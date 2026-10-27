@@ -217,7 +217,7 @@ from fitdocs.declaration import (
 )
 from fitdocs.docio import REMEDY_REPLACE_SYMLINK as _REMEDY_REPLACE_SYMLINK
 from fitdocs.docio import SYMLINK_DETAIL as _SYMLINK_DETAIL
-from fitdocs.docio import read_frontmatter
+from fitdocs.docio import read_frontmatter, write_bytes_if_changed
 from fitdocs.docmerge import (
     RegionError,
     begin_marker,
@@ -2579,11 +2579,16 @@ def _write_outputs(
 
 
 def _write_assets(data_root: Path, assets: tuple[Asset, ...]) -> None:
-    """Step 1: the new render's assets, each doc-relative under ``workouts/``."""
+    """Step 1: the new render's assets, each doc-relative under ``workouts/``.
+
+    Each goes through :func:`fitdocs.docio.write_bytes_if_changed`: bytes equal
+    to the file already there leave it untouched (content and mtime), and any
+    other write is an atomic replace (compact-chart-assets Req 6.1, 6.2, 6.3).
+    """
     for asset in assets:
         asset_path = data_root / WORKOUTS_DIR / asset.rel_path
         asset_path.parent.mkdir(parents=True, exist_ok=True)
-        asset_path.write_text(asset.content, encoding="utf-8")
+        write_bytes_if_changed(asset_path, asset.content.encode("utf-8"))
 
 
 def _remove_stale_assets(data_root: Path, names: tuple[str, ...]) -> None:
