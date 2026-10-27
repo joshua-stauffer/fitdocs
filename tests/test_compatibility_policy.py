@@ -32,6 +32,7 @@ EXPECTED_HEADINGS: tuple[str, ...] = (
     "## Deprecation",
     "## The compatible-upgrade guarantee",
     "## Public versus internal",
+    "## Map images",
     "## Which commands need a data root",
 )
 

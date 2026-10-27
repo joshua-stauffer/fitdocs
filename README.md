@@ -73,6 +73,21 @@ network. What leaves your machine and when, the persistent opt-out, choosing
 a provider, attribution, and the tile cache all now live in
 [Configuration](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/configuration.md#tiles-the-map-tile-provider-and-the-offline-opt-out).
 
+Each map file carries **one basemap image**: the tiles under the route,
+composed and cropped to the area the map shows, at the tiles' own pixel
+density (one pixel per output unit for 256-pixel tiles, two for 512-pixel
+tiles), and stored as a WebP image at a fixed quality. The route, markers
+and attribution are drawn above it as vector shapes. The tiles themselves are
+still cached and reused across maps while rendering. If a tile a map needs
+cannot be decoded, fitdocs omits that document's Map section and prints a
+warning that names the document, the tile and the cause (for example
+`BasemapError: tile z/x/y cannot be decoded: …`). The rest of the document is
+written and the run still succeeds. If your installed Pillow cannot encode
+WebP, every command that renders workout pages stops with an error before it
+writes anything, and tells you to reinstall Pillow from an official wheel or
+build it with libwebp. Which viewers display the image is listed under
+[Map images](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/compatibility.md#map-images).
+
 ## Plugins
 
 fitdocs ships one built-in training-load methodology, `threshold`, and

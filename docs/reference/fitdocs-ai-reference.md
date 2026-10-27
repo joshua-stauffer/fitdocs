@@ -122,6 +122,11 @@ Section order — our markdown doc should mirror it:
   is active (3 ticks at 0.42/0.67/0.92 mapped back to metric units).
 - **Smoothing**: null-skipping symmetric boxcar, default k=5 (11-sample
   window); no downsampling. Raw values preserved for tooltips.
+  - *Static adaptation (compact-chart-assets):* the static SVG draws each
+    line at output resolution, not through every smoothed sample. A line is
+    thinned so that every plotted point lies within 0.5 output units of the
+    drawn line; its first and last points per gap-free segment are kept and
+    a gap is never bridged. Nothing else about the spec changes.
 - **Style**: line width 1.8, no dots, monotone interpolation; dashed vertical
   cursor `3 3`.
 - **Colors (oklch)**: HR `oklch(0.6 0.18 14)` red; Power `oklch(0.62 0.17 60)`

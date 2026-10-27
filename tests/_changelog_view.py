@@ -25,6 +25,8 @@ from pathlib import Path
 
 #: The release every pin currently in ``[Unreleased]`` postdates.
 V0_1_0 = "0.1.0"
+#: The release every pin that postdates 0.2.0 anchors to.
+V0_2_0 = "0.2.0"
 
 _UNRELEASED = "## [Unreleased]"
 _RELEASE_HEADING = re.compile(r"(?m)^## \[(\d+)\.(\d+)\.(\d+)\][^\n]*\n")

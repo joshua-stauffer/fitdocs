@@ -159,6 +159,29 @@ The bundled calculator class, `ThresholdCalculator`
 author looks it up through `available()` or `get("threshold")`, never by
 importing the class.
 
+## Map images
+
+Each route map carries one basemap image, encoded as WebP, with the route,
+markers and attribution drawn above it as vector shapes. The map file
+references no external resource, and a standard image link displays it
+without plugins, scripts or network access. WebP displays in:
+
+- Obsidian, desktop and mobile;
+- iA Writer;
+- GitHub, as an image in a rendered page;
+- Safari on iOS 14 or later and on macOS 11 or later.
+
+A viewer below that floor, such as Safari on iOS 13 or on macOS 10.15, shows
+the route, markers and attribution over a blank basemap: the street imagery
+is missing and the route is still drawn. Nothing in the file or the page
+changes for such a viewer; upgrading it restores the imagery.
+
+The basemap image's bytes depend on the installed Pillow library. When that
+library changes, the bytes fitdocs would write for a map can change with it.
+The next `fitdocs regen` then rewrites the affected maps once, and later
+regens leave them untouched again (see
+[the ownership contract](ownership-contract.md)).
+
 ## Which commands need a data root
 
 The project-wide rule: **a command that describes a tree requires a data

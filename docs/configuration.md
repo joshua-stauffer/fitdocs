@@ -167,6 +167,23 @@ is **append-only and never pruned**: fitdocs only ever adds tiles, never
 deletes them. Deleting the cache is safe — the only effect is that its tiles
 are re-fetched on the next render.
 
+The cache holds the provider's tiles exactly as fetched; the map file does
+not embed them one by one. When a map is rendered, fitdocs reads the cached
+tiles under the route (reusing them across maps) and composes them into **one
+basemap image** cropped to the map's visible area, at the highest pixel
+density among those tiles or one pixel per output unit if that is higher, and
+embeds that image, encoded as WebP at one fixed quality, in the map file. No
+setting changes the format or the quality. Tiles are read as PNG, JPEG or
+WebP, and must be square with an edge of at most 1024 pixels. A tile that is
+none of those, or that cannot be decoded, omits that document's Map section
+with a warning that names the document, the tile and the cause (for example
+`BasemapError: tile z/x/y cannot be decoded: …`, or a tile that is not square
+or is larger than 1024 pixels); the rest of the document is written and the
+run still succeeds. If the installed
+Pillow has no WebP encoder, the commands that render workout pages (`sync`,
+`regen`, the inbox drain and `pull --sync`) stop with exit code 2 before they
+write anything.
+
 ### `[plugins]`: third-party calculator discovery
 
 fitdocs ships one built-in training-load methodology, `threshold`, and

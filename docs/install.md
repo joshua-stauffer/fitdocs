@@ -34,6 +34,14 @@ The analytics index adds DuckDB, which occupies about 44 MB installed. Its
 prebuilt package is unavailable on musl-based Linux and free-threaded Python
 builds; on those platforms, installation needs a working native build toolchain.
 
+Route maps add Pillow, which occupies about 12 MB installed (measured as the
+`PIL` package of Pillow 13.0.0 on macOS arm64 with CPython 3.11; other
+platforms differ). fitdocs uses it to compose each map's basemap image and
+encode it as WebP. A platform without a prebuilt Pillow package builds it from
+source, and a build from source may lack WebP support. If it does, every
+command that renders workout pages stops with an error before it writes
+anything; reinstall Pillow from an official wheel or build it with libwebp.
+
 Installing or upgrading never creates a directory, configuration file,
 profile, or data root anywhere on your machine — nothing is written until you
 run a command against one.

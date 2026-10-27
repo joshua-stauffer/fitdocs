@@ -14,8 +14,9 @@ Dependencies) and it never ships in a built artifact.
 
 Reproducibility. Every series value is rounded to ``DECIMALS`` decimals inside
 :func:`demo_spec`, so the renderer receives the same floats wherever ``exp``
-and ``sin`` differ in their last bit. From there the renderer uses only
-IEEE-754 basic operations and its own two-decimal formatting.
+and ``sin`` differ in their last bit. From there the renderer thins each line
+(windowed Ramer-Douglas-Peucker, which measures distances with ``math.hypot``)
+and formats line coordinates to one decimal place.
 """
 
 from __future__ import annotations
