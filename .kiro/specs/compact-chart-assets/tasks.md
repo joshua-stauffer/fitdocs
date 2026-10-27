@@ -8,7 +8,7 @@ Three parallel-safe streams meet in the integration group:
 The foundation group (1.x) lands first, in order. Every task leaves the full
 suite, ruff, ruff format and mypy green on its own.
 
-- [ ] 1. Foundation: the dependency, test inputs and shared render primitives
+- [x] 1. Foundation: the dependency, test inputs and shared render primitives
 
 - [x] 1.1 Add the image library as a required dependency
   - Declare Pillow with a minimum of 13.0.0 and no upper bound, and lock it.
@@ -101,7 +101,7 @@ suite, ruff, ruff format and mypy green on its own.
     suite passes.
   - _Requirements: 10.1, 10.2_
 
-- [ ] 1.6 Move the remaining end-to-end tests onto decodable tiles
+- [x] 1.6 Move the remaining end-to-end tests onto decodable tiles
   - Apply the 1.5 rule to every other test module that feeds tiles to a
     page render: route-maps, determinism, compose and compose passes, wiki
     contract, plugin regression, effort tags, inbox, reconcile, running
@@ -429,3 +429,15 @@ suite, ruff, ruff format and mypy green on its own.
   - (c) Failures in `resize`/`alpha_composite` become `BasemapError` ("cannot be composed"). This is reachable with real Pillow through the partial-crop bomb check; Pillow skips that check when a tile exactly covers the canvas.
   - Placement is pixel-granular at fractional density (`floor(d·o)`, not `floor(o)·d`).
   - Round 3 was a controller fix (a header-only fixture pinning ruling (a)'s ordering).
+- 1.6: The exceptions to "no tile fake in `tests/`":
+  - **Kept fake:** `tests/test_tiles.py`; it never composes a map.
+  - **Not tiles:** `sitebuild/test_check_site.py` and `dashboards/test_storage.py` hold site-asset bytes.
+  - **Not fakes:**
+    - `_FailingTiles` and `_UnavailableTiles` raise.
+    - `_NoTiles` returns `{}` (in test_identity_e2e and test_retimed_rename).
+    - The real `TileStore`s in the reconcile tests are served by the patched `fetch_stub()`.
+    - The morning and apple-import `TileStore`s are disabled.
+  - Beyond the task list, the change also covered `test_sync_handoff`, `index/conftest` and `index/derived/conftest`.
+  - An instrument the reviewer wrote around both `compose_map` bindings, in `render/charts/map.py` and `render/sections.py`, found 0 undecodable tiles out of 7703 across 640 suite-wide composes.
+  - Until stream 5 decodes tiles, a reintroduced fake on a composing path still passes the plain suite.
+  - Round 2 was a controller prose fix.
