@@ -281,7 +281,7 @@ suite, ruff, ruff format and mypy green on its own.
   - _Requirements: 6.1, 6.2, 6.3, 6.4_
   - _Depends: 4, 5.1_
 
-- [ ] 5.3 (P) Fail before writing when the WebP encoder is missing
+- [x] 5.3 (P) Fail before writing when the WebP encoder is missing
   - Add the CLI preflight that requires the encoder and routes the encoder
     error to the configuration-error exit, code 2, with the remedy message.
   - Call it before the first write of:
@@ -457,3 +457,4 @@ suite, ruff, ruff format and mypy green on its own.
     - `tests/index/test_boundary.py` asserts `'PIL' not in sys.modules` after plugin discovery.
     - basemap.py has an import allow list and banned I/O builtins. File access via `io.open` or a PIL path is not pinned (declared).
   - **Review:** four rounds. Rounds 3–4 were controller test and comment fixes. The round-4 confirmation went to the same reviewer instead of a debug subagent, because the fix was already agreed.
+- 5.3: `cli._basemap_preflight()` maps `BasemapEncoderError` to `_config_error` (exit 2) using the design's exact message (controller ruling: the design text governs over the module error's phrase). It is called on four paths: sync SOURCE after `_tile_store`, `_run_drain_passes` before `_inbox_preflight`, regen before `rebuild_series`, and the end of pull's `if sync_after:` block. `load` and plain `pull` do not call it. Tests snapshot the whole data root (paths, bytes, mtime_ns, dirs). Round 2 was a controller docstring fix. Known gap, queued: plugin discovery can write `__pycache__` into a data-root plugins dir before any preflight.
