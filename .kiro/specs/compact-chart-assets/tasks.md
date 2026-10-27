@@ -161,7 +161,7 @@ suite, ruff, ruff format and mypy green on its own.
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 5.3_
   - _Depends: 2.1, 1.4_
 
-- [ ] 2.3 (P) Draw the map route at output resolution
+- [x] 2.3 (P) Draw the map route at output resolution
   - Thin each route segment once and reuse the points for the underlay and
     foreground strokes. Markers stay at the unthinned first and last track
     points. Separate segments are never joined. Widths, colours, opacity,
@@ -441,3 +441,4 @@ suite, ruff, ruff format and mypy green on its own.
   - An instrument the reviewer wrote around both `compose_map` bindings, in `render/charts/map.py` and `render/sections.py`, found 0 undecodable tiles out of 7703 across 640 suite-wide composes.
   - Until stream 5 decodes tiles, a reintroduced fake on a composing path still passes the plain suite.
   - Round 2 was a controller prose fix.
+- 2.3: `_render_route` thins each segment once, and both strokes reuse the result. Markers stay at the raw `plan.segments` endpoints. A segment that thins to a single point is drawn as a duplicated-point dot. `_point()` was removed. The map tests use Req 2.1's 0.5-unit bound; the tighter ≈0.371 postcondition is pinned in test_polyline. Whichever of 2.2/2.3 lands second must re-run `python -m tests.render.test_golden_docs` after rebasing; only map assets changed here. Round 2 was a controller prose fix.
