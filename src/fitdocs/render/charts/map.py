@@ -32,8 +32,9 @@ a gap in either channel breaks the route and is never interpolated across (Req
 latitude and a longitude (absent data stays absent, Req 1.3).
 
 Purity: standard-library ``math`` and ``base64`` plus the sibling
-:mod:`fitdocs.render.charts` modules (``series``, ``svg``, ``palette``) only --
-no I/O, no clock, no randomness, and never an import of :mod:`fitdocs.tiles`.
+:mod:`fitdocs.render.charts` modules (``series``, ``svg``, ``palette``,
+``polyline``) only -- no I/O, no clock, no randomness, and never an import of
+:mod:`fitdocs.tiles`.
 Determinism follows by construction: planning emits tiles in a fixed row-major
 order (``y`` outer, ``x`` inner), and composition runs every coordinate through
 :func:`~fitdocs.render.charts.svg.fmt_num`, builds every attribute mapping in a
@@ -52,6 +53,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from fitdocs.render.charts.palette import ROUTE_FINISH_COLOR, ROUTE_START_COLOR
+from fitdocs.render.charts.polyline import points_attr, thin
 from fitdocs.render.charts.series import paired_gap_segments
 from fitdocs.render.charts.svg import el, fmt_num, svg_document, text
 
@@ -303,11 +305,6 @@ def plan_map(
     )
 
 
-def _point(px: float, py: float) -> str:
-    """Format one ``x,y`` coordinate through the shared deterministic writer."""
-    return f"{fmt_num(px)},{fmt_num(py)}"
-
-
 def _render_tiles(plan: MapPlan, tiles: Mapping[TileRef, bytes]) -> list[str]:
     """The basemap tiles as inline ``data:`` ``<image>`` elements (bottom layer).
 
@@ -357,16 +354,21 @@ def _render_route(plan: MapPlan, tint: str) -> list[str]:
 
     Each segment draws a wide translucent underlay beneath a narrow opaque
     foreground -- both tinted, round caps and joins -- so the route reads with a
-    glow. A single-point segment duplicates its point, rendering the zero-length
-    round-cap stroke as a dot.
+    glow. A segment is thinned once to output resolution
+    (:func:`~fitdocs.render.charts.polyline.thin`) and both strokes reuse those
+    points. A segment that thins to a single point duplicates it, rendering the
+    zero-length round-cap stroke as a dot.
     """
     elements: list[str] = []
     for segment in plan.segments:
-        coords = [_point(px, py) for px, py in segment]
-        if len(coords) == 1:
+        # Thinned once per segment (segments are never joined); the underlay and
+        # the foreground reuse the same points. The markers do not: they stay on
+        # the unthinned ``plan.segments`` endpoints.
+        thinned = thin(segment)
+        if len(thinned) == 1:
             # A zero-length stroke: the round cap shows the lone point as a dot.
-            coords = coords * 2
-        points = " ".join(coords)
+            thinned = thinned * 2
+        points = points_attr(thinned)
         elements.append(
             _polyline(points, tint, GLOW_UNDERLAY_WIDTH, GLOW_UNDERLAY_OPACITY)
         )

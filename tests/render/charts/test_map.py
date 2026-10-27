@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import base64
 import math
+import random
 import re
 from collections.abc import Sequence
 from dataclasses import FrozenInstanceError
@@ -49,6 +50,7 @@ from fitdocs.render.charts.map import (
     plan_map,
 )
 from fitdocs.render.charts.palette import ROUTE_FINISH_COLOR, ROUTE_START_COLOR
+from fitdocs.render.charts.polyline import thin
 from fitdocs.render.charts.svg import SVG_NAMESPACE, fmt_num
 from tests.support import tiles as tile_factory
 
@@ -540,3 +542,154 @@ def test_map_module_does_not_import_pil() -> None:
     ] + [n.module or "" for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)]
     assert imported, "the walk found no imports; it is looking at the wrong module"
     assert not [m for m in imported if m == "PIL" or m.startswith("PIL.")]
+
+
+# ============================================================================
+# the route at output resolution (compact-chart-assets Req 2.1-2.4)
+# ============================================================================
+
+_Seg = tuple[tuple[float, float], ...]
+
+
+def _wiggle(n: int, seed: int) -> _Seg:
+    """Noisy sine track: up to ±1.2 units of y jitter on a slow 20-unit sine."""
+    rng = random.Random(seed)
+    return tuple(
+        (
+            i * 0.7 + rng.uniform(-0.4, 0.4),
+            100.0 + rng.uniform(-1.2, 1.2) + 20.0 * math.sin(i / 40.0),
+        )
+        for i in range(n)
+    )
+
+
+def _loop(n: int) -> _Seg:
+    """A closed circle (first point == last point) spanning several windows."""
+    ring = [
+        (
+            400.0 + 60.0 * math.cos(2 * math.pi * i / n),
+            250.0 + 60.0 * math.sin(2 * math.pi * i / n),
+        )
+        for i in range(n)
+    ]
+    return (*ring, ring[0])
+
+
+def _route_polylines(svg: str) -> list[list[tuple[float, float]]]:
+    """Every ``<polyline>`` of the document, in order, as float point lists."""
+    out: list[list[tuple[float, float]]] = []
+    for attr in re.findall(r'<polyline[^>]*? points="([^"]*)"', svg):
+        pairs = [tuple(map(float, p.split(","))) for p in attr.split(" ")]
+        out.append([(x, y) for x, y in pairs])
+    return out
+
+
+def _dist_to_segment(
+    p: tuple[float, float], a: tuple[float, float], b: tuple[float, float]
+) -> float:
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    length2 = dx * dx + dy * dy
+    if length2 == 0.0:
+        return math.hypot(p[0] - a[0], p[1] - a[1])
+    t = max(0.0, min(1.0, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / length2))
+    return math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy))
+
+
+def _dist_to_line(p: tuple[float, float], line: Sequence[tuple[float, float]]) -> float:
+    if len(line) == 1:
+        return math.hypot(p[0] - line[0][0], p[1] - line[0][1])
+    return min(_dist_to_segment(p, a, b) for a, b in zip(line, line[1:], strict=False))
+
+
+def _compose(plan: MapPlan) -> str:
+    return compose_map(plan, _tiles_for(plan), tint=_TINT, attribution=_ATTRIBUTION)
+
+
+def _planned_route() -> MapPlan:
+    """A real ``plan_map`` of a dense, noisy two-segment route (None gap)."""
+    rng = random.Random(7)
+    lats: list[float | None] = []
+    lons: list[float | None] = []
+    for i in range(1400):
+        if i == 700:
+            lats.append(None)
+            lons.append(None)
+        lats.append(45.0 + i * 2e-6 + rng.uniform(-3e-7, 3e-7))
+        lons.append(10.0 + 0.0006 * math.sin(i / 60.0) + rng.uniform(-3e-7, 3e-7))
+    plan = plan_map(lats, lons)
+    assert plan is not None
+    assert len(plan.segments) == 2
+    return plan
+
+
+_DENSE_PLANS = {
+    "wiggle": lambda: _hand_plan((_wiggle(1500, 0),)),
+    "loop": lambda: _hand_plan((_loop(1300),)),
+    "planned": _planned_route,
+}
+
+
+@pytest.mark.parametrize("name", sorted(_DENSE_PLANS))
+def test_route_points_lie_within_half_unit_of_the_drawn_line(name: str) -> None:
+    plan = _DENSE_PLANS[name]()
+    lines = _route_polylines(_compose(plan))
+    assert len(lines) == 2 * len(plan.segments)
+    for index, segment in enumerate(plan.segments):
+        for drawn in (lines[2 * index], lines[2 * index + 1]):
+            # The route is genuinely thinned and not collapsed to a chord.
+            assert 2 < len(drawn) < len(segment) * 0.9
+            assert max(_dist_to_line(p, drawn[:1] + drawn[-1:]) for p in segment) > 0.5
+            # Every full-resolution point is near the drawn line (Req 2.1) ...
+            assert max(_dist_to_line(p, drawn) for p in segment) < 0.5
+            # ... and the segment's ends are points of it (Req 2.2).
+            first, last = segment[0], segment[-1]
+            assert drawn[0] == (round(first[0], 1), round(first[1], 1))
+            assert drawn[-1] == (round(last[0], 1), round(last[1], 1))
+
+
+def test_underlay_and_foreground_share_one_thinning() -> None:
+    segment = _wiggle(1500, 0)
+    once = thin(segment)
+    # The wrong implementation thins the thinned points again; this fixture is
+    # one where that gives a different line.
+    assert thin(once) != once
+    lines = _route_polylines(_compose(_hand_plan((segment,))))
+    assert len(lines) == 2
+    assert lines[0] == lines[1] == list(once)
+    assert len(lines[0]) < len(segment)
+
+
+def test_separate_segments_are_thinned_apart_and_never_joined() -> None:
+    # Two straight runs on one line with a gap between them. Thinned as one
+    # run, the inner ends are not vertices of the result.
+    seg_a = tuple((10.04 + i * 0.5, 100.0) for i in range(300))
+    seg_b = tuple((300.04 + i * 0.5, 100.0) for i in range(300))
+    joined = thin(seg_a + seg_b)
+    assert (159.5, 100.0) not in joined
+    assert (300.0, 100.0) not in joined
+    lines = _route_polylines(_compose(_hand_plan((seg_a, seg_b))))
+    assert len(lines) == 4
+    assert lines[0] == lines[1] == [(10.0, 100.0), (159.5, 100.0)]
+    assert lines[2] == lines[3] == [(300.0, 100.0), (449.5, 100.0)]
+
+
+def test_markers_stay_on_the_unthinned_endpoints() -> None:
+    seg_a = ((120.04, 200.06), (130.0, 210.0), (140.0, 215.0))
+    seg_b = ((300.0, 300.0), (310.0, 305.0), (333.33, 444.44))
+    plan = _hand_plan((seg_a, seg_b))
+    svg = _compose(plan)
+    lines = _route_polylines(svg)
+    # The drawn line's ends are the rounded ends, which differ from the raw ones.
+    assert lines[1][0] == (120.0, 200.1)
+    assert lines[3][-1] == (333.3, 444.4)
+    circles = re.findall(r"<circle[^>]*/>", svg)
+    start = next(c for c in circles if f'fill="{ROUTE_START_COLOR}"' in c)
+    finish = next(c for c in circles if f'fill="{ROUTE_FINISH_COLOR}"' in c)
+    assert 'cx="120.04"' in start and 'cy="200.06"' in start
+    assert 'cx="333.33"' in finish and 'cy="444.44"' in finish
+
+
+def test_single_point_dot_uses_the_output_precision() -> None:
+    svg = _compose(_hand_plan((((400.04, 250.06),),)))
+    assert _route_polylines(svg) == [[(400.0, 250.1)] * 2] * 2
+    assert svg.count('points="400,250.1 400,250.1"') == 2
