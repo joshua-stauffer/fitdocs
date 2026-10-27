@@ -77,6 +77,7 @@ from fitdocs.load.types import (
 from fitdocs.model import Sport
 from fitdocs.settings import SettingsError
 from tests.fixtures import builder
+from tests.support import tiles as tile_factory
 
 # A representative settings-file path; the reader only ever names it in errors
 # and never opens it, so it need not (and here does not) exist on disk.
@@ -2399,9 +2400,7 @@ def test_load_load_settings_is_called_the_documented_number_of_times_per_command
     ``fitdocs check`` assertion as a sole failure in every case (verified by
     running each mutation through the full suite, not by inspection).
     """
-    monkeypatch.setattr(
-        "fitdocs.tiles._default_fetch", lambda _url: b"\x89PNG\r\n\x1a\n"
-    )
+    monkeypatch.setattr("fitdocs.tiles._default_fetch", tile_factory.fetch_stub())
     runner = CliRunner()
     source = tmp_path / "src"
     data_root = tmp_path / "data"

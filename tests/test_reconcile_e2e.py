@@ -52,6 +52,7 @@ from fitdocs.layout import WORKOUTS_DIR
 from fitdocs.sync import sync as sync_engine
 from fitdocs.tiles import TileStore, load_tile_settings
 from tests.fixtures import builder
+from tests.support import tiles as tile_factory
 from tests.test_history_e2e import _fake_system_date
 
 runner = CliRunner()
@@ -72,9 +73,7 @@ _LINK_RE = re.compile(r"\]\((\.\./(?:\.\./)?workouts/[^)]+)\)")
 def _offline_tiles(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep every `fitdocs sync` network-free (mirrors `tests/test_cli.py`
     and `tests/test_cli_reconcile.py`)."""
-    monkeypatch.setattr(
-        "fitdocs.tiles._default_fetch", lambda _url: b"\x89PNG\r\n\x1a\n"
-    )
+    monkeypatch.setattr("fitdocs.tiles._default_fetch", tile_factory.fetch_stub())
 
 
 def _page(

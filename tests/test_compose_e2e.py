@@ -30,18 +30,22 @@ from fitdocs.quarantine import QuarantineRecord
 from fitdocs.render import DocContext, RenderedDoc, TileRef, render_document
 from fitdocs.sync import SyncReport, drain, regen, sync
 from tests.fixtures import merge
+from tests.support import tiles as tile_factory
 
 # A fixed -06:00 zone so stems never depend on where the suite runs.
 _TZ = timezone(timedelta(hours=-6))
 
 
 class _ServingTiles:
-    """Serves placeholder PNG bytes for any ref (the run fixtures record GPS)."""
+    """Serves a decodable factory PNG tile for any ref (the run fixtures record GPS)."""
 
     attribution = "test"
 
     def resolve(self, refs: Sequence[TileRef]) -> dict[TileRef, bytes]:
-        return {ref: b"\x89PNG\r\n\x1a\n" for ref in refs}
+        return {
+            ref: tile_factory.solid(tile_factory.DEFAULT_SIZE, (46, 139, 120))
+            for ref in refs
+        }
 
 
 _TILES = _ServingTiles()
@@ -496,9 +500,7 @@ def test_a_pre_channel_merge_run_pair_page_is_out_of_date_and_regen_restores_it(
     assert contract.DOC_VERSION > _PRE_CHANNEL_MERGE_DOC_VERSION
 
     monkeypatch.delenv("FITDOCS_DATA", raising=False)
-    monkeypatch.setattr(
-        "fitdocs.tiles._default_fetch", lambda _url: b"\x89PNG\r\n\x1a\n"
-    )
+    monkeypatch.setattr("fitdocs.tiles._default_fetch", tile_factory.fetch_stub())
     cwd = tmp_path / "cwd"
     cwd.mkdir()
     monkeypatch.chdir(cwd)

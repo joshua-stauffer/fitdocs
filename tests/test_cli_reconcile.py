@@ -39,6 +39,7 @@ from fitdocs.plans import (
 from fitdocs.sync import sync as sync_engine
 from fitdocs.tiles import TileStore, load_tile_settings
 from tests.fixtures import builder
+from tests.support import tiles as tile_factory
 
 runner = CliRunner()
 
@@ -49,9 +50,7 @@ _ZERO_SETTLE_TOML = "[inbox]\nsettle_seconds = 0\n"
 def _offline_tiles(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep every CLI ``sync``/``regen`` network-free (mirrors
     ``tests/test_cli.py``)."""
-    monkeypatch.setattr(
-        "fitdocs.tiles._default_fetch", lambda _url: b"\x89PNG\r\n\x1a\n"
-    )
+    monkeypatch.setattr("fitdocs.tiles._default_fetch", tile_factory.fetch_stub())
 
 
 def _put(directory: Path, name: str, data: bytes) -> Path:

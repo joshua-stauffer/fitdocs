@@ -30,6 +30,7 @@ from fitdocs.load.render import parse_payload
 from fitdocs.performance.engine import DeriveReport, derive_benchmarks
 from fitdocs.sync import SyncReport, sync
 from tests.fixtures import merge
+from tests.support import tiles as tile_factory
 
 _TZ = timezone(timedelta(hours=-6))
 
@@ -42,7 +43,10 @@ class _NoTiles:
     attribution = "test"
 
     def resolve(self, refs: object) -> dict[object, bytes]:
-        return {ref: b"\x89PNG\r\n\x1a\n" for ref in refs}  # type: ignore[attr-defined]
+        return {
+            ref: tile_factory.solid(tile_factory.DEFAULT_SIZE, (46, 139, 120))
+            for ref in refs  # type: ignore[attr-defined]
+        }
 
 
 def _stage(source: Path, **files: bytes) -> Path:

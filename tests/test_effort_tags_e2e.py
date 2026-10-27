@@ -63,6 +63,7 @@ from fitdocs.load.types import (
 )
 from tests import test_confinement
 from tests.fixtures import builder
+from tests.support import tiles as tile_factory
 from tests.test_determinism import _no_socket
 
 runner = CliRunner()
@@ -139,9 +140,7 @@ def _offline_tiles(monkeypatch: pytest.MonkeyPatch) -> None:
     This is the offline mechanism this module uses: the tile *fetch* seam is
     monkeypatched, never a settings file disabling tiles.
     """
-    monkeypatch.setattr(
-        "fitdocs.tiles._default_fetch", lambda _url: b"\x89PNG\r\n\x1a\n"
-    )
+    monkeypatch.setattr("fitdocs.tiles._default_fetch", tile_factory.fetch_stub())
 
 
 def _put(source_dir: Path, name: str, data: bytes) -> Path:

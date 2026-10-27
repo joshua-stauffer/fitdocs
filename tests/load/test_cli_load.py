@@ -70,6 +70,7 @@ from tests.load.conftest import (
     ComputingCalculator,
     ScopedFieldCalculator,
 )
+from tests.support import tiles as tile_factory
 
 runner = CliRunner()
 
@@ -88,7 +89,10 @@ class _ServingTiles:
     attribution = "© OpenStreetMap contributors"
 
     def resolve(self, refs: Sequence[object]) -> dict[object, bytes]:
-        return {ref: b"\x89PNG\r\n\x1a\n" for ref in refs}
+        return {
+            ref: tile_factory.solid(tile_factory.DEFAULT_SIZE, (46, 139, 120))
+            for ref in refs
+        }
 
 
 _TILES: _ServingTiles = _ServingTiles()
@@ -104,9 +108,7 @@ def _offline_tiles(monkeypatch: pytest.MonkeyPatch) -> None:
     return deterministic bytes makes tile resolution succeed offline, so no test
     here performs real network access.
     """
-    monkeypatch.setattr(
-        "fitdocs.tiles._default_fetch", lambda _url: b"\x89PNG\r\n\x1a\n"
-    )
+    monkeypatch.setattr("fitdocs.tiles._default_fetch", tile_factory.fetch_stub())
 
 
 # --- scripted interaction session (drives the interactive CLI compute path) --

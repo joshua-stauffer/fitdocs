@@ -47,6 +47,7 @@ from fitdocs.model import Activity
 from fitdocs.render import DocContext, render_document
 from fitdocs.render.format import ABSENT
 from tests.fixtures import builder
+from tests.support import tiles as tile_factory
 
 runner = CliRunner()
 
@@ -63,9 +64,7 @@ _DYNAMICS_LINK_RE = re.compile(r"!\[[^\]]*\]\(([^)\s]+-dynamics\.svg)\)")
 @pytest.fixture(autouse=True)
 def _offline_tiles(monkeypatch: pytest.MonkeyPatch) -> None:
     """Keep ``sync`` network-free: the tile fetch seam returns fixed bytes."""
-    monkeypatch.setattr(
-        "fitdocs.tiles._default_fetch", lambda _url: b"\x89PNG\r\n\x1a\n"
-    )
+    monkeypatch.setattr("fitdocs.tiles._default_fetch", tile_factory.fetch_stub())
 
 
 def _clock(seconds: float) -> str:

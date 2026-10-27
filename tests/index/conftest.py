@@ -28,13 +28,17 @@ from fitdocs.render.charts.map import TileRef
 from fitdocs.sync import sync
 from fitdocs.version import tool_version
 from tests.fixtures import builder, merge
+from tests.support import tiles as tile_factory
 
 
 class _SyntheticTiles:
     attribution = "Synthetic map fixture"
 
     def resolve(self, refs: Sequence[TileRef]) -> dict[TileRef, bytes]:
-        return {ref: b"synthetic-png" for ref in refs}
+        return {
+            ref: tile_factory.solid(tile_factory.DEFAULT_SIZE, (46, 139, 120))
+            for ref in refs
+        }
 
 
 @dataclass(frozen=True)

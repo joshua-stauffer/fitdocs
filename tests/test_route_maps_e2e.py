@@ -48,6 +48,7 @@ from fitdocs.render import plan_map
 from fitdocs.sync import DocWarning, sync
 from fitdocs.tiles import TileUnavailableError
 from tests.fixtures import builder
+from tests.support import tiles as tile_factory
 
 runner = CliRunner()
 
@@ -61,9 +62,9 @@ _RIDE_STEM = "2021-09-07-ride-1946"
 _STRENGTH_STEM = "2021-09-07-strength-1946"
 
 _ATTRIBUTION = "© OpenStreetMap contributors"
-#: Deterministic synthetic tile bytes -- ``compose_map`` only base64-encodes the
-#: bytes (it never decodes the PNG), so any fixed payload composes deterministically.
-_TILE_BYTES = b"\x89PNG\r\n\x1a\n synthetic route-map tile"
+#: Synthetic tile bytes: one decodable factory PNG served for every ref, so two
+#: runs over identical inputs see identical tiles.
+_TILE_BYTES = tile_factory.solid(tile_factory.DEFAULT_SIZE, (46, 139, 120))
 
 
 # --- fixtures / helpers -----------------------------------------------------
@@ -342,7 +343,7 @@ def test_failing_map_via_cli_reports_warning_and_exits_zero(
     opt-out gate raises before any fetch, and the fetch seam is patched inert as
     belt-and-suspenders so no test performs real network access."""
     # Belt-and-suspenders: even were a fetch attempted, it would stay offline.
-    monkeypatch.setattr("fitdocs.tiles._default_fetch", lambda _url: _TILE_BYTES)
+    monkeypatch.setattr("fitdocs.tiles._default_fetch", tile_factory.fetch_stub())
     source = tmp_path / "src"
     data_root = tmp_path / "data"
     data_root.mkdir()

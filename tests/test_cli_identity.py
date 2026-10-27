@@ -28,6 +28,7 @@ from fitdocs.identity.roles import DEFAULT_PRECEDENCE, Precedence
 from fitdocs.identity.settings import load_identity_settings
 from fitdocs.layout import WORKOUTS_DIR, archive_path, held_path, source_ref
 from tests.fixtures import identity as fx
+from tests.support import tiles as tile_factory
 
 runner = CliRunner()
 
@@ -37,9 +38,7 @@ _MALFORMED = 'precedence = "original"'
 
 @pytest.fixture(autouse=True)
 def _offline_tiles(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        "fitdocs.tiles._default_fetch", lambda _url: b"\x89PNG\r\n\x1a\n"
-    )
+    monkeypatch.setattr("fitdocs.tiles._default_fetch", tile_factory.fetch_stub())
 
 
 def _settings(data_root: Path, precedence_line: str | None) -> None:

@@ -97,6 +97,7 @@ from fitdocs.model import SCHEMA_VERSION, SessionSummary
 from fitdocs.render.charts.map import TileRef
 from fitdocs.sync import sync
 from tests.fixtures import builder
+from tests.support import tiles as tile_factory
 
 # ---------------------------------------------------------------------------
 # Calculator-level fixture builders
@@ -575,7 +576,10 @@ class _ServingTiles:
     attribution = "© OpenStreetMap contributors"
 
     def resolve(self, refs: Sequence[TileRef]) -> dict[TileRef, bytes]:
-        return {ref: b"\x89PNG\r\n\x1a\n" for ref in refs}
+        return {
+            ref: tile_factory.solid(tile_factory.DEFAULT_SIZE, (46, 139, 120))
+            for ref in refs
+        }
 
 
 _TILES = _ServingTiles()

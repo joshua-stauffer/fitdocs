@@ -45,6 +45,7 @@ from fitdocs.docmerge import begin_marker, end_marker, extract_regions
 from fitdocs.layout import DECLARED_DIRS, WORKOUTS_DIR, doc_path
 from fitdocs.sync import regen, sync
 from tests.fixtures import builder
+from tests.support import tiles as tile_factory
 from tests.test_confinement import _snapshot, assert_confined, permitted_locations
 from tests.test_determinism import _no_socket
 
@@ -61,7 +62,10 @@ class _ServingTiles:
     attribution = "© OpenStreetMap contributors"
 
     def resolve(self, refs: Sequence[object]) -> dict[object, bytes]:
-        return {ref: b"\x89PNG\r\n\x1a\n" for ref in refs}
+        return {
+            ref: tile_factory.solid(tile_factory.DEFAULT_SIZE, (46, 139, 120))
+            for ref in refs
+        }
 
 
 _TILES: _ServingTiles = _ServingTiles()

@@ -24,13 +24,17 @@ from fitdocs.model import Activity
 from fitdocs.render import TileRef
 from fitdocs.sync import SyncReport, sync
 from tests.fixtures.merge import run_trio_fit_bytes
+from tests.support import tiles as tile_factory
 
 
 class _Tiles:
     attribution = "test"
 
     def resolve(self, refs: Sequence[TileRef]) -> dict[TileRef, bytes]:
-        return {ref: b"\x89PNG\r\n\x1a\n" for ref in refs}
+        return {
+            ref: tile_factory.solid(tile_factory.DEFAULT_SIZE, (46, 139, 120))
+            for ref in refs
+        }
 
 
 def _stage_and_sync(tmp_path: Path) -> Path:

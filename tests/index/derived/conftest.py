@@ -22,6 +22,7 @@ from fitdocs.layout import WORKOUTS_DIR, source_ref
 from fitdocs.render.charts.map import TileRef
 from fitdocs.sync import SyncReport, sync
 from tests.fixtures import builder, merge
+from tests.support import tiles as tile_factory
 
 TODAY: Final[date] = date(2026, 2, 24)
 _INDEX_BASE = "fitdocs-derived-index"
@@ -32,7 +33,10 @@ class _OfflineTiles:
     attribution = "Synthetic fixture tiles"
 
     def resolve(self, refs: Sequence[TileRef]) -> dict[TileRef, bytes]:
-        return {ref: b"synthetic-tile" for ref in refs}
+        return {
+            ref: tile_factory.solid(tile_factory.DEFAULT_SIZE, (46, 139, 120))
+            for ref in refs
+        }
 
 
 def _write(root: Path, relative: str, text: str) -> Path:

@@ -76,6 +76,7 @@ from tests.golden._serialize import (
     canonical_json,
     to_jsonable,
 )
+from tests.support import tiles as tile_factory
 
 # Both the no-athlete and the fully-specified-athlete computation paths must be
 # deterministic and pure (Req 13.2, 13.3): threshold-dependent fields (TRIMP,
@@ -314,7 +315,7 @@ def test_provenance_sha256_is_deterministic_and_is_the_content_hash(name: str) -
 
 _RUN_STEM = "2021-09-07-run-1946"  # the run fixture's stable stem under _MAP_TZ
 _MAP_TZ = timezone(timedelta(hours=-6))
-_SYNTHETIC_TILE = b"\x89PNG\r\n\x1a\n synthetic route-map tile bytes"
+_SYNTHETIC_TILE = tile_factory.solid(tile_factory.DEFAULT_SIZE, (46, 139, 120))
 
 
 class _WarmFakeTiles:

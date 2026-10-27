@@ -22,6 +22,7 @@ from fitdocs.quarantine import QuarantineRecord
 from fitdocs.render import DocContext, TileRef, render_document
 from fitdocs.sync import DocumentMatch, RenderedPage, drain, regen, sync
 from tests.fixtures import merge
+from tests.support import tiles as tile_factory
 
 _TZ = timezone(timedelta(hours=-6))
 
@@ -30,7 +31,10 @@ class _Tiles:
     attribution = "test"
 
     def resolve(self, refs: Sequence[TileRef]) -> dict[TileRef, bytes]:
-        return {ref: b"tile" for ref in refs}
+        return {
+            ref: tile_factory.solid(tile_factory.DEFAULT_SIZE, (46, 139, 120))
+            for ref in refs
+        }
 
 
 def _fixture(tmp_path: Path) -> tuple[Path, bytes, bytes]:

@@ -28,6 +28,7 @@ from fitdocs.wellness.intake import (
 )
 from fitdocs.wellness.spec import ExtractContext, WellnessFormatError
 from tests.fixtures import builder
+from tests.support import tiles as tile_factory
 from tests.wellness._helpers import (
     EXTRACT_FORMAT,
     EXTRACT_SOURCE,
@@ -57,7 +58,10 @@ class _Tiles:
     attribution = "synthetic offline tiles"
 
     def resolve(self, refs: Sequence[TileRef]) -> dict[TileRef, bytes]:
-        return {ref: b"\x89PNG\r\n\x1a\n" for ref in refs}
+        return {
+            ref: tile_factory.solid(tile_factory.DEFAULT_SIZE, (46, 139, 120))
+            for ref in refs
+        }
 
 
 def _put(root: Path, name: str, data: bytes) -> Path:

@@ -41,6 +41,7 @@ from fitdocs.metrics.types import AthleteInputs
 from fitdocs.plugins import PluginLoadError, PluginReport
 from tests.fixtures import builder
 from tests.index._helpers import hold_index
+from tests.support import tiles as tile_factory
 
 runner = CliRunner()
 
@@ -132,9 +133,7 @@ def _seed_indexed_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     (source / "run.fit").write_bytes(builder.run_fit_bytes())
     data_root = tmp_path / "data"
     data_root.mkdir()
-    monkeypatch.setattr(
-        "fitdocs.tiles._default_fetch", lambda _url: b"\x89PNG\r\n\x1a\n"
-    )
+    monkeypatch.setattr("fitdocs.tiles._default_fetch", tile_factory.fetch_stub())
     initial = runner.invoke(app, ["sync", str(source), "--out", str(data_root)])
     assert initial.exit_code == 0, initial.output
     built = runner.invoke(app, ["index", "--out", str(data_root)])
@@ -160,9 +159,7 @@ def test_sync_reports_an_unbuilt_index_after_writing_the_page(
     (source / "run.fit").write_bytes(builder.run_fit_bytes())
     data_root = tmp_path / "data"
     data_root.mkdir()
-    monkeypatch.setattr(
-        "fitdocs.tiles._default_fetch", lambda _url: b"\x89PNG\r\n\x1a\n"
-    )
+    monkeypatch.setattr("fitdocs.tiles._default_fetch", tile_factory.fetch_stub())
 
     response = runner.invoke(app, ["sync", str(source), "--out", str(data_root)])
 
@@ -331,9 +328,7 @@ def test_load_alone_updates_document_rows_without_deriving_archives(
         (data_root / "fitdocs.toml").write_text(
             '[load]\ndefault_calculator = "index-load-a"\n', encoding="utf-8"
         )
-        monkeypatch.setattr(
-            "fitdocs.tiles._default_fetch", lambda _url: b"\x89PNG\r\n\x1a\n"
-        )
+        monkeypatch.setattr("fitdocs.tiles._default_fetch", tile_factory.fetch_stub())
         initial = runner.invoke(app, ["sync", str(source), "--out", str(data_root)])
         assert initial.exit_code == 0, initial.output
         built = runner.invoke(app, ["index", "--out", str(data_root)])

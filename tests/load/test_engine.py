@@ -78,6 +78,7 @@ from tests.load.test_render import (
     _V1_UNSUPPORTED_LINE,
     _V1_WITHDRAWN_COMPUTED_LINE,
 )
+from tests.support import tiles as tile_factory
 
 # PINNED timezone (never the system zone) so document stems are byte-stable.
 _TZ = timezone(timedelta(hours=-6))
@@ -294,7 +295,10 @@ class _ServingTiles:
     attribution = "© OpenStreetMap contributors"
 
     def resolve(self, refs: Sequence[TileRef]) -> dict[TileRef, bytes]:
-        return {ref: b"\x89PNG\r\n\x1a\n" for ref in refs}
+        return {
+            ref: tile_factory.solid(tile_factory.DEFAULT_SIZE, (46, 139, 120))
+            for ref in refs
+        }
 
 
 _TILES: _ServingTiles = _ServingTiles()

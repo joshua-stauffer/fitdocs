@@ -14,6 +14,7 @@ from fitdocs.athlete import load_athlete_inputs
 from fitdocs.cli import app
 from fitdocs.sync import sync
 from tests.index.derived.conftest import TODAY, build_fixture_root
+from tests.support import tiles as tile_factory
 from tests.test_confinement import _TZ, _tiles
 
 _Entry: TypeAlias = tuple[str, bytes | str | int | None]
@@ -148,7 +149,7 @@ def _invoke_cli(command: str, root: Path, source: Path, index_dir: Path) -> int:
     with (
         patch.dict(os.environ, {"FITDOCS_INDEX_DIR": str(index_dir)}),
         patch("fitdocs.cli._today", lambda: TODAY),
-        patch("fitdocs.tiles._default_fetch", lambda _url: b"synthetic-tile"),
+        patch("fitdocs.tiles._default_fetch", tile_factory.fetch_stub()),
     ):
         result = _RUNNER.invoke(app, args)
     assert result.exit_code == 0, result.output

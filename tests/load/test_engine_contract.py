@@ -31,6 +31,7 @@ from fitdocs.load.engine import DocLoadEntry, apply_load
 from fitdocs.load.prompts import NonInteractiveSession
 from fitdocs.sync import sync
 from tests.fixtures import builder
+from tests.support import tiles as tile_factory
 
 # PINNED timezone (never the system zone) so document stems are byte-stable.
 _TZ = timezone(timedelta(hours=-6))
@@ -50,7 +51,10 @@ class _ServingTiles:
     attribution = "© OpenStreetMap contributors"
 
     def resolve(self, refs: Sequence[object]) -> dict[object, bytes]:
-        return {ref: b"\x89PNG\r\n\x1a\n" for ref in refs}
+        return {
+            ref: tile_factory.solid(tile_factory.DEFAULT_SIZE, (46, 139, 120))
+            for ref in refs
+        }
 
 
 def _build_data_root(tmp_path: Path, fixtures: dict[str, bytes]) -> Path:

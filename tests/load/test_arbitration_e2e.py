@@ -60,6 +60,7 @@ from tests.load.conftest import (
     DecliningCalculator,
     HintedCalculator,
 )
+from tests.support import tiles as tile_factory
 
 _TZ = timezone(timedelta(hours=-6))
 
@@ -103,7 +104,10 @@ class _ServingTiles:
     attribution = "© OpenStreetMap contributors"
 
     def resolve(self, refs: Sequence[TileRef]) -> dict[TileRef, bytes]:
-        return {ref: b"\x89PNG\r\n\x1a\n" for ref in refs}
+        return {
+            ref: tile_factory.solid(tile_factory.DEFAULT_SIZE, (46, 139, 120))
+            for ref in refs
+        }
 
 
 _TILES: _ServingTiles = _ServingTiles()
