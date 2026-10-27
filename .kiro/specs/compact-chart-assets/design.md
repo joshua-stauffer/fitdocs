@@ -80,8 +80,9 @@ Safari. The agent maintaining their wiki, which reads the ownership contract.
   deploys on push.
 
 ### Allowed Dependencies
-- `render.charts.polyline` → stdlib only (`math`). The chart kit does not
-  import it. Adding it to the kit allow list is follow-on work.
+- `render.charts.polyline` → stdlib (`math`) and `render.charts.svg`
+  (`fmt_num`, used by `points_attr`; corrected 2026-10-27 at implementation).
+  The chart kit does not import it. Adding it to the kit allow list is follow-on work.
 - `render.charts.hero` → `polyline`, `svg`, `series`, `palette`, as today
   plus `polyline`.
 - `render.charts.map` → stdlib `base64`/`math`, plus `polyline`, `svg`,
@@ -623,8 +624,12 @@ def compose_basemap(plan: MapPlan, tiles: Sequence[tuple[TileRef, bytes]]) -> Ba
   - Tiles from rows clamped out of range by `plan_map` are never present;
     uncovered pixels stay white.
 - **Encode**: `save(buf, "WEBP", quality=75, method=4)` from a fresh
-  `Image.new` canvas, so no metadata is carried (3.4, 5.1).
-  `encode_canvas` calls `require_encoder()` first.
+  image with no metadata (3.4, 5.1). As implemented it is built with
+  `Image.frombytes` from the canvas's RGB bytes, which carries no `info` or
+  `encoderinfo`.
+  `encode_canvas` calls `require_encoder()` first, and so does
+  `compose_basemap`, before decoding any tile, so a missing encoder is never
+  reported as a tile error (implementation note, 2026-10-27).
 - **Errors**:
   - Any exception from `Image.open`/`load` for a tile, including
     `UnidentifiedImageError` and `OSError`, is re-raised as `BasemapError`
@@ -736,8 +741,11 @@ report lines.
   - Lengths 0, 1 and 2 are handled.
   - Duplicates produced by rounding are removed.
   - The output is identical across two calls (5.1).
-- **polyline linear bound** (1.6, 2.5): a 100,000-point convex arc, RDP's
-  quadratic worst case, completes under a generous ceiling. Separately, an
+- **polyline linear bound** (1.6, 2.5): a large input completes under a
+  generous ceiling. (A convex arc is not RDP's quadratic worst case:
+  unwindowed it costs about 7n distance evaluations. A zigzag that peels one
+  point per split is, at (n−1)(n−2)/2; that is what the windowed bound is
+  tested against. Corrected 2026-10-27 at implementation.) Separately, an
   instrumented distance counter asserts at most `n·THIN_WINDOW`
   evaluations.
 - **svg**: `fmt_num(v)` is byte-identical to today on the existing
