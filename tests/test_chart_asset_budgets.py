@@ -122,12 +122,12 @@ def test_activity_renders_hero_and_dynamics_charts(
     assets = activities.render_assets(activities.activity_fit_bytes(duration, gps=gps))
     assert ("map" in assets) is gps
     for kind in ("hero", "dynamics"):
-        # Two series per chart, one full-resolution polyline each: the render
-        # is the thing the budgets will measure, not a placeholder.
-        assert _points_per_polyline(assets[kind]) == [samples, samples], kind
-        # Pre-thinning parity check (retired by task 2.2 when the line renderer
-        # changes): the render still has the recorded baseline size.
-        assert len(assets[kind].encode("utf-8")) == _BASELINES[label][kind], kind
+        # Two series per chart, one polyline each. The lines are drawn at output
+        # resolution, so each carries fewer points than the recorded samples;
+        # the charts still render both series.
+        counts = _points_per_polyline(assets[kind])
+        assert len(counts) == 2, kind
+        assert all(0 < count < samples for count in counts), kind
 
 
 @pytest.mark.parametrize(

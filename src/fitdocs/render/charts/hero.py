@@ -53,6 +53,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from fitdocs.render.charts.polyline import points_attr, thin
 from fitdocs.render.charts.series import (
     boxcar_smooth,
     gap_segments,
@@ -226,9 +227,10 @@ def _render_backdrop(
     for segment in gap_segments(x, norm):
         if len(segment) < 2:
             continue
-        points: list[_Point] = [(layout.x_px(xv), layout.y_px(n)) for xv, n in segment]
-        commands = [f"M{_coord(*points[0])}"]
-        commands += [f"L{_coord(px, py)}" for px, py in points[1:]]
+        points = thin([(layout.x_px(xv), layout.y_px(n)) for xv, n in segment])
+        commands = [f"M{points_attr(points[:1])}"]
+        commands += [f"L{points_attr([p])}" for p in points[1:]]
+        # The closure drops from the thinned (rounded) end points.
         commands.append(f"L{_coord(points[-1][0], baseline)}")
         commands.append(f"L{_coord(points[0][0], baseline)}")
         commands.append("Z")
@@ -263,8 +265,8 @@ def _render_series(
     for s in series:
         norm = normalize_band(boxcar_smooth(s.values, _SMOOTH_K), *_SERIES_BAND)
         for segment in gap_segments(x, norm):
-            points = " ".join(
-                _coord(layout.x_px(xv), layout.y_px(n)) for xv, n in segment
+            points = points_attr(
+                thin([(layout.x_px(xv), layout.y_px(n)) for xv, n in segment])
             )
             lines.append(
                 el(
