@@ -7,10 +7,10 @@ modality (Req 2.3), and the standard chart-asset naming and markdown image link
 map asset first; strength untouched) is pinned in
 :mod:`tests.render.test_golden_docs`.
 
-The map tiles are a tiny synthetic, license-clean PNG from the test tile factory
-(``tests/support/tiles.py``) -- no basemap-provider tile is ever downloaded or
-committed. The map plan is built from a short chosen route so the
-composition is deterministic and independent of any fixture's own GPS channels.
+The basemap is the fixed fake value in ``tests/support/basemap.py`` -- no
+basemap-provider tile is ever downloaded or committed. The map plan is built from
+a short chosen route so the composition is deterministic and independent of any
+fixture's own GPS channels.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from datetime import timedelta, timezone, tzinfo
 
 from fitdocs import compute_metrics, parse_fit
 from fitdocs.layout import asset_rel_path
-from fitdocs.render import DocContext, MapData, plan_map
+from fitdocs.render import Basemap, DocContext, MapData, plan_map
 from fitdocs.render.charts.palette import (
     ROUTE_BIKE_TINT,
     ROUTE_NEUTRAL_TINT,
@@ -27,7 +27,7 @@ from fitdocs.render.charts.palette import (
 )
 from fitdocs.render.sections import map_section
 from tests.fixtures import builder
-from tests.support import tiles as tile_factory
+from tests.support.basemap import FAKE_BASEMAP
 
 TZ: tzinfo = timezone(timedelta(hours=-6))
 
@@ -41,12 +41,7 @@ _ATTRIBUTION = "© OpenStreetMap contributors"
 def _map_data() -> MapData:
     plan = plan_map(_LATS, _LONS)
     assert plan is not None
-    tile = tile_factory.solid((4, 4), (46, 139, 120))
-    return MapData(
-        plan=plan,
-        tiles=tuple((ref, tile) for ref in plan.tiles),
-        attribution=_ATTRIBUTION,
-    )
+    return MapData(plan=plan, basemap=FAKE_BASEMAP, attribution=_ATTRIBUTION)
 
 
 def _ctx(fit_bytes: bytes, map_data: MapData | None = None) -> DocContext:
@@ -110,3 +105,22 @@ def test_link_and_asset_use_chart_naming_conventions() -> None:
     assert link == f"![Route map]({expected_rel})"
     assert asset.content.startswith("<svg")
     assert _ATTRIBUTION in asset.content or "OpenStreetMap" in asset.content
+
+
+def test_section_embeds_the_map_datas_basemap_as_the_only_image() -> None:
+    """The section passes ``MapData.basemap`` through to the one embedded image."""
+    plan = plan_map(_LATS, _LONS)
+    assert plan is not None
+    # A basemap unlike FAKE_BASEMAP, so a pass-through of any other value differs.
+    basemap = Basemap("image/x-test", b"\x00\x01\x02", -0.125, -0.5, 640.25, 400.75)
+    data = MapData(plan=plan, basemap=basemap, attribution=_ATTRIBUTION)
+
+    result = map_section(_ctx(builder.run_fit_bytes(), data))
+
+    assert result is not None
+    _, asset = result
+    assert asset.content.count("<image") == 1
+    assert (
+        '<image x="-0.125" y="-0.5" width="640.25" height="400.75" '
+        'href="data:image/x-test;base64,AAEC"/>'
+    ) in asset.content

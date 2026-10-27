@@ -30,7 +30,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from fitdocs import Activity, DerivedMetrics, Modality
+from fitdocs import Activity, DerivedMetrics, Modality, parse_fit
 from fitdocs import cli as cli_module
 from fitdocs.cli import app
 from fitdocs.config import DataRootError
@@ -57,7 +57,7 @@ from fitdocs.plugins import (
     PluginLoadError,
     PluginReport,
 )
-from fitdocs.render.charts.map import TileRef
+from fitdocs.render.charts.map import TileRef, plan_map
 from fitdocs.sync import sync as _engine_sync
 from tests.fixtures import builder
 from tests.support import tiles as tile_factory
@@ -606,6 +606,43 @@ def test_sync_reports_map_warning_row_and_detail_without_failing(
     run_text = (data_root / "workouts" / run_doc).read_text(encoding="utf-8")
     assert "## Map" not in run_text
     assert "## Summary" in run_text  # every other section renders normally
+
+
+def _run_plan_tiles() -> tuple[TileRef, ...]:
+    """The tiles the run fixture's map needs, in plan order."""
+    activity = parse_fit(builder.run_fit_bytes())
+    plan = plan_map(activity.samples.latitude_deg, activity.samples.longitude_deg)
+    assert plan is not None
+    return plan.tiles
+
+
+def test_sync_reports_an_undecodable_tile_as_a_warning_and_exits_zero(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A provider that serves a non-image tile leaves the page without its Map
+    section, the warning names the document and the tile, and the run exits 0."""
+    source = tmp_path / "src"
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    _put(source, "run.fit", builder.run_fit_bytes())
+    monkeypatch.setattr(
+        "fitdocs.tiles._default_fetch", lambda _url: tile_factory.UNDECODABLE["tiff"]()
+    )
+
+    result = runner.invoke(app, ["sync", str(source), "--out", str(data_root)])
+
+    assert result.exit_code == 0
+    run_doc = next(name for name in _docs(data_root) if _RUN_SLUG in name)
+    assert "Warnings:\n" in result.output
+    # The Warnings block (not just the Written list) names the document, and the
+    # next line names the first tile in plan order and the cause.
+    block = result.output.split("Warnings:\n", 1)[1].splitlines()
+    assert block[0].strip() == f"workouts/{run_doc}"
+    first = _run_plan_tiles()[0]
+    assert f"tile {first.z}/{first.x}/{first.y} cannot be decoded" in block[1]
+    run_text = (data_root / "workouts" / run_doc).read_text(encoding="utf-8")
+    assert "## Map" not in run_text
+    assert "## Summary" in run_text
 
 
 def test_malformed_tiles_settings_exits_two_before_any_write(tmp_path: Path) -> None:

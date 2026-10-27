@@ -223,7 +223,12 @@ def test_outdoor_activity_yields_map_section_between_summary_and_telemetry(
     # The self-contained asset is on disk under the standard assets dir (1.4).
     map_asset = data_root / WORKOUTS_DIR / ASSETS_SUBDIR / f"{_RUN_STEM}-map.svg"
     assert map_asset.is_file()
-    assert map_asset.read_text(encoding="utf-8").startswith("<svg")
+    svg = map_asset.read_text(encoding="utf-8")
+    assert svg.startswith("<svg")
+    # One composed WebP basemap, not one PNG per tile.
+    assert svg.count("<image") == 1
+    assert svg.count('href="data:image/webp;base64,') == 1
+    assert "data:image/png" not in svg
 
 
 # --- 3. clean omission: no GPS -> no section, no asset, no resolution (1.3, 3.5)

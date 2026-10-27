@@ -193,6 +193,7 @@ from fitdocs import (
     compute_metrics,
     parse_fit,
 )
+from fitdocs.basemap import BasemapError, compose_basemap
 from fitdocs.compose.composer import compose_activity
 from fitdocs.compose.types import Composition
 from fitdocs.contract import (
@@ -2275,7 +2276,11 @@ def _page_task(
 
     # Resolve prepared map inputs before the pure render, only for the outdoor
     # (non-strength) views that render a Map section (Req 3.5). Tile unavailability
-    # degrades to a warning naming this document; the doc renders mapless (4.3, 4.4).
+    # and an undecodable tile each degrade to a warning naming this document; the
+    # doc renders mapless (4.3, 4.4). A missing WebP encoder (BasemapEncoderError)
+    # is deliberately not caught: it is an installation fault. Here it propagates
+    # and becomes a per-file failure; the CLI preflight (``cli._basemap_preflight``)
+    # stops page-rendering commands before any write.
     map_data: MapData | None = None
     warnings: list[DocWarning] = pending_warnings
     if render_activity.modality is not Modality.STRENGTH:
@@ -2289,11 +2294,17 @@ def _page_task(
                 if not quiet:
                     warnings.append(DocWarning(doc=doc_ref, detail=_reason(exc)))
             else:
-                map_data = MapData(
-                    plan=plan,
-                    tiles=tuple((ref, resolved_tiles[ref]) for ref in plan.tiles),
-                    attribution=tiles.attribution,
-                )
+                try:
+                    basemap = compose_basemap(
+                        plan, tuple((ref, resolved_tiles[ref]) for ref in plan.tiles)
+                    )
+                except BasemapError as exc:
+                    if not quiet:
+                        warnings.append(DocWarning(doc=doc_ref, detail=_reason(exc)))
+                else:
+                    map_data = MapData(
+                        plan=plan, basemap=basemap, attribution=tiles.attribution
+                    )
 
     ctx = DocContext(
         activity=render_activity,

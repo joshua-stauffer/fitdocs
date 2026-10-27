@@ -47,7 +47,6 @@ fails this suite loudly.
 
 from __future__ import annotations
 
-import base64
 import builtins
 import hashlib
 import socket
@@ -77,6 +76,7 @@ from tests.golden._serialize import (
     to_jsonable,
 )
 from tests.support import tiles as tile_factory
+from tests.support.basemap import FAKE_BASEMAP, FAKE_PAYLOAD
 
 # Both the no-athlete and the fully-specified-athlete computation paths must be
 # deterministic and pure (Req 13.2, 13.3): threshold-dependent fields (TRIMP,
@@ -337,7 +337,7 @@ def _map_ctx(data: bytes) -> DocContext:
     """A run ``DocContext`` carrying real ``MapData`` composed from its own GPS.
 
     ``plan_map`` over the fixture's decoded position channels yields a real plan;
-    pairing every planned tile with synthetic bytes gives a ``MapData`` that
+    pairing it with the fixed fake basemap gives a ``MapData`` that
     forces ``compose_map`` to actually run inside ``render_document`` -- so the
     offline check below is not vacuous (the map path is genuinely exercised, not
     skipped).
@@ -348,7 +348,7 @@ def _map_ctx(data: bytes) -> DocContext:
     assert plan is not None  # the run fixture carries a complete GPS route
     map_data = MapData(
         plan=plan,
-        tiles=tuple((ref, _SYNTHETIC_TILE) for ref in plan.tiles),
+        basemap=FAKE_BASEMAP,
         attribution="© OpenStreetMap contributors",
     )
     return DocContext(
@@ -373,19 +373,17 @@ def test_render_plus_compose_perform_no_network() -> None:
     the map genuinely composed rather than being skipped.
     """
     ctx = _map_ctx(builder.run_fit_bytes())
-    tile_uri = "data:image/png;base64," + base64.b64encode(_SYNTHETIC_TILE).decode(
-        "ascii"
-    )
+    image_uri = f"data:image/webp;base64,{FAKE_PAYLOAD}"
 
     with mock.patch("socket.socket", _no_socket):
         rendered = render_document(ctx)
 
     # The map genuinely composed under the guard: the section, exactly one map
-    # asset, and the inline tile data-URI are all present (so this is not vacuous).
+    # asset, and the inline basemap data-URI are all present (so this is not vacuous).
     assert "## Map" in rendered.markdown
     map_assets = [a for a in rendered.assets if a.rel_path.endswith("-map.svg")]
     assert len(map_assets) == 1
-    assert tile_uri in map_assets[0].content
+    assert image_uri in map_assets[0].content
 
 
 def test_sync_over_a_warm_fake_cache_is_network_free(tmp_path: Path) -> None:

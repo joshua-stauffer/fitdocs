@@ -4,9 +4,9 @@ These exercise both halves of :mod:`fitdocs.render.charts.map`: the *planning*
 half -- the Web-Mercator / EPSG:3857 slippy projection, integer zoom selection,
 whole-route viewport framing with padding, row-major covering-tile enumeration,
 and the gap-split route projected into viewport pixels -- and the *composition*
-half (``compose_map``): tiles embedded as ``data:`` URIs, the per-segment glow
-treatment, start/finish markers, and legible attribution, composed into a
-single self-contained SVG that is byte-identical for identical inputs.
+half (``compose_map``): the one composed basemap embedded as a ``data:`` URI,
+the per-segment glow treatment, start/finish markers, and legible attribution,
+composed into a single self-contained SVG that is byte-identical for identical inputs.
 
 The invariants under test:
 
@@ -42,6 +42,7 @@ from dataclasses import FrozenInstanceError
 import pytest
 
 from fitdocs.render.charts.map import (
+    Basemap,
     MapPlan,
     TileRef,
     _project,
@@ -52,7 +53,6 @@ from fitdocs.render.charts.map import (
 from fitdocs.render.charts.palette import ROUTE_FINISH_COLOR, ROUTE_START_COLOR
 from fitdocs.render.charts.polyline import thin
 from fitdocs.render.charts.svg import SVG_NAMESPACE, fmt_num
-from tests.support import tiles as tile_factory
 
 # --- viewport constants mirrored from the module contract -------------------
 VIEWPORT_WIDTH = 800
@@ -292,19 +292,19 @@ _TINT = "#123456"
 _ATTRIBUTION = "© OpenStreetMap contributors"
 
 
-def _tile_bytes(ref: TileRef) -> bytes:
-    """Distinct per-tile decodable PNG bytes from the test tile factory.
-
-    Making each tile's bytes unique (seeded from ``z``/``x``/``y``) lets a test
-    assert the emitted ``<image>`` order matches ``plan.tiles`` order by locating
-    each tile's distinct base64 payload in the document.
-    """
-    seed = (ref.z << 40) | (ref.x << 20) | ref.y
-    return tile_factory.map_like(tile_factory.DEFAULT_SIZE, seed)
-
-
-def _tiles_for(plan: MapPlan) -> dict[TileRef, bytes]:
-    return {ref: _tile_bytes(ref) for ref in plan.tiles}
+#: A fixed fake basemap: opaque bytes and fixed placement and size values that
+#: two decimals cannot represent. ``compose_map`` embeds it without decoding and
+#: does not check placement ranges, so it need not be a real image or placement.
+_DATA = bytes(range(256)) * 2
+_BASEMAP = Basemap(
+    mime="image/webp",
+    data=_DATA,
+    x=-0.3333,
+    y=-0.6667,
+    width=801.3333,
+    height=500.6667,
+)
+_PAYLOAD = base64.b64encode(_DATA).decode("ascii")
 
 
 def _multi_segment_plan() -> MapPlan:
@@ -335,20 +335,26 @@ def _hand_plan(
 # --- determinism (4.1) ------------------------------------------------------
 def test_compose_is_byte_identical_for_identical_inputs() -> None:
     plan = _multi_segment_plan()
-    tiles = _tiles_for(plan)
-    first = compose_map(plan, tiles, tint=_TINT, attribution=_ATTRIBUTION)
-    second = compose_map(plan, tiles, tint=_TINT, attribution=_ATTRIBUTION)
+    first = compose_map(plan, _BASEMAP, tint=_TINT, attribution=_ATTRIBUTION)
+    second = compose_map(plan, _BASEMAP, tint=_TINT, attribution=_ATTRIBUTION)
     assert first == second
-    # A freshly-built (equal) tiles mapping yields the same bytes, too: base64
-    # of identical bytes is identical regardless of dict identity.
-    third = compose_map(plan, _tiles_for(plan), tint=_TINT, attribution=_ATTRIBUTION)
-    assert first == third
+    # An equal, separately built basemap yields the same bytes, too.
+    equal = Basemap(
+        _BASEMAP.mime,
+        bytes(_BASEMAP.data),
+        _BASEMAP.x,
+        _BASEMAP.y,
+        _BASEMAP.width,
+        _BASEMAP.height,
+    )
+    assert equal is not _BASEMAP
+    assert first == compose_map(plan, equal, tint=_TINT, attribution=_ATTRIBUTION)
 
 
 # --- self-contained: no external references (6.1) --------------------------
 def test_compose_references_no_external_resources() -> None:
     plan = _multi_segment_plan()
-    svg = compose_map(plan, _tiles_for(plan), tint=_TINT, attribution=_ATTRIBUTION)
+    svg = compose_map(plan, _BASEMAP, tint=_TINT, attribution=_ATTRIBUTION)
 
     # A complete SVG document rooted at <svg> with the namespace.
     assert svg.startswith("<svg")
@@ -360,52 +366,64 @@ def test_compose_references_no_external_resources() -> None:
 
     # Every href is a self-contained data: URI -- no remote tile references.
     hrefs = re.findall(r'href="([^"]*)"', svg)
-    assert hrefs  # tiles are present
-    assert all(h.startswith("data:image/png;base64,") for h in hrefs)
+    assert hrefs  # the basemap is present
+    assert all(h.startswith("data:image/webp;base64,") for h in hrefs)
 
     # The only absolute URL anywhere is the SVG namespace literal in xmlns.
     urls = re.findall(r'https?://[^\s"\'<>]+', svg)
     assert set(urls) == {SVG_NAMESPACE}
 
 
-# --- tiles are the bottom layer, in plan order (4.1) -----------------------
-def test_tiles_are_bottom_layer_in_plan_order() -> None:
+# --- one basemap image, the bottom layer (3.1, 3.6) --------------------------
+def test_one_basemap_image_replaces_the_per_tile_images() -> None:
     plan = _multi_segment_plan()
-    tiles = _tiles_for(plan)
-    svg = compose_map(plan, tiles, tint=_TINT, attribution=_ATTRIBUTION)
+    # The plan covers several tiles, so one image is not just one tile.
+    assert len(plan.tiles) > 1
+    svg = compose_map(plan, _BASEMAP, tint=_TINT, attribution=_ATTRIBUTION)
 
-    # Tiles (images) precede the route (polylines) and the markers (circles).
-    assert svg.index("<image") < svg.index("<polyline")
+    assert svg.count("<image") == 1
+    assert "data:image/png" not in svg
+    assert svg.count(f"data:image/webp;base64,{_PAYLOAD}") == 1
+
+
+def test_basemap_is_the_first_element_before_route_markers_and_attribution() -> None:
+    plan = _multi_segment_plan()
+    svg = compose_map(plan, _BASEMAP, tint=_TINT, attribution=_ATTRIBUTION)
+
+    image = svg.index("<image")
+    # The image opens the document body: nothing is drawn beneath it.
+    assert svg[svg.index(">") + 1 :].startswith("<image")
+    assert image < svg.index("<polyline")
     assert svg.index("<polyline") < svg.index("<circle")
-
-    # Images appear in exactly plan.tiles order (distinct payloads per tile).
-    payloads = [base64.b64encode(tiles[ref]).decode("ascii") for ref in plan.tiles]
-    positions = [svg.index(p) for p in payloads]
-    assert positions == sorted(positions)
-    assert len(set(positions)) == len(positions)
+    assert svg.index("<circle") < svg.index("<rect")
+    assert svg.index("<rect") < svg.index("<text")
 
 
-def test_tile_image_is_placed_at_its_viewport_offset() -> None:
+def test_basemap_placement_keeps_four_decimals() -> None:
+    plan = _multi_segment_plan()
+    svg = compose_map(plan, _BASEMAP, tint=_TINT, attribution=_ATTRIBUTION)
+    assert (
+        f'<image x="-0.3333" y="-0.6667" width="801.3333" height="500.6667" '
+        f'href="data:image/webp;base64,{_PAYLOAD}"/>'
+    ) in svg
+    # ``fmt_num``'s default stays at two places; only the image uses four.
+    assert fmt_num(_BASEMAP.x) == "-0.33"
+    assert fmt_num(_BASEMAP.x, 4) == "-0.3333"
+
+
+def test_basemap_mime_type_is_the_basemaps_own() -> None:
     plan = _hand_plan(segments=(((10.0, 20.0),),))
-    ref = plan.tiles[0]
-    svg = compose_map(plan, _tiles_for(plan), tint=_TINT, attribution=_ATTRIBUTION)
-    exp_x = fmt_num(ref.x * 256 - plan.origin_x)
-    exp_y = fmt_num(ref.y * 256 - plan.origin_y)
-    assert f'<image x="{exp_x}" y="{exp_y}" width="256" height="256"' in svg
-
-
-def test_missing_tile_bytes_raise_keyerror() -> None:
-    # compose requires full coverage of plan.tiles; sync guarantees it.
-    plan = _hand_plan(segments=(((10.0, 20.0),),))
-    with pytest.raises(KeyError):
-        compose_map(plan, {}, tint=_TINT, attribution=_ATTRIBUTION)
+    other = Basemap("image/x-test", b"\x00\x01\x02", 0.0, 0.0, 800.0, 500.0)
+    svg = compose_map(plan, other, tint=_TINT, attribution=_ATTRIBUTION)
+    assert 'href="data:image/x-test;base64,AAEC"' in svg
+    assert svg.count("<image") == 1
 
 
 # --- route glow: wide translucent underlay + narrow opaque foreground (2.1) -
 def test_each_segment_yields_underlay_and_foreground() -> None:
     plan = _multi_segment_plan()
     n = len(plan.segments)
-    svg = compose_map(plan, _tiles_for(plan), tint=_TINT, attribution=_ATTRIBUTION)
+    svg = compose_map(plan, _BASEMAP, tint=_TINT, attribution=_ATTRIBUTION)
 
     # Two polylines per segment: one wide translucent, one narrow opaque.
     assert svg.count("<polyline") == 2 * n
@@ -428,7 +446,7 @@ def test_each_segment_yields_underlay_and_foreground() -> None:
 def test_single_point_segment_renders_as_dot() -> None:
     pt = (400.0, 250.0)
     plan = _hand_plan(segments=((pt,),))
-    svg = compose_map(plan, _tiles_for(plan), tint=_TINT, attribution=_ATTRIBUTION)
+    svg = compose_map(plan, _BASEMAP, tint=_TINT, attribution=_ATTRIBUTION)
     coord = f"{fmt_num(pt[0])},{fmt_num(pt[1])}"
     # A zero-length round-cap stroke: the point duplicated so the cap shows.
     assert f'points="{coord} {coord}"' in svg
@@ -439,7 +457,7 @@ def test_single_point_segment_renders_as_dot() -> None:
 # --- start / finish markers at the route endpoints (2.2) -------------------
 def test_start_and_finish_markers_at_route_endpoints() -> None:
     plan = _multi_segment_plan()
-    svg = compose_map(plan, _tiles_for(plan), tint=_TINT, attribution=_ATTRIBUTION)
+    svg = compose_map(plan, _BASEMAP, tint=_TINT, attribution=_ATTRIBUTION)
 
     start = plan.segments[0][0]  # first point of the first segment
     finish = plan.segments[-1][-1]  # last point of the last segment
@@ -467,7 +485,7 @@ def test_start_and_finish_markers_at_route_endpoints() -> None:
 def test_attribution_text_over_backing_rect_is_escaped() -> None:
     attribution = 'Tiles & data <src> "prov"'
     plan = _hand_plan(segments=(((10.0, 20.0),),))
-    svg = compose_map(plan, _tiles_for(plan), tint=_TINT, attribution=attribution)
+    svg = compose_map(plan, _BASEMAP, tint=_TINT, attribution=attribution)
 
     # Attribution text is XML-escaped -- the raw form never reaches the markup.
     assert "Tiles &amp; data &lt;src&gt; &quot;prov&quot;" in svg
@@ -602,7 +620,7 @@ def _dist_to_line(p: tuple[float, float], line: Sequence[tuple[float, float]]) -
 
 
 def _compose(plan: MapPlan) -> str:
-    return compose_map(plan, _tiles_for(plan), tint=_TINT, attribution=_ATTRIBUTION)
+    return compose_map(plan, _BASEMAP, tint=_TINT, attribution=_ATTRIBUTION)
 
 
 def _planned_route() -> MapPlan:

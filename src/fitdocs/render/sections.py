@@ -472,13 +472,13 @@ def map_section(ctx: DocContext) -> tuple[str, Asset] | None:
     """The route map image link and its SVG asset, or ``None`` (Req 1.1-1.4, 2.3).
 
     Returns ``None`` when the context carries no prepared map inputs
-    (``ctx.map_data is None``) -- no positions, tiles unavailable, or a strength
-    activity -- so the document omits the Map section and its asset entirely (Req
-    1.3). Otherwise the route is tinted by sport (rides use
+    (``ctx.map_data is None``) -- no positions, tiles unavailable or undecodable,
+    or a strength activity -- so the document omits the Map section and its asset
+    entirely (Req 1.3). Otherwise the route is tinted by sport (rides use
     :data:`~fitdocs.render.charts.palette.ROUTE_BIKE_TINT`, runs
     :data:`~fitdocs.render.charts.palette.ROUTE_RUN_TINT`, and every other
     modality the neutral :data:`~fitdocs.render.charts.palette.ROUTE_NEUTRAL_TINT`,
-    Req 2.3), the already-resolved tiles are composed into one self-contained SVG
+    Req 2.3), the already-composed basemap is embedded in one self-contained SVG
     (:func:`~fitdocs.render.charts.map.compose_map`), and the function returns a
     ``![Route map](assets/<stem>-map.svg)`` relative link -- the same
     document-relative convention as the other chart assets (Req 1.4, 6.2) --
@@ -494,7 +494,7 @@ def map_section(ctx: DocContext) -> tuple[str, Asset] | None:
         tint = ROUTE_RUN_TINT
     else:
         tint = ROUTE_NEUTRAL_TINT
-    svg = compose_map(md.plan, dict(md.tiles), tint=tint, attribution=md.attribution)
+    svg = compose_map(md.plan, md.basemap, tint=tint, attribution=md.attribution)
     rel_path = asset_rel_path(ctx.doc_stem, "map")
     return f"![Route map]({rel_path})", Asset(rel_path=rel_path, content=svg)
 

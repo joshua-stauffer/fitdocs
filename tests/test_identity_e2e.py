@@ -58,6 +58,7 @@ from fitdocs.layout import (
 from fitdocs.quarantine import QuarantineRecord, load_quarantine
 from fitdocs.render import TileRef
 from fitdocs.sync import SyncReport, drain, regen, sync
+from fitdocs.tiles import TileUnavailableError
 from tests.fixtures import identity as fx
 from tests.support import tiles as tile_factory
 
@@ -789,6 +790,7 @@ def _trade_export(
     session: int,
     elapsed_s: float,
     distance_m: float,
+    with_position: bool = False,
 ) -> bytes:
     """One HealthFit-style export of a session that starts ``start_hours``
     after the fixtures' common start and was created ``created_hours`` after
@@ -807,6 +809,7 @@ def _trade_export(
         time_created=base.time_created + created_hours * 3600,
         session_uuid=tuple(range(session * 16, session * 16 + 16)),
         device_manufacturer="garmin",
+        with_position=with_position,
     )
 
 
@@ -1378,6 +1381,88 @@ def test_a_ledger_settle_does_not_repeat_the_pages_notices(tmp_path: Path) -> No
     assert report.failures == ()
     assert len(_rename_warnings(report)) == 3  # precondition: A moved twice, B once
     assert sum("effort" in w.detail for w in report.warnings) == 1
+
+
+class _CountingTiles:
+    """A ``TileSource`` that counts ``resolve`` calls and fails them by *mode*.
+
+    ``"undecodable"`` serves decodable factory tiles except for the first
+    requested ref, which gets bytes outside the tile-format allow-list (a real
+    TIFF); ``"unavailable"`` raises
+    ``TileUnavailableError`` on every call.
+    """
+
+    attribution = "test"
+
+    def __init__(self, mode: str) -> None:
+        self._mode = mode
+        self.calls = 0
+
+    def resolve(self, refs: Sequence[TileRef]) -> dict[TileRef, bytes]:
+        self.calls += 1
+        if self._mode == "unavailable":
+            raise TileUnavailableError("offline: no route to host")
+        served = {
+            ref: tile_factory.map_like(tile_factory.DEFAULT_SIZE, index)
+            for index, ref in enumerate(refs)
+        }
+        served[refs[0]] = tile_factory.UNDECODABLE["tiff"]()
+        return served
+
+
+@pytest.mark.parametrize(
+    ("mode", "needle"),
+    [("undecodable", "cannot be decoded"), ("unavailable", "no route to host")],
+)
+def test_a_ledger_settle_does_not_repeat_the_pages_map_warning(
+    tmp_path: Path, mode: str, needle: str
+) -> None:
+    """The page the trading run writes has a route whose map cannot be built.
+    That run reports the omission once; the settle that then moves the same page
+    re-renders it quietly.
+
+    Mutation: ``if not quiet`` -> ``if True`` on the matching ``except`` in
+    ``_page_task`` (two warnings).
+    """
+    kwargs = {"elapsed_s": 3000.0, "distance_m": 9000.0}
+    a_old = _trade_export(
+        start_hours=1, created_hours=0, session=1, with_position=True, **kwargs
+    )
+    a_new = _trade_export(
+        start_hours=0, created_hours=1, session=1, with_position=True, **kwargs
+    )
+    b_old = _trade_export(
+        start_hours=0,
+        created_hours=0,
+        session=2,
+        elapsed_s=2000.0,
+        distance_m=6000.0,
+    )
+    b_new = _trade_export(
+        start_hours=1,
+        created_hours=1,
+        session=2,
+        elapsed_s=2000.0,
+        distance_m=6000.0,
+    )
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    tiles = _CountingTiles(mode)
+    for name, data in (("x", a_old), ("y", b_old)):
+        source = _put_files(tmp_path, name, {"f.fit": data})
+        assert sync(source, data_root, athlete=None, tz=_TZ, tiles=tiles).failures == ()
+    first_run_calls = tiles.calls
+    assert first_run_calls == 1  # only A has a route
+
+    source = _put_files(tmp_path, "both", {"1-a.fit": a_new, "2-b.fit": b_new})
+    report = sync(source, data_root, athlete=None, tz=_TZ, tiles=tiles)
+
+    assert report.failures == ()
+    # Precondition: A moved twice (written, then settled), so the settle path
+    # re-rendered a page whose route needs tiles.
+    assert len(_rename_warnings(report)) == 3
+    assert tiles.calls - first_run_calls == 2
+    assert sum(needle in w.detail for w in report.warnings) == 1
 
 
 # --- planned sync runs (4.3) ---

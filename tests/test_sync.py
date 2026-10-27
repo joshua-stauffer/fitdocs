@@ -22,6 +22,7 @@ source-directory immutability, force semantics, and region-conflict failures.
 
 from __future__ import annotations
 
+import base64
 import contextlib
 import dataclasses
 import hashlib
@@ -36,6 +37,7 @@ import yaml
 
 from fitdocs import Modality, compute_metrics, parse_fit
 from fitdocs.audit import FindingKind, audit
+from fitdocs.basemap import compose_basemap
 from fitdocs.contract import DOC_VERSION, LOAD_KEYS
 from fitdocs.declaration import DECLARATION_FILENAME
 from fitdocs.docmerge import (
@@ -66,7 +68,8 @@ from fitdocs.load.types import (
     LoadResult,
     ProfileView,
 )
-from fitdocs.render import plan_map
+from fitdocs.render import Basemap, MapPlan, TileRef, plan_map
+from fitdocs.render.charts.svg import fmt_num
 from fitdocs.sync import (
     DocumentMatch,
     DocWarning,
@@ -1291,6 +1294,177 @@ def test_sync_disabled_tiles_with_miss_warns_and_omits(tmp_path: Path) -> None:
     assert report.warnings[0].doc == doc_ref
     # The reason surfaces the disabled opt-out.
     assert "disabled" in report.warnings[0].detail.lower()
+
+
+# --- the basemap composed from the resolved tiles (compact-chart-assets 3.1, 3.5,
+# 3.6, 4.1, 4.3) --------------------------------------------------------------
+
+
+def _run_plan() -> MapPlan:
+    """The plan ``sync`` makes for the run fixture, computed independently."""
+    activity = parse_fit(builder.run_fit_bytes())
+    plan = plan_map(activity.samples.latitude_deg, activity.samples.longitude_deg)
+    assert plan is not None
+    return plan
+
+
+class _ScriptedTiles:
+    """A ``TileSource`` serving scripted bytes per ref, in REVERSED dict order.
+
+    Every ref gets distinct decodable bytes unless *overrides* replaces it. The
+    returned mapping iterates in reverse plan order, so an engine that walks the
+    mapping instead of ``plan.tiles`` hands the basemap its tiles in the wrong
+    order.
+    """
+
+    def __init__(self, overrides: dict[TileRef, bytes] | None = None) -> None:
+        self._overrides = overrides or {}
+        self.served: dict[TileRef, bytes] = {}
+        self.returned: tuple[TileRef, ...] = ()
+
+    @property
+    def attribution(self) -> str:
+        return _ATTR
+
+    def resolve(self, refs: Sequence[object]) -> dict[object, bytes]:
+        served: dict[TileRef, bytes] = {}
+        for index, ref in enumerate(refs):
+            assert isinstance(ref, TileRef)
+            served[ref] = self._overrides.get(
+                ref, tile_factory.map_like(tile_factory.DEFAULT_SIZE, index)
+            )
+        self.served = served
+        reordered = dict(reversed(list(served.items())))
+        self.returned = tuple(reordered)
+        return reordered
+
+
+def test_sync_composes_the_basemap_from_tile_pairs_in_plan_order(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plan = _run_plan()
+    assert len(plan.tiles) > 2
+    tiles = _ScriptedTiles()
+    calls: list[tuple[MapPlan, list[tuple[TileRef, bytes]]]] = []
+
+    def recording(
+        called_plan: MapPlan, pairs: Sequence[tuple[TileRef, bytes]]
+    ) -> Basemap:
+        calls.append((called_plan, list(pairs)))
+        return compose_basemap(called_plan, pairs)
+
+    monkeypatch.setattr("fitdocs.sync.compose_basemap", recording)
+    source = tmp_path / "src"
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    _put(source, "run.fit", builder.run_fit_bytes())
+
+    report = sync(source, data_root, athlete=None, tz=_TZ, tiles=tiles)
+
+    assert report.warnings == ()
+    assert report.failures == ()
+    assert len(calls) == 1
+    called_plan, pairs = calls[0]
+    assert called_plan == plan
+    expected = [(ref, tiles.served[ref]) for ref in plan.tiles]
+    # The scenario can tell orders apart: the mapping the source returned
+    # iterates in a different order from the plan, and the tile bytes differ.
+    assert tiles.returned == tuple(reversed(plan.tiles))
+    assert tiles.returned != plan.tiles
+    assert len({data for _, data in expected}) == len(expected)
+    assert pairs == expected
+
+
+def test_sync_embeds_the_composed_basemap_as_the_maps_only_image(
+    tmp_path: Path,
+) -> None:
+    plan = _run_plan()
+    tiles = _ScriptedTiles()
+    source = tmp_path / "src"
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    _put(source, "run.fit", builder.run_fit_bytes())
+
+    report = sync(source, data_root, athlete=None, tz=_TZ, tiles=tiles)
+
+    assert report.warnings == ()
+    expected = compose_basemap(plan, [(ref, tiles.served[ref]) for ref in plan.tiles])
+    # Precondition: the placement has digits beyond the second decimal, so a
+    # two-decimal embedding would change the element.
+    assert fmt_num(expected.x, 4) != fmt_num(expected.x, 2)
+    assert fmt_num(expected.y, 4) != fmt_num(expected.y, 2)
+    svg = _map_asset(data_root, _RUN_STEM).read_text(encoding="utf-8")
+    payload = base64.b64encode(expected.data).decode("ascii")
+    assert svg.count("<image") == 1
+    assert (
+        f'<image x="{fmt_num(expected.x, 4)}" y="{fmt_num(expected.y, 4)}" '
+        f'width="{fmt_num(expected.width, 4)}" '
+        f'height="{fmt_num(expected.height, 4)}" '
+        f'href="data:image/webp;base64,{payload}"/>'
+    ) in svg
+    assert "data:image/png" not in svg
+    # The written map carries the tile source's own attribution text.
+    assert f">{tiles.attribution}</text>" in svg
+    # The image is the first thing drawn: before the route, markers and attribution.
+    assert svg.index("<image") < svg.index("<polyline") < svg.index("<circle")
+
+
+def test_sync_omits_map_with_warning_when_a_tile_cannot_be_decoded(
+    tmp_path: Path,
+) -> None:
+    plan = _run_plan()
+    first, last = plan.tiles[0], plan.tiles[-1]
+    # Two different undecodable tiles: the warning must name the first in plan
+    # order, whatever order the source's mapping iterates in.
+    tiles = _ScriptedTiles(
+        {
+            first: tile_factory.UNDECODABLE["tiff"](),
+            last: tile_factory.UNDECODABLE["gif"](),
+        }
+    )
+    source = tmp_path / "src"
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    _put(source, "run.fit", builder.run_fit_bytes())
+
+    report = sync(source, data_root, athlete=None, tz=_TZ, tiles=tiles)
+
+    doc_ref = f"{WORKOUTS_DIR}/{_RUN_STEM}.md"
+    # The document is written, never a failure; the run reports success.
+    assert report.written == (doc_ref,)
+    assert report.failures == ()
+    text = doc_path(data_root, _RUN_STEM).read_text(encoding="utf-8")
+    assert "## Map" not in text
+    assert "Route map" not in text
+    assert not _map_asset(data_root, _RUN_STEM).exists()
+    assert "## Summary" in text
+    # One warning naming the document and the cause (the tile and why).
+    assert len(report.warnings) == 1
+    warning = report.warnings[0]
+    assert warning.doc == doc_ref
+    assert f"tile {first.z}/{first.x}/{first.y} cannot be decoded" in warning.detail
+    assert "UnidentifiedImageError" in warning.detail
+    assert f"{last.z}/{last.x}/{last.y}" not in warning.detail
+
+
+def test_sync_does_not_downgrade_a_missing_webp_encoder_to_a_warning(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("fitdocs.basemap.encoder_available", lambda: False)
+    source = tmp_path / "src"
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    _put(source, "run.fit", builder.run_fit_bytes())
+
+    report = sync(source, data_root, athlete=None, tz=_TZ, tiles=_ScriptedTiles())
+
+    # The installation fault fails the file instead of writing a mapless page.
+    assert report.warnings == ()
+    assert report.written == ()
+    assert len(report.failures) == 1
+    assert "BasemapEncoderError" in report.failures[0].reason
+    assert not doc_path(data_root, _RUN_STEM).exists()
+    assert not _map_asset(data_root, _RUN_STEM).exists()
 
 
 # --- strength: no tile resolution is ever attempted (3.5) --------------------

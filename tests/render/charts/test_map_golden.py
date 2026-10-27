@@ -6,19 +6,15 @@ SVGs, one per reference scenario, exactly as ``test_hero.py`` /``test_zones.py``
 do for the other charts. A golden regression here means the composed appearance
 changed -- deliberately (regenerate) or by accident (a bug).
 
-Two things are committed and read from disk, never fabricated at compare time:
-
-* **A synthetic fixture tile PNG** (``golden/tiles/fixture_tile.png``) generated
-  by the test tile factory (``tests/support/tiles.py``; an uncompressed PNG,
-  byte-identical across platforms). It is a solid-color raster: license-clean, no
-  basemap-provider tile is ever downloaded or redistributed. Its committed bytes
-  are the stable source every golden embeds as base64 (a tile's real pixels are
-  irrelevant -- the SVG ``<image>`` sizes it to 256).
-* **One golden ``.svg`` per scenario** composed via ``compose_map`` from that
-  fixture: the ride tint, the run tint, the neutral tint, a gap-split route (a
-  ``None`` gap yields >= 2 segments), a single-point route (the zoom-16 centered
-  fallback rendered as a dot), and an attribution block whose text carries an
-  ``&`` to prove XML escaping survives into the committed bytes.
+Each golden is composed from a **fixed fake basemap value**: a ``Basemap`` whose
+bytes are a short literal, not an image. ``compose_map`` embeds a basemap without
+decoding it, so no image library and no tile enters these goldens, and nothing
+here depends on a platform's encoder. The placement (-1/3, -2/3) is chosen so it
+cannot be written exactly with two decimals. One golden ``.svg`` per scenario:
+the ride tint, the run tint, the neutral tint, a gap-split route (a ``None`` gap
+yields >= 2 segments), a single-point route (the zoom-16 centered fallback
+rendered as a dot), and an attribution block whose text carries an ``&`` to prove
+XML escaping survives into the committed bytes.
 
 The invariants under test:
 
@@ -27,25 +23,22 @@ The invariants under test:
 * **Determinism (4.1)** -- each scenario composes byte-identically across calls.
 * **Self-contained (6.1)** -- every golden references no external resource: the
   only absolute URL is the SVG namespace, and every ``href`` is a ``data:`` URI.
-* **Fixture provenance** -- the committed fixture's base64 payload actually
-  appears in every golden, so the goldens are pinned to the committed PNG bytes.
+* **Fixture provenance** -- the fake basemap's base64 payload appears exactly
+  once in every golden, in a single ``data:image/webp`` image.
 
 Regeneration (the "regenerate byte-identically" observable): run this module as
 a script -- ``uv run python -m tests.render.charts.test_map_golden`` -- to
-rewrite the fixture PNG and every golden from the *same* ``compose_case`` /
-``_fixture_bytes`` the tests compare against, so the committed files and the live
-comparison can never drift. It is byte-deterministic in a fixed environment; no
-personal data or provider tile enters the repo. Pytest does not run ``main``.
+rewrite every golden from the *same* ``compose_case`` the tests compare against,
+so the committed files and the live comparison can never drift. It is
+byte-deterministic in a fixed environment; no personal data or provider tile
+enters the repo. Pytest does not run ``main``.
 """
 
 from __future__ import annotations
 
-import base64
 import re
 from dataclasses import dataclass
 from pathlib import Path
-
-from PIL import Image
 
 from fitdocs.render.charts.map import compose_map, plan_map
 from fitdocs.render.charts.palette import (
@@ -54,23 +47,11 @@ from fitdocs.render.charts.palette import (
     ROUTE_RUN_TINT,
 )
 from fitdocs.render.charts.svg import SVG_NAMESPACE
-from tests.support import tiles as tile_factory
+from tests.support.basemap import FAKE_BASEMAP, FAKE_PAYLOAD, FAKE_PLACEMENT
 
 GOLDEN_DIR = Path(__file__).parent / "golden"
-TILES_DIR = GOLDEN_DIR / "tiles"
-FIXTURE_TILE = TILES_DIR / "fixture_tile.png"
-
-#: The solid fixture color (RGB). Arbitrary and fixed -- the pixels never show
-#: through the route/markers/attribution the goldens are really pinning.
-_FIXTURE_RGB = (46, 139, 120)
-_FIXTURE_SIZE = 4  # a 4x4 raster; the SVG <image> sizes every tile to 256
 
 _OSM_ATTRIBUTION = "© OpenStreetMap contributors"
-
-
-def _fixture_bytes() -> bytes:
-    """The fixture tile, built by the test tile factory (decodable, byte-stable)."""
-    return tile_factory.solid((_FIXTURE_SIZE, _FIXTURE_SIZE), _FIXTURE_RGB)
 
 
 # --- reference scenarios ----------------------------------------------------
@@ -130,14 +111,12 @@ GOLDEN_CASES: dict[str, _Scenario] = {
 
 
 def compose_case(name: str) -> str:
-    """Compose one scenario's SVG from the *committed* fixture tile bytes.
+    """Compose one scenario's SVG over the fixed fake basemap.
 
     The single source of truth shared by the tests and :func:`main`: it plans the
-    route, maps every tile the plan requires to the committed fixture PNG's bytes
-    (read from disk -- the stable byte-source, one solid fixture for all tiles),
-    and composes. Because the test compares this exact output to the committed
-    golden and ``main`` writes the golden from this exact output, the two can
-    never drift.
+    route and composes it over :data:`FAKE_BASEMAP`. Because the test compares this
+    exact output to the committed golden and ``main`` writes the golden from this
+    exact output, the two can never drift.
     """
     scenario = GOLDEN_CASES[name]
     plan = plan_map(scenario.lats, scenario.lons)
@@ -146,33 +125,20 @@ def compose_case(name: str) -> str:
         f"scenario {name}: expected {scenario.segments} segment(s), "
         f"got {len(plan.segments)}"
     )
-    tile_bytes = FIXTURE_TILE.read_bytes()
-    tiles = {ref: tile_bytes for ref in plan.tiles}
     return compose_map(
-        plan, tiles, tint=scenario.tint, attribution=scenario.attribution
+        plan, FAKE_BASEMAP, tint=scenario.tint, attribution=scenario.attribution
     )
 
 
-# --- fixture provenance -----------------------------------------------------
-def test_fixture_tile_is_committed_and_is_a_valid_png() -> None:
-    assert FIXTURE_TILE.exists(), f"missing fixture tile: {FIXTURE_TILE}"
-    data = FIXTURE_TILE.read_bytes()
-    # It decodes as a PNG of the fixture size and colour, not a truncated file.
-    with Image.open(FIXTURE_TILE, formats=["PNG"]) as image:
-        assert image.size == (_FIXTURE_SIZE, _FIXTURE_SIZE)
-        assert image.convert("RGB").getpixel((0, 0)) == _FIXTURE_RGB
-    # License-clean: regenerating from the factory reproduces the committed
-    # bytes, so no provider tile was ever substituted.
-    assert data == _fixture_bytes()
-
-
-def test_goldens_embed_the_committed_fixture_bytes() -> None:
-    payload = base64.b64encode(FIXTURE_TILE.read_bytes()).decode("ascii")
+# --- fixture provenance ------------------------------------------------------
+def test_goldens_embed_the_fake_basemap_once() -> None:
     for name in GOLDEN_CASES:
         golden = GOLDEN_DIR / f"{name}.svg"
         assert golden.exists(), f"missing golden: {golden}"
-        # The committed PNG is the byte-source the golden embeds as base64.
-        assert payload in golden.read_text(), f"golden {name} lacks fixture payload"
+        svg = golden.read_text()
+        assert svg.count("<image") == 1, f"golden {name} is not one image"
+        assert svg.count(f"data:image/webp;base64,{FAKE_PAYLOAD}") == 1
+        assert FAKE_PLACEMENT in svg
 
 
 # --- byte-for-byte match against committed goldens (4.1) --------------------
@@ -199,10 +165,10 @@ def test_goldens_are_self_contained() -> None:
         assert svg.endswith("</svg>")
         assert "<script" not in svg
         assert "xlink" not in svg
-        # Every tile reference is an inline data: URI -- no remote tiles.
+        # The basemap reference is an inline data: URI -- no remote tiles.
         hrefs = re.findall(r'href="([^"]*)"', svg)
-        assert hrefs, f"golden {name} embeds no tiles"
-        assert all(h.startswith("data:image/png;base64,") for h in hrefs)
+        assert hrefs, f"golden {name} embeds no basemap"
+        assert all(h.startswith("data:image/webp;base64,") for h in hrefs)
         # The only absolute URL anywhere is the SVG namespace literal.
         urls = re.findall(r'https?://[^\s"\'<>]+', svg)
         assert set(urls) == {SVG_NAMESPACE}, f"golden {name} has external URLs"
@@ -219,16 +185,14 @@ def test_attribution_golden_preserves_xml_escaping() -> None:
 
 # --- regeneration writer (developer utility; pytest does not run this) ------
 def main() -> None:
-    """Rewrite the fixture tile and every golden from the shared code above.
+    """Rewrite every golden from the shared code above.
 
-    Writes ``golden/tiles/fixture_tile.png`` (deterministic factory PNG) then
-    ``golden/<name>.svg`` for every scenario via :func:`compose_case` -- the same
-    function the tests compare against. Byte-deterministic, so re-running leaves
-    the working tree unchanged when nothing intentional has changed.
+    Writes ``golden/<name>.svg`` for every scenario via :func:`compose_case` --
+    the same function the tests compare against. Byte-deterministic, so
+    re-running leaves the working tree unchanged when nothing intentional has
+    changed.
     """
-    TILES_DIR.mkdir(parents=True, exist_ok=True)
-    FIXTURE_TILE.write_bytes(_fixture_bytes())
-    print(f"wrote {FIXTURE_TILE}")
+    GOLDEN_DIR.mkdir(parents=True, exist_ok=True)
     for name in GOLDEN_CASES:
         path = GOLDEN_DIR / f"{name}.svg"
         path.write_text(compose_case(name), encoding="utf-8")

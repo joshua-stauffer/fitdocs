@@ -67,7 +67,7 @@ from fitdocs.render.charts.palette import (
 )
 from fitdocs.render.sections import hero_chart_spec
 from tests.fixtures import builder, merge
-from tests.support import tiles as tile_factory
+from tests.support.basemap import FAKE_BASEMAP
 
 _GOLDEN_DIR = Path(__file__).parent / "golden_docs"
 
@@ -131,7 +131,7 @@ MAP_FIXTURES: dict[str, Callable[[], bytes]] = {
 }
 
 # A short, stable curved route (no gaps) shared by every map case, planned once
-# and resolved to a single synthetic tile, so the composed map is deterministic.
+# and paired with the fixed fake basemap, so the composed map is deterministic.
 _MAP_LATS: tuple[float | None, ...] = (45.0, 45.0008, 45.0016, 45.0022, 45.0030)
 _MAP_LONS: tuple[float | None, ...] = (10.0, 10.0010, 10.0016, 10.0026, 10.0032)
 _MAP_ATTRIBUTION = "© OpenStreetMap contributors"
@@ -142,19 +142,14 @@ COMPOSED_KEY = "composed_run"
 
 
 def _map_data() -> MapData:
-    """Prepared, resolved map inputs for a map-bearing DocContext.
+    """Prepared map inputs for a map-bearing DocContext.
 
-    Plans the shared route and resolves every tile it requires to one committed
-    synthetic PNG's bytes (a real tile's pixels never show through the route), so
-    the ``MapData`` is deterministic and license-clean (Req 4.1)."""
+    Plans the shared route and pairs it with the fixed fake basemap value (no real
+    encode, so the goldens do not depend on a platform's WebP encoder), so the
+    ``MapData`` is deterministic and license-clean (Req 4.1)."""
     plan = plan_map(_MAP_LATS, _MAP_LONS)
     assert plan is not None
-    tile = tile_factory.solid((4, 4), (46, 139, 120))
-    return MapData(
-        plan=plan,
-        tiles=tuple((ref, tile) for ref in plan.tiles),
-        attribution=_MAP_ATTRIBUTION,
-    )
+    return MapData(plan=plan, basemap=FAKE_BASEMAP, attribution=_MAP_ATTRIBUTION)
 
 
 def _build_ctx(

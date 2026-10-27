@@ -9,7 +9,7 @@ returns: :class:`DocContext` (the immutable render input -- activity, derived
 metrics, optional athlete inputs, document stem, append-ordered source
 references, timezone, and optional prepared map inputs), :class:`Asset` (a
 doc-relative chart asset), :class:`RenderedDoc` (the rendered markdown plus its
-assets), and :class:`MapData` (a route map's plan plus its resolved tiles,
+assets), and :class:`MapData` (a route map's plan plus its composed basemap,
 carried across the purity boundary). All are frozen dataclasses so rendering
 stays deterministic (Req 4.1).
 
@@ -41,12 +41,13 @@ from fitdocs.identity.kinds import SourceIdentity
 # Re-export the pure map planning surface (Req 1.1) so downstream callers -- the
 # sync engine especially -- import map types from ``fitdocs.render`` rather than
 # from ``fitdocs.render.charts.map``. ``charts.map`` depends only on sibling
-# ``charts`` modules (``svg``/``series``/``palette``) and stdlib, so this
+# ``charts`` modules (``svg``/``series``/``palette``/``polyline``) and stdlib, so this
 # module-level import introduces no cycle.
-from fitdocs.render.charts.map import MapPlan, TileRef, plan_map
+from fitdocs.render.charts.map import Basemap, MapPlan, TileRef, plan_map
 
 __all__ = [
     "Asset",
+    "Basemap",
     "DocContext",
     "MapData",
     "MapPlan",
@@ -85,20 +86,17 @@ class RenderedDoc:
 
 @dataclass(frozen=True)
 class MapData:
-    """Prepared map inputs: the plan plus its resolved tiles, ready to compose.
+    """Prepared map inputs: the plan plus its composed basemap, ready to compose.
 
     The impure sync engine plans the route (:func:`plan_map`), resolves the
-    plan's exact tile set through the tile store, and freezes the result into
-    this value before it crosses into the pure render layer -- so composition
-    consumes only immutable, already-fetched inputs.
-
-    :attr:`tiles` is ordered exactly as :attr:`MapPlan.tiles`; each ``bytes``
-    payload is an immutable tile image. That ordering, together with the
-    immutability, is what keeps warm-cache renders byte-identical (Req 4.1).
+    plan's exact tile set through the tile store, composes those tiles into one
+    encoded :class:`Basemap`, and freezes the result into this value before it
+    crosses into the pure render layer -- so composition consumes only immutable,
+    already-built inputs and the render layer never sees an image library.
     """
 
     plan: MapPlan
-    tiles: tuple[tuple[TileRef, bytes], ...]  # aligned with plan.tiles order
+    basemap: Basemap
     attribution: str
 
 

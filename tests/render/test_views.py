@@ -38,7 +38,7 @@ from fitdocs.metrics.types import AthleteInputs, ZoneSpec
 from fitdocs.model import DeviceInfo, Samples
 from fitdocs.render import DocContext, MapData, plan_map, render_document
 from tests.fixtures import builder
-from tests.support import tiles as tile_factory
+from tests.support.basemap import FAKE_BASEMAP
 
 # The run/ride/strength fixtures start 2021-09-08 01:46:40 UTC; at -06:00 that is
 # local 2021-09-07 19:46:40 -- pinned so titles and dates are deterministic.
@@ -321,14 +321,7 @@ def _ctx_with_dynamics(
 def _map_data() -> MapData:
     plan = plan_map([37.7749, 37.7752], [-122.4194, -122.4180])
     assert plan is not None
-    return MapData(
-        plan=plan,
-        tiles=tuple(
-            (ref, tile_factory.solid(tile_factory.DEFAULT_SIZE, (46, 139, 120)))
-            for ref in plan.tiles
-        ),
-        attribution="test attribution",
-    )
+    return MapData(plan=plan, basemap=FAKE_BASEMAP, attribution="test attribution")
 
 
 def test_run_dynamics_sits_after_telemetry_and_before_splits(

@@ -10,11 +10,11 @@ and :func:`compose_map` reads the same plan to draw the SVG.
 
 Two halves live here. *Planning* -- :class:`TileRef`, :class:`MapPlan`,
 :func:`plan_map` -- projects and frames the route and enumerates its covering
-tiles. *Composition* -- :func:`compose_map` -- lays the resolved tiles down as
-inline base64 ``data:`` images, draws the gap-split route with a per-segment
-glow, marks the start and finish, and labels the tile attribution, emitting one
-self-contained SVG that references no external resources (Req 2.1, 2.2, 2.7,
-6.1).
+tiles. *Composition* -- :func:`compose_map` -- lays the one composed
+:class:`Basemap` down as an inline base64 ``data:`` image, draws the gap-split
+route with a per-segment glow, marks the start and finish, and labels the tile
+attribution, emitting one self-contained SVG that references no external
+resources (Req 2.1, 2.2, 2.7, 6.1).
 
 The projection is the canonical slippy formula on 256-px tiles: at zoom ``z``
 the world is ``256 * 2**z`` px wide, ``px = (lon + 180) / 360 * world`` and
@@ -33,8 +33,9 @@ latitude and a longitude (absent data stays absent, Req 1.3).
 
 Purity: standard-library ``math`` and ``base64`` plus the sibling
 :mod:`fitdocs.render.charts` modules (``series``, ``svg``, ``palette``,
-``polyline``) only -- no I/O, no clock, no randomness, and never an import of
-:mod:`fitdocs.tiles`.
+``polyline``) only. It embeds a raster it is given and imports no image library;
+there is no I/O, no clock, no randomness, and never an import of
+:mod:`fitdocs.tiles` or :mod:`fitdocs.basemap`.
 Determinism follows by construction: planning emits tiles in a fixed row-major
 order (``y`` outer, ``x`` inner), and composition runs every coordinate through
 :func:`~fitdocs.render.charts.svg.fmt_num`, builds every attribute mapping in a
@@ -49,7 +50,7 @@ from __future__ import annotations
 
 import base64
 import math
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from fitdocs.render.charts.palette import ROUTE_FINISH_COLOR, ROUTE_START_COLOR
@@ -305,32 +306,26 @@ def plan_map(
     )
 
 
-def _render_tiles(plan: MapPlan, tiles: Mapping[TileRef, bytes]) -> list[str]:
-    """The basemap tiles as inline ``data:`` ``<image>`` elements (bottom layer).
+def _render_basemap(basemap: Basemap) -> str:
+    """The composed basemap as one inline ``data:`` ``<image>`` (bottom layer).
 
-    One ``<image>`` per tile in ``plan.tiles`` order (deterministic, Req 4.1),
-    positioned at its viewport offset ``(x*256 - origin_x, y*256 - origin_y)``,
-    each carrying a base64 PNG payload via the SVG2 ``href`` attribute (no
-    ``xlink``) so the map is self-contained (Req 6.1). ``tiles`` must cover every
-    ref: a missing key is a programming error (sync guarantees coverage) and
-    surfaces as :class:`KeyError` rather than a silently dropped tile.
+    Placement and size go through :func:`~fitdocs.render.charts.svg.fmt_num` at
+    four places, so a placement of ``-k/d`` (``d`` the pixel density) survives
+    formatting within 0.0001 units. The payload is the basemap's own MIME type and
+    base64 bytes, via the SVG2 ``href`` attribute (no ``xlink``), so the map is
+    self-contained (Req 6.1).
     """
-    images: list[str] = []
-    for ref in plan.tiles:
-        encoded = base64.b64encode(tiles[ref]).decode("ascii")
-        images.append(
-            el(
-                "image",
-                {
-                    "x": fmt_num(ref.x * TILE_SIZE - plan.origin_x),
-                    "y": fmt_num(ref.y * TILE_SIZE - plan.origin_y),
-                    "width": str(TILE_SIZE),
-                    "height": str(TILE_SIZE),
-                    "href": f"data:image/png;base64,{encoded}",
-                },
-            )
-        )
-    return images
+    encoded = base64.b64encode(basemap.data).decode("ascii")
+    return el(
+        "image",
+        {
+            "x": fmt_num(basemap.x, 4),
+            "y": fmt_num(basemap.y, 4),
+            "width": fmt_num(basemap.width, 4),
+            "height": fmt_num(basemap.height, 4),
+            "href": f"data:{basemap.mime};base64,{encoded}",
+        },
+    )
 
 
 def _polyline(points: str, tint: str, width: float, opacity: float) -> str:
@@ -448,35 +443,30 @@ def _render_attribution(plan: MapPlan, attribution: str) -> list[str]:
 
 def compose_map(
     plan: MapPlan,
-    tiles: Mapping[TileRef, bytes],
+    basemap: Basemap,
     *,
     tint: str,
     attribution: str,
 ) -> str:
-    """Compose ``plan`` and its resolved ``tiles`` into one self-contained SVG.
+    """Compose ``plan`` and its composed ``basemap`` into one self-contained SVG.
 
-    Drawn bottom to top (document order): the basemap ``tiles`` as base64
-    ``data:`` ``<image>`` elements at their viewport offsets; the gap-split
-    route with a per-segment glow (a wide translucent underlay beneath a narrow
-    opaque foreground, ``tint``-colored, round caps/joins, single-point segments
-    as dots, Req 2.1); distinct start/finish markers on the first and last
-    recorded positions (Req 2.2); and legible ``attribution`` over a translucent
-    backing in the bottom-right corner (Req 2.7). The result is a complete SVG
-    document string that references no external resources -- every tile is an
-    inline ``data:`` URI, so it renders with no network access at view time (Req
-    6.1).
+    Drawn bottom to top (document order): the single ``basemap`` as a base64
+    ``data:`` ``<image>``; the gap-split route with a per-segment glow (a wide
+    translucent underlay beneath a narrow opaque foreground, ``tint``-colored,
+    round caps/joins, single-point segments as dots, Req 2.1); distinct
+    start/finish markers on the first and last recorded positions (Req 2.2); and
+    legible ``attribution`` over a translucent backing in the bottom-right corner
+    (Req 2.7). The result is a complete SVG document string that references no
+    external resources -- the basemap is an inline ``data:`` URI, so it renders
+    with no network access at view time (Req 6.1).
 
-    ``tiles`` must cover every :attr:`MapPlan.tiles` entry (sync guarantees this);
-    a missing key raises :class:`KeyError` rather than silently dropping a tile.
-
-    Deterministic by construction (Req 4.1): tiles are emitted in ``plan.tiles``
-    order, every coordinate passes through
-    :func:`~fitdocs.render.charts.svg.fmt_num`, each attribute mapping is built
-    in a fixed key order, and ``base64`` of identical bytes is identical -- so
+    Deterministic by construction (Req 4.1): every coordinate passes through
+    :func:`~fitdocs.render.charts.svg.fmt_num`, each attribute mapping is built in
+    a fixed key order, and ``base64`` of identical bytes is identical -- so
     identical inputs yield byte-identical SVG.
     """
     children: list[str] = []
-    children += _render_tiles(plan, tiles)
+    children.append(_render_basemap(basemap))
     children += _render_route(plan, tint)
     children += _render_markers(plan)
     children += _render_attribution(plan, attribution)

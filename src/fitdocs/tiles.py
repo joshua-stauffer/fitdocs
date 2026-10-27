@@ -329,9 +329,10 @@ class TileStore:
     ``settings.enabled = False`` a cache miss raises :class:`TileUnavailableError`
     and nothing is requested, while a fully-cached map still renders from cache.
     Any fetch failure likewise raises :class:`TileUnavailableError` naming the
-    cause. The cache is append-only: bytes are embedded verbatim (a corrupt
-    provider tile is the provider's content, not validated here), never
-    rewritten and never pruned.
+    cause. The cache is append-only: bytes are stored and returned verbatim (a
+    corrupt provider tile is the provider's content, not validated here), never
+    rewritten and never pruned. Decoding and composing the tiles into the map's
+    one basemap image happens later, in :mod:`fitdocs.basemap`.
 
     ``fetch`` is an injectable seam (default: the real :func:`_default_fetch`
     urllib opener) so tests drive every path with a fake and never touch the
