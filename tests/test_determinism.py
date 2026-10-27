@@ -49,7 +49,10 @@ from __future__ import annotations
 
 import builtins
 import hashlib
+import os
 import socket
+import subprocess
+import sys
 import tomllib
 from collections.abc import Callable, Sequence
 from datetime import UTC, timedelta, timezone
@@ -614,6 +617,41 @@ def test_regen_rewrites_every_document_and_asset_byte_for_byte(tmp_path: Path) -
     _assert_covers_documents_and_every_asset_kind(after_sync)
     assert after_first_regen == after_sync
     assert after_second_regen == after_first_regen
+
+
+def test_separate_processes_write_byte_identical_map_hero_and_dynamics_assets(
+    tmp_path: Path,
+) -> None:
+    """Req 5.1, 3.1: two independent *processes* render the same 1-hour GPS
+    activity (synthetic decodable tiles, separate data roots) to byte-identical
+    map, hero and dynamics assets.
+
+    Each run is a fresh interpreter with a different ``PYTHONHASHSEED``, so
+    output that depends on the hash seed (set iteration order) or on object
+    addresses differs between the two. It does not detect state
+    that is rebuilt identically in every fresh process, such as a per-process
+    render counter.
+    """
+    repo = Path(__file__).parents[1]
+    outputs: list[dict[str, bytes]] = []
+    for name, hash_seed in (("first", "1"), ("second", "2")):
+        out = tmp_path / name
+        env = {**os.environ, "PYTHONHASHSEED": hash_seed}
+        subprocess.run(
+            [sys.executable, "-B", "-m", "tests.fixtures.budget_activities", str(out)],
+            cwd=repo,
+            env=env,
+            check=True,
+            capture_output=True,
+            timeout=300,
+        )
+        outputs.append({p.name: p.read_bytes() for p in sorted(out.glob("*.svg"))})
+
+    first, second = outputs
+    assert sorted(first) == ["1h-dynamics.svg", "1h-hero.svg", "1h-map.svg"]
+    assert all(len(data) > 1000 for data in first.values())
+    assert first["1h-map.svg"].count(b"data:image/webp;base64,") == 1
+    assert first == second
 
 
 def test_the_repeat_run_comparison_detects_a_single_changed_byte(

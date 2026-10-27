@@ -24,6 +24,10 @@ pins the user-visible guarantees route-maps promises:
   ``SyncReport.warnings`` channel alongside an empty ``failures``) and at the CLI
   level (the summary's Warnings row with a genuine exit code 0).
 
+* **Migration and settings (compact-chart-assets 7.2).** One ``regen`` replaces
+  the committed pre-change hero, dynamics and map SVGs with the new form, and the
+  settings tables and the ``[tiles]`` TOML keys are the pre-change set.
+
 The timezone is PINNED to a fixed -06:00 offset so document stems are stable
 wherever the engine-driven cases run; the CLI threads the *system local* zone, so
 those cases match on the sport slug (``-run-`` / ``-ride-``) instead. Every path
@@ -34,7 +38,8 @@ before any fetch) with the fetch seam additionally patched inert.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import re
+from collections.abc import ItemsView, Iterator, KeysView, Sequence, ValuesView
 from datetime import timedelta, timezone
 from pathlib import Path
 
@@ -42,12 +47,19 @@ import pytest
 from typer.testing import CliRunner
 
 from fitdocs import Modality, parse_fit
+from fitdocs.athlete import load_athlete_inputs
 from fitdocs.cli import app
 from fitdocs.layout import ASSETS_SUBDIR, WORKOUTS_DIR, doc_path
 from fitdocs.render import plan_map
-from fitdocs.sync import DocWarning, sync
-from fitdocs.tiles import TileUnavailableError
-from tests.fixtures import builder
+from fitdocs.sync import DocWarning, regen, sync
+from fitdocs.tiles import (
+    DEFAULT_TILE_SETTINGS,
+    TILES_TABLE,
+    TileStore,
+    TileUnavailableError,
+    tile_settings_from_document,
+)
+from tests.fixtures import budget_activities, builder
 from tests.support import tiles as tile_factory
 
 runner = CliRunner()
@@ -378,3 +390,190 @@ def test_failing_map_via_cli_reports_warning_and_exits_zero(
     assert "## Map" not in run_text
     assert "## Summary" in run_text
     assert "## Map" not in ride_text  # the ride never carried GPS
+
+
+# --- 5. migration: one regen replaces pre-change assets (compact-chart-assets 7.2)
+
+_PRE_COMPACT = Path(__file__).parent / "fixtures" / "pre_compact"
+_POINTS = re.compile(r'<polyline points="([^"]*)"')
+_ASSET_LINK = re.compile(r"\]\(assets/([^)]+\.svg)\)")
+
+
+def _point_counts(svg: str) -> list[int]:
+    """The vertex count of every ``<polyline>`` in *svg*, in document order."""
+    return [len(match.split()) for match in _POINTS.findall(svg)]
+
+
+def test_one_regen_replaces_pre_change_assets_and_changes_no_name_or_link(
+    tmp_path: Path,
+) -> None:
+    """Req 7.3 (chiefly), 7.1, 5.1, 5.2, 3.1: a data root holding the pre-change hero,
+    dynamics and map SVGs is migrated by a single ``regen``.
+
+    The 1-hour budget activity is synced, then its three assets are overwritten
+    with the committed pre-change fixtures (tests/fixtures/pre_compact), so the
+    bytes on disk differ from what the renderer now produces. One regen must
+    put the new form back byte-for-byte, leave the document and every file
+    name and link as they were, and the map must hold one WebP image and no
+    PNG while each hero/dynamics line carries fewer vertices than the fixture.
+    """
+    data_root = tmp_path / "data"
+    source = tmp_path / "src"
+    _put(
+        source,
+        "hour.fit",
+        budget_activities.activity_fit_bytes(budget_activities.ONE_HOUR_S, gps=True),
+    )
+
+    def tiles() -> TileStore:
+        return TileStore(
+            data_root,
+            DEFAULT_TILE_SETTINGS,
+            fetch=tile_factory.fetch_stub((16, 16)),
+        )
+
+    synced = sync(
+        source,
+        data_root,
+        athlete=load_athlete_inputs(data_root),
+        tz=_TZ,
+        tiles=tiles(),
+    )
+    assert synced.failures == ()
+    assets_dir = data_root / WORKOUTS_DIR / ASSETS_SUBDIR
+    kinds = budget_activities.ASSET_KINDS
+    paths = {kind: assets_dir / f"{_RUN_STEM}-{kind}.svg" for kind in kinds}
+    assert sorted(p.name for p in assets_dir.iterdir()) == sorted(
+        path.name for path in paths.values()
+    )
+    new_form = {kind: path.read_bytes() for kind, path in paths.items()}
+    names_before = sorted(p.name for p in assets_dir.iterdir())
+    docs_before = {
+        name: data for name, data in _docs(data_root).items() if name.startswith("20")
+    }
+    links_before = set(_ASSET_LINK.findall(next(iter(docs_before.values())).decode()))
+    assert len(docs_before) == 1
+    assert links_before == {paths[kind].name for kind in kinds}
+
+    # Overwrite with the pre-change fixtures, and prove they are in place.
+    fixtures = {kind: (_PRE_COMPACT / f"1h-{kind}.svg").read_bytes() for kind in kinds}
+    for kind in kinds:
+        paths[kind].write_bytes(fixtures[kind])
+        assert paths[kind].read_bytes() == fixtures[kind]
+        assert fixtures[kind] != new_form[kind]
+    assert fixtures["map"].decode().count("data:image/png") > 1
+    assert "data:image/webp" not in fixtures["map"].decode()
+
+    report = regen(
+        data_root,
+        athlete=load_athlete_inputs(data_root),
+        tz=_TZ,
+        tiles=tiles(),
+    )
+    assert report.failures == ()
+    assert len(report.written) == 1
+
+    for kind in kinds:
+        assert paths[kind].read_bytes() == new_form[kind], kind
+    map_svg = paths["map"].read_text(encoding="utf-8")
+    assert map_svg.count("data:image/webp;base64,") == 1
+    assert map_svg.count("<image") == 1
+    assert "data:image/png" not in map_svg
+    for kind in ("hero", "dynamics"):
+        before = _point_counts(fixtures[kind].decode())
+        after = _point_counts(paths[kind].read_text(encoding="utf-8"))
+        assert len(before) == len(after) > 0
+        assert all(0 < new < old for new, old in zip(after, before, strict=True))
+
+    # Nothing else moved: file names, links, and the document itself.
+    assert sorted(p.name for p in assets_dir.iterdir()) == names_before
+    docs_after = {
+        name: data for name, data in _docs(data_root).items() if name.startswith("20")
+    }
+    assert docs_after == docs_before
+    assert set(_ASSET_LINK.findall(next(iter(docs_after.values())).decode())) == (
+        links_before
+    )
+
+
+# --- 6. the settings tables and keys are unchanged (Req 7.5) ----------------
+
+
+class _RecordingTable(dict[str, object]):
+    """A ``[tiles]`` table that logs every key the reader touches."""
+
+    def __init__(self, data: dict[str, object]) -> None:
+        super().__init__(data)
+        self.touched: set[str] = set()
+
+    def __contains__(self, key: object) -> bool:
+        self.touched.add(str(key))
+        return super().__contains__(key)
+
+    def __getitem__(self, key: str) -> object:
+        self.touched.add(key)
+        return super().__getitem__(key)
+
+    def get(self, key: str, default: object = None) -> object:  # type: ignore[override]
+        self.touched.add(key)
+        return super().get(key, default)
+
+    def __iter__(self) -> Iterator[str]:
+        self.touched.add("<iteration>")
+        return super().__iter__()
+
+    def items(self) -> ItemsView[str, object]:
+        self.touched.add("<iteration>")
+        return super().items()
+
+    def keys(self) -> KeysView[str]:
+        self.touched.add("<iteration>")
+        return super().keys()
+
+    def values(self) -> ValuesView[object]:
+        self.touched.add("<iteration>")
+        return super().values()
+
+
+def test_the_settings_tables_and_tile_keys_are_the_pre_change_set() -> None:
+    """Req 7.5: this feature adds no settings table and no ``[tiles]`` TOML key.
+
+    The table names are read from the ``*_TABLE`` string constants in
+    ``src/fitdocs``. The ``[tiles]`` TOML keys are the keys
+    ``tile_settings_from_document`` touches on a recording table holding valid
+    values: ``enabled``, ``name``, ``url`` and ``attribution`` (``url`` fills
+    the ``url_template`` field).
+    """
+    src = Path(__file__).parents[1] / "src" / "fitdocs"
+    pattern = re.compile(r'^([A-Z][A-Z0-9_]*_TABLE)\b[^=\n]*= "([^"]*)"$', re.M)
+    found: dict[str, str] = {}
+    for path in sorted(src.rglob("*.py")):
+        for name, value in pattern.findall(path.read_text(encoding="utf-8")):
+            found[name] = value
+    assert found == {
+        "CONNECTORS_TABLE": "connectors",
+        "FLAGS_TABLE": "flags",
+        "HISTORY_TABLE": "history",
+        "IDENTITY_TABLE": "identity",
+        "INBOX_TABLE": "inbox",
+        "LOAD_TABLE": "load",
+        "PLANS_TABLE": "plans",
+        "PLUGINS_TABLE": "plugins",
+        "PRIORITY_TABLE": "priority",
+        "SUFFICIENCY_TABLE": "sufficiency",
+        "TILES_TABLE": "tiles",
+        "WELLNESS_TABLE": "wellness",
+    }
+    assert TILES_TABLE == "tiles"
+
+    table = _RecordingTable(
+        {
+            "enabled": True,
+            "name": "osm",
+            "url": "https://tiles.invalid/{z}/{x}/{y}.png",
+            "attribution": "synthetic",
+        }
+    )
+    settings = tile_settings_from_document({TILES_TABLE: table}, Path("fitdocs.toml"))
+    assert settings.url_template == "https://tiles.invalid/{z}/{x}/{y}.png"
+    assert table.touched == {"enabled", "name", "url", "attribution"}
