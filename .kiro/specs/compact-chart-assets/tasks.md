@@ -242,7 +242,7 @@ suite, ruff, ruff format and mypy green on its own.
 
 - [ ] 5. Integration
 
-- [ ] 5.1 Put the composed basemap into the map pipeline
+- [x] 5.1 Put the composed basemap into the map pipeline
   - The map composer embeds exactly one image (a data URI with the
     basemap's MIME type, placement at 4 decimals) before the route, markers
     and attribution, and replaces the per-tile images. Its purity statement
@@ -458,3 +458,4 @@ suite, ruff, ruff format and mypy green on its own.
     - basemap.py has an import allow list and banned I/O builtins. File access via `io.open` or a PIL path is not pinned (declared).
   - **Review:** four rounds. Rounds 3–4 were controller test and comment fixes. The round-4 confirmation went to the same reviewer instead of a debug subagent, because the fix was already agreed.
 - 5.3: `cli._basemap_preflight()` maps `BasemapEncoderError` to `_config_error` (exit 2) using the design's exact message (controller ruling: the design text governs over the module error's phrase). It is called on four paths: sync SOURCE after `_tile_store`, `_run_drain_passes` before `_inbox_preflight`, regen before `rebuild_series`, and the end of pull's `if sync_after:` block. `load` and plain `pull` do not call it. Tests snapshot the whole data root (paths, bytes, mtime_ns, dirs). Round 2 was a controller docstring fix. Known gap, queued: plugin discovery can write `__pycache__` into a data-root plugins dir before any preflight.
+- 5.1: `compose_map(plan, basemap, *, tint, attribution)` draws one `<image>` (4-place placement) as the first element. `MapData` is now `(plan, basemap, attribution)`, and both `MapData` and `Basemap` are in `fitdocs.render.__all__` (design § Modified Files). `sync._page_task` passes `(ref, bytes)` pairs in `plan.tiles` order. A `BasemapError` becomes a `DocWarning` (unless `quiet`) and the map is omitted. `BasemapEncoderError` propagates: it is a per-file failure in the engine, and the CLI preflight (5.3) stops before any write. The render-level map goldens use `tests/support/basemap.py` `FAKE_BASEMAP`. `fixture_tile.png` and its provenance tests are deleted. A new `test_identity_e2e::test_a_ledger_settle_does_not_repeat_the_pages_map_warning` pins the `quiet` gates on both map-warning branches, and a sync test pins attribution. 2 rounds.
