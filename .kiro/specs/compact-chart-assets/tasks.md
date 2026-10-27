@@ -385,7 +385,7 @@ suite, ruff, ruff format and mypy green on its own.
   - _Requirements: 1.5, 3.8_
   - _Depends: 1.4, 2.2, 5.1_
 
-- [ ] 7.2 Prove the end-to-end guarantees
+- [x] 7.2 Prove the end-to-end guarantees
   - Extend the existing end-to-end modules rather than repeating the
     undecodable-tile test from 5.1 or the regen-twice test from 5.2.
   - With synthetic decodable tiles, two independent runs give byte-identical
@@ -477,3 +477,9 @@ suite, ruff, ruff format and mypy green on its own.
   - If the renderer shrinks more than about 18%, the live looseness check fails and the budgets must be lowered.
   - Two rounds.
 - 6.1: `CONTRACT_VERSION` is now "17", with a history paragraph. In docs/ownership-contract.md the version head and the "what changed" paragraph are updated. "What Regeneration Replaces and Preserves" gains the write-if-changed and never-partial guarantee, plus this temp-file sentence: "a run killed mid-write can leave one behind … safe to delete". The 8 declaration goldens are regenerated, and three pins moved (test_retimed_rename_docs, index/test_contract_docs, derived/test_preserved). The version-16 head pin was dropped by convention; the 16 text stays pinned in the history. `tests/test_asset_write_contract_docs.py` holds doc pins only. Two notes for 6.2: name "contract version 17" in the changelog, and make sure "Nothing is needed for existing documents" doesn't read as contradicting the `fitdocs regen` action. The website's "currently version 16" is queued, since it is Josh's copy. Two rounds.
+- 7.2: Three tests:
+  - `test_determinism::test_separate_processes_write_byte_identical_map_hero_and_dynamics_assets`: two `-B` subprocesses with PYTHONHASHSEED 1 and 2. It catches set order and `id()`, not per-process counters.
+  - `test_route_maps_e2e::test_one_regen_replaces_pre_change_assets_and_changes_no_name_or_link`: Req 7.3 migration from `pre_compact/`, through the engine regen.
+  - `test_the_settings_tables_and_tile_keys_are_the_pre_change_set`: all `*_TABLE` constants, plus the `[tiles]` TOML keys read by `tile_settings_from_document`, captured with a recording dict.
+
+  DOC_VERSION 11 is pinned at `index/test_contract_docs.py:182` and `render/test_frontmatter.py:106`. Three rounds; round 3 was a one-phrase controller fix the reviewer pre-cleared. Linux CI pending.
