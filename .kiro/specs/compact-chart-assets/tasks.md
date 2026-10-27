@@ -298,7 +298,7 @@ suite, ruff, ruff format and mypy green on its own.
   - _Boundary: cli_
   - _Depends: 3.2_
 
-- [ ] 6. Contract, documentation and specification amendments
+- [x] 6. Contract, documentation and specification amendments
 
 - [x] 6.1 Advance the ownership contract
   - Raise the contract version by one from its value at landing: 16 → 17
@@ -317,7 +317,7 @@ suite, ruff, ruff format and mypy green on its own.
   - _Requirements: 9.1, 9.2_
   - _Depends: 5.2_
 
-- [ ] 6.2 Document the change for users
+- [x] 6.2 Document the change for users
   - Route-map documentation (the README route maps and the configuration
     tile-cache section) covers:
     - one basemap image cropped to the map at the tiles' pixel density;
@@ -370,7 +370,7 @@ suite, ruff, ruff format and mypy green on its own.
     naming this feature, and their spec status checks are clean.
   - _Requirements: 9.4, 9.6_
 
-- [ ] 7. Validation
+- [x] 7. Validation
 
 - [x] 7.1 Enforce the chart byte budgets
   - Activate the budgets for:
@@ -483,3 +483,12 @@ suite, ruff, ruff format and mypy green on its own.
   - `test_the_settings_tables_and_tile_keys_are_the_pre_change_set`: all `*_TABLE` constants, plus the `[tiles]` TOML keys read by `tile_settings_from_document`, captured with a recording dict.
 
   DOC_VERSION 11 is pinned at `index/test_contract_docs.py:182` and `render/test_frontmatter.py:106`. Three rounds; round 3 was a one-phrase controller fix the reviewer pre-cleared. Linux CI pending.
+- 6.2: The docs now cover the change in these places:
+  - README route maps and the docs/configuration.md tile cache: one cropped WebP basemap at the tiles' density; tiles cached and reused; a warning that names the document, the tile and the cause; the encoder preflight, which exits 2.
+  - docs/install.md: a Pillow paragraph (about 12 MB, measured on macOS arm64 / CPython 3.11).
+  - docs/compatibility.md § Map images: the iOS 14 / macOS 11 floor and a blank basemap below it; GitHub only as an image in a rendered page.
+  - Reference §3: the static adaptation.
+  - CHANGELOG [Unreleased] `### Changed`: contract version advances from 16 to 17; one `fitdocs regen`; page text unchanged.
+
+  `tests/_changelog_view.py` gains `V0_2_0`, and `tests/test_map_images_docs.py` pins the [Unreleased] section only. Website-copy outcome: not applicable for per-tile embedding (workout-pages.md:59 and privacy-and-network.md describe only fetch and cache). The stale "currently version 16" and the missing viewer floor are queued (2026-10-27-site-copy-contract-17-and-map-viewer-floor). Two rounds.
+- 7.3* (optional, maintainer-only) was not run. Real-archive totals and real-viewer checks remain for the maintainer.
