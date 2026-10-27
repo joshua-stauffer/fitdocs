@@ -3527,8 +3527,14 @@ script-free) still holds.
 
 #### Specs (dependency order)
 
-- [ ] compact-chart-assets — **brief written 2026-10-26; spec written
-  2026-10-26.** The record:
+- [x] compact-chart-assets — **implemented 2026-10-27** (20/20 executable tasks; optional
+  maintainer-only 7.3* not run; CONTRACT_VERSION "17", DOC_VERSION unchanged at 11;
+  Pillow `>=13.0.0` is a core dependency, imported only in `fitdocs.basemap`;
+  route-maps Amendment 2, workout-docs Amendment 7, wiki-contract Amendment 13,
+  docs-site Amendment 2, distribution Amendment 5, plugin-api Amendment 2;
+  validate-impl GO, full suite 27283 passed / 46 skipped, branch CI green on
+  Linux x86-64 py3.11–3.13; 1h hero 149,489 → 24,514 B; follow-ups queued
+  2026-10-27). **Brief written 2026-10-26; spec written 2026-10-26.** The record:
   - `/kiro-spec-quick --auto`, every phase auto-approved at the maintainer's
     request;
   - 10 requirements / 50 criteria;
