@@ -300,7 +300,7 @@ suite, ruff, ruff format and mypy green on its own.
 
 - [ ] 6. Contract, documentation and specification amendments
 
-- [ ] 6.1 Advance the ownership contract
+- [x] 6.1 Advance the ownership contract
   - Raise the contract version by one from its value at landing: 16 → 17
     unless a peer landed first. Append its history paragraph.
   - In the published ownership contract:
@@ -476,3 +476,4 @@ suite, ruff, ruff format and mypy green on its own.
   - The map-like thresholds are ≥5 colours and a dominant colour under 90%; two real tiles are at 76% and 79%.
   - If the renderer shrinks more than about 18%, the live looseness check fails and the budgets must be lowered.
   - Two rounds.
+- 6.1: `CONTRACT_VERSION` is now "17", with a history paragraph. In docs/ownership-contract.md the version head and the "what changed" paragraph are updated. "What Regeneration Replaces and Preserves" gains the write-if-changed and never-partial guarantee, plus this temp-file sentence: "a run killed mid-write can leave one behind … safe to delete". The 8 declaration goldens are regenerated, and three pins moved (test_retimed_rename_docs, index/test_contract_docs, derived/test_preserved). The version-16 head pin was dropped by convention; the 16 text stays pinned in the history. `tests/test_asset_write_contract_docs.py` holds doc pins only. Two notes for 6.2: name "contract version 17" in the changelog, and make sure "Nothing is needed for existing documents" doesn't read as contradicting the `fitdocs regen` action. The website's "currently version 16" is queued, since it is Josh's copy. Two rounds.
