@@ -204,7 +204,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from fitdocs import AthleteInputs
+from fitdocs import AthleteInputs, basemap
 from fitdocs.agentskill import PACKAGED_SKILLS, skill_root
 from fitdocs.athlete import AthleteFileError, load_athlete_inputs
 from fitdocs.audit import AuditReport, audit
@@ -866,6 +866,8 @@ def sync_command(
         # Build the tile store once (a malformed [tiles] table exits 2 here, before any
         # write); pass it to the engine as the always-supplied basemap-tile source.
         tiles = _tile_store(data_root)
+        # A missing WebP encoder exits 2 here, before any write (Req 4.4).
+        _basemap_preflight()
         # Load [identity] once (a malformed table exits 2 here, before any write).
         identity = _identity_settings(data_root)
         handoff = _new_index_handoff()
@@ -954,6 +956,9 @@ def _run_drain_passes(
         load_holds(data_root)
     except HoldRecordError as exc:
         _hold_record_error(exc)
+    # A missing WebP encoder exits 2 before the inbox preflight creates the inbox
+    # directories (Req 4.4).
+    _basemap_preflight()
     inbox_settings, inbox_paths, quarantine, tiles = _inbox_preflight(data_root)
     handoff = _new_index_handoff()
     try:
@@ -1073,6 +1078,8 @@ def regen_command(
     tiles = _tile_store(data_root)
     identity = _identity_settings(data_root)
     wellness = _wellness_settings(data_root)
+    # A missing WebP encoder exits 2 before the wellness series is rebuilt (Req 4.4).
+    _basemap_preflight()
     series_report = rebuild_series(data_root, settings=wellness, force=True)
     handoff = _new_index_handoff()
     report = regen(
@@ -1602,6 +1609,9 @@ def pull_command(
             load_holds(data_root)
         except HoldRecordError as exc:
             _hold_record_error(exc)
+        # A missing WebP encoder exits 2 before the inbox is created or any
+        # request is made (Req 4.4).
+        _basemap_preflight()
 
     if dry_run:
         inbox_path = validated_inbox.inbox_resolved
@@ -2528,6 +2538,27 @@ def _tile_store(data_root: Path) -> TileStore:
     except SettingsError as exc:
         _config_error(str(exc))
     return TileStore(data_root, settings)
+
+
+def _basemap_preflight() -> None:
+    """Exit ``2`` before any write when Pillow cannot encode WebP (Req 4.4).
+
+    Every command that renders workout pages calls this before its first write.
+    Per the design, :class:`~fitdocs.basemap.BasemapEncoderError` is a per-file
+    failure, never a silent map omission, so without this check each
+    map-bearing page would fail mid-run while pages without a map were still
+    written.
+    Here it becomes a configuration error naming the missing capability and the
+    remedy.
+    """
+    try:
+        basemap.require_encoder()
+    except basemap.BasemapEncoderError:
+        _config_error(
+            "fitdocs cannot draw maps: the installed Pillow has no WebP encoder. "
+            "Reinstall it from an official wheel (`uv tool install --reinstall "
+            "fitdocs`), or build Pillow with libwebp."
+        )
 
 
 def _identity_settings(data_root: Path) -> IdentitySettings:
