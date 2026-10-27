@@ -205,4 +205,6 @@ The compact-chart-assets feature adds `pillow>=13.0.0` to fitdocs' runtime
 dependencies. This does not change Requirement 7 criterion 2: plugin
 discovery itself adds no dependency, and discovering plugins does not import
 Pillow. The dependency declaration is pinned by
-`tests/test_determinism.py::test_no_new_third_party_runtime_dependency_was_added`.
+`tests/test_determinism.py::test_no_new_third_party_runtime_dependency_was_added`;
+that discovery leaves Pillow unimported is pinned by
+`tests/index/test_boundary.py::test_importing_cli_index_modules_and_discovering_plugins_stays_lazy`.

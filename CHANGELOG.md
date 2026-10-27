@@ -19,9 +19,9 @@ recorded as one.
 
 - Chart files are much smaller. Each map now carries one WebP basemap image
   cropped to the area it shows, at the tiles' pixel density, in place of one
-  embedded image per tile, and the hero and running-dynamics charts draw each
-  line at output resolution, within 0.5 output units of the line through every
-  plotted point. Cached tiles are reused as before. A tile that cannot be
+  embedded image per tile. The hero and running-dynamics charts and each map's
+  route draw every line at output resolution, within 0.5 output units of the
+  line through every plotted point. Cached tiles are reused as before. A tile that cannot be
   decoded omits that page's Map section with a warning, and the run still
   succeeds. Chart files are also left untouched when a regeneration would
   write identical bytes.
