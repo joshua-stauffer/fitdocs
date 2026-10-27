@@ -91,9 +91,9 @@ pull` are the other — see Requirement 4.2.)*
 **Objective:** As a user who relies on the data root being fully re-derivable, I want regeneration to remain reproducible and offline-tolerant, so that adding maps never compromises the existing regeneration guarantees.
 
 #### Acceptance Criteria
-1. While the local tile cache already holds every tile a document's map requires, when rendering the same activity with the same inputs repeatedly, the fitdocs CLI shall produce byte-identical document and asset output on every invocation. (This refines the workout-docs byte-identical guarantee to "byte-identical given a warm tile cache".)
+1. While the local tile cache already holds every tile a document's map requires, when rendering the same activity with the same inputs and the same installed dependency versions repeatedly, the fitdocs CLI shall produce byte-identical document and asset output on every invocation. (This refines the workout-docs byte-identical guarantee to "byte-identical given a warm tile cache".) *(amended by Amendment 2: formerly "... with the same inputs repeatedly ...", without "and the same installed dependency versions")*
 2. The fitdocs CLI shall perform network access, outside the explicit connector commands (`fitdocs connect`, `fitdocs pull`), only to fetch missing basemap tiles; every other operation shall continue to work fully offline. (This amends the workout-docs fully-offline guarantee; this spec's Amendment 1, landed by `connectors`, further amends it to name the connector commands as the tool's other, equally explicit, network path.) *(amended by Amendment 1: formerly "The fitdocs CLI shall perform network access only to fetch missing basemap tiles; every other operation shall continue to work fully offline.")*
-3. If a required tile is neither cached nor fetchable (offline, provider error, or tile requests disabled), the fitdocs CLI shall omit the Map section, emit a warning naming the affected document, and render the remainder of the document normally.
+3. If a required tile is neither cached nor fetchable (offline, provider error, or tile requests disabled), or is cached or fetched but is not a PNG, JPEG or WebP image, cannot be decoded, is not square, has an edge longer than 1024 pixels, or cannot be composed onto the basemap, the fitdocs CLI shall omit the Map section, emit a warning naming the affected document, and render the remainder of the document normally. *(amended by Amendment 2: the causes listed in 4.3 as amended added; formerly only "neither cached nor fetchable (offline, provider error, or tile requests disabled)")*
 4. The fitdocs CLI shall never report a document or a run as failed solely because a map could not be rendered; map omission is reported as a warning, not an error.
 
 ### Requirement 5: Tile Provider Configuration and Privacy Opt-Out
@@ -112,6 +112,7 @@ pull` are the other — see Requirement 4.2.)*
 #### Acceptance Criteria
 1. The fitdocs CLI shall produce each map as a single self-contained image file that references no external resources when displayed.
 2. The generated document shall embed the map via a standard image link, consistent with existing chart embedding, so that it displays in common markdown renderers (including Obsidian and GitHub) without plugins, scripts, or network access at view time.
+3. _(added by Amendment 2)_ The map file shall contain exactly one basemap image, covering the map's visible area and embedded as a `data:image/webp` image under the route, markers and attribution, which stay vector shapes and text.
 
 ## Amendment 1 (2026-10-01): the connector commands named as the tool's other explicit network path, landed by connectors
 
@@ -125,3 +126,36 @@ network behavior; this spec owns only the correction that its own
 offline-except-tiles statement no longer describes the whole tool —
 recorded here as Requirement 4 criterion 4.2 amended in place. No
 criterion is renumbered.
+
+## Amendment 2 (2026-10-27): one basemap image per map, undecodable tiles and the determinism wording, landed by compact-chart-assets
+
+Before this feature a map file embedded every basemap tile it covered as its
+own image. `compact-chart-assets` composites the cached tiles onto one canvas
+cropped to the map's visible area and embeds that canvas as one WebP image
+(`data:image/webp`), quality 75, under the vector route, markers and
+attribution. The route line is drawn at output resolution (thinned to the points
+its image can show, coordinates at one decimal place), with the start and finish
+markers still at the first and last track points and the route's widths,
+opacities and tint unchanged (compact-chart-assets Requirement 2). The canvas has the highest pixel density among its tiles, or one
+pixel per output unit if that is higher. This spec's tile fetching, cache,
+provider and opt-out requirements (Requirements 3 and 5) are not changed, and
+tiles are still cached and reused across maps.
+
+Three statements of this spec change:
+- Requirement 4 criterion 4.1: byte-identical output is now stated for the
+  same inputs *and the same installed dependency versions*, because the
+  encoded basemap's bytes can change when the installed image library
+  changes (compact-chart-assets Requirement 5.1 and 8.5). Amended in place.
+- Requirement 4 criterion 4.3: a tile that is cached or fetched but is not a
+  PNG, JPEG or WebP image, cannot be decoded, is not square, has an edge longer
+  than 1024 pixels, or cannot be composed onto the basemap, is a further cause of the
+  Map section's omission, with the same warning and the same unchanged exit
+  status (compact-chart-assets Requirement 4.1 to 4.3; the last three causes are
+  task 3.1 controller rulings, 2026-10-27). Amended in place.
+- Requirement 6 gains criterion 6.3, stating the basemap form above.
+
+The spec's design is amended by a dated note of the same date: its
+"stdlib-only (zero new dependencies)" statement and its "embedded verbatim"
+statement no longer hold. The criterion-to-test mapping for these changes is
+the compact-chart-assets feature's own.
+No existing criterion is renumbered or withdrawn.

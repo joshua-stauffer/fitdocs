@@ -822,11 +822,11 @@ def gap_segments(x: Sequence[float], y: Sequence[float | None]) -> tuple[tuple[t
 
 ##### Service Interface
 ```python
-def fmt_num(value: float) -> str            # fixed 2-decimal, no trailing noise
+def fmt_num(value: float, places: int = 2) -> str  # fixed 2-decimal by default (Amendment 7: see the note below), no trailing noise
 def el(tag: str, attrs: Mapping[str, str], children: Sequence[str] = ()) -> str
 def svg_document(width: int, height: int, children: Sequence[str]) -> str
 ```
-- Deterministic by construction: fixed float precision, attribute order as
+- Deterministic by construction: fixed float precision (2 decimals by default; the coordinates of a thinned line use 1 and a map's basemap placement 4, see the note below), attribute order as
   given (callers pass ordered mappings), no timestamps/ids. Output subset:
   `svg, g, path, polyline, rect, line, text` with presentation attributes
   only — the portable-renderer subset (no scripts, no external refs).
@@ -1035,3 +1035,15 @@ No other persistence exists: state = the user's files (steering).
 `uv run pytest`, `ruff check`, `mypy --strict src/` green; `uv tool install
 --from . fitdocs` smoke test (`fitdocs --version`, `--help`) covers 14.1,
 14.2 from a clean checkout.
+
+## Amendment note (2026-10-27): coordinate precision, landed by compact-chart-assets
+
+The SvgBuilder statement that `fmt_num` is "fixed 2-decimal" is scoped.
+`fmt_num(value)` still rounds to two decimals by default, and the axes, ticks,
+legend and backdrop baseline are written that way. The coordinates of a
+thinned line (the hero and running-dynamics series lines and the elevation
+backdrop's outline, and a map's route line) are written with
+`fmt_num(value, places=1)`, so they carry one decimal place. The placement of
+a map's single basemap image (`x`, `y`, `width`, `height`) is written with
+`fmt_num(value, places=4)`.
+The reasons and the thinning rule are in requirements Amendment 7.

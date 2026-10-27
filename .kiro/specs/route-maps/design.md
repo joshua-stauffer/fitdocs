@@ -47,9 +47,9 @@
 
 ### Allowed Dependencies
 
-- `sync.py` → `fitdocs.tiles` (TileSource resolution) and `fitdocs.render` (plan_map, MapData, existing contracts). CLI → `fitdocs.tiles` (settings load, store construction).
+- `sync.py` → `fitdocs.tiles` (TileSource resolution) and `fitdocs.render` (plan_map, MapData, existing contracts) *(amended 2026-10-27: also `fitdocs.basemap`, see the amendment note at the end of this document)*. CLI → `fitdocs.tiles` (settings load, store construction).
 - `fitdocs.tiles` → `fitdocs.layout` (cache paths) and `fitdocs.render.charts.map` **for the `TileRef` value type only** — never composition functions.
-- `render/charts/map.py` → `render/charts/{svg,palette,series}` and stdlib (`math`, `base64`) only. The render layer never imports `fitdocs.tiles` (purity).
+- `render/charts/map.py` → `render/charts/{svg,palette,series}` and stdlib (`math`, `base64`) only *(amended 2026-10-27: also `render/charts/polyline`, see the amendment note at the end of this document)*. The render layer never imports `fitdocs.tiles` (purity).
 - Network access (`urllib.request`) is permitted **only** inside `fitdocs.tiles` — the sole network-touching module in the package (4.2).
 
 ### Revalidation Triggers
@@ -114,10 +114,10 @@ graph TB
 **Architecture Integration**:
 
 - Selected pattern: impure acquisition + pure composition, sync-orchestrated. Sync calls `plan_map` (pure) to learn the exact tile set, resolves it through `TileStore` (impure), and injects a complete `MapData` — or `None` — into `DocContext`; rendering stays a pure function.
-- Dependency direction (violations are errors): `cli → sync → {tiles, render}`; `tiles → {layout, render.charts.map(TileRef only)}`; `render.charts.map → render.charts.{svg, palette, series}`. The render layer never imports `tiles`; `tiles` never performs composition.
+- Dependency direction (violations are errors): `cli → sync → {tiles, render}`; `tiles → {layout, render.charts.map(TileRef only)}`; `render.charts.map → render.charts.{svg, palette, series}`. *(amended 2026-10-27: also `sync → basemap` and `render.charts.map → render.charts.polyline`, see the amendment note at the end of this document)* The render layer never imports `tiles`; `tiles` never performs composition.
 - Existing patterns preserved: pure render, single-writer sync, asset naming/link conventions, deterministic SVG writer, frozen-dataclass contracts, loud config failure (exit 2), rich-table CLI reporting.
 - New components rationale: `tiles.py` isolates the package's only network/cache I/O behind an injectable seam; `charts/map.py` keeps planning and composition in one module; the warnings channel is the smallest addition that satisfies "warn, never fail" (4.3, 4.4).
-- Steering compliance: stdlib-only (zero new dependencies), data-root contract (cache under the data root, never the repo), absent data is `None` (no positions → no plan → no section), `mypy --strict` typing on all new interfaces.
+- Steering compliance: stdlib-only (zero new dependencies) *(reversed 2026-10-27, see the amendment note at the end of this document)*, data-root contract (cache under the data root, never the repo), absent data is `None` (no positions → no plan → no section), `mypy --strict` typing on all new interfaces.
 
 ### Technology Stack
 
@@ -126,11 +126,11 @@ graph TB
 | HTTP fetch | stdlib `urllib.request` (Py ≥3.11) | Tile GET with mandatory descriptive UA, 10 s timeout | Only inside `fitdocs.tiles`; OSM blocks default UAs — override is load-bearing |
 | Settings | stdlib `tomllib` (read-only) | Parse `<data-root>/fitdocs.toml` `[tiles]` | File is user-edited; fitdocs never writes it |
 | Geometry | stdlib `math` | Web-Mercator projection, zoom selection | Standard slippy-map formulas, pure |
-| Encoding | stdlib `base64` | PNG tiles → `data:image/png;base64,…` URIs | Deterministic for identical bytes |
+| Encoding | stdlib `base64` | PNG tiles → `data:image/png;base64,…` URIs | Deterministic for identical bytes *(reversed 2026-10-27, see the amendment note at the end of this document)* |
 | Rendering | existing `charts/svg.py` writer | Map SVG document | Gains an `<image>`-bearing caller; writer itself unchanged except docstring |
 | Default provider | OSM standard tile layer | Keyless default (5.2) | Policy explicitly permits identified, cached, viewport-only app use; attribution "© OpenStreetMap contributors" |
 
-No new runtime dependencies.
+No new runtime dependencies. *(amended 2026-10-27: reversed: `pillow>=13.0.0` is a required runtime dependency, see the amendment note at the end of this document)*
 
 ## File Structure Plan
 
@@ -150,6 +150,9 @@ src/fitdocs/render/charts/
                                    #   padding, tile enumeration, gap-split route),
                                    #   compose_map (tiles as data URIs, glow
                                    #   polyline, markers, attribution → SVG str).
+                                   #   [2026-10-27: compose_map embeds one basemap
+                                   #   image, not tiles; see the amendment note at
+                                   #   the end of this document]
 
 tests/
 ├── test_tiles.py                  # TileStore vs fake fetch: cache-first, UA,
@@ -219,7 +222,7 @@ sequenceDiagram
     SYNC->>SYNC: render_document pure then merge write archive
 ```
 
-Flow decisions: the map path runs **after** stem/match resolution so a warning names the affected document (4.3); it runs **before** `render_document` so rendering stays pure. The strength gate in sync and the view dispatch key on the same condition (`Modality.STRENGTH`), keeping "sync fetched tiles" ≡ "a view will render them" (3.5). A `TileUnavailableError` never propagates as a failure — it becomes a warning and the document renders without a Map section (4.3, 4.4).
+Flow decisions: the map path runs **after** stem/match resolution so a warning names the affected document (4.3); it runs **before** `render_document` so rendering stays pure. The strength gate in sync and the view dispatch key on the same condition (`Modality.STRENGTH`), keeping "sync fetched tiles" ≡ "a view will render them" (3.5). A `TileUnavailableError` never propagates as a failure — it becomes a warning and the document renders without a Map section (4.3, 4.4). *(amended 2026-10-27: after the tiles resolve, sync composes the basemap with `fitdocs.basemap`, and the `MapData` step in the diagram carries that basemap; an undecodable tile is a warning with the Map section omitted, as a `TileUnavailableError` is, see the amendment note at the end of this document)*
 
 ## Requirements Traceability
 
@@ -257,7 +260,7 @@ Flow decisions: the map path runs **after** stem/match resolution so a warning n
 
 | Component | Domain/Layer | Intent | Req Coverage | Key Dependencies | Contracts |
 |-----------|--------------|--------|--------------|------------------|-----------|
-| MapPlanner + MapComposer | render/charts (pure) | Geometry, tile planning, SVG composition | 1.3, 2.1, 2.2, 2.4–2.7, 4.1, 6.1 | svg.py (P0), palette (P1), series (P1) | Service |
+| MapPlanner + MapComposer | render/charts (pure) | Geometry, tile planning, SVG composition | 1.3, 2.1, 2.2, 2.4–2.7, 4.1, 6.1 | svg.py (P0), palette (P1), series (P1) *(amended 2026-10-27: also polyline; see the amendment note at the end of this document)* | Service |
 | TileSettings + loader | tiles (config) | `[tiles]` schema, defaults, validation | 5.1, 5.2, 5.3 | tomllib (P0) | Service, State |
 | TileStore | tiles (impure) | Cache-first resolve, polite fetch, opt-out gate | 3.1–3.4, 4.2, 5.4 | layout (P0), urllib (P0), TileRef (P0) | Service |
 | MapData / DocContext extension | render contracts | Carry prepared map inputs into pure render | 1.1, 4.1 | charts/map types (P0) | State |
@@ -280,8 +283,8 @@ Flow decisions: the map path runs **after** stem/match resolution so a warning n
 **Responsibilities & Constraints**
 
 - Web-Mercator projection (EPSG:3857 slippy scheme, 256 px tiles), integer zoom selection, viewport framing, tile enumeration, gap-split route projection, and deterministic SVG authoring.
-- Pure: stdlib (`math`, `base64`) + `charts/{svg,palette,series}` only; no I/O, no clock, no randomness. Never imports `fitdocs.tiles`.
-- Determinism (4.1): tiles iterated in `MapPlan.tiles` order (row-major y, then x); coordinates through `fmt_num`; attributes in fixed mapping order; base64 of identical bytes is identical.
+- Pure: stdlib (`math`, `base64`) + `charts/{svg,palette,series}` only *(amended 2026-10-27: also `charts/polyline`, see the amendment note at the end of this document)*; no I/O, no clock, no randomness. Never imports `fitdocs.tiles`.
+- Determinism (4.1): tiles iterated in `MapPlan.tiles` order (row-major y, then x); coordinates through `fmt_num`; attributes in fixed mapping order; base64 of identical bytes is identical *(amended 2026-10-27: tiles are no longer emitted one per tile; the one basemap image is deterministic for the same inputs and installed dependency versions, see the amendment note at the end of this document)*.
 
 **Dependencies**
 
@@ -325,13 +328,15 @@ def compose_map(
 ) -> str: ...
 ```
 
-- Preconditions: `latitudes`/`longitudes` are same-length channels in decimal degrees with `None` gaps (the fit-ingest shape). `compose_map` requires `tiles` to cover every `plan.tiles` entry (sync guarantees it; a missing key is a programming error and may raise `KeyError`).
+*(Signature superseded 2026-10-27: compact-chart-assets design § map gives `compose_map(plan: MapPlan, basemap: Basemap, *, tint: str, attribution: str) -> str`, taking one composed `Basemap` instead of the tile mapping.)*
+
+- Preconditions: `latitudes`/`longitudes` are same-length channels in decimal degrees with `None` gaps (the fit-ingest shape). `compose_map` requires `tiles` to cover every `plan.tiles` entry (sync guarantees it; a missing key is a programming error and may raise `KeyError`). *(amended 2026-10-27: this precondition describes the superseded `tiles` signature; the new signature takes one composed `Basemap`, see compact-chart-assets design § map and the amendment note at the end of this document)*
 - Postconditions: `plan_map` returns `None` iff no index has *both* latitude and longitude present (1.3). Otherwise the plan frames the whole route with ≥ 32 px padding on all sides (2.5) at the largest zoom that fits, clamped to [1, 17]; a negligible extent (single point / sub-pixel bbox) yields a fixed zoom 16 centered on the position (2.6). `compose_map` returns a complete, self-contained SVG document string (6.1).
-- Invariants: the fixed 800×500 viewport geometrically bounds the covering set to ≤ 15 tiles at any zoom — the size budget needs no separate tile-count knob (measured ~30–37 KB/tile ⇒ ~0.5–0.75 MB per map SVG, well under GitHub's ~5 MB image-proxy cap). Identical inputs ⇒ byte-identical SVG (4.1).
+- Invariants: the fixed 800×500 viewport geometrically bounds the covering set to ≤ 15 tiles at any zoom — the size budget needs no separate tile-count knob (measured ~30–37 KB/tile ⇒ ~0.5–0.75 MB per map SVG, well under GitHub's ~5 MB image-proxy cap). Identical inputs ⇒ byte-identical SVG (4.1). *(amended 2026-10-27: the "~30–37 KB/tile ⇒ ~0.5–0.75 MB per map SVG" figure describes per-tile embedding; the byte budget for a map is now compact-chart-assets Requirement 3.8, and the ≤ 15-tile bound still holds, see the amendment note at the end of this document)*
 
 **Composition spec** (reference visual style, 2.1, 2.2, 2.7):
 
-- Tiles: one `<image>` per tile, `href="data:image/png;base64,…"` (SVG2 `href`, no xlink — the root carries only `xmlns`), placed at `(x·256 − origin_x, y·256 − origin_y)`, drawn first (bottom layer). The root svg's default overflow clipping crops tiles at the viewport edge.
+- Tiles: one `<image>` per tile, `href="data:image/png;base64,…"` (SVG2 `href`, no xlink — the root carries only `xmlns`), placed at `(x·256 − origin_x, y·256 − origin_y)`, drawn first (bottom layer). The root svg's default overflow clipping crops tiles at the viewport edge. *(Reversed 2026-10-27: the map carries exactly one basemap `<image>` with a `data:image/webp;base64` href, still drawn first; see the amendment note at the end of this document.)*
 - Route: per gap-split segment, a glow underlay `<polyline>` (stroke = tint, `stroke-width` 10, `stroke-opacity` 0.2) beneath a foreground `<polyline>` (stroke = tint, `stroke-width` 4, `stroke-opacity` 0.95); `fill` none, round caps and joins. A single-point segment renders as a zero-length round-cap stroke (a dot).
 - Markers: first recorded position (first point of first segment) and last recorded position (last point of last segment): circles r 5 with 1.5 px white stroke, start filled `ROUTE_START_COLOR`, finish filled `ROUTE_FINISH_COLOR` (2.2).
 - Attribution: bottom-right, 10 px sans text over a white `fill-opacity` 0.8 backing rect with 4 px padding (2.7). Text passes through the writer's XML escaping.
@@ -394,7 +399,7 @@ def load_tile_settings(data_root: Path) -> TileSettings: ...
 
 - `resolve(refs)`: for each ref, read `<data-root>/.cache/tiles/<name>/<z>/<x>/<y>.png` first (3.2, 3.3); on miss with `enabled`, fetch sequentially with the mandatory descriptive UA and write through to the cache atomically (temp + `os.replace`, the `profile.py` pattern) before returning (3.1). On miss with `enabled = False`, or on any fetch failure (offline, HTTP error, timeout), raise `TileUnavailableError` with a human-readable reason (5.4, → 4.3 warning path).
 - Politeness (3.4): UA `fitdocs/{version} (+https://github.com/joshua-stauffer/fitdocs)` — OSM actively blocks default library UAs; sequential fetching (≤ 15 tiles/map makes one connection trivially compliant with the ≤ 2 norm); 10 s timeout; one attempt per tile per run, no retries; already-cached tiles are never re-requested. No prefetch API exists — the only entry point takes an explicit ref list (supports 3.5).
-- Cached bytes are embedded verbatim (no image validation): a corrupt provider tile is the provider's pixel content, not fitdocs' failure; atomic writes prevent torn cache files.
+- Cached bytes are embedded verbatim (no image validation) *(reversed 2026-10-27, see the amendment note at the end of this document)*: a corrupt provider tile is the provider's pixel content, not fitdocs' failure; atomic writes prevent torn cache files.
 
 **Dependencies**
 
@@ -450,6 +455,8 @@ class MapData:
     """Prepared map inputs: the plan plus its resolved tiles, ready to compose."""
     plan: MapPlan
     tiles: tuple[tuple[TileRef, bytes], ...]  # aligned with plan.tiles order
+    # [2026-10-27: superseded. MapData carries a `basemap` field instead of `tiles`;
+    #  see compact-chart-assets design (Boundary Commitments) and task 5.1]
     attribution: str
 
 @dataclass(frozen=True)
@@ -459,7 +466,7 @@ class DocContext:
                                          #   or strength modality
 ```
 
-- Invariants: `tiles` is ordered exactly as `plan.tiles` (determinism, 4.1); `bytes` values are immutable. The default keeps every existing `DocContext(...)` call site and test valid.
+- Invariants: `tiles` is ordered exactly as `plan.tiles` (determinism, 4.1); `bytes` values are immutable. The default keeps every existing `DocContext(...)` call site and test valid. *(amended 2026-10-27: the `tiles` ordering invariant describes the superseded field; `MapData` carries a `basemap` instead (compact-chart-assets design, task 5.1), see the amendment note at the end of this document)*
 
 #### MapSection + DocViews insertion (`sections.py`, `views.py`)
 
@@ -494,12 +501,12 @@ The 2-channel sibling of `gap_segments`: a point `(a[i], b[i])` exists only wher
 
 **Responsibilities & Constraints**
 
-- In `_process_file`, after stem/match resolution and before `DocContext` construction, and only when `activity.modality is not Modality.STRENGTH` (the exact set of views that render a Map section — keeps "tiles fetched" ≡ "map rendered", 3.5): call `plan_map`; on a plan, `tiles.resolve(plan.tiles)` → `MapData`; on `TileUnavailableError` → append a `DocWarning` naming the target document and carry `map_data = None` (4.3).
+- In `_process_file`, after stem/match resolution and before `DocContext` construction, and only when `activity.modality is not Modality.STRENGTH` (the exact set of views that render a Map section — keeps "tiles fetched" ≡ "map rendered", 3.5): call `plan_map`; on a plan, `tiles.resolve(plan.tiles)` → `MapData`; on `TileUnavailableError` → append a `DocWarning` naming the target document and carry `map_data = None` (4.3). *(amended 2026-10-27: between resolving and building `MapData`, sync composes the basemap with `fitdocs.basemap`; a tile that cannot be used is handled the same way as `TileUnavailableError`, see the amendment note at the end of this document)*
 - Warnings are a separate channel: they never enter `failures`, never affect the written/skipped classification, and never change the exit code (4.4). Warm-cache regen output remains byte-identical (4.1) — the map path adds no clock, randomness, or ordering instability.
 
 **Dependencies**
 
-- Outbound: `fitdocs.tiles` (`TileSource`, `TileUnavailableError`) (P0); `fitdocs.render` (`plan_map`, `MapData`) (P0).
+- Outbound: `fitdocs.tiles` (`TileSource`, `TileUnavailableError`) (P0); `fitdocs.render` (`plan_map`, `MapData`) (P0). *(amended 2026-10-27: also `fitdocs.basemap`, see the amendment note at the end of this document)*
 - Inbound: CLI (P0).
 
 **Contracts**: Service [x] / State [x]
@@ -573,11 +580,11 @@ Keyed by provider `name` so switching providers never mixes skins. Append-only, 
 
 - `TileRef(z, x, y)` — identity of one tile; equality/hash drive cache lookups and dict keys.
 - `MapPlan` — pure derivation from the position channels; contains the *exact* tile set (aggregate root of the map computation).
-- `MapData` — `MapPlan` + resolved tile bytes (ordered as the plan) + attribution; the only map input rendering sees.
+- `MapData` — `MapPlan` + resolved tile bytes (ordered as the plan) + attribution; the only map input rendering sees. *(amended 2026-10-27: it carries one composed basemap in place of the tile bytes, see the amendment note at the end of this document)*
 - `TileSettings` — validated configuration; `DEFAULT_TILE_SETTINGS` is the OSM constant.
 - `DocWarning` — doc-scoped non-fatal condition in `SyncReport.warnings`.
 
-Invariants: absent position data is `None` end-to-end (never fabricated coordinates); `MapData.tiles` order ≡ `MapPlan.tiles` order; all types are immutable so `DocContext` stays a value.
+Invariants: absent position data is `None` end-to-end (never fabricated coordinates); `MapData.tiles` order ≡ `MapPlan.tiles` order *(amended 2026-10-27: `MapData.tiles` is superseded by a basemap, see the amendment note at the end of this document)*; all types are immutable so `DocContext` stays a value.
 
 ## Error Handling
 
@@ -595,7 +602,7 @@ Map trouble is *never* fatal (4.3, 4.4): everything downstream of "a map was pos
 | Disabled + all tiles cached | Map renders normally from cache (5.4) | — | 0 |
 | Malformed `fitdocs.toml` `[tiles]` (bad type, bad `name`, template missing `{z}/{x}/{y}`) | `TileSettingsError` → instructive stderr message, nothing written | `_config_error` | 2 |
 | Unrelated per-file failure (decode, region conflict) | Unchanged existing behavior | `SyncReport.failures` | 1 |
-| Corrupt cached tile bytes | Embedded verbatim (provider content, not validated); atomic writes prevent torn files | — | 0 |
+| Corrupt cached tile bytes | Embedded verbatim (provider content, not validated); atomic writes prevent torn files *(reversed 2026-10-27: see the amendment note at the end of this document)* | — | 0 |
 
 ### Monitoring
 
@@ -625,7 +632,7 @@ CLI reporting only (no logging framework, matching the codebase): the sync/regen
 
 ### Validation Hooks (one-time, during implementation)
 
-- Push a sample map SVG (data-URI tiles) to a scratch GitHub repo and confirm markdown embedding renders through the image proxy (6.1/6.2 empirical check; Obsidian needs no check — root width/height/viewBox already emitted).
+- Push a sample map SVG (data-URI tiles *(2026-10-27: now one data-URI basemap image)*) to a scratch GitHub repo and confirm markdown embedding renders through the image proxy (6.1/6.2 empirical check; Obsidian needs no check — root width/height/viewBox already emitted).
 
 ## Security Considerations
 
@@ -635,6 +642,43 @@ CLI reporting only (no logging framework, matching the codebase): the sync/regen
 
 ## Performance & Scalability
 
-- Size budget: fixed 800×500 viewport ⇒ ≤ 15 tiles/map; measured OSM tiles 30–37 KB ⇒ ~0.5–0.75 MB per map SVG (base64 ×1.33), well under GitHub's ~5 MB image-proxy cap. No further bounding needed by construction.
+- Size budget: fixed 800×500 viewport ⇒ ≤ 15 tiles/map; measured OSM tiles 30–37 KB ⇒ ~0.5–0.75 MB per map SVG (base64 ×1.33), well under GitHub's ~5 MB image-proxy cap. No further bounding needed by construction. *(amended 2026-10-27: this size budget describes per-tile embedding; the map's byte budget is now compact-chart-assets Requirement 3.8, see the amendment note at the end of this document)*
 - Network: worst case 15 sequential GETs per *new-area* map on first sync; zero on every warm re-render. Politeness (UA, sequential, cache-forever, no prefetch) exceeds the OSM tile policy's requirements.
-- Compute: projection is O(samples), composition O(tiles + samples) string building — negligible next to FIT decode; no impact on indoor/strength throughput (map path skipped entirely).
+- Compute: projection is O(samples), composition O(tiles + samples) string building *(amended 2026-10-27: composing the basemap also decodes each tile and encodes one WebP image, see the amendment note at the end of this document)* — negligible next to FIT decode; no impact on indoor/strength throughput (map path skipped entirely).
+
+## Amendment note (2026-10-27): one basemap image, Pillow, and decoded tiles, landed by compact-chart-assets
+
+This note reverses the two statements named below and amends the statements
+tagged inline above; requirements Amendment 2 records the requirement-side
+changes.
+
+- **"stdlib-only (zero new dependencies)" no longer holds.** `pillow>=13.0.0`
+  is a required runtime dependency. Only `fitdocs.basemap` imports `PIL`; the
+  `render/charts/map.py` module this document describes imports none. The
+  `Encoding` row of the Technology Stack, "PNG tiles → `data:image/png;base64,…` URIs",
+  is replaced by one `data:image/webp;base64` image per map, encoded at
+  quality 75.
+- **"embedded verbatim" no longer holds.** The tile cache still stores the
+  provider's bytes verbatim. A map no longer embeds them: `fitdocs.basemap`
+  decodes each tile through a PNG/JPEG/WebP allow list, composites the tiles
+  onto one canvas cropped to the map's visible area, and encodes that canvas.
+  A tile for which requirement 4.3, as amended, lists a cause (not an allowed
+  format, cannot be decoded, not square, an edge over 1024 pixels, or cannot be
+  composed) omits the Map
+  section with a warning naming the document and the cause; it is no longer "the provider's pixel content, not fitdocs'
+  failure". The exit status stays 0, so the Error Handling row for corrupt
+  cached tile bytes now reads "Warning, map omitted".
+- The determinism of requirement 4.1 now also assumes the same installed
+  dependency versions.
+- The route line is thinned. `render/charts/map.py` now also depends on
+  `render/charts/polyline`. `_render_route` applies `thin` to each gap-split
+  segment and writes the points at one decimal place; the start and finish
+  markers stay at the first and last raw track points; the stroke widths,
+  opacities and tint are unchanged (compact-chart-assets Requirements 2.1 to
+  2.5).
+- `sync` also depends on `fitdocs.basemap`, which composes the basemap from
+  the resolved tiles before rendering.
+- Unchanged: the pure-composition split (tile acquisition in `fitdocs.tiles`,
+  rendering in the render layer), the cache layout, the fetch behaviour, the
+  markers' and the attribution's drawing, and the stroke widths, opacities and
+  tint of the route.

@@ -1,7 +1,7 @@
 {
   "feature_name": "route-maps",
   "created_at": "2026-07-17T04:33:34Z",
-  "updated_at": "2026-10-01T00:00:00Z",
+  "updated_at": "2026-10-27T00:00:00Z",
   "language": "en",
   "phase": "tasks-generated",
   "approvals": {
@@ -25,6 +25,12 @@
       "requirement": "4.2 amended",
       "reason": "connectors spec task 9.1: `connectors` adds `fitdocs connect` and `fitdocs pull`, a second explicit network path after the map tiles. Criterion 4.2's 'network access only to fetch missing basemap tiles' read, on its own, as a claim that no other fitdocs operation ever reaches the network — true when this spec shipped, false once the connector commands exist.",
       "also": "requirements.md gains Amendment 1 (2026-10-01); Requirement 4 criterion 4.2 is amended in place, tagged `(amended by Amendment 1)`, naming the connector commands as the tool's other explicit network path. Nothing renumbered."
+    },
+    {
+      "date": "2026-10-27",
+      "requirement": "4.1 amended, 4.3 amended, 6.3 added (appended; no criterion renumbered) -- Amendment 2, landed by compact-chart-assets task 6.3",
+      "reason": "compact-chart-assets replaces the per-tile embedded images of a map with one WebP basemap image cropped to the map, decoded from the cached tiles through a PNG/JPEG/WebP allow list. Byte-identical output now also depends on the installed image library, and a tile that cannot be decoded becomes a further cause of map omission. Criterion 4.3's added causes are a tile that is not PNG, JPEG or WebP, cannot be decoded, is not square, has an edge over 1024 pixels, or cannot be composed (the last three are task 3.1 controller rulings).",
+      "also": "requirements.md gains Amendment 2; Requirement 4 criteria 4.1 and 4.3 are amended in place, tagged `(amended by Amendment 2)`, and Requirement 6 gains criterion 6.3. design.md gains a dated note reversing 'stdlib-only (zero new dependencies)' and 'embedded verbatim'. Nothing renumbered."
     }
   ]
 }

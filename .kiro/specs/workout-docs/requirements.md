@@ -145,6 +145,7 @@ I choose) and never silently inside a code repository.
 8. When output directories do not yet exist inside the data root, the fitdocs CLI shall create them.
 9. _(added by Amendment 6)_ When the file a document is rendered from records the local-time offset its recording device kept, the fitdocs CLI shall take the activity's local start date and time — for the document's name (2.4), its frontmatter date and start time, its title and its heading — from the activity's start in that offset.
 10. _(added by Amendment 6)_ If that file records no such offset, the fitdocs CLI shall take the activity's local start date and time from the system's time zone, at the offset that zone had at the activity's start rather than the offset in force when the command runs; only where the system names no readable zone (neither the `TZ` variable nor `/etc/localtime` names one) shall it fall back to the current offset.
+11. _(added by Amendment 7)_ When `fitdocs sync` or `fitdocs regen` renders a workout chart asset (any image file written under `workouts/assets/` for a workout page) whose bytes equal those of the existing file at its path, the fitdocs CLI shall leave that file untouched, content and modification time; when the bytes differ or no file exists, it shall write the asset so that its path never holds partial content, an interrupted run leaving the previous complete content or the new complete content.
 
 ### Requirement 3: Source Archival and Deduplication
 **Objective:** As an athlete, I want every source `.fit` file archived with my
@@ -233,11 +234,12 @@ profile is visible in any markdown renderer with zero plugins.
 1. When an activity has at least one plottable telemetry series (heart rate, power, pace or speed), the fitdocs CLI shall generate a hero chart as a static image asset alongside the document.
 2. The hero chart shall plot heart rate and power overlaid by default; when either is absent, it shall fall back to the available series per a documented precedence order.
 3. The hero chart shall use cumulative distance as its x-axis when distance data is available, and elapsed time otherwise.
-4. The hero chart shall follow the chart specification documented in `docs/reference/fitdocs-ai-reference.md` §3 — per-series band normalization, faint elevation backdrop band, null-skipping boxcar smoothing, and the documented color palette — adapted only where static rendering demands.
+4. The hero chart shall follow the chart specification documented in `docs/reference/fitdocs-ai-reference.md` §3 — per-series band normalization, faint elevation backdrop band, null-skipping boxcar smoothing, and the documented color palette — adapted only where static rendering demands. _(see criterion 7.9, added by Amendment 7)_
 5. When samples are missing within a series, the hero chart shall render gaps rather than interpolating fabricated values.
 6. If an activity has no plottable telemetry series, the fitdocs CLI shall omit the hero chart and render the rest of the document without error.
 7. _(added by Amendment 1)_ When at least one of ground contact time, leg spring stiffness, vertical oscillation, form power, step length or vertical ratio has recorded data, the Running Dynamics section shall include one chart plotting the first two of those channels, in that order, that have recorded data, on the same horizontal axis as the page's telemetry chart (cumulative distance when the activity records distance, otherwise elapsed time), leaving a gap where a charted channel has no recorded sample and never interpolating across it; if none of those channels has recorded data, the section shall render without a chart.
 8. _(added by Amendment 1)_ The fitdocs CLI shall generate the running-dynamics chart as a static image asset alongside the document, linked by a standard relative image link, byte-identical for identical inputs and free of scripts.
+9. _(added by Amendment 7)_ When the fitdocs CLI draws a line of the hero chart or of the running-dynamics chart, it shall draw the line at output resolution: every point of the line through every plotted point shall lie within 0.5 output units of the drawn line, the first and last plotted points of every gap-free segment shall be points of the drawn line, and a gap shall never be bridged. This is a static-rendering adaptation of the chart specification under criterion 4.
 
 ### Requirement 8: Athlete Zone Inputs and HR-Zone Strip
 **Objective:** As an athlete, I want zone-based displays computed from my
@@ -363,4 +365,49 @@ with its charts (activity-identity Amendment 2, maintainer decision
 2026-10-18); a filename the user chose is kept, as activity-identity
 Requirement 6.3 requires. The criterion-to-test mapping is recorded in this
 spec's `spec.json`.
+No existing criterion is renumbered, reworded or withdrawn.
+
+## Amendment 7 (2026-10-27): line charts at output resolution and asset write semantics, landed by compact-chart-assets
+
+Two statements of this spec change.
+
+**Requirement 7 criterion 7.4: one more static-rendering adaptation.** The
+hero chart follows the reference chart specification "adapted only where
+static rendering demands". Before this feature fitdocs drew a line through
+every plotted point. A static image has a fixed output resolution (the hero
+and running-dynamics charts are 800 output units wide), and points closer
+together than the image can show add bytes and no visible detail. Criterion
+7.9 (new) therefore states that a line is
+drawn with only the points its image can show: every point of the full line
+within 0.5 output units of the drawn line, the ends of every gap-free segment
+kept, and gaps never bridged, so criterion 7.5 is unchanged. The running-dynamics
+chart (criterion 7.7 and 7.8) is drawn by the same renderer and takes the same
+adaptation. The implementation is Ramer-Douglas-Peucker at 0.3 output units,
+applied over windows of 512 intervals so that the work grows in proportion to
+the number of points, with coordinates written to one decimal place
+(`fitdocs.render.charts.polyline`). Axes, ticks, legend, smoothing, band
+normalization, colours and series precedence are drawn as before.
+`docs/reference/fitdocs-ai-reference.md` section 3 records the same
+adaptation.
+
+**Asset write semantics.** Requirement 2 gains criterion 2.11. Before this
+feature `fitdocs sync` and `fitdocs regen` rewrote every chart asset on every
+run; now an asset whose regenerated bytes equal the file on disk is left
+untouched, and a changed asset is replaced atomically
+(`docio.write_bytes_if_changed`). This applies to every workout chart asset,
+not only the line charts and the map. Asset names and locations and the
+document's relative links are unchanged (criterion 2.7), and so is the removal
+of assets that a rewritten page no longer links (compact-chart-assets
+Requirement 6.4).
+
+**Design.** The design's SvgBuilder statement that `fmt_num` is "fixed
+2-decimal" is scoped by a dated note (2026-10-27) in `design.md`: two decimals remain
+the default, the coordinates of a thinned line are written to one decimal
+place, and the placement of a map's basemap image to four, each through
+`fmt_num`'s `places` parameter.
+
+The page-format version (`DOC_VERSION`) is unchanged: the markdown of a
+workout page does not change, except that a page omits its Map section when a
+tile cannot be decoded (route-maps Amendment 2). The criterion-to-test
+mapping for these changes is the compact-chart-assets feature's own.
 No existing criterion is renumbered, reworded or withdrawn.

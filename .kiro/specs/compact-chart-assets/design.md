@@ -489,6 +489,13 @@ def points_attr(points: Sequence[Point]) -> str:
 - Risks: banker's rounding of `.x5` ties is deterministic in CPython on
   every platform. `fmt_num` re-rounds idempotently.
 
+**Controller ruling (2026-10-27)**, from task 2.1: the normative
+`[0..K],[K..2K]` partition governs, so a window spans K = `THIN_WINDOW`
+intervals, which is at most K+1 points. This supersedes the comment on
+`THIN_WINDOW` above, `# max points per RDP window (shared endpoints)`, which
+reads as a point count. The "at most 512 points" wording is in tasks.md 2.1.
+The Algorithm's partition bullet above is unchanged.
+
 #### hero (modified)
 
 - `_render_series`: for each gap segment, map to output points, apply
@@ -634,6 +641,18 @@ def compose_basemap(plan: MapPlan, tiles: Sequence[tuple[TileRef, bytes]]) -> Ba
   evidence.
 - Risks: a future libwebp changes bytes. The goldens are tied to the
   `uv.lock` Pillow (Revalidation Triggers).
+
+**Controller rulings (2026-10-27)**, from task 3.1, which amend the
+**Errors** list above:
+- (a) A tile must be square, with an edge of at most `MAX_TILE_PX` = 1024
+  pixels (density at most 4). This is checked from the image header before
+  `load()`; anything else is a `BasemapError` naming `z/x/y`.
+- (b) The error text is deterministic: `tile z/x/y cannot be decoded: Cause:
+  msg`, with ` at 0x...` addresses stripped.
+- (c) A failure in `resize` or `alpha_composite` becomes a `BasemapError`
+  ("cannot be composed"). It is reachable with real Pillow through the
+  partial-crop decompression-bomb check; Pillow skips that check when a tile
+  exactly covers the canvas.
 
 ### sync and io
 

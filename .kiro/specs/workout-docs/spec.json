@@ -1,7 +1,7 @@
 {
   "feature_name": "workout-docs",
   "created_at": "2026-07-14T22:41:40Z",
-  "updated_at": "2026-10-18T00:00:00Z",
+  "updated_at": "2026-10-27T00:00:00Z",
   "language": "en",
   "phase": "tasks-generated",
   "approvals": {
@@ -188,6 +188,12 @@
         ]
       },
       "cross_spec": "fit-ingest Amendment 8 supplies Activity.local_offset. Every reader of a page's date (morning, load, history, hr_benchmarks, performance, plans, index) reads frontmatter, so it follows after regen with no change of its own."
+    },
+    {
+      "date": "2026-10-27",
+      "requirement": "2.11, 7.9 added (appended; no criterion renumbered or reworded) -- Amendment 7, landed by compact-chart-assets task 6.3",
+      "reason": "compact-chart-assets draws the hero and running-dynamics lines at output resolution (every plotted point within 0.5 output units of the drawn line) and writes workout chart assets only when their bytes change, replacing a changed one atomically. Both are published behavior of this spec's chart and output requirements.",
+      "also": "requirements.md gains Amendment 7; design.md gains a dated note scoping the SvgBuilder 'fixed 2-decimal' statement: 2 decimals by default, 1 for thinned-line coordinates and 4 for a map's basemap placement. DOC_VERSION is unchanged."
     }
   ]
 }
