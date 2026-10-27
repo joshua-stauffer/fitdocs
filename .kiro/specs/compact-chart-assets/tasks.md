@@ -240,7 +240,7 @@ suite, ruff, ruff format and mypy green on its own.
   - _Requirements: 6.1, 6.2_
   - _Boundary: docio_
 
-- [ ] 5. Integration
+- [x] 5. Integration
 
 - [x] 5.1 Put the composed basemap into the map pipeline
   - The map composer embeds exactly one image (a data URI with the
@@ -266,7 +266,7 @@ suite, ruff, ruff format and mypy green on its own.
   - _Requirements: 3.1, 3.5, 3.6, 4.1, 4.3_
   - _Depends: 1.3, 1.5, 1.6, 2.3, 3.2_
 
-- [ ] 5.2 Write workout chart assets through the change-aware helper
+- [x] 5.2 Write workout chart assets through the change-aware helper
   - Lands after 5.1, because both edit the sync module (the page task and
     the asset writer).
   - The sync asset writer keeps its name and loop, and writes every asset
@@ -459,3 +459,4 @@ suite, ruff, ruff format and mypy green on its own.
   - **Review:** four rounds. Rounds 3–4 were controller test and comment fixes. The round-4 confirmation went to the same reviewer instead of a debug subagent, because the fix was already agreed.
 - 5.3: `cli._basemap_preflight()` maps `BasemapEncoderError` to `_config_error` (exit 2) using the design's exact message (controller ruling: the design text governs over the module error's phrase). It is called on four paths: sync SOURCE after `_tile_store`, `_run_drain_passes` before `_inbox_preflight`, regen before `rebuild_series`, and the end of pull's `if sync_after:` block. `load` and plain `pull` do not call it. Tests snapshot the whole data root (paths, bytes, mtime_ns, dirs). Round 2 was a controller docstring fix. Known gap, queued: plugin discovery can write `__pycache__` into a data-root plugins dir before any preflight.
 - 5.1: `compose_map(plan, basemap, *, tint, attribution)` draws one `<image>` (4-place placement) as the first element. `MapData` is now `(plan, basemap, attribution)`, and both `MapData` and `Basemap` are in `fitdocs.render.__all__` (design § Modified Files). `sync._page_task` passes `(ref, bytes)` pairs in `plan.tiles` order. A `BasemapError` becomes a `DocWarning` (unless `quiet`) and the map is omitted. `BasemapEncoderError` propagates: it is a per-file failure in the engine, and the CLI preflight (5.3) stops before any write. The render-level map goldens use `tests/support/basemap.py` `FAKE_BASEMAP`. `fixture_tile.png` and its provenance tests are deleted. A new `test_identity_e2e::test_a_ledger_settle_does_not_repeat_the_pages_map_warning` pins the `quiet` gates on both map-warning branches, and a sync test pins attribution. 2 rounds.
+- 5.2: `sync._write_assets` writes every asset through `docio.write_bytes_if_changed`. The write order, assets → stale removal → move → document → archive, is unchanged. `tests/test_chart_asset_writes.py` covers all four asset kinds (hero, dynamics, map, zones), and needs an athlete with HR zones so zones render. It also checks first-write and replace atomicity, and pins the order. The identity fault-injection test wraps the `_write_assets` step, so it needed no change. Two rounds. Queued follow-up: a SIGKILL during the helper leaves an orphan `.tmp` in `workouts/assets/`.
