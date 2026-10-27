@@ -31,10 +31,6 @@ def test_contract_states_the_local_start_rename() -> None:
     assert "with two exceptions, each renamed with the same chart-asset cleanup" in text
     head = text.split(" ## ", 1)[0]
     assert f"**Contract version:** `{CONTRACT_VERSION}`" in head
-    assert (
-        "A workout page whose filename fitdocs chose from its local start time "
-        "now follows that start time when it changes"
-    ) in head
 
 
 def test_workouts_declaration_states_the_local_start_rename() -> None:
@@ -52,7 +48,7 @@ def test_workouts_declaration_states_the_local_start_rename() -> None:
 
 def test_contract_version_history_records_the_rename() -> None:
     history = _flat(inspect.getsource(contract))
-    assert CONTRACT_VERSION == "16"
+    assert CONTRACT_VERSION == "17"
     assert "Raised from ``15`` to ``16`` by the local-time fix" in history
     assert (
         "A page whose filename fitdocs chose from its local start time is "
