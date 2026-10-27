@@ -1,4 +1,6 @@
-"""Viewport-cropped raster basemap composition (compact-chart-assets 3.1-3.3, 4.1, 4.2).
+"""Viewport-cropped raster basemap composition and encoding.
+
+Spec: compact-chart-assets 3.1-3.4, 3.7, 4.1, 4.2, 4.4, 5.1, 5.2, 5.4.
 
 This is the only module in ``src/`` that touches the image library, and it
 imports it only inside functions (or under ``TYPE_CHECKING``). It does no file
@@ -25,7 +27,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
-from fitdocs.render.charts.map import MapPlan, TileRef
+from fitdocs.render.charts.map import Basemap, MapPlan, TileRef
 
 if TYPE_CHECKING:
     from PIL import Image
@@ -33,6 +35,10 @@ if TYPE_CHECKING:
 TILE_FORMATS: Final[tuple[str, ...]] = ("PNG", "JPEG", "WEBP")
 TILE_UNITS: Final[int] = 256  # output units one tile covers
 MAX_TILE_PX: Final[int] = 1024  # largest accepted tile edge; density <= 4
+BASEMAP_FORMAT: Final[str] = "WEBP"
+BASEMAP_MIME: Final[str] = "image/webp"
+BASEMAP_QUALITY: Final[int] = 75
+BASEMAP_METHOD: Final[int] = 4
 
 _ADDRESS: Final = re.compile(r" at 0x[0-9a-fA-F]+")
 
@@ -42,6 +48,14 @@ class BasemapError(Exception):
     larger than ``MAX_TILE_PX``, or not composable.
 
     The message names the tile as ``z/x/y`` and the cause.
+    """
+
+
+class BasemapEncoderError(Exception):
+    """The installed image library cannot encode ``BASEMAP_FORMAT``.
+
+    An installation fault, not a tile fault; it does not derive from
+    :class:`BasemapError`.
     """
 
 
@@ -122,3 +136,53 @@ def compose_canvas(plan: MapPlan, tiles: Sequence[tuple[TileRef, bytes]]) -> Can
         x=(left - plan.origin_x * density) / density,
         y=(top - plan.origin_y * density) / density,
     )
+
+
+def encoder_available() -> bool:
+    """Whether the installed Pillow can encode ``BASEMAP_FORMAT`` (WebP)."""
+    from PIL import features
+
+    return bool(features.check(BASEMAP_FORMAT.lower()))
+
+
+def require_encoder() -> None:
+    """Raise :class:`BasemapEncoderError` unless a WebP encoder is available."""
+    if not encoder_available():
+        raise BasemapEncoderError(
+            "the installed Pillow was built without WebP support, so maps "
+            "cannot be written; install a Pillow wheel that includes libwebp"
+        )
+
+
+def encode_canvas(canvas: Canvas) -> Basemap:
+    """Encode *canvas* as WebP and return it with its placement in output units.
+
+    The pixels are copied into a fresh RGB image first, so neither metadata on
+    the canvas image (ICC profile, EXIF, XMP) nor an alpha plane reaches the file.
+    Raises :class:`BasemapEncoderError` when no WebP encoder is available.
+    """
+    require_encoder()
+    from PIL import Image
+
+    source = canvas.image.convert("RGB")
+    fresh = Image.frombytes("RGB", source.size, source.tobytes())
+    out = io.BytesIO()
+    fresh.save(out, BASEMAP_FORMAT, quality=BASEMAP_QUALITY, method=BASEMAP_METHOD)
+    return Basemap(
+        mime=BASEMAP_MIME,
+        data=out.getvalue(),
+        x=canvas.x,
+        y=canvas.y,
+        width=fresh.width / canvas.density,
+        height=fresh.height / canvas.density,
+    )
+
+
+def compose_basemap(plan: MapPlan, tiles: Sequence[tuple[TileRef, bytes]]) -> Basemap:
+    """Compose the resolved *tiles* for *plan* and encode the result.
+
+    Raises :class:`BasemapEncoderError` before looking at any tile when no WebP
+    encoder is available, and :class:`BasemapError` naming the tile otherwise.
+    """
+    require_encoder()
+    return encode_canvas(compose_canvas(plan, tiles))

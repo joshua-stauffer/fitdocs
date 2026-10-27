@@ -642,6 +642,7 @@ from fitdocs import plugins
 from fitdocs.plugins import DEFAULT_PLUGIN_SETTINGS
 plugins.discover(Path(sys.argv[1]), DEFAULT_PLUGIN_SETTINGS)
 assert 'duckdb' not in sys.modules
+assert 'PIL' not in sys.modules
 print('duckdb-loaded', 'duckdb' in sys.modules)
 """
     completed = subprocess.run(
