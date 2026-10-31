@@ -292,12 +292,12 @@ flowchart TD
     Strava -->|yes| NotUpd[not updatable]
     Strava -->|no| Absent
     UpdList -->|confirmed| Posted
-    UpdList -->|absent| Absent{uploads on}
+    UpdList -->|absent| Absent
     UpdList -->|other answer| Code
-    Absent -->|no| NotFound[not found]
-    Absent -->|yes| Unreadable{pull record was unreadable}
-    Unreadable -->|yes| LocalUnreadable[local record unreadable]
-    Unreadable -->|no| File{base file present and intact}
+    Absent{pull record was unreadable} -->|yes| LocalUnreadable[local record unreadable]
+    Absent -->|no| Uploads{uploads on}
+    Uploads -->|no| NotFound[not found]
+    Uploads -->|yes| File{base file present and intact}
     File -->|no| FileMissing[activity file missing]
     File -->|yes| Up[upload once]
     Up -->|created and names one| Confirm[update the named activity]
@@ -321,9 +321,11 @@ Key decisions:
   without distance or elapsed time can still be updated through its link or
   its pull record (3.9).
 - An unreadable pull record never stops the read-only steps (the link, the
-  listing); it only bars the upload, which answers `local_record_unreadable`
-  (controller ruling R11), because that record may name the activity and an
-  upload cannot be undone (3.4, 6.8). connectors Req 7.6 never reads an
+  listing), which may still post. When they do not resolve the activity, the
+  answer is `local_record_unreadable` whatever the upload setting
+  (controller ruling R11): `not_found` would assert that no matching
+  activity exists, which the unread record leaves unverified, and an upload
+  cannot be undone (3.4, 6.1, 6.8). connectors Req 7.6 never reads an
   unreadable ledger as absent.
 
 ## Requirements Traceability
@@ -348,7 +350,7 @@ Key decisions:
 | 6.1, 6.2, 6.3 | upload gate and file | IntervalsPublisher, ActivityWrites | `_upload`, `_base_file` | request |
 | 6.4 | upload once | ActivityWrites | `post(..., single_attempt=True)` | request |
 | 6.5, 6.6, 6.7 | confirmation | IntervalsPublisher, ActivityWrites | `_uploaded_activity`, `_update` | request |
-| 6.8 | unreadable pull record bars the upload | IntervalsPublisher, ActivityFinding | `_record_activity`, `publish` step 5 | request |
+| 6.8 | unreadable pull record answers local record unreadable | IntervalsPublisher, ActivityFinding | `_record_activity`, `publish` step 5 | request |
 | 7.1 | one target code | IntervalsPublisher | `publish` | — |
 | 7.2-7.6 | answer table | AnswerMapping | `ANSWER_CODES`, `_answer_class` | — |
 | 7.7 | by request kind | AnswerMapping | `CallKind` | — |
@@ -585,8 +587,9 @@ def _match_listing(listed: Sequence[ListedActivity], subject: CompletedActivity,
 - **Pull record** (3.2-3.4): `load_ledger(session.data_root, session.instance,
   connector_id=INTERVALS_CONNECTOR_ID)`; an absent file is an empty ledger
   (`None`); `LedgerError` → `LOCAL_RECORD_UNREADABLE`, which the operation
-  notes and does not return here (the read-only steps continue; only the
-  upload is barred). The ledger is never written. Tier one: distinct usable `remote_id`s of entries whose `sha256`
+  notes and does not return here (the read-only steps continue; when they
+  do not resolve the activity, the operation answers it whatever the upload
+  setting). The ledger is never written. Tier one: distinct usable `remote_id`s of entries whose `sha256`
   equals the base digest (`subject.source_shas[-1]`); tier two, only when
   tier one is empty: those whose `sha256` is any other source digest. A tier
   with one id answers it; more than one answers `AMBIGUOUS`; both empty, or
@@ -732,9 +735,9 @@ def publish(self, session: ConnectorSession, request: PublishRequest) -> Publish
      `AMBIGUOUS` or `NOT_UPDATABLE` → that; an id → `_update`:
      `CONFIRMED` → `POSTED`, a code → that code, `ABSENT` → step 5; `None` →
      step 5.
-  5. uploads off → `NOT_FOUND`. `record_unreadable` →
-     `LOCAL_RECORD_UNREADABLE` (no file read, no upload). `_base_file` is
-     `None` → `ACTIVITY_FILE_MISSING`. `_upload` → a code → that code; an answer
+  5. `record_unreadable` → `LOCAL_RECORD_UNREADABLE`, whatever the upload
+     setting (no file read, no upload). Uploads off → `NOT_FOUND`.
+     `_base_file` is `None` → `ACTIVITY_FILE_MISSING`. `_upload` → a code → that code; an answer
      naming no usable id, or an id in `absent` → `UNCONFIRMED`; otherwise
      `_update` of the named id: `CONFIRMED` → `UPLOADED` (created) or
      `POSTED` (duplicate) with the link; after a creation anything else →
@@ -800,7 +803,10 @@ def publish(self, session: ConnectorSession, request: PublishRequest) -> Publish
   table equal to `ANSWER_CODES`) and what `posted`, `uploaded`, `not_found`,
   `ambiguous`, `not_updatable`, `activity_file_missing`,
   `local_record_unreadable` and `unconfirmed` mean for intervals.icu (an
-  unreadable instance ledger never stops an update, only an upload; `fitdocs
+  unreadable instance ledger never stops an update through the link or the
+  listing; when neither finds the activity, the answer is
+  `local_record_unreadable` whether or not uploads are on, never `not_found`
+  and never an upload; `fitdocs
   pull` names the file to fix). A malformed `publish_upload` is a
   configuration error for every command that reads the connectors table,
   `fitdocs pull` included, since it goes through the same settings loader.
@@ -914,7 +920,7 @@ an unredirected secret header.
 | any intervals.icu status or transport failure | `ANSWER_CODES` by request kind, or the flow's own success and absence handling |
 | listing body not in documented form | `unavailable` |
 | upload answer not naming one usable activity | `unconfirmed` |
-| pull ledger unreadable | step skipped; link and listing still apply; the upload answers `local_record_unreadable` |
+| pull ledger unreadable | step skipped; link and listing still apply and may post; otherwise `local_record_unreadable`, whatever the upload setting |
 | base file missing, unreadable or altered | `activity_file_missing` |
 | settings object of another connector | `ConnectorError` (fitdocs text) → publish-core `target_error` |
 | any other exception | propagates → publish-core `target_error`, no text kept |
@@ -939,7 +945,7 @@ ids, builder FIT bytes; no value from any real account.
     and id rules (accept `i9000001`; refuse `i9/1`, `i 1`, 65 characters, an
     `http://` link, a link with a query).
   - Finding: recorded link updated first and only once; pull record tiers,
-    ambiguity in each tier, unreadable ledger (file of invalid TOML) skipped for updates and barring the upload with `local_record_unreadable`,
+    ambiguity in each tier, unreadable ledger (file of invalid TOML) skipped for updates and answered as `local_record_unreadable` when nothing else resolves,
     malformed id ignored; for starts at 00:30 and 23:30 UTC, the window holds
     the local wall-clock start at every offset from -12:00 to +14:00 in
     whole hours; external-id match
@@ -950,12 +956,12 @@ ids, builder FIT bytes; no value from any real account.
     updated; facts missing with no link and no record.
   - Writes: update address and body; empty description; 404 → absent; upload
     address, query, multipart body equal to the archived bytes; digest
-    mismatch → `activity_file_missing`; uploads off → `not_found` with no
-    POST; 201 and confirmation → `uploaded`; 200 and confirmation → `posted`;
-    an unreadable pull ledger with uploads on → `local_record_unreadable`
-    with no file read and no POST, with uploads off → `not_found`, and with a
-    recorded link or a listing match → `posted` (the read-only steps still
-    run);
+    mismatch → `activity_file_missing`; uploads off with a readable or absent
+    pull ledger → `not_found` with no POST; 201 and confirmation → `uploaded`; 200 and confirmation → `posted`;
+    an unreadable pull ledger with nothing else resolving →
+    `local_record_unreadable` with uploads on (no file read, no POST) and
+    with uploads off alike, and with a recorded link or a listing match →
+    `posted` (the read-only steps still run);
     201 with no id, two ids, a malformed id → `unconfirmed`; confirming update
     404 or 503 after 201 → `unconfirmed`; upload 503 and `TransportError` →
     `unconfirmed` with exactly one transport call; upload 429 →

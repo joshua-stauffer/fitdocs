@@ -270,8 +270,10 @@
   `local_record_unreadable`, into publish-core (appended after `ready`; a
   target code, a failure, not landed, not stopping). `LedgerError` is noted;
   the read-only steps (recorded link, listing) still run and may still post;
-  only the upload branch answers `local_record_unreadable` instead of
-  uploading. With uploads off the answer stays `not_found`.
+  when they do not resolve the activity, the answer is
+  `local_record_unreadable` whatever the upload setting (a refinement of
+  R11 after the re-review: `not_found` would assert that no matching
+  activity exists, which the unread record leaves unverified).
 - **Rationale**: an upload cannot be undone, so it never runs on unreadable
   identity state; an update to an activity found by other evidence is still
   safe.

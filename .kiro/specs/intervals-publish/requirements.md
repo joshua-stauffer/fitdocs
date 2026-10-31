@@ -173,14 +173,14 @@ Terms used below:
 **Objective:** As an athlete who records workouts that never reach intervals.icu, I want fitdocs to upload the page's own file once when I allow it, so that the post lands without ever creating a duplicate.
 
 #### Acceptance Criteria
-1. While an instance's uploads are off, when the page's activity is not found, the intervals.icu connector shall answer the not-found code and send no request that creates an activity.
+1. While an instance's uploads are off, when the page's activity is not found and the instance's pull record is readable or absent, the intervals.icu connector shall answer the not-found code and send no request that creates an activity.
 2. While an instance's uploads are on, when the page's activity is not found, the intervals.icu connector shall upload the page's base `.fit` file from the archive, unmodified, marked with the page's publication id as its external identifier.
 3. If uploads are on and the page's base file is not in the archive, cannot be read, or does not hash to the digest it is archived under, the intervals.icu connector shall answer the missing-activity-file code and upload nothing.
 4. The intervals.icu connector shall send each upload exactly once, and shall never repeat it, whatever intervals.icu answers and whatever network failure occurs.
 5. When intervals.icu answers that the upload created an activity and names exactly one, the intervals.icu connector shall set that activity's name and description with one update, and on intervals.icu's confirmation of that update shall answer the uploaded code with the activity's direct link.
 6. When intervals.icu answers that it already holds the uploaded file as an activity and names exactly one, the intervals.icu connector shall set that activity's name and description with one update, and on confirmation shall answer the posted code with the activity's direct link.
 7. If an upload is answered with a server error, a network failure, or a success that does not name exactly one activity in the documented form or names one already answered as not existing in the same request; or intervals.icu answers the update of an activity the upload created with anything but a confirmation; or answers that an activity the upload named as already held does not exist, the intervals.icu connector shall answer the unconfirmed code, so that the next run looks for the activity, by its publication id among others, before it uploads again.
-8. If uploads are on, the page's activity is not found, and the instance's pull record cannot be read, the intervals.icu connector shall answer the local-record-unreadable code and upload nothing, because the unreadable record may name the activity.
+8. If the page's activity is not found through the recorded link or the listing and the instance's pull record cannot be read, the intervals.icu connector shall answer the local-record-unreadable code whatever the upload setting, and shall upload nothing, because the unreadable record may name the activity.
 
 ### Requirement 7: Mapping intervals.icu's Answers into Codes
 **Objective:** As an athlete, I want every outcome stated as one fitdocs code that means the same on every target, so that I know what happened and what to do next.
