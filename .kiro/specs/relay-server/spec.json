@@ -1,0 +1,22 @@
+{
+  "feature_name": "relay-server",
+  "created_at": "2026-10-31T14:22:08Z",
+  "updated_at": "2026-10-31T15:20:46Z",
+  "language": "en",
+  "phase": "tasks-generated",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    }
+  },
+  "ready_for_implementation": true
+}
