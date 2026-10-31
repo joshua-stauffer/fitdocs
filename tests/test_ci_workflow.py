@@ -1,7 +1,9 @@
 """Conformance for task 6.2: the continuous integration workflow
 (design.md "CiWorkflow and ReleaseWorkflow"; Req 5.2, 6.9).
 
-`.github/workflows/ci.yml` runs on every push and pull request: the three
+`.github/workflows/ci.yml` runs on every push and pull request that changes
+anything outside `.kiro/specs/` (a spec-only change runs `specs.yml`, pinned by
+`tests/test_specs_workflow.py`): the three
 quality gates on the project's supported Python floor, then a build and an
 artifact conformance check, so a manifest edit that would break a release
 fails on the change rather than at release time (5.2). The encumbered-content

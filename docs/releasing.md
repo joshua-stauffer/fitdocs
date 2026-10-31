@@ -42,8 +42,8 @@ catching it:
 The full test suite, the linter, and the strict type check must pass on the
 exact revision being released — the same three commands
 [`CONTRIBUTING.md`](../CONTRIBUTING.md#the-three-quality-gates) names and the
-same three continuous integration runs on every push and pull request (Req
-5.2):
+same three continuous integration runs on every push and pull request that
+changes anything outside `.kiro/specs/` (Req 5.2):
 
 ```
 uv run pytest

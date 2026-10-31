@@ -41,7 +41,9 @@ uv run mypy
 The first runs the full test suite. The second lints and checks formatting.
 The third runs the strict type check. These are the same three commands the
 project's continuous integration runs on every push and on pull requests from
-branches of this repository (a fork's pull request is covered below), and the
+branches of this repository that change anything outside `.kiro/specs/` (a
+change only to specs runs the encumbered-content scan and the tests that read
+spec text instead) (a fork's pull request is covered below), and the
 same three a release cannot skip — see the fixture-discrimination discipline
 in [`.kiro/steering/change-protocol.md`](.kiro/steering/change-protocol.md)
 for what a passing test is expected to prove.

@@ -1,9 +1,11 @@
 # Continuous integration (task 6.2; design.md "CiWorkflow and
 # ReleaseWorkflow"; Requirements 5.2, 6.9).
 #
-# Runs on every push and pull request: the same three quality gates
-# CONTRIBUTING.md's "The three quality gates" section documents, then a
-# build and the artifact conformance / encumbered-content checks, so a
+# Runs on every push and pull request that changes anything outside
+# `.kiro/specs/` (a change only to specs runs `specs.yml` instead, which
+# keeps the encumbered-content scan of every tracked file): the same three
+# quality gates CONTRIBUTING.md's "The three quality gates" section
+# documents, then a build and the artifact conformance / encumbered-content checks, so a
 # manifest edit that would break a release fails here rather than at
 # release time. This is the `gates` job docs/releasing.md's "1. Quality
 # gates" step names as the automation that runs those exact three
@@ -34,7 +36,10 @@
 
 on:
   push:
+    paths-ignore: &spec_only
+      - ".kiro/specs/**"
   pull_request:
+    paths-ignore: *spec_only
 
 permissions:
   contents: read
