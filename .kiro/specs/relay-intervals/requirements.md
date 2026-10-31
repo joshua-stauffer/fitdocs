@@ -302,7 +302,7 @@ intervals-publish's terms keep their meaning):
 
 #### Acceptance Criteria
 1. A relay offering both targets shall use one connect-session mechanism, one set of encryption keys, one re-encryption command and one privacy-policy address for both, and its privacy policy shall describe each configured target.
-2. Every Strava behaviour strava-publish specifies shall be unchanged, and every Strava test shall pass with no change other than the modules it imports.
+2. Every Strava behaviour strava-publish specifies shall be unchanged, and every Strava test shall keep its assertions, changing only the modules it imports, the target it names where a shared operation now takes one, and, on the privacy policy page, the grouping of the Strava sections under Strava's name.
 3. The fitdocs CLI's browser-consent connect and disconnect shall name the service of the instance they act on in every line that names a service.
 4. Neither the relay package nor fitdocs shall hold a second copy of the connect-session, token-custody, page, policy or relay-answer mapping machinery for the intervals.icu target.
 
