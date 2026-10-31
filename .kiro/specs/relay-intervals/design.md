@@ -27,8 +27,9 @@ the intervals.icu calls.
 - intervals-publish's intervals.icu rules move into a standard-library-only
   leaf, `connectors/intervals_rules.py`, which the relay pins.
 - The relay gains a `targets/` package (lifted from `strava/`), an
-  `intervals/` package, seven deploy-contract variables, and one schema
-  change pair making a token's expiry optional.
+  `intervals/` package and seven deploy-contract variables. It needs no
+  schema change: strava-publish's `target_connections` already stores an
+  absent expiry (R13.6).
 - Neither `CONTRACT_VERSION` nor `DOC_VERSION` changes; no command, no
   `PublishCode` and no `RelayCode` is added.
 
@@ -74,9 +75,8 @@ the intervals.icu calls.
     target-neutral routes, the generic operator commands);
   - the `intervals/` package: configuration, API client, budget policy,
     custody, consent provider, publisher, consent and policy text, routes;
-  - `EnvVar.required_with` as a tuple, and the seven intervals.icu rows;
-  - the schema change pair `NNNN_target_expiry_optional` and the optional
-    `SealedTokens.access_expires_at`;
+  - the seven intervals.icu rows, and `FITDOCS_RELAY_INTERVALS_CLIENT_ID`
+    appended to the four target-neutral rows' `required_with` tuple;
   - the route-table, body-limit, reserved-prefix and capabilities appends.
 - **Shared-copy pair** (R2): `src/fitdocs/connectors/intervals_rules.py` →
   `relay/src/fitdocs_relay/shared/intervals_rules.py`, appended to
@@ -140,8 +140,11 @@ the intervals.icu calls.
 - intervals-publish's resolution order, `ANSWER_CODES` or `publish_upload`
   meaning: this spec's fitdocs connector and relay publisher.
 - strava-publish's `ConnectFlow`, `Custody`, storage areas, `relay_targets`
-  codec, `BrowserConsentClient`, `RelayBound`, binding pass, or
-  `OAUTH_BROWSER` resolution: the lifted modules and both targets.
+  codec, `BrowserConsentClient`, `RelayBound`, binding pass,
+  `OAUTH_BROWSER` resolution, its nullable `access_expires_at`, its
+  `required_with` tuple, its neutral CLI started line, or
+  `RelayClient.post`'s `max_request_bytes` keyword: the lifted modules and
+  both targets.
 - publish-core's ledger identity rule, `PublishRequest`, `TARGET_CODES` or
   the link rule: the shared-ledger hook and the mapping.
 - The deploy-contract rows or `required_with`'s meaning: every deployment.
@@ -217,16 +220,17 @@ door:
     resolver, publisher, webhook, `/go/`, `robots.txt` and its webhook
     commands. `connectors/strava.py`'s consent operations and mapping tables
     move to `connectors/relay_route.py`.
-  - Design "StravaConfig": `EnvVar.required_with` is `tuple[str, ...]`
-    ("required when any is set"); the four generic rows name both client
-    ids.
-  - Design "Storage additions": `SealedTokens.access_expires_at` is
-    `int | None`; the column becomes nullable (this spec's schema pair).
+  - Design "StravaConfig": `FITDOCS_RELAY_INTERVALS_CLIENT_ID` is appended
+    to the four target-neutral rows' `required_with` tuple, which
+    strava-publish ships as `("FITDOCS_RELAY_STRAVA_CLIENT_ID",)` (R13.6).
+    The tuple form and the nullable `SealedTokens.access_expires_at` are
+    strava-publish's own (folded by R13.6), not amendments of this spec.
   - Design "ProtocolAmendment": `BrowserConsentClient` gains
     `service_name`; `StravaConnector.service_name = "Strava"`.
   - Design "BrowserConnectEngine": the stored credentials name
-    `instance.connector.connector_id`; `ConsentShown` carries the service
-    name; the CLI's started line and the disconnect notes name it.
+    `instance.connector.connector_id`; the disconnect notes name the
+    service from `service_name`; the CLI's started line stays strava-publish's
+    neutral line (R13.5).
   - Design "SharedTargetWire": the intervals.icu names are appended.
   - Design "Pages and Policy": the privacy page groups each configured
     target's sections under its service name.
@@ -248,17 +252,15 @@ door:
   identity is `fitdocs.publish.targets.ledger_connector(instance)`: the
   connector's `publish_ledger_connector` when it implements
   `PublishLedgerShared`, else its `connector_id`. The mismatch check is
-  otherwise unchanged. Req 11.6 reads "... or was written for a connector
-  other than the target's ledger identity ..." in place of "for a different
-  connector than the target now uses".
+  otherwise unchanged. publish-core pre-words its Req 11.6 as "the target's
+  ledger identity (its connector id)" (R13.6), so this amendment changes
+  only that definition: the ledger identity is `ledger_connector(instance)`.
 - **relay-server**:
   - Req 9.2: the variable table gains the seven intervals.icu rows; the
     generic rows' requirement reads "with either target".
   - Design "AnswersGlue, CoreRoutes": `OFFERED_TARGETS` gains `intervals`;
     `RESERVED_PREFIXES` gains `/intervals/`; `ROUTE_BODY_LIMITS` gains the
     intervals.icu upload route.
-  - The recorded `/readyz` exchange and the schema-count literals move with
-    the new schema pair, by appended literals.
 - **connectors**:
   - New: the built-in `intervals-relay` connector (this spec's Requirement
     1).
@@ -286,9 +288,9 @@ door:
   from the configured connector; the link is kept only beside a landed code
   and must pass `valid_link`.
 - strava-publish's browser-consent engine, binding pass and disconnect rows
-  are keyed on `AuthStyle.OAUTH_BROWSER`, not on Strava, except for three
-  literals (the stored connector id, the CLI's started line, the disconnect
-  notes).
+  are keyed on `AuthStyle.OAUTH_BROWSER`, not on Strava, except for two
+  literals (the stored connector id and the disconnect notes); its CLI
+  started line is neutral (R13.5).
 - strava-publish's relay connect machinery (sessions, claim, state, poll,
   connection-token issuance, sealing, re-encryption, pages, `/privacy`) is
   target-neutral but lives under `strava/` and is built inside
@@ -436,15 +438,13 @@ relay/src/fitdocs_relay/
 │   ├── publish.py              # IntervalsPublisher: publish, upload; Landed; deadlines
 │   ├── policy.py               # CONSENT_TEXT, POLICY_SECTIONS (intervals.icu's group)
 │   └── routes.py               # intervals_routes(services): publish, upload
-├── storage/migrations/sqlite/NNNN_target_expiry_optional.sql     # NEW (NNNN = next free at landing)
-└── storage/migrations/postgres/NNNN_target_expiry_optional.sql   # NEW, same name
 relay/tests/
 ├── targets/                    # MOVED from relay/tests/strava/ where the code moved: test_connect.py, test_vault.py,
 │                               #   test_pages.py, test_policy.py, test_routes.py, test_cli.py (assertions kept)
 ├── intervals/                  # NEW: scripted_intervals.py (the Outbound fake), test_config.py, test_api.py,
 │                               #   test_budget.py, test_custody.py, test_consent.py, test_publish.py, test_upload.py,
 │                               #   test_routes.py, test_rules_copy.py, test_boundary_sentinel.py
-└── conformance/test_target_expiry.py   # NEW: an absent expiry stored and read on both backends
+│                               #   (no schema change: strava-publish's nullable expiry column is used)
 relay/contract/intervals-cases.json      # NEW: ParityCases, the match and resolution cases both suites run
 relay/LIVE_CHECK_INTERVALS.md            # NEW: the maintainer's live-check procedure
 relay/LIVE_CHECK_INTERVALS_RECORD.md     # NEW: the record template
@@ -471,21 +471,23 @@ tests/publish/test_ledger_identity.py              # NEW: ledger_connector and t
 - `src/fitdocs/connectors/protocol.py`: `PublishLedgerShared`;
   `BrowserConsentClient.service_name`; docstrings.
 - `src/fitdocs/connectors/registry.py`: the two new rules.
-- `src/fitdocs/connectors/browser_connect.py`: stored connector id,
-  `ConsentShown.service`.
+- `src/fitdocs/connectors/browser_connect.py`: stored connector id.
 - `src/fitdocs/connectors/disconnect.py`: the `OAUTH_BROWSER` notes name the
   service.
 - `src/fitdocs/connectors/__init__.py`: register `IntervalsRelayConnector()`
-  after `IntervalsConnector()`; export `PublishLedgerShared`; docstring.
-- `src/fitdocs/cli.py`: the started line names the service.
+  after `IntervalsConnector()`; export `PublishLedgerShared`; the package
+  docstring's allowed-import sentence, which intervals-publish extended with
+  `fitdocs.identity.matching` for the intervals module's publish path, names
+  `fitdocs.identity.strict` instead (task 1.3).
+- `src/fitdocs/cli.py`: no change to the started line (strava-publish's
+  neutral line, R13.5); the disconnect notes print `service_name`.
 - `src/fitdocs/publish/targets.py`: `ledger_connector`; the CLI's ledger
   mapping uses it (publish-core's CliPublish in `src/fitdocs/cli.py`).
 - `scripts/sync_relay_shared.py`, `tests/test_relay_shared_copies.py`: one
   pair; `relay_targets` re-synced.
-- relay: `contract.py` (`EnvVar.required_with`, rows), `config.py`
-  (`RelayConfig.intervals`, `targets` from `targets.config`),
-  `storage/interface.py` (`SealedTokens`), `storage/sqlite.py`,
-  `storage/postgres.py` (nullable read and write), `routes.py`
+- relay: `contract.py` (the intervals.icu rows; the client id appended to
+  the target-neutral rows' `required_with`), `config.py`
+  (`RelayConfig.intervals`, `targets` from `targets.config`), `routes.py`
   (`OFFERED_TARGETS`, `RESERVED_PREFIXES`, `ROUTE_BODY_LIMITS`,
   `core_routes`), `app.py` (`RelayServices.target_core`, `.intervals`),
   `logs.py` (redaction, intervals.icu call events), `cli.py` (registration
@@ -657,7 +659,7 @@ Key decisions:
 | 4.5, 4.6 | Exchange, grant, refusal | IntervalsConsent, IntervalsApi | `complete`, `exchange`, `revoke` | Connecting |
 | 4.8 | One account, one principal | TargetsCore (TokenVault), storage | `put_connection` | Revocation |
 | 5.1, 5.5, 5.6, 5.7 | Sealing, keys, account key | TokenVault, IntervalsCustody | `store`, `open`, `reencrypt_all`, `account_key` | — |
-| 5.2 | No expiry, no renewal | StorageAmendment, IntervalsCustody | `SealedTokens.access_expires_at` | — |
+| 5.2 | No expiry, no renewal | IntervalsCustody (on strava-publish's nullable expiry) | `SealedTokens.access_expires_at` | — |
 | 5.3 | Refused token deleted | IntervalsCustody, IntervalsPublisher | `rejected`, `delete_connection` | Revocation |
 | 5.4 | Header-only tokens | IntervalsApi | `OutboundRequest.secret_headers` | — |
 | 6.1, 6.2, 6.3, 6.4, 6.5 | Known activities and local refusals | IntervalsRelayConnector | `publish`, `intervals_publish_fields` | Publishing |
@@ -717,7 +719,6 @@ Key decisions:
 | IntervalsRelayConnector | fitdocs connectors | The relay-routed target | 1, 2.3, 2.4, 3, 6, 11.1, 11.2 | RelayRoute (P0), intervals (P0) | Service |
 | TargetsCore | relay | The target-neutral connect, custody, pages, policy, routes and commands | 4.1, 4.2, 4.3, 4.4, 4.7, 4.8, 5.1, 5.7, 11.3, 12.4, 12.5, 13.3, 14 | storage, keyring, identity (P0) | Service, API |
 | DeployContractRows, IntervalsConfig | relay | Environment | 10.1, 13.1, 13.2, 13.3, 13.6 | contract (P0) | State |
-| StorageAmendment | relay storage | Optional expiry on both backends | 5.2 | backends (P0) | State |
 | IntervalsApi | relay | The only reader of intervals.icu responses | 4.3, 4.5, 4.6, 5.4, 8.1, 8.4, 8.5, 12.2 | Outbound (P0), shared rules (P0) | Service |
 | IntervalsBudget | relay | Count calls before making them | 10 | BudgetStore (P0) | Service |
 | IntervalsCustody | relay | Token use, deletion on refusal, withdrawal | 5.2, 5.3, 5.5, 9.4, 11.3, 11.4 | TokenVault (P0), IntervalsApi (P0) | Service |
@@ -932,20 +933,21 @@ def answer_code(reply: RelayReply, *, upload: bool, allowed: frozenset[str]) -> 
 
 | Field | Detail |
 |-------|--------|
-| Intent | Make the browser-consent path name the service of the instance it acts on |
+| Intent | Store the instance's own connector; name the service in the disconnect notes only |
 | Requirements | 3.1, 3.3, 11.1, 11.2, 14.3 |
 
 - `BrowserConsentClient` gains `@property service_name -> str`; the registry
   requires it for `OAUTH_BROWSER`, passing `valid_label`.
 - `run_browser_connect` stores `StoredCredentials(connector_id=
-  instance.connector.connector_id, ...)` (3.3); `ConsentShown` gains
-  `service: str`.
-- The CLI's started line reads `NAME: open this address in a browser to
-  connect <service>:`; the disconnect notes read "... revoked in
-  <service>'s settings". For Strava every printed line is the same text as
-  before.
-- Implementation Notes: a CLI test pins the intervals.icu lines; the Strava
-  CLI pins pass unchanged. Named mutation: storing `"strava"` literally
+  instance.connector.connector_id, ...)` (3.3).
+- The CLI's started line is strava-publish's neutral line, `NAME: open this
+  address in a browser to connect this instance:` (R13.5), for every
+  browser-consent instance; no CLI line reads "connect <service>". Only the
+  relay's connect page names the service on its control.
+- The disconnect notes read "... revoked in <service>'s settings", from
+  `service_name`. For Strava every printed line is the same text as before.
+- Implementation Notes: a CLI test pins the intervals.icu lines, including
+  the neutral started line; the Strava CLI pins pass unchanged. Named mutation: storing `"strava"` literally
   reds the route-switch credential test.
 
 #### IntervalsDirectAmendment — `src/fitdocs/connectors/intervals.py`
@@ -1038,8 +1040,10 @@ class IntervalsRelayConnector:         # Connector, PostPublisher, BrowserConsen
      `record_unreadable` → `LOCAL_RECORD_UNREADABLE`;
      uploads off → `NOT_FOUND`; `archived_base_file(subject)` `None` →
      `ACTIVITY_FILE_MISSING`; more than `MAX_FIT_BYTES` → `REJECTED` unsent;
-     otherwise one upload request with `upload_fields(facts, data)` and
-     `max_request_bytes=MAX_UPLOAD_REQUEST_BYTES`, mapped with `upload=True`
+     otherwise one upload request with `upload_fields(facts, data)` through
+     `RelayClient.post(route, fields, max_request_bytes=
+     MAX_UPLOAD_REQUEST_BYTES)` (the keyword strava-publish adds to
+     relay-server's client, R13.3), mapped with `upload=True`
      and `INTERVALS_UPLOAD_OUTCOMES`; a landed outcome without a usable id
      is treated as "ok without an outcome" (`unconfirmed`).
   7. `POSTED` or `UPLOADED` carries `activity_link(id)`; no other code
@@ -1174,15 +1178,16 @@ def target_routes(services: RelayServices) -> list[BaseRoute]: ...
 | Intent | The intervals.icu target's configuration, from the environment only |
 | Requirements | 10.1, 13.1, 13.2, 13.3, 13.6 |
 
-- `EnvVar.required_with: tuple[str, ...] = ()`: the names whose presence
-  makes the row required ("required when any is set"). strava-publish's
-  Strava rows become `("FITDOCS_RELAY_STRAVA_CLIENT_ID",)`; the four
+- strava-publish ships `EnvVar.required_with: tuple[str, ...] = ()`
+  ("required when any named variable is set"), with the four
   target-neutral rows (`FITDOCS_RELAY_PUBLIC_URL`, `_ENCRYPTION_KEYS`,
-  `_OPERATOR_NAME`, `_SUPPORT_CONTACT`) become
-  `("FITDOCS_RELAY_STRAVA_CLIENT_ID", "FITDOCS_RELAY_INTERVALS_CLIENT_ID")`.
-  `docs/relay.md` renders it as "with `A`" or "with `A` or `B`". The literal
-  full-table pin is rewritten for those four rows and appended with the
-  rows below. `DEPLOY_CONTRACT_VERSION` stays 1.
+  `_OPERATOR_NAME`, `_SUPPORT_CONTACT`) at
+  `("FITDOCS_RELAY_STRAVA_CLIENT_ID",)` (R13.6). This spec appends
+  `FITDOCS_RELAY_INTERVALS_CLIENT_ID` to those four tuples, so they read
+  `("FITDOCS_RELAY_STRAVA_CLIENT_ID", "FITDOCS_RELAY_INTERVALS_CLIENT_ID")`
+  and `docs/relay.md` renders "with `A` or `B`". The literal full-table pin
+  gains the appended name in those four rows and the rows below.
+  `DEPLOY_CONTRACT_VERSION` stays 1.
 
 | Variable | Required | Default | Secret | Meaning |
 |----------|----------|---------|--------|---------|
@@ -1214,30 +1219,15 @@ def load_intervals_config(environ: Mapping[str, str]) -> IntervalsConfig | None
   `ConfigError` naming the variable, never its value.
 - Implementation Notes: configuration tests mirror Strava's, with a planted
   secret absent from every message; an unconfigured environment loads as
-  before; a Strava-only environment loads as before (the generic rows'
-  widened `required_with` changes nothing for it).
+  before; a Strava-only environment loads as before (the appended name in
+  the generic rows' `required_with` changes nothing for it).
 
-#### StorageAmendment — `storage/interface.py`, backends, `NNNN_target_expiry_optional`
-
-| Field | Detail |
-|-------|--------|
-| Intent | A token with no stated expiry, stored as absent |
-| Requirements | 5.2 |
-
-- `SealedTokens.access_expires_at: int | None`; `StoredConnection.tokens`
-  carries it; both backends read and write `NULL`.
-- Schema pair (next free `NNNN` at landing): PostgreSQL `ALTER TABLE
-  target_connections ALTER COLUMN access_expires_at DROP NOT NULL`; SQLite
-  rebuilds `target_connections` with the same columns, keys and foreign key
-  and the column nullable (`CREATE`, `INSERT ... SELECT`, `DROP`, `ALTER
-  TABLE ... RENAME`), which is safe in one transaction because no table
-  references `target_connections`.
-- Strava's `Custody` treats an absent expiry as "never refreshed by time";
-  Strava rows always carry one.
-- Implementation Notes: a conformance test (both backends, coverage-marked)
-  stores and reads an absent expiry and shows every existing row unchanged
-  after the migration; the migration parity test, the `/readyz` exchange and
-  the schema-count literals move by appended literals.
+#### Stored expiry (consumed, no component of this spec)
+- strava-publish ships `SealedTokens.access_expires_at: int | None` with a
+  nullable column in its own `NNNN_target_custody` pair, Strava's custody
+  treating `None` as "no time-based refresh" (R13.6). intervals.icu
+  connections are stored with `None` through `TokenVault.store`; this spec
+  adds no schema change, so no schema-count or `/readyz` literal moves.
 
 #### IntervalsApi — `intervals/api.py`
 
@@ -1581,14 +1571,19 @@ class IntervalsPublisher:
   intervals.icu for it. `structure.md` gains: "`connectors.intervals_rules`
   (the intervals.icu answer table and the rules both intervals.icu routes
   share) imports only the standard library, and the relay runs a pinned copy
-  of it".
+  of it". The two `structure.md` clauses intervals-publish added (the
+  connectors sentence's "the intervals connector imports activity-identity's
+  match rule on its publish path", and the intervals connector's publish
+  path among the identity sentence's importers) are rewritten to name
+  `identity.strict`, which the intervals connector imports in place of
+  `identity.matching` once task 1.3 lands.
 - **Changelogs** (15.5): root Unreleased (read through
   `unreleased_since(text, V0_2_0)`): Added, the relay route to intervals.icu
   (the `intervals-relay` connector, `publish_upload`, connecting in a
   browser); Changed, browser-consent connect and disconnect name the
   service. Relay changelog: a new section recording the intervals.icu
   target, its variables, routes and pages, `required_with` naming either
-  target, the schema change, and the internal `targets/` package, restating
+  target, and the internal `targets/` package, restating
   deploy contract 1, envelope 1 and seam 1.
 - **SiteFollowUp** (15.6): `.kiro/queue/2026-10-31-relay-intervals-site-copy.md`,
   written with this spec.
@@ -1615,8 +1610,9 @@ class IntervalsPublisher:
 - No publication record for `intervals`: the link is direct.
 
 ### Physical Data Model
-- `target_connections.access_expires_at` becomes nullable
-  (`NNNN_target_expiry_optional`); no other table or column changes.
+- No table or column changes: an intervals.icu connection stores `NULL` in
+  strava-publish's nullable `target_connections.access_expires_at` and in
+  `refresh_sealed`.
 - No column holds an intervals.icu activity, activity id, athlete id, name
   or response text (12.3).
 
@@ -1626,9 +1622,10 @@ class IntervalsPublisher:
   and `known_activities` (0-2 ids) with `known_only` (`true` only with at
   least one id). **Upload**: the same without `known_activities` and
   `known_only`, plus `fit` (standard base64).
-- **Relay to fitdocs**: `{"envelope": 1, "code": "ok", "outcome":
-  "<code>", "data": {}}`, or `"data": {"activity_id": "<id>"}` beside
-  `posted` and `uploaded` only.
+- **Relay to fitdocs**, in relay-server's canonical key order
+  `{"envelope", "code", "data"[, "outcome"]}` (R13.4): `{"envelope": 1,
+  "code": "ok", "data": {}, "outcome": "<code>"}`, or with `"data":
+  {"activity_id": "<id>"}` beside `posted` and `uploaded` only.
 
 ## Error Handling
 
@@ -1762,8 +1759,8 @@ exchanges decoded by the fitdocs suite.
   fitdocs's 30 s request timeout.
 
 ## Migration Strategy
-- The relay's migration command applies `NNNN_target_expiry_optional`; a
-  relay without the intervals.icu variables behaves as before, Strava
+- No relay schema change: the migration command has nothing new to apply.
+  A relay without the intervals.icu variables behaves as before, Strava
   included.
 - Existing fitdocs configurations are unchanged; the relay route is opt-in
   per instance. An instance switched between routes keeps its publish

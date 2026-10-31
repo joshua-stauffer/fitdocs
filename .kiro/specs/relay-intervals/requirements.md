@@ -168,7 +168,7 @@ intervals-publish's terms keep their meaning):
 **Objective:** As an athlete, I want `fitdocs connect` for my relay-routed instance to open my relay's intervals.icu connect page and wait until the connection is made, so that I connect intervals.icu once, in a browser, without an API key.
 
 #### Acceptance Criteria
-1. When `fitdocs connect NAME` runs for a relay-routed instance, the fitdocs CLI shall behave as strava-publish Requirement 2 criteria 1 to 9 state for a Strava instance, naming intervals.icu wherever those criteria name the service: it resolves the bound relay instance's token first, makes one connect-start request, prints the connect page's address, the user code, the same-code instruction and the time remaining, asks the operating system to open the address unless `--no-browser` is given, polls at the stated interval with one request per poll, and stores the connection token only when the relay answers granted.
+1. When `fitdocs connect NAME` runs for a relay-routed instance, the fitdocs CLI shall behave as strava-publish Requirement 2 criteria 1 to 9 state for a Strava instance, with a started line that names no service: it resolves the bound relay instance's token first, makes one connect-start request, prints the connect page's address, the user code, the same-code instruction and the time remaining, asks the operating system to open the address unless `--no-browser` is given, polls at the stated interval with one request per poll, and stores the connection token only when the relay answers granted.
 2. If `--register` or `--email` is given for a relay-routed instance, the fitdocs CLI shall exit with the configuration-error code before any request.
 3. When the connection token is stored, the fitdocs CLI shall record it as belonging to the relay-routed connector, so that no other connector's instance of the same name reads it as its own.
 
@@ -305,7 +305,7 @@ intervals-publish's terms keep their meaning):
 #### Acceptance Criteria
 1. A relay offering both targets shall use one connect-session mechanism, one set of encryption keys, one re-encryption command and one privacy-policy address for both, and its privacy policy shall describe each configured target.
 2. Every Strava behaviour strava-publish specifies shall be unchanged, and every Strava test shall keep every expected value it asserts; a moved test may change only its imports, its setup and the construction of the objects it tests, the target argument a shared operation now takes, the shape of the conditional-requirement field in the deploy contract's pin, the place of moved documentation headings, and, on the privacy policy page, the grouping of the Strava sections under Strava's name.
-3. The fitdocs CLI's browser-consent connect and disconnect shall name the service of the instance they act on in every line that names a service.
+3. The fitdocs CLI's browser-consent connect shall print a started line that names no service, for every browser-consent instance, and its disconnect notes shall name the service of the instance they act on.
 4. Neither the relay package nor fitdocs shall hold a second copy of the connect-session, token-custody, page, policy or relay-answer mapping machinery for the intervals.icu target.
 
 ### Requirement 15: Documentation, Network Statements, Steering and Changelog
@@ -316,7 +316,7 @@ intervals-publish's terms keep their meaning):
 2. The relay documentation shall describe the intervals.icu target: its variables, its routes and pages, the budget, the data held and when it is deleted, the policy and consent, and the self-hosting note; and shall describe the target-neutral variables, encryption keys and privacy policy once for every target.
 3. Every repository statement that lists the commands which make network requests shall name `fitdocs publish --yes`, and the connectors documentation's "What leaves your machine" shall say that a relay-routed instance's requests go to its bound relay instance's URL and never to intervals.icu, whichever Phase 14 target lands first; an automated test shall pin each such statement.
 4. The technology steering's network and credentials section shall state, in its own sentence, the requests `fitdocs connect`, `fitdocs disconnect` and `fitdocs publish --yes` make for a relay-routed instance, and the structure steering shall describe the shared intervals.icu rules module and its pinned copy.
-5. The `fitdocs` changelog's unreleased section shall record the relay route to intervals.icu, and the relay changelog shall record the intervals.icu target, its variables, routes and storage change.
+5. The `fitdocs` changelog's unreleased section shall record the relay route to intervals.icu, and the relay changelog shall record the intervals.icu target, its variables, routes and pages.
 6. This feature shall edit no website page, and shall record the site copy it makes stale or newly needs as a follow-up for the next release.
 7. Every new or changed document shall pass every existing documentation, network-statement and neutral-scan guard, and no new document shall mention a hosting provider, an email provider or a deployment's infrastructure.
 8. This feature shall not change the packaged agent skill, whose publishing section names no target.

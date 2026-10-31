@@ -71,13 +71,14 @@
   (`strava/custody.py`), `Keyring` (`crypto.py`), `Outbound`
   (`outbound.py`), the three storage areas and `NNNN_target_custody`,
   `TargetsConfig` with `load_targets_config(environ, *, any_target)`,
-  `EnvVar.required_with: str | None`, `relay_targets.py` (route builder,
+  `EnvVar.required_with` (`tuple[str, ...]` after R13.6), `relay_targets.py` (route builder,
   `PublishFacts` codec, field and outcome sets), `BrowserConsentClient`,
   `RelayBound`, `_bind_relay_instances`, `run_browser_connect`,
   `PUBLISH_MAPPING`/`UPLOAD_MAPPING`, `identity.strict`. The connect
   session, claim, state and poll mechanics are target-neutral but live under
   `strava/`, and `browser_connect` stores `connector_id="strava"`
-  literally; the CLI and disconnect lines name Strava.
+  literally; the disconnect notes name Strava (its CLI started line is
+  neutral after the cross-spec review, R13.5).
 - **intervals-publish**: the resolution order (recorded link, pull record,
   facts check, listing match by external id then strict rule without sport,
   Strava-import rule), `ANSWER_CODES` by `CallKind` and `AnswerClass`, the
@@ -290,24 +291,27 @@ Each is behind one function and its tests.
   headings, and the privacy page's grouping (Req 14.2, widened after the
   Step 3.5 review).
 
-### Decision: `required_with` becomes a tuple
+### Decision: `required_with` names either target
 - **Selected Approach**: `EnvVar.required_with: tuple[str, ...] = ()`,
-  meaning "required when any of these is set"; the generic rows name both
-  client ids; the docs render "with `A` or `B`".
+  meaning "required when any of these is set". After the cross-spec review
+  (R13.6) strava-publish ships the tuple form with the generic rows at
+  `("FITDOCS_RELAY_STRAVA_CLIENT_ID",)`; this spec only appends
+  `FITDOCS_RELAY_INTERVALS_CLIENT_ID`; the docs render "with `A` or `B`".
 - **Rationale**: one mechanism that a third target extends by appending a
   name; `DEPLOY_CONTRACT_VERSION` stays 1 because a Strava-only deployment
   behaves the same.
 
 ### Decision: no recorded expiry for intervals.icu tokens
-- **Context**: strava-publish's `SealedTokens.access_expires_at` is an
-  `int` and the column is NOT NULL; intervals.icu states no expiry.
-- **Selected Approach**: make it `int | None` and the column nullable, in
-  this spec's schema change pair `NNNN_target_expiry_optional` (PostgreSQL
-  `ALTER COLUMN ... DROP NOT NULL`; SQLite table rebuild, which is safe
-  because no table references `target_connections`).
+- **Context**: strava-publish's design first made
+  `SealedTokens.access_expires_at` an `int` with a NOT NULL column;
+  intervals.icu states no expiry. After R13.6 strava-publish ships it as
+  `int | None` with a nullable column.
+- **Selected Approach**: store `None`. The first draft made the column
+  nullable in a schema pair of its own (`NNNN_target_expiry_optional`,
+  with a SQLite table rebuild). The cross-spec review folded the
+  nullability into strava-publish's `NNNN_target_custody` (R13.6), so this
+  spec dropped the pair and adds no schema change.
 - **Rationale**: absent data is `None`, never a fabricated value.
-- **Follow-up**: if the controller folds the nullability into
-  strava-publish's own pair before it is implemented, this pair is dropped.
 
 ### Decision: no refresh; a refused token deletes the connection
 - **Selected Approach**: a 401 on any call made with the token deletes the
@@ -365,7 +369,7 @@ Each is behind one function and its tests.
   words and policy sections, the fitdocs relay-routed connector.
 - **Simplification**: no refresh lease, no webhook, no `/go/`, no
   publication records, no per-second pacing, no PKCE, no new storage area,
-  no new relay code, no new publish code.
+  no schema change, no new relay code, no new publish code.
 
 ## Risks & Mitigations
 - intervals.icu does not approve the application, or approves it late:

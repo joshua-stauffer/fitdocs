@@ -59,15 +59,16 @@ Rules for every task:
   `tests/connectors/test_boundary.py` likewise.
 - **No version constant moves.** `CONTRACT_VERSION`, `DOC_VERSION`,
   `ENVELOPE_VERSION`, `SEAM_VERSION` and `DEPLOY_CONTRACT_VERSION` stay; no
-  command is added, so the CLI command-count pins do not move. The schema
-  counts move with the new schema pair, and the connectors surface count with
-  the new names, each as a literal written at landing, never derived from a
-  live constant.
+  command is added, so the CLI command-count pins do not move. No schema
+  change is added (strava-publish's `NNNN_target_custody` already stores an
+  absent expiry, R13.6), so no schema-count or readiness literal moves. The
+  connectors surface count moves with the new names, as a literal written at
+  landing, never derived from a live constant.
 - **The website is not edited** (R9). Its copy is the queue item
   `.kiro/queue/2026-10-31-relay-intervals-site-copy.md`, written with this
   spec.
 - **Amendments** to other specs take the next free amendment number at
-  landing. The schema change pair takes the next free `NNNN`.
+  landing.
 - **Wording**: no document names a hosting or email provider or a
   deployment's infrastructure; no text says who runs a command; nothing in
   the relay-routed connector or the relay-route module names an
@@ -123,6 +124,9 @@ Rules for every task:
   - Make the direct route's link builder, link reader, pull-record lookup
     and base-file reader public under the design's names, for the
     relay-routed connector.
+  - Rewrite the connectors package docstring's allowed-import sentence and
+    the intervals module docstring's import sentence, which intervals-publish
+    wrote with the match rule, to name the strict module.
   - Create the shared case file `relay/contract/intervals-cases.json` with
     its `match` cases (external id before strict, two strict matches
     ambiguous, a different sport still matching, a Strava import by instant
@@ -241,10 +245,10 @@ Rules for every task:
   - _Requirements: 4.1, 11.3, 12.5, 14.1, 14.2_
 
 - [ ] 2.5 Configure the intervals.icu target from the environment
-  - Make the deploy contract's conditional-requirement field a tuple of
-    variable names ("required when any is set"); the four target-neutral
-    rows name both client ids and render as "with A or B"; Strava's rows
-    name its own.
+  - Append `FITDOCS_RELAY_INTERVALS_CLIENT_ID` to the four target-neutral
+    rows' conditional-requirement tuple, which strava-publish ships as the
+    Strava client id alone (R13.6), so they render as "with A or B";
+    Strava's own rows are unchanged.
   - Append the seven intervals.icu variables with their required flag or
     condition, default, secret flag and meaning, to the contract table, its
     literal pin and the relay docs variable table in the same task.
@@ -262,20 +266,6 @@ Rules for every task:
     Strava-only environments load exactly as before, and dropping a row from
     the docs table reds its binding test.
   - _Requirements: 10.1, 13.1, 13.2, 13.3, 13.6_
-
-- [ ] 2.6 Store a token with no expiry on both backends
-  - Add the schema change pair making a connection's expiry nullable
-    (PostgreSQL drops the not-null constraint; SQLite rebuilds the table
-    with the same columns, keys and foreign key); the sealed-tokens value
-    takes an absent expiry and both backends read and write it.
-  - Strava's custody treats an absent expiry as never due for refresh.
-  - The new pair moves the schema counts: update the recorded readiness
-    exchange and every schema-count literal, by appended literals.
-  - Done when a coverage-marked conformance test stores and reads an absent
-    expiry on both backends, existing rows are unchanged after migrating,
-    the migration parity test and the readiness replay pass, and storing a
-    zero for an absent expiry reds the conformance test.
-  - _Requirements: 5.2_
 
 - [ ] 3. Relay intervals.icu services
 
@@ -320,12 +310,13 @@ Rules for every task:
   - _Boundary: IntervalsBudget_
 
 - [ ] 3.4 Keep custody of a principal's intervals.icu token
-  - Store a grant through the vault with no refresh token and no expiry;
+  - Store a grant through the vault with no refresh token and no expiry
+    (`None` in strava-publish's nullable expiry column);
     give a usable token or not connected; delete the connection on a refused
     token only when its generation is unchanged; withdraw with one
     revocation when the budget allows, then delete whatever happened.
-  - Done when tests over both backends show an undecryptable token reading
-    as not connected, a stale deletion leaving a newer connection, a second
+  - Done when tests over both backends show an absent expiry read back as
+    absent (never zero), an undecryptable token reading as not connected, a stale deletion leaving a newer connection, a second
     principal's grant of the same account displacing the first and revoking
     its connection token, a deleted principal taking its connection with
     it, and a withdrawal with the budget spent still deleting.
@@ -445,8 +436,8 @@ Rules for every task:
     connector calls them.
   - Browser-consent connectors declare a service name, required and checked
     by the registry; the connect engine stores the instance's own connector
-    id and reports the service; the CLI's started line and the disconnect
-    notes name it.
+    id; the disconnect notes name the service, and the CLI's started line
+    stays strava-publish's neutral line, naming no service (R13.5).
   - Add the module to the connectors boundary test in this task; move the
     Strava mapping tests with their assertions kept.
   - Done when every Strava connect, disconnect, mapping and CLI test passes
@@ -475,7 +466,9 @@ Rules for every task:
     flag, and the relay's not found then gives ambiguous), the local refusals,
     one publish request, the upload request only after a definite
     `not_found` with uploads on, a readable or absent pull record and an
-    intact file, the mapping through the relay-route module, and the direct
+    intact file, sending the upload through the relay client's
+    `max_request_bytes` keyword (strava-publish's, R13.3), the mapping through
+    the relay-route module, and the direct
     link built by the direct route's own builder.
   - Register the connector after the direct one with its label, service
     name and ledger identity; name it in the connectors page's built-in list
@@ -498,8 +491,10 @@ Rules for every task:
 - [ ] 5.5 Present the relay-routed connect and disconnect in the CLI
   - `fitdocs connect NAME [--no-browser]` and `fitdocs disconnect NAME
     [--local-only]` for a relay-routed instance through the shared
-    browser-consent and disconnect paths, naming intervals.icu.
-  - Done when CLI tests pin the printed lines, show no browser call with
+    browser-consent and disconnect paths: the neutral started line (no
+    "connect <service>"), and disconnect notes naming intervals.icu.
+  - Done when CLI tests pin the printed lines, including the neutral started
+    line, show no browser call with
     `--no-browser`, exit 2 for `--register` and `--email` before any
     request, the credentials file written owner-only with the relay-routed
     connector's id, and the local-only note naming intervals.icu's settings.
@@ -618,8 +613,13 @@ Rules for every task:
   - `tech.md` "Network and Credentials" gains the relay-routed sentence of
     design.md; `structure.md` gains the shared-rules sentence; each is
     line-disjoint from other specs' edits.
-  - Done when the steering pins still pass and the new sentences read as in
-    design.md.
+  - Rewrite the two `structure.md` clauses intervals-publish added that name
+    the match rule (in the connectors sentence and in the identity
+    sentence's importers) to name `identity.strict`, matching the import
+    task 1.3 switched.
+  - Done when the steering pins still pass, the new sentences read as in
+    design.md, and no steering sentence still says the intervals connector
+    imports `identity.matching`.
   - Not parallel with 7.3, which may touch the same `tech.md` section.
   - _Requirements: 15.4_
 
@@ -628,9 +628,8 @@ Rules for every task:
     relay route to intervals.icu, its settings and browser connect, and the
     service-named browser-consent lines. The relay changelog: a new section
     for the intervals.icu target, its variables, routes and pages, the
-    widened condition on the target-neutral variables, the schema change and
-    the internal targets package, restating deploy contract 1, envelope 1
-    and seam 1.
+    widened condition on the target-neutral variables and the internal
+    targets package, restating deploy contract 1, envelope 1 and seam 1.
   - Done when both changelog pins pass and moving the root entry into the
     0.2.0 section reds its pin.
   - _Requirements: 15.5_
@@ -640,10 +639,10 @@ Rules for every task:
   - strava-publish, intervals-publish, publish-core, relay-server,
     connectors and intervals-connector, each with the items of design.md's
     Amendments Carried, worded like the earlier landed amendments and naming
-    the pin that enforces each. publish-core's amendment rewords its Req
-    11.6 so a ledger is refused when written for a connector other than the
-    target's ledger identity, not "a different connector than the target now
-    uses". Confirm the site-copy queue item still names true lines.
+    the pin that enforces each. publish-core pre-words its Req 11.6 as "the
+    target's ledger identity (its connector id)"; its amendment here changes
+    only that definition, to the ledger identity of design.md. Confirm the
+    site-copy queue item still names true lines.
   - Done when each requirements document carries its dated amendment naming
     relay-intervals and the packaged agent skill is unchanged.
   - _Requirements: 14.2, 15.6, 15.8_
