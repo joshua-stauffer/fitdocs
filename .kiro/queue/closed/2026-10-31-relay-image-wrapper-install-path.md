@@ -1,7 +1,7 @@
 ---
 id: 2026-10-31-relay-image-wrapper-install-path
 title: Deploy contract v1 does not say how a wrapper package gets into the relay image
-status: open
+status: done
 importance: medium
 importance_why: A deployment that wraps the relay (FITDOCS_RELAY_EXTENSIONS) must make its module importable in the image's environment; today it would have to reverse-engineer the Dockerfile, and nothing pins what it relies on.
 effort: S
@@ -52,3 +52,14 @@ contract version moving (Req 9.12).
    section, and a test that pins it.
 3. Optionally extend `relay/scripts/image_smoke.sh` to build a derived image
    with a trivial test extension and check that it loads.
+
+## Resolution (2026-10-31, branch chore/p14-strava-activity-link)
+Folded into relay-server before implementation, with no version bump:
+- Req 9.1 now requires a documented environment path whose `bin` is first
+  on `PATH`, the derived-image steps in the relay docs, and a CI build of a
+  derived image served with a wrapper.
+- Design: `IMAGE_ENVIRONMENT = "/opt/fitdocs-relay"`, with the Dockerfile
+  building and copying the environment there; the derived-image steps
+  (`uv pip install --python /opt/fitdocs-relay/bin/python <package>`); a
+  `derived` smoke run with `relay/tests/smoke_extension`.
+- Tasks 5.3, 5.4 and 8.3 carry it.

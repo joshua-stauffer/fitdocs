@@ -522,32 +522,39 @@ Rules for every task:
 - [ ] 5.3 Define the image and smoke-run it in CI
   - A two-stage image definition:
     - the build stage uses uv pinned by digest, with a locked, non-dev
-      install including the `postgres` extra, plus the licence collection
-      script;
-    - the runtime stage uses the slim Python base pinned by digest, with a
+      install including the `postgres` extra into the documented
+      environment path, plus the licence collection script;
+    - the runtime stage uses the slim Python base pinned by digest, with
+      the environment at the same path and its `bin` first on `PATH`, a
       numeric non-root user, an empty owned data directory, the listen
       address set for containers, the documented port, the entrypoint
       `fitdocs-relay` with `serve` as the default command, no secret
       variable, no volume and no database file.
   - An ignore file.
   - A static image test that pins each rule, with mutations proving that a
-    tag-only base and a root user each red it.
+    tag-only base, a root user and an environment path other than the
+    contract's each red it.
+  - A minimal installable wrapper package under `relay/tests/
+    smoke_extension` with one route under `/x/smoke/`.
   - The smoke script, run for SQLite and for PostgreSQL. Each run migrates,
     serves detached, probes both endpoints, stops with SIGTERM (asserting
-    exit 0), and scans the logs for planted secrets.
+    exit 0), and scans the logs for planted secrets. A third run,
+    `derived`, builds a derived image by the documented steps with that
+    package, serves it on SQLite with `FITDOCS_RELAY_EXTENSIONS` naming it,
+    and checks that its route answers.
   - Add the build and smoke steps to the relay workflow, without push or
     login, and extend its pin test.
   - Done when:
     - the image builds locally;
-    - both smoke runs pass;
+    - the three smoke runs pass;
     - the licence directory lists the installed distributions;
     - the workflow pin test requires the build step and forbids push.
   - _Requirements: 9.1, 9.11_
 
 - [ ] 5.4 Pin the deploy contract and tie its version to the relay changelog
   - A contract pin test fixes, as literals: the contract version, the full
-    environment table, the probe paths, the image user, port and
-    entrypoint, and the command list.
+    environment table, the probe paths, the image user, port, entrypoint
+    and environment path, and the command list.
   - The relay changelog's newest section names deploy contract 1,
     envelope 1 and seam 1, and a test reds when any constant differs from
     the section.
@@ -818,7 +825,9 @@ Rules for every task:
     - a self-hosting guide: a local SQLite run, building the image from a
       pinned commit, migrate then serve, minting a token, connecting
       fitdocs, switching to PostgreSQL;
-    - the deploy contract v1 with the environment table;
+    - the deploy contract v1 with the environment table and the image's
+      environment path;
+    - the derived-image steps for installing a wrapper;
     - the database URLs;
     - the probes and the commands;
     - stop-then-start and the one-replica rule, including the

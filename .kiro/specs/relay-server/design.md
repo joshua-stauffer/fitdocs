@@ -148,8 +148,8 @@ documented in-process seam.
 - **`SEAM_VERSION` or any seam signature.** Re-check every wrapper; the
   relay changelog marks it as breaking.
 - **`DEPLOY_CONTRACT_VERSION`, the environment table, the probes, the
-  commands, the image user, port or entrypoint, or the one-replica or state
-  rule.** Re-check every deployment.
+  commands, the image user, port, entrypoint or environment path, or the
+  one-replica or state rule.** Re-check every deployment.
 - **`RelayClient`, `RelaySettings`, `RelayTokenClient`, `AuthStyle.
   RELAY_TOKEN`, `run_disconnect`'s per-style table, or the bare-pull
   selection rule.** Re-check the fitdocs-side consumers in `strava-publish`
@@ -389,7 +389,7 @@ relay/
 ├── contract/envelope-v1.json   # recorded request/answer exchanges both test suites replay
 ├── scripts/
 │   ├── collect_licences.py # image build: copies installed distributions' licence files
-│   └── image_smoke.sh      # CI: migrate, serve, probe, SIGTERM, log scan, for one backend
+│   └── image_smoke.sh      # CI: migrate, serve, probe, SIGTERM, log scan, for one backend; `derived` serves a wrapper image
 ├── src/fitdocs_relay/
 │   ├── __init__.py         # __version__ only
 │   ├── __main__.py         # python -m fitdocs_relay -> cli.main
@@ -422,6 +422,7 @@ relay/
     ├── test_routes.py, test_envelope_server.py, test_wire_examples.py, test_seam.py
     ├── test_logs.py, test_serve.py (subprocess shutdown and claim), test_cli.py
     ├── test_dockerfile.py  # static image rules
+    ├── smoke_extension/    # a minimal installable wrapper package (one route under /x/smoke/) for the derived-image smoke run
     └── test_docs_relay.py  # docs/relay.md environment table and versions bound to contract.py
 
 src/fitdocs/connectors/
@@ -1101,6 +1102,7 @@ class EnvVar: name: str; required: bool; default: str | None; secret: bool; mean
 ENVIRONMENT: Final[tuple[EnvVar, ...]]
 IMAGE_USER_ID: Final = 10001; IMAGE_PORT: Final = 8080; IMAGE_ENTRYPOINT: Final = ("fitdocs-relay",)
 IMAGE_DEFAULT_COMMAND: Final = ("serve",)
+IMAGE_ENVIRONMENT: Final = "/opt/fitdocs-relay"   # the image's Python environment; its bin/ is first on PATH
 COMMANDS: Final[tuple[str, ...]] = ("serve", "migrate", "principal", "token", "new-pepper")
 
 @dataclass(frozen=True)
@@ -1532,15 +1534,27 @@ def create_app(config: RelayConfig, *, extensions: Sequence[RelayExtension] = ()
 | Requirements | 1.5, 7.6, 9.1, 9.11 |
 
 - **Dockerfile**:
-  - Build stage: from the uv image pinned by digest, `uv sync --locked
+  - Build stage: from the uv image pinned by digest, with
+    `UV_PROJECT_ENVIRONMENT=/opt/fitdocs-relay`, `uv sync --locked
     --no-dev --extra postgres --no-editable`, then
     `scripts/collect_licences.py`.
   - Runtime stage: `FROM python:3.12-slim-bookworm@sha256:<digest>`,
-    which copies the venv and the licences, creates user 10001 and an
-    empty `/data` it owns, and sets `ENV FITDOCS_RELAY_HOST=0.0.0.0`,
+    which copies the environment to the same path `IMAGE_ENVIRONMENT` and
+    the licences, creates user 10001 and an empty `/data` it owns, and
+    sets `ENV PATH=/opt/fitdocs-relay/bin:$PATH`,
+    `ENV FITDOCS_RELAY_HOST=0.0.0.0`,
     `EXPOSE 8080`, `USER 10001`, `ENTRYPOINT ["fitdocs-relay"]` and
     `CMD ["serve"]`.
   - No `ENV` of a secret variable, no `VOLUME`, and no database file.
+- **Derived image** (the documented steps for a wrapper):
+  - `FROM` the relay image built from the pinned commit;
+  - as root, copy the `uv` binary from the uv image pinned by digest and
+    run `uv pip install --python /opt/fitdocs-relay/bin/python <wrapper
+    package>`;
+  - return to `USER 10001`, and leave the entrypoint and command as they
+    are;
+  - at run time, set `FITDOCS_RELAY_EXTENSIONS` to the wrapper's
+    `module:attribute`.
 - **relay.yml**:
   - Triggers on `push` and `pull_request`, with `permissions: contents:
     read`.
@@ -1556,7 +1570,11 @@ def create_app(config: RelayConfig, *, extensions: Sequence[RelayExtension] = ()
       `FITDOCS_RELAY_REQUIRE_POSTGRES=1`;
     - ruff check, ruff format check and mypy in `relay`;
     - `docker build -t fitdocs-relay:ci relay`;
-    - `relay/scripts/image_smoke.sh sqlite` and `... postgres`.
+    - `relay/scripts/image_smoke.sh sqlite`, `... postgres` and
+      `... derived`. The `derived` run builds a derived image by the
+      documented steps with `relay/tests/smoke_extension`, serves it on
+      SQLite with `FITDOCS_RELAY_EXTENSIONS` naming that extension, and
+      checks that its route under `/x/smoke/` answers.
   - No `docker push` or `docker login`, no `id-token`, and no registry
     action.
 
@@ -1621,13 +1639,14 @@ def create_app(config: RelayConfig, *, extensions: Sequence[RelayExtension] = ()
     mutation: deleting `relay` from the preamble reds it.
 - **RelayDocsPage** (2.8, 16.4): `docs/relay.md`, which says it is not
   governed by fitdocs's compatibility policy. It holds:
-  - the deploy contract v1 (image, the environment table above, URLs,
+  - the deploy contract v1 (image and its environment path, the
+    environment table above, URLs,
     probes, commands, migrate-before-serve, stop-then-start, state,
     shutdown, logs, and TLS terminated in front of the relay);
   - the operator commands;
   - envelope v1 (the route table and answer shape), the code table, and the
     registration format;
-  - seam v1;
+  - seam v1, and the derived-image steps for installing a wrapper;
   - the pepper-rotation statement;
   - the shared-network-filesystem limit;
   - a self-hosting guide (16.5): a local SQLite run, building the image
