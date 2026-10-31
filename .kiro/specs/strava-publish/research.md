@@ -320,6 +320,24 @@
   their own policy page; the text is versioned with the code that it
   describes.
 
+### Decision: Controller ruling R11 applied
+- **Context**: the intervals-publish Step 3.5 review produced three wave-2
+  rulings.
+- **Selected Approach**:
+  - `connectors.strava` names `PublishCode` and `TARGET_CODES` through
+    `fitdocs.connectors.protocol`'s re-export and imports nothing from
+    `fitdocs.publish`; the relay keeps its pinned copy of the vocabulary.
+  - `local_record_unreadable` is not used: neither fitdocs nor the relay
+    keeps a local record of fetched Strava activities.
+  - An upload never runs on unreadable identity state: the relay reaches
+    the upload call only after a fully parsed, not-full listing, decrypted
+    tokens and error-free storage reads, and fitdocs sends an upload request
+    only after a definite `not_found` (requirement 7.8).
+- **Note**: intervals-publish compares sport by passing the page's sport
+  on both keys (accepted by R11). This spec compares Strava's sport type
+  through the sport-family table, because Strava states one; a family gap
+  fails safe (no match).
+
 ## Synthesis Outcomes
 - **Generalization**: the connect machinery (sessions, pages, callback,
   custody, revocation) is keyed by target id, and the storage operations

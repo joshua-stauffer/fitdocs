@@ -109,9 +109,10 @@ uploads are enabled, to upload the page's activity file once.
   - `connectors.relay_targets`: standard library plus the relative
     `.relay_codes` and `.relay_envelope`;
   - `connectors.strava`: `errors`, `protocol`, `secrets`, `relay`,
-    `relay_codes`, `relay_envelope`, `relay_targets`, and
-    `fitdocs.publish.outcomes` (the one module outside `connectors` it
-    imports, a standard-library-only leaf);
+    `relay_codes`, `relay_envelope` and `relay_targets`. It names
+    `PublishCode`, `TARGET_CODES` and the request types through
+    `fitdocs.connectors.protocol`, which re-exports them (R11); it imports
+    nothing from `fitdocs.publish` directly;
   - `connectors.browser_connect`: `credentials`, `http`, `protocol`,
     `secrets`, `settings`, `relay_codes`;
   - no new runtime dependency; no clock read; network only through
@@ -171,6 +172,11 @@ outcome sets.
   application's privacy-policy field points at `<FITDOCS_RELAY_PUBLIC_URL>/
   privacy` (for the maintainer's instance, `https://api.fitdocs.ai/
   privacy`), or at the operator's own `FITDOCS_RELAY_PRIVACY_POLICY_URL`.
+- **R11**: `PublishCode` and `TARGET_CODES` come from
+  `fitdocs.connectors.protocol`'s re-export; `local_record_unreadable` is
+  not used (no local record of fetched activities exists on this path); an
+  upload never runs on unreadable identity state (StravaPublisher, "Upload
+  guard").
 - **Interpretation of "a PostPublisher on the relay connector"**: the
   publisher is the new `strava` connector, built on relay-server's
   `RelayClient`. The `relay` connector itself gains no capability: a
@@ -196,8 +202,6 @@ outcome sets.
     strava-publish Req 2, including `--no-browser`.
   - Req 14.1 and 14.4: the requests `connect`, `disconnect` and `publish
     --yes` make for a Strava instance.
-  - Allowed Dependencies: `connectors.strava` imports
-    `fitdocs.publish.outcomes`.
   - New: the built-in Strava connector (strava-publish Req 1).
   - relay-server's Disconnect criterion 14.5 ("where its style is reserved")
     now has no reserved style; a browser-consent instance follows
@@ -224,10 +228,12 @@ outcome sets.
 - **activity-identity**: the strict tier lives in `fitdocs.identity.strict`
   (standard library only, pinned into the relay); `matching` re-exports its
   constants and calls it; every result is unchanged.
-- **publish-core**: none. Its Allowed Dependencies sentence ("nothing else
-  from `fitdocs.publish`") is read as governing `protocol` and `registry`;
-  a target module importing the outcomes leaf is a connectors boundary
-  entry (cross-spec review: `intervals-publish` needs the same).
+- **publish-core**: none of its own. This spec consumes the R11 re-export
+  of `PublishCode` and `TARGET_CODES` through `fitdocs.connectors.protocol`
+  (folded into publish-core by the controller). It does not use
+  `local_record_unreadable` (R11): neither fitdocs nor the relay keeps a
+  local record of fetched Strava activities, so no target state of that
+  kind exists on this path.
 - **steering**: `tech.md` and `structure.md`, one sentence each (Steering).
 
 ## Architecture
@@ -402,7 +408,7 @@ tests/connectors/test_browser_connect.py      # NEW: engine over a scripted tran
 tests/connectors/test_cli_strava.py           # NEW: connect, --no-browser, disconnect, flag refusals
 tests/connectors/test_strava_wire_examples.py # NEW: decodes the recorded Strava-route exchanges
 .kiro/queue/2026-10-31-strava-publish-site-copy.md   # NEW (written with this spec): site copy follow-up (R9)
-relay/LIVE_CHECK_STRAVA.md                    # NEW (optional task 11.1*): the maintainer-gated live check procedure
+relay/LIVE_CHECK_STRAVA.md                    # NEW: the live check procedure; running it is the optional, maintainer-gated task
 ```
 
 ### Modified Files
@@ -447,7 +453,8 @@ relay/LIVE_CHECK_STRAVA.md                    # NEW (optional task 11.1*): the m
   token); `test_cli_connectors.py:96-104, 350-362, 435-450` (the
   reserved-style refusal tests retire; the refusal branch stays for any
   future reserved style); `test_boundary.py` (three new modules and import
-  sets; `fitdocs.publish.outcomes` in `strava`); `test_surface.py`
+  sets; `strava` reaches publish codes only through `protocol`);
+  `test_surface.py`
   (`EXPECTED_ALL` appended, count literal at landing); `test_docs.py`
   (`_EXPECTED_HEADINGS` rows, the neutral-scan entry for the Strava
   section, the preamble connector list); `test_network_statements.py`
@@ -469,7 +476,7 @@ entries, non-standard-library only):
 |--------|------------------------|
 | `relay_targets` | `fitdocs.connectors.relay_codes`, `fitdocs.connectors.relay_envelope` |
 | `protocol` | existing |
-| `strava` | `errors`, `protocol`, `secrets`, `relay`, `relay_codes`, `relay_envelope`, `relay_targets`, `fitdocs.publish.outcomes` |
+| `strava` | `errors`, `protocol`, `secrets`, `relay`, `relay_codes`, `relay_envelope`, `relay_targets` (no `fitdocs.publish.*`, R11) |
 | `browser_connect` | `credentials`, `http`, `protocol`, `secrets`, `settings`, `relay_codes` |
 | `fitdocs.connectors` (package) | existing + `fitdocs.connectors.strava` |
 
@@ -594,7 +601,7 @@ stateDiagram-v2
 | 5.5 | Single attempt | RelayClientAmendment | `HttpRequest.single_attempt` | — |
 | 6.1, 6.2, 6.4, 6.5 | Resolution | Resolver, StravaPublisher | `list_window`, `pick`, `SPORT_FAMILIES` | Publishing |
 | 6.3 | Pinned rule | StrictRule, SharedCopyPairs | `strict_match` | — |
-| 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7 | Writes | StravaPublisher, StravaApi | `update_activity`, `create_upload`, `upload_state` | Publishing |
+| 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8 | Writes and the upload guard | StravaPublisher, StravaApi, StravaConnector | `update_activity`, `create_upload`, `upload_state` | Publishing |
 | 8.1, 8.2, 8.3 | Relay mapping | StravaApi, StravaPublisher | `classify`, `STEP_OUTCOMES` | — |
 | 8.4 | fitdocs mapping | StravaConnector | `PUBLISH_MAPPING`, `UPLOAD_MAPPING` | — |
 | 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7 | Budget | StravaBudget, StorageBudget, StravaConfig | `spend_budget`, `exhaust_budget` | — |
@@ -1288,7 +1295,7 @@ def account_key(pepper: bytes, target: str, athlete_id: str) -> str: ...
 | Field | Detail |
 |-------|--------|
 | Intent | Publish, upload and resolve links, each to one code |
-| Requirements | 5.6, 6.1, 6.4, 7.1-7.7, 8.1, 8.2, 10.1-10.3, 10.6 |
+| Requirements | 5.6, 6.1, 6.4, 7.1-7.8, 8.1, 8.2, 10.1-10.3, 10.6 |
 
 ```python
 PUBLISH_DEADLINE_S: Final = 20.0; UPLOAD_DEADLINE_S: Final = 25.0; CALL_TIMEOUT_S: Final = 8.0
@@ -1315,6 +1322,16 @@ class StravaPublisher:
   the deadline: ready → `put_publication`, `UPLOADED`; failed → list and
   pick again (one → update, `POSTED`; `MANY` → `AMBIGUOUS`; `NONE` →
   `REJECTED`); deadline or poll failure → `UNCONFIRMED`.
+- **Upload guard** (R11, 7.8): the upload call is reached only after a
+  listing that read completely (every entry parsed, not full) and held no
+  match, for a connection whose tokens decrypted, with the publication
+  check and the budget reservation read from storage without error. Any
+  unreadable state on that path (an entry that does not parse, an
+  undecryptable token, a storage failure) ends the request first with its
+  own code (`unavailable`, `not_connected` or `relay-failure`), never with
+  an upload. On the fitdocs side the upload request is sent only after a
+  definite `not_found` outcome, never after a malformed or missing answer,
+  and only with a readable file.
 - **`STEP_OUTCOMES`** (pinned row by row; a budget refusal counts as
   `LIMITED`):
 
@@ -1646,8 +1663,7 @@ class BudgetStore(StorageBase, Protocol):
   --yes` makes at most two requests per page; no fitdocs command contacts
   Strava. `structure.md` gains: "`identity.strict` (the strict tier of the
   match rule) imports only the standard library, and the relay runs a
-  pinned copy of it", and, in a separate sentence of the connectors
-  bullet, that `connectors.strava` imports `fitdocs.publish.outcomes`.
+  pinned copy of it".
 - **Changelogs** (17.5): root Unreleased (read through
   `unreleased_since(text, V0_2_0)`) adds the Strava connector ("Compatible
   with Strava", through a relay), `fitdocs connect --no-browser`, Strava
@@ -1657,7 +1673,8 @@ class BudgetStore(StorageBase, Protocol):
 - **SiteFollowUp** (17.6): `.kiro/queue/2026-10-31-strava-publish-site-
   copy.md`, written with this spec.
 - **LiveCheck** (18): `relay/LIVE_CHECK_STRAVA.md`, an optional procedure
-  run only with the maintainer's explicit go (task 11.1*).
+  run only with the maintainer's explicit go (the optional task marked
+  `*` in tasks.md).
 
 ## Data Models
 

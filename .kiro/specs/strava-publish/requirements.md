@@ -226,6 +226,7 @@ meaning):
 5. If Strava reports the upload as failed, the relay server shall resolve the activity again by listing, never by reading the failure's text: one match is updated as in 7.1, several answer the ambiguous outcome, and none answers the rejected outcome.
 6. The relay server shall change no field of a Strava activity other than its name and description, and shall delete nothing on Strava.
 7. The relay server shall finish each publish request and each upload request within a documented deadline shorter than fitdocs's request timeout, answering the unavailable outcome (publish) or the unconfirmed outcome (upload, once the file was sent) when that deadline passes.
+8. If any state the upload decision depends on cannot be read (a listing entry, the connection's tokens, or the relay's own records), the relay server shall end the request without uploading, and the fitdocs CLI shall send an upload request only after a definite not-found outcome.
 
 ### Requirement 8: One fitdocs Code for Every Answer
 **Objective:** As an athlete, I want every Strava answer turned into one fitdocs code with fitdocs's own explanation, so that I always know what happened without seeing anything Strava said.
