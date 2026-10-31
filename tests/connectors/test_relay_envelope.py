@@ -6,8 +6,10 @@ Envelope v1" in the relay-server design.md, not imported from the module, so
 a change to the module reds the pin rather than the pin tracking the module.
 Each bound is tested one step inside and one step outside. The design forces
 two ties between bounds: MAX_POLL_INTERVAL_S and MIN_EXPIRES_IN_S are both 60,
-and MAX_REQUEST_BYTES and MAX_ANSWER_BYTES are both 65,536. A swap of either
-pair is guarded only by the by-name constants pin, not by the boundary tests.
+and MAX_REQUEST_BYTES and MAX_ANSWER_BYTES are both 65,536. Under these ties,
+using one name of a pair in place of the other changes no behaviour, so no
+test here can detect it; the constants pin guards each name's value, not which
+name a parser uses.
 """
 
 from __future__ import annotations
