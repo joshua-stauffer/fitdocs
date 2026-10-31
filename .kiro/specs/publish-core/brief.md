@@ -142,7 +142,7 @@ A target-neutral core that every target plugs into, in four stages:
     - each code has a fixed explanation written by fitdocs;
     - it is append-only, and a prefix test pins its order;
     - every target uses it, and so does the relay (a seam with
-      relay-accounts and strava-publish);
+      relay-server and strava-publish);
   - the publish-target contract that targets implement.
     - The design decides whether it is a connectors operation protocol
       driving the reserved capabilities, or its own seam.

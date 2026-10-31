@@ -5,7 +5,7 @@
 Publishing to intervals.icu directly needs a personal API key in the
 athlete's fitdocs credential store, which is `intervals-publish`'s default
 route. Two kinds of athlete would rather connect intervals.icu once to
-their relay account, in a browser, the same way they connect Strava:
+their relay, in a browser, the same way they connect Strava:
 
 - an athlete who does not want to handle an API key;
 - an athlete whose fitdocs runs somewhere they would rather not keep one.
@@ -83,12 +83,12 @@ Reuse rather than rebuild.
 ## Out of Boundary
 
 - The direct route (`intervals-publish`).
-- Accounts and deployment (`relay-accounts`).
+- Relay tokens, principals and the deploy contract (`relay-server`).
 
 ## Upstream / Downstream
 
 - **Upstream**: `strava-publish` (the OAuth machinery), `intervals-publish`
-  (the semantics), `relay-accounts`, `publish-core`.
+  (the semantics), `relay-server`, `publish-core`.
 - **Downstream**: none planned.
 
 ## Existing Spec Touchpoints

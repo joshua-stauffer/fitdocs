@@ -3574,13 +3574,14 @@ The maintainer set the rule this phase is built around (2026-10-31):
 - it exposes its own publishing interface, with its own success and failure
   codes, and translates each platform's API into them.
 
-Strava publishing goes through a passthrough relay at fitdocs.ai. Athletes
-register an email from their fitdocs, verify it by email, and receive a
-relay token that authenticates them to the relay's publish API.
+Strava publishing goes through a passthrough relay at fitdocs.ai.
+- Athletes register an email from their fitdocs, verify it by email, and
+  receive a relay token that authenticates them to the relay's publish API.
+- The open-source relay server has no accounts. Its operator mints tokens.
+- The `fitdocs` CLI drives registration against any relay that offers it.
 
-The research and viability findings, with their sources, are in the five
-briefs: Strava's terms and API in `.kiro/specs/strava-publish/brief.md`,
-the hosting and email facts in `.kiro/specs/relay-accounts/brief.md`.
+The research findings, with their sources, are in the briefs. Strava's terms
+and API are in `.kiro/specs/strava-publish/brief.md`.
 
 **Approach decision — a target-neutral publish core in fitdocs, two
 platform targets, and a self-hostable relay for the one platform that
@@ -3603,11 +3604,26 @@ needs a held application.**
     sets its name and description. It uploads the `.fit` only when no
     activity exists and uploads are enabled.
   - It answers fitdocs only with outcome codes.
-- **The relay** lives in this repository as its own deployable package,
-  never in the `fitdocs` wheel. It is a Python ASGI app with PostgreSQL in
-  a container on a DigitalOcean droplet: the data on a block-storage volume,
-  and WAL-G archiving continuously to Spaces in another region. Email goes
-  through a provider's HTTPS API, Resend by default.
+- **The relay application** lives in this repository as its own package,
+  never in the `fitdocs` wheel. It is a Python ASGI app.
+  - **It has no accounts** (maintainer, 2026-10-31).
+    - It is single-operator: the operator mints and revokes relay tokens
+      with a server command.
+    - A wrapping deployment can add its own token issuance, such as email
+      sign-up, through a documented in-process seam.
+    - The server sends no email.
+  - **Storage sits behind one domain-level interface** (maintainer,
+    2026-10-31). There are two backends, chosen by the database URL:
+    - SQLite, the default, through the standard library's `sqlite3`. A
+      local relay needs no database server, no driver and no Docker.
+    - PostgreSQL, through an optional extra (`[postgres]`), selected by
+      passing a PostgreSQL database URL.
+  - One conformance suite runs against both backends.
+  - It defines a deploy contract: a container image, configuration from the
+    environment only, health and readiness endpoints, a separate migration
+    command, and the configured database as the only state.
+  - Hosting is out of scope. The maintainer's instance answers at
+    `https://api.fitdocs.ai`, the default relay URL.
 - **An optional relay route to intervals.icu** comes last. It is gated on
   intervals.icu approving an OAuth app.
 
@@ -3619,16 +3635,14 @@ Rejected:
   this, for their own relay.
 - *Gate the Strava work on a written answer from Strava* (offered at
   discovery). The maintainer chose to build now (below).
-- *DuckDB on Spaces as the relay's store.* A remote DuckDB file opens
-  read-only. DuckLake still needs a catalog database. And an analytics
-  engine is a poor fit for small concurrent token rotations.
-- *SQLite with Litestream* and *managed Postgres*. Both were offered; the
-  maintainer chose a Postgres container on DigitalOcean.
-- *SMTP.* DigitalOcean blocks ports 25, 465 and 587 on droplets. An HTTPS
-  API with a send-only, domain-scoped key is safer, and costs the same at
-  this volume (the free tiers cover it).
-- *Cloudflare Workers + D1* and *AWS serverless* for the relay. Both are
-  harder to self-host, and neither shares the fitdocs vocabulary in Python.
+- *DuckDB as the relay's store.* A remote DuckDB file opens read-only, and
+  an analytics engine is a poor fit for small concurrent token rotations.
+- *Accounts and email verification in the open-source server* (this
+  discovery's first plan). A self-hosted relay serves one operator, who can
+  mint a token directly, so email adds nothing there. Sign-up belongs to
+  whoever runs a multi-user relay.
+- *A platform-specific or serverless runtime* for the relay. It is harder to
+  self-host, and could not share the fitdocs vocabulary in Python.
 - *Writing the Strava activity URL into the page.* An activity id is Strava
   Data (AGR §2.3), cached 7 days at most (POL §6.2), and it would break the
   maintainer's rule. The page carries a relay redirect link instead.
@@ -3637,7 +3651,7 @@ Rejected:
 
 - **Path E: five new specs, with existing-spec updates carried out inside
   them** (maintainer, 2026-10-31). The shape is
-  (`publish-core` ∥ `relay-accounts`) → (`intervals-publish` ∥
+  (`publish-core` ∥ `relay-server`) → (`intervals-publish` ∥
   `strava-publish`) → `relay-intervals`.
 - **Build the Strava path now** (maintainer).
   - Strava's API Agreement and Policy took effect 2026-06-01. Their AI
@@ -3648,21 +3662,47 @@ Rejected:
   - The application runs in Single Player Mode, which its owner can raise
     to 10 athletes. Beyond that is Strava's discretionary review, a
     maintainer action outside these specs.
-- **The relay lives in this repository and is self-hostable** (maintainer).
-  It is a separate deployable, and `fitdocs.toml` points a relay instance
-  at a URL that defaults to `https://api.fitdocs.ai`.
-- **The relay stack is a Python ASGI app with a PostgreSQL container on
-  DigitalOcean** (maintainer). Durability is a hard requirement ("I don't
-  want to lose user data"), which brings in the volume, WAL archiving to
-  Spaces in another region, and a rehearsed restore.
-- **Email goes through an HTTPS API, not SMTP** (maintainer, after
-  viability). A local relay skips email: it prints the confirmation link,
-  and refuses to do so unless bound to loopback.
-- **Registration is device-style.** The CLI shows a short code. The emailed
-  link opens a page that shows the same code, and a Confirm POST verifies.
-  The waiting CLI receives the token over its private polling secret. This
-  answers the "someone else registered my email" risk and link-scanner
-  prefetch.
+- **The relay application lives in this repository and is self-hostable**
+  (maintainer). It is a separate package, and `fitdocs.toml` points a relay
+  instance at a URL that defaults to `https://api.fitdocs.ai`.
+  - It is kept open for three reasons:
+    1. Strava allows each operator only their own application. An athlete
+       who does not use fitdocs.ai can publish to Strava only by running a
+       relay.
+    2. The client and the relay share the outcome vocabulary and the HTTP
+       contract, so one CI tests both sides.
+    3. Users hand the relay their Strava authorization, and open code lets
+       them check what it does with it.
+- **The relay stack is a Python ASGI app with storage behind one
+  interface** (maintainer, revised 2026-10-31).
+  - The interface is domain-level: mint and revoke a token, delete a
+    principal, rotate a refresh token atomically. It is not a SQL or ORM
+    layer, because each backend must give the same transactional
+    guarantees in its own way: `BEGIN IMMEDIATE` in SQLite, row locks in
+    Postgres.
+  - SQLite (standard library) is the default. PostgreSQL is an optional
+    extra, selected by the database URL.
+  - A conformance suite, run against both backends in this repository's
+    CI, is what keeps them consistent.
+  - This repository ships a small server that runs locally on SQLite, plus
+    the deploy contract above. Hosting is out of scope.
+  - The database is the relay's only state, so a database backup is a
+    complete backup.
+- **The open-source relay server has no accounts and sends no email**
+  (maintainer, 2026-10-31).
+  - The operator mints tokens.
+  - A relay that offers registration says so on its capabilities endpoint,
+    and implements that side itself.
+- **The CLI's registration client is device-style.**
+  1. It sends the email address and shows the short code the relay
+     returns.
+  2. It polls with a private secret until the relay issues a token, refuses,
+     or the registration expires.
+  3. Every answer is a relay code.
+
+  The emailed link and its confirmation page are the relay's. Showing the
+  same code on both sides is what defends against someone else registering
+  your email.
 - **intervals.icu has both routes, direct by default** (maintainer). Direct
   uses the personal key and the existing connector. The relay route is
   `relay-intervals`.
@@ -3695,8 +3735,12 @@ Rejected:
     - target discovery;
   - the intervals.icu direct target;
   - the relay:
-    - accounts, email verification, relay tokens, account deletion;
-    - storage, backups, deployment;
+    - operator-minted relay tokens and principals, with no accounts or
+      email;
+    - the in-process seam a wrapping deployment uses to add token issuance;
+    - the storage interface, with SQLite and PostgreSQL backends, their
+      migrations and the conformance suite;
+    - the container image, a local SQLite run, and the deploy contract;
     - the Strava connect flow, publish endpoint, redirect endpoint and
       revocation handling;
   - the optional relay route to intervals.icu;
@@ -3709,6 +3753,7 @@ Rejected:
   - a publish-target plugin kind;
   - paid plans or charging for any Strava functionality (POL §5.8);
   - a social layer;
+  - hosting and operating relay instances;
   - running several relay instances against one database;
   - a daemon or scheduler.
 
@@ -3745,17 +3790,21 @@ Rejected:
   - The relay stores only token hashes and encrypted Strava tokens.
   - Provider keys and the encryption key come only from the deploy
     environment.
-- **Relay operations.**
-  - One instance at a time.
-  - Only 80/443 and a restricted SSH are open, behind a DigitalOcean Cloud
-    Firewall. 5432 is never published, because Docker bypasses `ufw`.
-  - The `api` record is DNS-only, with TLS on the droplet.
+- **The relay's deploy contract** is what any deployment wraps, so it
+  changes only deliberately:
+  - configuration only from the environment, with no secret in the image;
+  - the configured database (a SQLite file or PostgreSQL) as the only state,
+    so the app container is disposable;
+  - health and readiness endpoints;
+  - a migration command the deploy runs before the app starts;
+  - graceful shutdown, and logs to stdout;
+  - one replica at a time.
 - **Strava wording and obligations.**
   - "Connect with Strava" and "View on Strava", and "Compatible with
     Strava" in docs.
   - No announcement referencing Strava without written consent (POL §4.6).
-  - A privacy policy, consent text, a support contact, and a 24-hour breach
-    runbook.
+  - A privacy policy, consent text and a support contact, all published
+    here.
   - A self-hosted relay needs its own Strava application and subscription.
 - **Shared vocabulary.** The relay and fitdocs share the outcome
   vocabulary, and the relay must not import the whole `fitdocs` package
@@ -3766,19 +3815,26 @@ Rejected:
 
 - **Why this split**:
   - The fitdocs side (publish-core, intervals-publish) and the relay side
-    (relay-accounts, strava-publish) change for different reasons: page
-    contract against hosted-service operations.
+    (relay-server, strava-publish) change for different reasons: the page
+    contract on one side, relay tokens and token custody on the other.
   - They meet at two narrow seams: the outcome vocabulary and the relay's
     HTTP envelope.
-  - publish-core and relay-accounts have no dependency on each other beyond
+  - publish-core and relay-server have no dependency on each other beyond
     the vocabulary, so they run in parallel.
   - Each target is its own spec, so a platform's terms or API change stays
     inside one spec.
 - **Shared seams to watch**:
   - the outcome vocabulary, which is owned by publish-core and used by every
     target and the relay;
-  - the relay envelope and auth, owned by relay-accounts and consumed by
+  - the relay envelope and auth, owned by relay-server and consumed by
     `strava-publish` and `relay-intervals`;
+  - the deploy contract (the image and how it is published, the environment
+    configuration, the probes, the migration command), consumed by any
+    deployment. Any change to it is a breaking change for deployments;
+  - the relay's storage interface. It is owned by relay-server, and
+    strava-publish and relay-intervals extend it with token-custody
+    operations. Every operation added must pass the conformance suite on
+    both backends;
   - the publish request: the match keys, the post, and the base `.fit`
     reference;
   - the `pair_evidence` rule, reused remotely through a shared module or a
@@ -3797,7 +3853,7 @@ Amendment numbers are the next free number at landing.
   `RESOLVE_REMOTE_ACTIVITY` / `ANNOTATE_REMOTE_ACTIVITY` / `PUSH_ACTIVITY`;
   PUT and a single-attempt write path in `http.py`; the relay auth style;
   `OAUTH_BROWSER` driven; the network statements. Carried by publish-core,
-  intervals-publish, relay-accounts and strava-publish.
+  intervals-publish, relay-server and strava-publish.
 - [ ] intervals-connector — the update, upload and resolve endpoints and the
   status-to-code mapping. Carried by intervals-publish.
 - [ ] wiki-contract — the `post` region, the opt-in mechanism, the links
@@ -3805,12 +3861,14 @@ Amendment numbers are the next free number at landing.
 - [ ] workout-docs — rendering the `post` placeholder and the links block.
   Carried by publish-core.
 - [ ] distribution — the wheel and sdist exclude `relay/`, enforced by the
-  release gate. Carried by relay-accounts.
+  release gate. Plus the relay's container image, if this repository's CI
+  publishes it. The design decides between an image published here and
+  deployments building from a pinned commit. Carried by relay-server.
 - [ ] docs-site — the publishing page, the relay self-hosting guide, and the
   privacy policy (with Strava sections). Carried by publish-core,
-  relay-accounts and strava-publish.
+  relay-server and strava-publish.
 - [ ] steering — `tech.md` ("No server" and "Network and Credentials") and
-  `structure.md` (`relay/`). Carried by relay-accounts.
+  `structure.md` (`relay/`). Carried by relay-server.
 
 #### Direct Implementation Candidates
 
@@ -3821,19 +3879,12 @@ Amendment numbers are the next free number at landing.
   before the spec that uses it can be checked live:
   - a Strava API application, which needs a Strava subscription, with the
     callback domain `api.fitdocs.ai` (strava-publish);
-  - DigitalOcean: a droplet, a block-storage volume, a Spaces bucket in
-    another region, and a Cloud Firewall (relay-accounts);
-  - a Resend account with a send-only key scoped to the sending domain,
-    plus SPF/DKIM/DMARC and the `api` A record in the Cloudflare zone
-    (relay-accounts);
   - an intervals.icu OAuth app request at <https://intervals.icu/oauth/apply>
     (relay-intervals).
 
 #### Follow-on candidates (not scheduled)
 
 - Strava's athlete-capacity review, beyond 10 athletes.
-- More email adapters (Postmark, Mailgun, SMTP on a configurable port) for
-  self-hosters.
 - A publish-target plugin kind, parameterized in `plugins.py` like the
   connector kind.
 - Planned-workout push to intervals.icu (Phase 8's candidate, still open).
@@ -3848,14 +3899,18 @@ Amendment numbers are the next free number at landing.
   wiki-contract, workout-docs and docs-site amendments and the agent skill's
   publishing section, which names no backend. **Brief written 2026-10-31.**
   Dependencies: none
-- [ ] relay-accounts — the self-hostable relay's foundation in `relay/`:
-  - the ASGI app, PostgreSQL, migrations;
-  - device-style email registration through an HTTPS email API (with a
-    console sender for local mode), relay tokens, account deletion;
-  - the envelope;
-  - the Compose deploy on DigitalOcean, with WAL-G to Spaces and a
-    rehearsed restore;
-  - the fitdocs relay connector and its `connect` flow.
+- [ ] relay-server — the self-hostable relay's foundation in `relay/`:
+  - the ASGI app;
+  - the storage interface, with a SQLite default and a PostgreSQL extra,
+    their migrations, and a conformance suite run on both;
+  - operator-minted relay tokens, with no accounts or email, plus the
+    in-process seam a wrapper uses to add its own token issuance;
+  - the envelope and its capabilities endpoint;
+  - the container image, a local SQLite run, and the deploy contract any
+    deployment wraps;
+  - the fitdocs relay connector and its `connect` flow: a pasted token, or
+    the device-style registration client against a relay that offers
+    registration.
 
   Carries the steering, distribution, connectors and docs-site amendments.
   **Brief written 2026-10-31.** Dependencies: none
@@ -3877,7 +3932,7 @@ Amendment numbers are the next free number at landing.
   - the rate-limit budget, and nothing from Strava crossing the relay;
   - the fitdocs relay target, with `OAUTH_BROWSER` driven.
 
-  **Brief written 2026-10-31.** Dependencies: publish-core, relay-accounts
+  **Brief written 2026-10-31.** Dependencies: publish-core, relay-server
 - [ ] relay-intervals — the optional relay route to intervals.icu. It
   reuses strava-publish's OAuth machinery and intervals-publish's semantics,
   and adds a per-instance route setting, direct by default. Implementation

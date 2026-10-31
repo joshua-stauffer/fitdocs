@@ -93,7 +93,7 @@ their Strava accounts without each registering an app.
 ## Desired Outcome
 
 - **Connecting.**
-  - The athlete connects Strava once, to their relay account.
+  - The athlete connects Strava once, to their relay token's principal.
   - `fitdocs connect <strava instance>` opens (or prints) the relay's
     connect page. That page carries the "Connect with Strava" button, and
     the CLI waits until the relay reports the connection made.
@@ -117,25 +117,28 @@ their Strava accounts without each registering an app.
   - The page and fitdocs never hold a Strava identifier (maintainer,
     2026-10-31).
 - **Disconnecting.** Disconnecting, a Strava-side revocation, or deleting
-  the account removes the athlete's Strava tokens at once. Any Strava Data
+  the principal removes the athlete's Strava tokens at once. Any Strava Data
   the relay holds goes within Strava's limits.
 
 ## Approach
 
 Strava support is two pieces, the relay side and the fitdocs side.
 
-**On the relay** (in `relay/`, on top of relay-accounts):
+**On the relay** (in `relay/`, on top of relay-server):
 
 1. **Connect.**
-   - A connect session is bound to the relay account and carries an
+   - A connect session is bound to the relay token's principal and carries an
      unguessable `state`.
    - It redirects to Strava's `/oauth/authorize` with the needed scopes.
    - The callback on `api.fitdocs.ai` exchanges the code and checks the
      granted scope.
    - The refresh token is stored encrypted (AES-GCM through
-     `cryptography`, key from the environment). Each rotation is one
-     transaction, so a concurrent refresh can never lose the only valid
+     `cryptography`, key from the environment).
+   - Each rotation is one atomic operation on relay-server' storage
+     interface, so a concurrent refresh can never lose the only valid
      token.
+   - The operations this spec adds to that interface pass its conformance
+     suite on both SQLite and PostgreSQL.
 2. **Publish.** The endpoint accepts a publish request: the publication id,
    start time with offset, elapsed time, distance, sport, title and
    description, plus the base `.fit` when an upload is allowed. Then:
@@ -158,7 +161,7 @@ Strava support is two pieces, the relay side and the fitdocs side.
    - An unknown or unresolvable id gets a fitdocs-owned "not found" page.
 4. **Revocation.** The relay keeps one deauthorization webhook subscription
    and acts on its events. `/oauth/revoke` is called on a CLI disconnect.
-   Account deletion cascades.
+   Deleting a principal cascades.
 
 **In fitdocs**:
 
@@ -182,8 +185,10 @@ Strava support is two pieces, the relay side and the fitdocs side.
   - brand-compliant wording on the relay's connect page and in the links
     block;
   - the Strava sections of the privacy policy and the consent text
-    (docs-site amendment), the support contact, and the operator's 24-hour
-    breach runbook;
+    (docs-site amendment), and the support contact;
+  - two additions to relay-server' deploy contract: the encryption-key
+    variable (with how a key rotation works), and the webhook-verification
+    setting;
   - a self-hosting note: a self-hosted relay needs its own Strava
     application and subscription. It may never use the fitdocs.ai
     application's credentials (AGR §1.1-1.2).
@@ -195,7 +200,8 @@ Strava support is two pieces, the relay side and the fitdocs side.
   - deleting activities (the API has none);
   - asking Strava for a capacity review (a maintainer action, beyond 10
     athletes);
-  - charging for the feature (POL §5.8).
+  - charging for the feature (POL §5.8);
+  - hosting and operating any relay instance.
 
 ## Boundary Candidates
 
@@ -207,14 +213,16 @@ Strava support is two pieces, the relay side and the fitdocs side.
 
 - Composing the post, the opt-in, the publish ledger, the links block and
   the `fitdocs publish` command. publish-core owns these.
-- Accounts, email and deployment. relay-accounts owns these.
+- Relay tokens, principals, the envelope and the deploy contract.
+  relay-server owns these.
 
 ## Upstream / Downstream
 
 - **Upstream**:
   - publish-core: the outcome vocabulary, the target contract, the publish
     request;
-  - relay-accounts: accounts, the envelope, storage, deployment;
+  - relay-server: tokens and principals, the envelope, storage, the
+    deploy contract;
   - activity-identity: the match rule.
 - **Downstream**: `relay-intervals` reuses the relay's OAuth-connect
   machinery.
