@@ -247,7 +247,11 @@
   re-post updates rather than duplicates; the docs say so.
 - Parallel landers append to `connectors.__all__`, `Capability` docs and
   `CHANGELOG.md`. Mitigation: append-only edits; the surface count pin moves
-  by this spec's two names at landing.
+  by this spec's six names at landing.
+- Site copy goes stale (example `doc_version`, contract version) and has no
+  publishing page. Mitigation: per controller ruling R9 the site is not
+  edited by a Phase 14 spec; `.kiro/queue/2026-10-31-publish-core-site-copy.md`
+  records it for the next release's site update.
 - A target leaking service text through an exception message. Mitigation:
   the core prints no exception text from a target, only `target_error`.
 

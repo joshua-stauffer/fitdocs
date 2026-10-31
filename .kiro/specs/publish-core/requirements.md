@@ -40,8 +40,10 @@ Source: `.kiro/specs/publish-core/brief.md`; Phase 14 of
 `.kiro/steering/roadmap.md` (wave 1, parallel with `relay-server`).
 Dependencies: none. Downstream: `intervals-publish`, `strava-publish`,
 `relay-intervals`, and the relay's pinned copy of the outcome vocabulary.
-Extends `wiki-contract`, `workout-docs`, `connectors`, `effort-tags`,
-`distribution` and `docs-site`, and the packaged agent skill.
+Extends `wiki-contract`, `workout-docs`, `connectors`, `effort-tags` and
+`distribution`, and the packaged agent skill. The documentation site is not
+edited (it describes released versions only); its publishing copy is
+recorded as a follow-up queue item.
 
 ## Introduction
 
@@ -91,8 +93,9 @@ Terms used below:
   transport and the publication id used as an idempotency key; the publish
   ledger and its version; the fitdocs-owned published region and the page
   contract changes that carry it; the packaged skill's publishing section;
-  the documentation, the docs-site publishing page, the changelog, and the
-  amendment records on the specs this extends.
+  the repository documentation, the changelog, a follow-up queue item for
+  the documentation site's publishing copy, and the amendment records on the
+  specs this extends.
 - **Out of scope**: any concrete target, including everything specific to
   intervals.icu, Strava or a relay (`intervals-publish`, `strava-publish`,
   `relay-intervals`, `relay-server`); how a target authenticates, finds its
@@ -112,8 +115,9 @@ Terms used below:
     vocabulary, decides how it finds its activity, and declares the link it
     permits. It returns exactly one code per request.
   - The relay carries a byte-identical pinned copy of the vocabulary and
-    answers a publish request with one of its codes; `relay-server` owns the
-    copy and the check that it never drifts.
+    answers a publish request with one of its codes; `relay-server` ships
+    the drift check, and `strava-publish`, the first spec where both
+    packages exist, adds the vocabulary's pinned copy to it.
   - The packaged skill names no service; the targets are discovered from the
     CLI.
   - Every other command (`sync`, `regen`, `load`, `check`, `index`,
@@ -239,7 +243,7 @@ Terms used below:
 5. The connector framework shall leave finding the remote activity, deciding whether to upload, and mapping a service's answers into codes to each target, and `fitdocs publish` shall perform none of these steps itself.
 6. The published target contract shall require a target to answer more than one matching activity with the ambiguous code and an activity it cannot identify from the facts given with the missing-activity-facts code, never by choosing one or by uploading.
 7. The connector framework shall still never read, render or write a workout document, and shall receive the publish request only as plain values.
-8. The connector framework shall add the publish operation, its value types and the single-attempt request mode to its published surface, and the automated surface pin shall list them.
+8. The connector framework shall add the publish operation, the set of publish capabilities, and the publish request and result value types to its published surface, the single-attempt mode being a field of the request type it already publishes, and the automated surface pin shall list them.
 9. The connector framework shall keep the capability vocabulary at exactly nine members, keep push-planned-workout and the four pull capabilities other than pull-activities and pull-wellness reserved, and keep every capability's remote-change and irreversible marks.
 
 ### Requirement 10: Writes That Cannot Land Twice
@@ -318,8 +322,8 @@ Terms used below:
 
 #### Acceptance Criteria
 1. The fitdocs documentation shall gain a publishing page stating the command and its options, the `[publish]` settings, the template syntax, every placeholder and its format, the `post` region's syntax, the `publish` key, every outcome code with its explanation, the ledger, the `published` region, and that nothing a service returns is printed, logged or written except permitted links.
-2. The documentation site shall gain a publishing guide page with its own navigation entry.
-3. The configuration documentation and the site's command and configuration references shall name the `[publish]` table and `fitdocs publish`.
+2. The feature shall edit no page of the documentation site, and shall record the site's publishing copy (a publishing guide page, the command and configuration reference entries, and each existing site line the feature makes stale, by file and line) as a follow-up queue item for the next release's site update.
+3. The configuration documentation shall name the `[publish]` table and `fitdocs publish`, and the documentation index and the package's project links shall name the publishing page.
 4. The changelog's unreleased section shall describe the feature, the new regions, the `publish` key, and the version changes.
-5. The specs this feature extends (`wiki-contract`, `workout-docs`, `connectors`, `effort-tags`, `distribution`, `docs-site`) shall each record an amendment, numbered as the next free amendment at landing, and existing criteria and approvals shall be preserved.
+5. The specs this feature extends (`wiki-contract`, `workout-docs`, `connectors`, `effort-tags`, `distribution`) shall each record an amendment, numbered as the next free amendment at landing, and existing criteria and approvals shall be preserved.
 6. The project structure steering shall describe the publishing package and the direction of its dependencies.

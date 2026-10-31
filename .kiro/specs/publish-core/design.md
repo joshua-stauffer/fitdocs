@@ -61,8 +61,9 @@ request reaches any service until a target spec lands.
   `.fitdocs/publish/<target>.toml`, key `workout:<sha256>`.
 - `fitdocs publish` (dry run, `--yes`, `--to`, PAGES, `--targets`,
   `--format`), its report shapes and exit codes.
-- The packaged skill's publishing section, `docs/publishing.md`, the site's
-  publishing guide, and the amendment records listed under Amendments.
+- The packaged skill's publishing section, `docs/publishing.md`, the queue
+  item recording the site's publishing copy, and the amendment records
+  listed under Amendments.
 
 ### Out of Boundary
 - How a target authenticates, finds its remote activity, decides to upload,
@@ -72,8 +73,11 @@ request reaches any service until a target spec lands.
 - `PUT` in `HttpRequest.method` (`intervals-publish`, R4); relay auth styles
   and relay envelope codes (`relay-server`, R3, R5); `OAUTH_BROWSER`
   (`strava-publish`).
-- The relay's pinned copy of `outcomes.py` and its drift check
-  (`relay-server`, R2).
+- The relay's pinned copy of `outcomes.py` (R2, R9): `relay-server` ships
+  the cross-check mechanism with its own pairs, and `strava-publish`, the
+  first spec where both packages exist, appends the `outcomes.py` pair.
+- Every page of the documentation site (`website/content/`, R9): this spec
+  edits none and records the site's publishing copy in a queue item.
 - Network statements in steering, docs, README and other specs' network
   criteria (the first target lander; see Revalidation Triggers).
 - `PUSH_PLANNED_WORKOUT` stays reserved and undriven (R8).
@@ -231,7 +235,8 @@ src/fitdocs/publish/
 └── report.py        # text and JSON renderers for runs and the listing
 
 tests/publish/
-├── conftest.py              # ScriptedPublisher connector fixture, page builders
+├── __init__.py
+├── conftest.py              # ScriptedPublisher connector fixture, page builders (task 6.1)
 ├── test_outcomes.py         # order prefix pin, flags, explanations, stdlib-only
 ├── test_request.py
 ├── test_template.py
@@ -250,7 +255,7 @@ tests/publish/
 └── test_docs.py             # docs/publishing.md code table and placeholder table pins
 
 docs/publishing.md                       # contract-grade publishing reference
-website/content/guides/publishing.md     # site guide, section Guides, next free order
+.kiro/queue/2026-10-31-publish-core-site-copy.md   # site copy for the next release (R9)
 ```
 
 ### Modified Files
@@ -269,22 +274,44 @@ website/content/guides/publishing.md     # site guide, section Guides, next free
 - `src/fitdocs/connectors/registry.py` — publish capability validation.
 - `src/fitdocs/connectors/http.py` — `HttpRequest.single_attempt`; `send`;
   `post(..., single_attempt=False)`.
-- `src/fitdocs/connectors/__init__.py` — `__all__` appends `PostPublisher`
-  and `PUBLISH_CAPABILITIES`; docstring's allowed-import sentence.
+- `src/fitdocs/connectors/__init__.py` — `__all__` appends `PostPublisher`,
+  `PUBLISH_CAPABILITIES`, `Post`, `CompletedActivity`, `PublishRequest` and
+  `PublishResult` (re-exported from `fitdocs.publish.request`); docstring's
+  allowed-import sentence.
 - `src/fitdocs/cli.py` — `publish` command and its options.
 - `src/fitdocs/skills/fitdocs-workouts/SKILL.md` — publishing section.
-- `tests/connectors/test_boundary.py`, `test_surface.py`,
-  `test_protocol.py`, `test_registry.py`, `test_http.py`, `test_e2e.py`;
-  `tests/test_contract.py`, `test_declaration.py`, `test_docmerge.py`,
-  `test_contract_consumers.py`, `test_agent_skill.py`, goldens under
-  `tests/golden/` and `tests/declaration_golden/`.
+- `pyproject.toml` — `tests/publish` in `[tool.mypy].files` (so the
+  scripted publisher is type-checked against `PostPublisher`), and a
+  `[project.urls]` entry for `docs/publishing.md` (the skill links it).
+- Tests whose pins move:
+  - connectors: `tests/connectors/test_boundary.py`, `test_surface.py`
+    (count pins at lines 127 and 158), `test_protocol.py`,
+    `test_registry.py` (the non-driven example at 573-576 moves to
+    `PUSH_PLANNED_WORKOUT`), `test_wellness_protocol.py` (the "other seven
+    reserved" case at 176-195 becomes the four still reserved),
+    `test_http.py`, `test_e2e.py`;
+  - contract and rendering: `tests/test_contract.py`, `test_public_api.py`
+    (`_CONTRACT_SURFACE`), `test_ownership_contract.py` (lines 130-138 and
+    294), `test_declaration.py`, `test_docmerge.py`,
+    `test_contract_consumers.py`, goldens under `tests/golden/` and
+    `tests/declaration_golden/`;
+  - current document-format literals: `tests/test_local_time_docs.py:46`
+    (becomes the literal `(10, 11)`), `tests/metrics/test_sources.py:2270`,
+    `tests/render/test_frontmatter.py:45`, `tests/morning/test_e2e.py:394,
+    400, 454`;
+  - command count (literal main + 1 at landing, R9): `tests/test_cli_skill.py`
+    (266, 268), `tests/query/test_cli_query.py:811`,
+    `tests/index/test_cli_index.py:609`, and the count word in `cli.py`'s
+    docstring;
+  - `tests/test_confinement.py` (`WRITING_ENTRY_POINTS` gains a posting
+    run), `tests/test_docs_guarantees.py` (`_REQUIRED_ENTRY_POINT_LINKS`
+    gains `publishing.md`), `tests/test_agent_skill.py`.
 - `docs/ownership-contract.md`, `docs/configuration.md`, `docs/index.md`,
-  `website/content/reference/cli.md`,
-  `website/content/reference/configuration.md`, `CHANGELOG.md`.
-- `.kiro/steering/structure.md` — `fitdocs.publish` entry and the
-  connectors import sentence.
+  `CHANGELOG.md`.
+- `.kiro/steering/structure.md` — `fitdocs.publish` entry, and the
+  connectors sentence (its imports, and who imports it).
 - Amendment records in `.kiro/specs/{wiki-contract,workout-docs,connectors,
-  effort-tags,distribution,docs-site}/requirements.md`.
+  effort-tags,distribution}/requirements.md`.
 
 ## System Flows
 
@@ -406,7 +433,7 @@ stateDiagram-v2
 | RenderChanges | rendering | regions on every page | 3.1, 12.1, 13.5-13.7 | ContractChanges | — |
 | ConnectorChanges | connectors | contract, capabilities, single attempt | 9.1, 9.2, 9.5-9.9, 10.1, 10.2 | RequestTypes | Service |
 | SkillSection | packaging | publishing section | 15.1-15.6 | — | — |
-| PublishingDocs | docs | reference, guide, contract docs | 1.7, 9.6, 10.6, 13.3, 16.1-16.4 | — | — |
+| PublishingDocs | docs | reference, contract docs, site-copy queue item | 1.7, 9.6, 10.6, 13.3, 16.1-16.4 | — | — |
 | Amendments | records | amendment records and steering | 16.5, 16.6 | — | — |
 
 ### Shared leaves
@@ -497,7 +524,8 @@ target may return it, S stops the target, St a listing state):
   `TARGET_CODES` excludes every code a target must not return (1-14, 16,
   24, 31-34).
 - Risks: an edit to an existing member breaks the relay's pinned copy;
-  relay-server's drift check catches it (R2).
+  the drift check relay-server ships, with the pair strava-publish appends,
+  catches it (R2, R9).
 
 #### RequestTypes (`src/fitdocs/publish/request.py`)
 
@@ -1071,8 +1099,11 @@ JSON (`render_json`), keys in this order:
 | Requirements | 7.1, 7.3, 7.4, 7.10, 7.11, 8.9, 14.2, 14.3, 14.4 |
 
 `fitdocs publish [PAGES...] [--to TARGET]... [--yes] [--targets]
-[--format text|json] [--out PATH]`. Imports `fitdocs.publish` lazily (a test
-pins that importing `fitdocs.cli` loads no `fitdocs.publish` module).
+[--format text|json] [--out PATH]`. Imports `fitdocs.publish` lazily. A test
+pins that importing `fitdocs.cli` loads no `fitdocs.publish` module other than
+the package marker, `outcomes` and `request`: `cli.py` imports
+`fitdocs.connectors.protocol` at module load, and that module imports the
+request leaf.
 
 Preflight, in order, each failure exiting 2 before any request or write:
 1. data root; 2. `--targets` combined with PAGES, `--to` or `--yes`;
@@ -1205,8 +1236,12 @@ class HttpClient:
   `ACTIVITY_FACTS_MISSING` when the facts given cannot identify the
   activity, never a pick or an upload; a non-idempotent request marked
   `single_attempt`.
-- `__all__` appends `PostPublisher` and `PUBLISH_CAPABILITIES` (surface
-  count + 2).
+- `__all__` appends `PostPublisher`, `PUBLISH_CAPABILITIES` and the four
+  value types `Post`, `CompletedActivity`, `PublishRequest` and
+  `PublishResult`, re-exported from `fitdocs.publish.request` as the wellness
+  value types are exported (surface count + 6; peers append their own
+  names, so the literal count moves at landing). The single-attempt mode is
+  published as a field of the already-published `HttpRequest` (9.8).
 
 ### Packaging and documentation
 
@@ -1238,14 +1273,26 @@ class HttpClient:
   `published` region; the target obligations (9.6, 10.6); the statement
   that nothing a service returns is printed, logged or written except
   permitted links. It names no service; each target spec adds its own
-  section. Linked from `docs/index.md`.
-- `website/content/guides/publishing.md` (16.2): section `Guides`, the next
-  free `order` at landing; `website/content/reference/cli.md` and
-  `configuration.md` gain `fitdocs publish` and `[publish]` (16.3);
-  `docs/configuration.md` names the table.
+  section. Linked from `docs/index.md` (and `_REQUIRED_ENTRY_POINT_LINKS`),
+  and declared in `[project.urls]` (16.3); `docs/configuration.md` names the
+  table.
+- The documentation site is not edited (16.2, R9). A new queue item,
+  `.kiro/queue/2026-10-31-publish-core-site-copy.md`, records the site's
+  publishing copy for the next release: a publishing guide page, the
+  `fitdocs publish` entry in `website/content/reference/cli.md`, the
+  `[publish]` entry in `website/content/reference/configuration.md`, and the
+  stale lines `website/content/guides/workout-pages.md:25`
+  (`doc_version: 11`) and `website/content/reference/ownership.md:10`
+  (contract version).
 - `docs/ownership-contract.md` (13.3): the two regions, the key, the ledger
   location, `[publish]`, and a `publish` entry in "Overwrite Semantics of
-  Every Writing Operation".
+  Every Writing Operation". The lists that `tests/test_ownership_contract.py`
+  holds equal to the contract's tuples (the preserved regions, the refreshed
+  regions, the user-owned keys) change in the same task as their tuple
+  (2.2, 2.3); the version head, the ledger, `[publish]`, the overwrite entry
+  and the history change with `CONTRACT_VERSION` (8.1). Likewise in the
+  workouts declaration, the tuple-driven region and key lists change with
+  their tuples and the `published` sentence with `CONTRACT_VERSION`.
 - `CHANGELOG.md` Unreleased (16.4), pinned through
   `tests/_changelog_view.unreleased_since`.
 - Tests (`tests/publish/test_docs.py`): the code table equals `OUTCOMES`
@@ -1335,6 +1382,9 @@ Every assertion names the mutation it dies on (`tech.md` Testing).
     and JSON; preflight order (each error before any write).
   - socket-guarded case in `tests/connectors/test_e2e.py` for `fitdocs
     publish` (dry run) and `fitdocs publish --targets`.
+  - a `WRITING_ENTRY_POINTS` entry in `tests/test_confinement.py` for a
+    posting run through the scripted target, whose non-vacuous check sees a
+    ledger and a `published` region written (wiki-contract Req 7.5, 7.6).
   - goldens regenerated with both regions; regen of a version-11 page adds
     both regions and preserves notes, workout, load and user keys.
 
@@ -1369,11 +1419,12 @@ Every assertion names the mutation it dies on (`tech.md` Testing).
   effort tag's four keys; the user-owned set also holds `publish`.
 - **distribution**: Req 8.1 and 8.2 gain publishing (the skill previews and,
   on request, publishes posts, and explains the publish codes).
-- **docs-site**: the publishing guide page and its navigation entry; the
-  CLI and configuration references.
 - **steering** `structure.md`: a `fitdocs.publish` entry, and the
-  connectors sentence admits `fitdocs.publish.request` (R7: line-disjoint
-  from relay-server's entries).
+  connectors sentence admits `fitdocs.publish.request` among its imports
+  and `fitdocs.publish.targets` beside `cli` among its importers (R7:
+  line-disjoint from relay-server's entries).
+- No `docs-site` amendment: the site is not edited (R9); its copy is a
+  queue item.
 
 ## Future Extension: planned-workout push
 
