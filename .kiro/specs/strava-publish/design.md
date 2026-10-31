@@ -4,7 +4,9 @@
 
 **Purpose**: This feature publishes a workout's post to Strava. fitdocs
 never talks to Strava itself: a relay holding one Strava application makes
-every Strava call, and answers fitdocs only with fitdocs codes. A Strava
+every Strava call, and answers fitdocs with fitdocs codes and, under its
+`activity` link setting, the Strava address of the activity a post landed
+on. A Strava
 instance in `fitdocs.toml` names the relay instance it goes through.
 `fitdocs connect` opens the relay's connect page, where the athlete
 connects their Strava account to their relay principal. `fitdocs publish
@@ -37,8 +39,10 @@ uploads are enabled, to upload the page's activity file once.
 ### Goals
 - A post lands on the right Strava activity or nowhere: strict one-to-one
   matching on every publish, ambiguity as a code.
-- Nothing Strava returns crosses the relay boundary, and the relay keeps no
-  Strava Data beyond the encrypted tokens of live connections.
+- Nothing Strava returns crosses the relay boundary except, under the
+  `activity` link setting, the address of the activity a post landed on;
+  the relay keeps no Strava Data beyond the encrypted tokens of live
+  connections.
 - Tokens are encrypted, rotate atomically on both backends, and are
   deleted at once on every revocation path.
 - The application's shared rate limits are counted before every call.
@@ -236,7 +240,7 @@ outcome sets.
     is configured.
   - Req 7.1: the interface gains the three storage areas; 7.5-7.7 apply to
     them.
-  - Req 9.2: the variable table gains thirteen rows, and `EnvVar` gains
+  - Req 9.2: the variable table gains fourteen rows, and `EnvVar` gains
     `required_with: tuple[str, ...] = ()`, "required when any named
     variable is set";
     `DEPLOY_CONTRACT_VERSION` stays 1 (the change is additive). The command
@@ -414,7 +418,7 @@ relay/src/fitdocs_relay/
 │   ├── publish.py            # StravaPublisher: publish, upload, resolve_link; deadlines; step mapping table
 │   ├── connect.py            # ConnectFlow over RecordStore: start, page, callback, poll
 │   ├── webhook.py            # Webhook: validate, event
-│   ├── policy.py             # POLICY_SECTIONS, CONSENT_TEXT (fixed fitdocs text)
+│   ├── policy.py             # policy_sections(links), consent_text(links) (fixed fitdocs text)
 │   ├── pages.py              # Page, the fitdocs-written HTML pages, PAGE_HEADERS
 │   ├── routes.py             # strava_routes(services): envelope routes and browser routes
 │   └── cli.py                # operator subcommands: strava webhook show|create|delete; reencrypt; new-encryption-key
@@ -586,7 +590,7 @@ sequenceDiagram
             Relay-->>Conn: ok uploaded or unconfirmed
         end
     end
-    Conn-->>Core: one code and the go link when landed
+    Conn-->>Core: one code, and the link when landed
 ```
 
 ### Token refresh
@@ -643,7 +647,7 @@ stateDiagram-v2
 | 8.1, 8.2, 8.3 | Relay mapping | StravaApi, StravaPublisher | `classify`, `STEP_OUTCOMES` | — |
 | 8.4 | fitdocs mapping | StravaConnector | `PUBLISH_MAPPING`, `UPLOAD_MAPPING` | — |
 | 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7 | Budget | StravaBudget, StorageBudget, StravaConfig | `spend_budget`, `exhaust_budget` | — |
-| 10.1, 10.2, 10.3, 10.4, 10.5, 10.6 | The link | StravaPublisher, StorageCustody, Pages, StravaRoutes | `put_publication`, `resolve_link`, `/go/{id}` | — |
+| 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7 | The link | StravaPublisher, StorageCustody, Pages, StravaRoutes, StravaConfig | `put_publication`, `resolve_link`, `Landed`, `LinkSetting`, `/go/{id}` | — |
 | 11.1, 11.2, 11.3, 11.4 | CLI disconnect | DisconnectAmendment, StravaConnector | `run_disconnect`, `withdraw_consent` | Revocation |
 | 11.5, 11.10 | Relay disconnect | Custody, StravaRoutes | `withdraw`, `delete_connection` | Revocation |
 | 11.6, 11.7 | Webhook | Webhook, StravaRoutes | `/strava/webhook/{secret}` | Revocation |
@@ -660,7 +664,7 @@ stateDiagram-v2
 | 15.2 | Strict extraction | StrictRule, MatchingAmendment | `strict_match` | — |
 | 15.3 | Outcome membership | AnswersAmendment, SharedTargetWire | `answer`, `route_outcome` | — |
 | 15.4 | Connect codes | RelayCodesAmendment | `RelayCode` | — |
-| 16.1, 16.2, 16.3 | Policy, consent, contact | Policy, Pages, StravaConfig, RelayDocs | `/privacy`, `CONSENT_TEXT` | — |
+| 16.1, 16.2, 16.3 | Policy, consent, contact | Policy, Pages, StravaConfig, RelayDocs | `/privacy`, `policy_sections`, `consent_text` | — |
 | 16.4, 16.5, 16.6 | Wording and obligations | Pages, StravaConnector, ConnectorsDocs, RelayDocs, Changelogs | — | — |
 | 17.1 | Connectors docs | ConnectorsDocs | `docs/connectors.md` | — |
 | 17.2 | Relay docs | RelayDocs | `docs/relay.md` | — |
@@ -754,6 +758,7 @@ TARGET_ROUTE_PREFIX: Final = "/v1/targets/"
 ACTION_CONNECT: Final = "connect"; ACTION_CONNECT_POLL: Final = "connect/poll"
 ACTION_PUBLISH: Final = "publish"; ACTION_UPLOAD: Final = "upload"; ACTION_DISCONNECT: Final = "disconnect"
 CONNECT_PAGE_PREFIX: Final = "/connect/"; LINK_PREFIX: Final = "/go/"
+LINK_FIELD: Final = "link"      # answer data beside posted or uploaded, under the activity link setting
 PUBLICATION_ID_RE: Final = r"^[0-9a-f]{32}$"
 SPORT_RE: Final = r"^[A-Z][A-Za-z]{0,31}$"
 MAX_TITLE_CHARS: Final = 255
@@ -798,6 +803,9 @@ def route_outcome(outcome: str | None, allowed: frozenset[str]) -> str | None
 - `FITDOCS_SPORTS` is the literal set of fitdocs's sport labels; a fitdocs
   test pins it equal to `{s.value for s in fitdocs.model.Sport}`, so a new
   fitdocs sport reds it and prompts the relay's family table to follow.
+- `LINK_FIELD`: under the relay's `activity` link setting, an `ok` answer
+  whose outcome is `posted` or `uploaded` carries `{"link": "<web>/activities/<id>"}`
+  as its `data`; every other answer's `data` has no `link`.
 - `route_outcome` returns `outcome` only when it is in `allowed`;
   otherwise `None`. A fitdocs test asserts both sets are subsets of
   `TARGET_CODES` values, and a relay test asserts every member is a
@@ -945,13 +953,16 @@ UPLOAD_MAPPING: Final[Mapping[RelayCode, PublishCode]]
      `ACTIVITY_FILE_MISSING`; larger than `MAX_FIT_BYTES` → `REJECTED`
      unsent; otherwise one upload request with `upload_fields`, mapped
      through `UPLOAD_MAPPING` and `UPLOAD_OUTCOMES`.
-  5. `POSTED` or `UPLOADED` carries the link `settings.relay.url +
-     link_path(request.publication_id)`; no other code carries a link.
-     `request.recorded_link` is not used. With a loopback `http` relay URL
-     (relay-server's local run), publish-core's `valid_link` refuses the
-     link, the row reports `link_refused`, and the page carries no "View on
-     Strava" link (5.10); a test pins this and the connectors page says
-     so.
+  5. `POSTED` or `UPLOADED` carries a link; no other code carries one.
+     Where the answer's `data` has `LINK_FIELD`, the link is its value when
+     that is a string and `None` otherwise; where `data` has no
+     `LINK_FIELD`, the link is `settings.relay.url +
+     link_path(request.publication_id)`. publish-core's `valid_link`
+     decides whether either is recorded. `request.recorded_link` is not
+     used. With no `LINK_FIELD` and a loopback `http` relay URL
+     (relay-server's local run), `valid_link` refuses the link, the row
+     reports `link_refused`, and the page carries no "View on Strava" link
+     (5.10); a test pins this and the connectors page says so.
 - **Mapping tables** (both pinned row by row):
 
 | Relay answer | Publish request | Upload request |
@@ -1107,6 +1118,7 @@ pin.
 | `FITDOCS_RELAY_STRAVA_API_URL` | no | `https://www.strava.com/api/v3` | no | Strava's API base |
 | `FITDOCS_RELAY_STRAVA_OAUTH_URL` | no | `https://www.strava.com/oauth` | no | Strava's OAuth base (authorize, token, revoke) |
 | `FITDOCS_RELAY_STRAVA_WEB_URL` | no | `https://www.strava.com` | no | Base of activity pages (`/activities/<id>`) |
+| `FITDOCS_RELAY_STRAVA_LINKS` | no | `activity` | no | The link setting: `activity` puts the activity's address `<web URL>/activities/<id>` in every posted or uploaded answer; `relay` puts none, and pages link to `/go/<publication id>` |
 | `FITDOCS_RELAY_STRAVA_RATE_LIMIT` | no | `200,2000` | no | Overall limit per 15 minutes and per day |
 | `FITDOCS_RELAY_STRAVA_READ_RATE_LIMIT` | no | `100,1000` | no | Non-upload limit per 15 minutes and per day |
 
@@ -1117,18 +1129,19 @@ class Limits: overall_15m: int; overall_day: int; read_15m: int; read_day: int
 class TargetsConfig:
     public_url: str; keys: tuple[EncryptionKey, ...] = field(repr=False)
     operator_name: str; support_contact: str; privacy_policy_url: str | None
+class LinkSetting(StrEnum): ACTIVITY = "activity"; RELAY = "relay"
 @dataclass(frozen=True)
 class StravaConfig:
     client_id: str; client_secret: str = field(repr=False); webhook_token: str = field(repr=False)
-    api_url: str; oauth_url: str; web_url: str; limits: Limits
+    api_url: str; oauth_url: str; web_url: str; limits: Limits; links: LinkSetting
 def load_targets_config(environ: Mapping[str, str], *, any_target: bool) -> TargetsConfig | None
 def load_strava_config(environ: Mapping[str, str]) -> StravaConfig | None
 ```
 - `RelayConfig` gains `targets: TargetsConfig | None` and `strava:
   StravaConfig | None`. A Strava variable set without the client id, a
-  missing "with Strava" variable, an invalid value or a 15-minute limit
-  above the daily one is a `ConfigError` naming the variable, never its
-  value. Without the client id, every Strava variable must be unset.
+  missing "with Strava" variable, an invalid value (including a link
+  setting other than `activity` or `relay`) or a 15-minute limit above the
+  daily one is a `ConfigError` naming the variable, never its value. Without the client id, every Strava variable must be unset.
 - `DEPLOY_CONTRACT_VERSION` stays 1: the rows and the `required_with`
   field are additive. `COMMANDS` gains `strava`, `reencrypt` and
   `new-encryption-key` where those commands are built (RelayOperatorCli).
@@ -1379,11 +1392,18 @@ PUBLISH_DEADLINE_S: Final = 20.0; UPLOAD_DEADLINE_S: Final = 25.0; CALL_TIMEOUT_
 UPLOAD_POLL_INTERVAL_S: Final = 2.0; MAX_UPLOAD_POLLS: Final = 8; UPLOAD_FOLLOW_UPS: Final = 2
 STEP_OUTCOMES: Final[Mapping[tuple[Step, Failure], PublishCode]]
 class LinkRefusal(StrEnum): NOT_FOUND = "not-found"; TRY_LATER = "try-later"
+@dataclass(frozen=True)
+class Landed: code: PublishCode; activity_page: str = field(repr=False)   # POSTED or UPLOADED
+def activity_page(web_url: str, activity_id: str) -> str     # "<web_url>/activities/<id>"
 class StravaPublisher:
-    def publish(self, principal_id: str, facts: PublishFacts) -> PublishCode: ...
-    def upload(self, principal_id: str, facts: PublishFacts, fit: bytes) -> PublishCode: ...
+    def publish(self, principal_id: str, facts: PublishFacts) -> PublishCode | Landed: ...
+    def upload(self, principal_id: str, facts: PublishFacts, fit: bytes) -> PublishCode | Landed: ...
     def resolve_link(self, publication_id: str) -> str | LinkRefusal: ...
 ```
+- **Landed**: every `POSTED` or `UPLOADED` result is a `Landed` carrying
+  `activity_page(config.web_url, id)` of the activity updated or created;
+  every other result is a bare `PublishCode`. Request records carry the
+  code only.
 - **Common start**: both facts absent → `ACTIVITY_FACTS_MISSING`; the
   publication id recorded for another principal → `REJECTED`; then
   `access_token`; every call's timeout is `min(CALL_TIMEOUT_S, time left)`.
@@ -1432,7 +1452,7 @@ class StravaPublisher:
   type only, and answered `ok` with `unconfirmed`, never `relay-failure`.
 - **`resolve_link`**: a malformed or unknown id, or no connection →
   `NOT_FOUND`; `access_token(for_link=True)` and a `for_link` budget spend
-  (refused → `TRY_LATER`); list and pick: one → `"<web>/activities/<id>"`;
+  (refused → `TRY_LATER`); list and pick: one → `activity_page(web, id)`;
   `NONE`, `MANY` or a list failure other than `limited` → `NOT_FOUND`;
   `limited` → `TRY_LATER`. Nothing about the result is stored.
 
@@ -1505,34 +1525,41 @@ class Page: status: int; html: str
 PAGE_HEADERS: Final[Mapping[str, str]]   # CSP default-src 'none'; style-src 'unsafe-inline';
                                          #   frame-ancestors 'none'; form-action 'none'; base-uri 'none';
                                          #   Referrer-Policy no-referrer; Cache-Control no-store; nosniff
-def connect_page(*, user_code: str, authorize_url: str, operator: Operator) -> Page
+def connect_page(*, user_code: str, authorize_url: str, operator: Operator, links: LinkSetting) -> Page
 def in_use_page(operator) -> Page; def invalid_code_page(operator) -> Page
 def granted_page(operator) -> Page; def refused_page(operator) -> Page
 def not_found_page(operator) -> Page; def try_later_page(operator) -> Page
-def unavailable_page(operator) -> Page; def privacy_page(operator) -> Page
+def unavailable_page(operator) -> Page; def privacy_page(operator, links: LinkSetting) -> Page
 # policy.py
-POLICY_SECTIONS: Final[tuple[tuple[str, str], ...]]   # (heading, text): The relay's operator; What fitdocs sends;
-                                                      #   What the relay receives from Strava and keeps;
-                                                      #   What the relay sends to Strava; Deletion; Your choices;
-                                                      #   Security; Contact
-CONSENT_TEXT: Final[tuple[str, ...]]
+POLICY_HEADINGS: Final[tuple[str, ...]]   # The relay's operator; What fitdocs sends;
+                                          #   What the relay receives from Strava and keeps;
+                                          #   What the relay sends to Strava; What the relay returns to fitdocs;
+                                          #   Deletion; Your choices; Security; Contact
+def policy_sections(links: LinkSetting) -> tuple[tuple[str, str], ...]   # (heading, text), in POLICY_HEADINGS order
+def consent_text(links: LinkSetting) -> tuple[str, ...]
 ```
 - `Operator(name, support_contact, policy_url)` comes from
   `TargetsConfig`. Every interpolated value is HTML-escaped and is either
   configuration or a value fitdocs generated or validated (the user code,
   the authorize address it built).
 - The connect page shows, in order: the user code and the instruction to
-  continue only if one's own terminal shows it; `CONSENT_TEXT`; the
+  continue only if one's own terminal shows it; `consent_text(links)`; the
   "Connect with Strava" control, a link to `authorize_url` rendered 48 px
   tall in text (no Strava artwork ships); the policy link and the support
   contact. Every other page carries the support contact and the policy
   link.
-- `CONSENT_TEXT` states that the relay will find the activity matching
+- `consent_text` states that the relay will find the activity matching
   each workout published with fitdocs by start time, sport, distance and
   duration, set its name and description, and only with uploads enabled
   create one from the workout's file; and that it will never read
   activities for another purpose, store or show them, share the access, or
-  change anything else; and how to disconnect.
+  change anything else; and how to disconnect. Under `activity` it also
+  states that the relay returns the Strava address of each activity a post
+  lands on to the athlete's fitdocs, which writes it into the workout page;
+  under `relay`, that the relay returns only fitdocs codes.
+- `policy_sections`: the section "What the relay returns to fitdocs" has
+  one fixed text per link setting, matching the consent text; every other
+  section's text is the same under both.
 
 #### StravaRoutes — `strava/routes.py`
 
@@ -1545,8 +1572,8 @@ CONSENT_TEXT: Final[tuple[str, ...]]
 |--------|------|------|----------------|--------|
 | POST | `/v1/targets/strava/connect` | bearer | `{}` | `connect-started` (`user_code`, `poll_secret`, `interval_s`, `expires_in_s`) |
 | POST | `/v1/targets/strava/connect/poll` | bearer | `poll_secret` | `connect-pending`, `connect-granted` (`token`), `connect-refused`, `connect-expired` |
-| POST | `/v1/targets/strava/publish` | bearer | `PUBLISH_FIELDS` | `ok` with `outcome` in `PUBLISH_OUTCOMES` |
-| POST | `/v1/targets/strava/upload` | bearer | `UPLOAD_FIELDS` | `ok` with `outcome` in `UPLOAD_OUTCOMES` |
+| POST | `/v1/targets/strava/publish` | bearer | `PUBLISH_FIELDS` | `ok` with `outcome` in `PUBLISH_OUTCOMES`; `data.link` beside `posted` under `activity` |
+| POST | `/v1/targets/strava/upload` | bearer | `UPLOAD_FIELDS` | `ok` with `outcome` in `UPLOAD_OUTCOMES`; `data.link` beside `posted` or `uploaded` under `activity` |
 | POST | `/v1/targets/strava/disconnect` | bearer | `{}` | `ok` |
 | GET | `/connect/strava?code=<user code>` | claim cookie | — | page |
 | GET | `/strava/callback` | claim cookie, state | — | page |
@@ -1562,6 +1589,9 @@ CONSENT_TEXT: Final[tuple[str, ...]]
 - Browser routes are rate-limited per client; a webhook request with the
   right secret is not counted (a wrong one is). While not ready, pages
   answer `unavailable_page` (503).
+- Under the `activity` link setting a `Landed` result answers `data:
+  {"link": landed.activity_page}`; under `relay` it answers `data: {}`.
+  `/go/` and `robots.txt` are served under either setting.
 - `/go/` answers `302` with `Location` only, plus `PAGE_HEADERS`.
 - Handlers are synchronous and run in Starlette's thread pool.
 
@@ -1705,7 +1735,9 @@ class BudgetStore(StorageBase, Protocol):
 - **ConnectorsDocs** (5.10, 17.1, 16.4, 16.5): a `## Strava` section in
   `docs/connectors.md` after relay-server's relay section, with `###
   Connecting a Strava instance`, `### Publishing and uploads`, `### The View
-  on Strava link` (including that a loopback `http` relay gives no link)
+  on Strava link` (the activity's page on Strava where the relay's link
+  setting is `activity`, the relay's `/go/` address where it is `relay`,
+  and that a loopback `http` relay set to `relay` gives no link)
   and `### Disconnecting a Strava instance`. It says
   "Compatible with Strava", gives the settings table (`relay`, `upload`),
   the relay-instance prerequisite, the connect output, the two mapping
@@ -1732,7 +1764,7 @@ class BudgetStore(StorageBase, Protocol):
   application` (its own subscription and callback domain; never another
   operator's credentials). Its variable and code tables are bound by the
   existing relay docs tests, and `relay/tests/strava/test_policy_docs.py`
-  binds its policy summary's section list to `POLICY_SECTIONS`.
+  binds its policy summary's section list to `POLICY_HEADINGS`.
 - **NetworkStatements** (17.3, R10), written to hold in either landing
   order:
   - each `REWRITTEN_PLACES` statement names `fitdocs publish --yes`; if it
@@ -1806,9 +1838,11 @@ profile or any response text (12.3).
 - The envelope rows are in StravaRoutes. Every answer uses relay-server's
   canonical key order `{"envelope", "code", "data"[, "outcome"]}` (R13.4).
   `relay/contract/envelope-v1.json`
-  gains one exchange per Strava envelope route and per new relay code, with
-  visibly fake values (tokens of all `a`, publication id of all `0`); both
-  suites replay or decode them.
+  gains one exchange per Strava envelope route and per new relay code, plus
+  a posted publish answer under each link setting, with visibly fake values
+  (tokens of all `a`, publication id of all `0`, link
+  `https://strava.example.invalid/activities/1`); both suites replay or
+  decode them.
 
 ## Error Handling
 
@@ -1845,8 +1879,11 @@ Every assertion names the mutation it dies on (`tech.md` Testing).
   without a request; the file sent only after `not_found` with uploads on;
   the link only with a landed code; an `ok` answer whose outcome is
   `uploaded` on the publish route is `unavailable`; a scripted non-envelope
-  502 on the upload route is `unconfirmed`; a loopback `http` relay URL
-  gives a landed code whose link publish-core refuses (`link_refused`);
+  502 on the upload route is `unconfirmed`; a landed answer with a string
+  `data.link` gives that link, one without `data.link` gives the `/go/`
+  link, and one with a non-string `data.link` gives none; without
+  `data.link`, a loopback `http` relay URL gives a landed code whose link
+  publish-core refuses (`link_refused`);
   an upload body over `max_request_bytes` is refused before any request. Single attempt: a
   DATA-mode client scripted with 503 sees one call per request (dies on
   removing `single_attempt=True`).
@@ -1891,6 +1928,11 @@ backends):
   a refused refresh deletes the connection and revokes its token.
 - `/go/`: 302 with only `Location`; not found; try later at the headroom;
   no row written by a click.
+- Link setting: under `activity`, every posted or uploaded answer carries
+  `data.link` equal to the scripted activity's page address and no other
+  answer carries one; under `relay`, no answer carries one; `/go/`
+  redirects under both; the consent and policy texts follow the setting;
+  any other value is a configuration error.
 - Webhook: validation with a wrong verify token (404), deauthorization
   deleting connection, publications and token, an activity event storing
   nothing, a wrong path secret counted against the client limit.
@@ -1923,7 +1965,9 @@ exchanges decoded by the fitdocs suite.
 - Link: an unauthenticated capability address (128-bit random id). It only
   redirects; Strava's own visibility settings govern what the activity page
   shows.
-- No Strava text, id or header reaches a log, an answer, a page or a row.
+- No Strava text, id or header reaches a log, an answer, a page or a row,
+  except the activity address a posted or uploaded answer carries under the
+  `activity` link setting.
 
 ## Performance & Scalability
 - A publish costs one list and one update against Strava; an upload at most

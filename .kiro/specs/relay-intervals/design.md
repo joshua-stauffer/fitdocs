@@ -1131,7 +1131,9 @@ def target_routes(services: RelayServices) -> list[BaseRoute]: ...
   `scope` parameter checked before one budget spend and one exchange, then
   `Custody.store_grant`); `Custody`'s refresh lease, `withdraw` and
   `forget_account`, now over `TokenVault`; its budget, resolver, publisher,
-  webhook, policy sections and consent text, `/go/`, `robots.txt` and the
+  webhook, policy sections and consent text (strava-publish's
+  `policy_sections(links)` and `consent_text(links)` for the configured
+  link setting), `/go/`, `robots.txt` and the
   `strava webhook` commands.
 - **Generalised behaviour**: the flow's session records already carry the
   target; `page`, `callback` and `poll` refuse a session of another target

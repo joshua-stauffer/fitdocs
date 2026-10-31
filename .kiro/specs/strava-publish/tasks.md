@@ -78,7 +78,8 @@ Rules for every task:
   - _Requirements: 6.3, 15.2_
 
 - [ ] 1.2 Add the shared Strava wire module
-  - The target route builder, the connect-page and link paths, the
+  - The target route builder, the connect-page and link paths, the link
+    field, the
     publication-id and sport formats, the title, description, file and
     upload-body bounds, the publish and upload field sets, the publish facts
     codec, and the two per-route outcome sets, as design.md states them.
@@ -146,14 +147,15 @@ Rules for every task:
     several names joined by " or "; the generic rows carry
     `("FITDOCS_RELAY_STRAVA_CLIENT_ID",)`, so a later target only appends
     its own client id.
-  - Append the thirteen variables to the deploy contract's table with their
+  - Append the fourteen variables to the deploy contract's table with their
     required flag or `required_with`, default, secret flag and meaning, and
     append them to relay-server's literal full-table pin.
   - Load the targets configuration (with the keys parsed by the keyring's
     parser) and the Strava configuration: the client id enables the target;
     the "with Strava" variables are then required; any Strava variable
     without the client id, a missing required one, an invalid value
-    (including an invalid encryption key list), or a fifteen-minute limit
+    (including an invalid encryption key list, or a link setting other than
+    `activity` or `relay`), or a fifteen-minute limit
     above the daily one is a configuration error naming the variable and
     never its value.
   - Add the rows to `docs/relay.md`'s variable table in the same task, since
@@ -163,7 +165,7 @@ Rules for every task:
     as before, the contract pins (the full table with the tuples) pass, a
     two-name tuple renders with " or ", and dropping a row from the docs
     table reds the binding test.
-  - _Requirements: 9.1, 13.1, 13.2, 13.5_
+  - _Requirements: 9.1, 10.7, 13.1, 13.2, 13.5_
 
 - [ ] 2.3 Add the relay's outbound client for provider calls
   - Requests with GET, POST, PUT and DELETE; secret headers added
@@ -319,18 +321,22 @@ Rules for every task:
     listing, the pick, one update with at most one repeat of the identical
     update on a server or network failure, and the publication record on a
     landed outcome; the publish deadline; the step-outcome table's list,
-    update and refresh columns.
+    update and refresh columns. A landed outcome is a `Landed` carrying the
+    updated activity's page address, built by the same function the link
+    resolution uses.
   - Done when scripted tests cover every publish branch and every row of
     those columns, a fake monotonic clock drives the deadline, a second
-    repeat never happens, and a publication id owned by another principal
-    answers `rejected` with no Strava call.
+    repeat never happens, a publication id owned by another principal
+    answers `rejected` with no Strava call, and a posted result carries the
+    scripted activity's page address.
   - _Requirements: 5.6, 6.4, 7.1, 7.2, 7.6, 7.7, 8.1, 8.2, 10.1, 10.6_
 
 - [ ] 3.7 Upload a post on Strava when no activity exists
   - The upload flow of design.md: listing and pick again, the upload
     reservation, one upload never repeated, bounded status polling,
     re-resolution after a failed upload, the upload deadline, and the
-    step-outcome table's upload and status columns.
+    step-outcome table's upload and status columns. An uploaded or posted
+    outcome is a `Landed` carrying the activity's page address.
   - The upload guard: an unparseable listing entry, an undecryptable token
     or a storage failure ends the request before any upload.
   - After the upload call, any later failure in the request (a storage
@@ -386,7 +392,9 @@ Rules for every task:
     carrying the support contact, the connect page's order, the operator's
     own policy address replacing the built-in one, and the only brand
     phrases being the allowed ones.
-  - _Requirements: 3.2, 3.5, 10.3, 10.4, 12.4, 16.1, 16.2, 16.3, 16.4_
+  - The consent text and the policy section "What the relay returns to
+    fitdocs" follow the link setting, one fixed text for each.
+  - _Requirements: 3.2, 3.5, 10.3, 10.4, 10.7, 12.4, 16.1, 16.2, 16.3, 16.4_
   - _Boundary: Pages, Policy_
 
 - [ ] 4. Relay HTTP surface and operator commands
@@ -410,13 +418,16 @@ Rules for every task:
 - [ ] 4.2 Serve the Strava envelope routes
   - Connect, poll, publish, upload and disconnect, through the relay's
     authentication, per-token limit and strict request reader, each answer
-    checked against its route's outcome set.
+    checked against its route's outcome set. Under the `activity` link
+    setting a landed answer's data carries the activity's page address as
+    `link`; under `relay` no answer carries it.
   - Done when test-client tests with scripted Strava show each route's
     answers, an unconfigured relay answering `not-offered` on each, a
-    disconnect answering `ok` when the principal held no connection, and a
+    disconnect answering `ok` when the principal held no connection, a
     70 KiB body refused on the publish route but accepted on the upload
-    route.
-  - _Requirements: 3.1, 3.8, 3.9, 5.1, 8.2, 11.5, 12.1, 12.5, 13.3_
+    route, a posted and an uploaded answer carrying `link` under `activity`
+    and none under `relay`, and `/go/` redirecting under both settings.
+  - _Requirements: 3.1, 3.8, 3.9, 5.1, 8.2, 10.7, 11.5, 12.1, 12.5, 13.3_
 
 - [ ] 4.3 Serve the browser pages, the link and the webhook
   - The connect page, the callback, `/go/`, `/privacy`, a `robots.txt`
@@ -507,7 +518,9 @@ Rules for every task:
   - The publish operation: facts and bounds checks before any request, the
     publish request, the upload request only after `not_found` with
     uploads enabled, the file checks, both mapping tables, and the link
-    only with a landed code.
+    only with a landed code: the answer's `link` when its data carries one
+    (none when that value is not a string), otherwise the relay's `/go/`
+    address.
   - The upload request is sent only after a definite `not_found` outcome,
     never after a malformed, failed or missing answer.
   - Register the connector in the package with its label "View on
@@ -522,9 +535,11 @@ Rules for every task:
     upload-route outcome on the publish route maps to `unavailable` with no
     upload request, no request is made for missing facts, an absent file or an
     oversize file, the upload request passes `MAX_UPLOAD_REQUEST_BYTES` as
-    its bound, a loopback `http` relay URL gives a landed code whose link
-    publish-core refuses (`link_refused`, no "View on Strava" link on the
-    page), and the boundary, surface and preamble pins pass; named
+    its bound, a landed answer with a string `link` gives that link, one
+    without gives the `/go/` link, one with a non-string `link` gives none,
+    without a `link` a loopback `http` relay URL gives a landed code whose
+    link publish-core refuses (`link_refused`, no "View on Strava" link on
+    the page), and the boundary, surface and preamble pins pass; named
     mutation: importing `PublishCode` from `fitdocs.publish.outcomes` reds
     the boundary assertion.
   - _Requirements: 1.1, 1.7, 5.1, 5.2, 5.3, 5.4, 5.6, 5.7, 5.8, 5.9, 5.10, 7.8, 8.4_
@@ -585,13 +600,15 @@ Rules for every task:
     `fitdocs pull` fails the socket guard.
   - _Requirements: 1.6, 1.8, 2.9_
 
-- [ ] 6.2 Prove nothing from Strava escapes the relay
+- [ ] 6.2 Prove nothing from Strava escapes the relay except the landed activity's link
   - A scripted Strava that plants one sentinel in every field and header,
     driven through connect, publish, upload, a link, a disconnect and a
     deauthorization on both backends.
-  - Done when the sentinel appears in no envelope answer, page, log record
-    or database column outside the sealed tokens, and no table holds an
-    activity id or athlete id.
+  - Done when, under both link settings, the sentinel appears in no
+    envelope answer, page, log record or database column outside the sealed
+    tokens, no table holds an activity id or athlete id, and the scripted
+    activity id reaches fitdocs only inside a posted or uploaded answer's
+    `link` under the `activity` setting.
   - _Requirements: 12.1, 12.2, 12.3, 12.5_
 
 - [ ] 7. Documentation, gates, steering and amendments
@@ -600,8 +617,9 @@ Rules for every task:
   - The Strava section of the connectors page with the four subsections of
     design.md, "Compatible with Strava", the settings table, the relay
     instance and public-address prerequisites, both mapping tables, what
-    leaves the machine, the default relay's policy address, and that a
-    loopback `http` relay gives no "View on Strava" link; heading rows added
+    leaves the machine, the default relay's policy address, the link under
+    each link setting, and that a loopback `http` relay set to `relay`
+    gives no "View on Strava" link; heading rows added
     in page order; the neutral-scan entry gains the section.
   - Done when the connectors docs tests pass, the section names no Strava
     host, and deleting a mapping row from the page reds a binding test
@@ -610,8 +628,8 @@ Rules for every task:
 
 - [ ] 7.2 Document the Strava target for operators
   - The relay page's Strava sections of design.md, including the
-    `required_with` rendering and the relay instance URL matching the
-    public address, and the policy summary bound to the policy sections by
+    `required_with` rendering, the link setting and the relay instance URL
+    matching the public address, and the policy summary bound to the policy sections by
     a test.
   - Done when the relay docs tests pass, removing a policy section from the
     summary reds its binding test, and the page names no hosting or email

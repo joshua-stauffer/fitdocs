@@ -3646,6 +3646,9 @@ Rejected:
 - *Writing the Strava activity URL into the page.* An activity id is Strava
   Data (AGR §2.3), cached 7 days at most (POL §6.2), and it would break the
   maintainer's rule. The page carries a relay redirect link instead.
+  **Revised by the maintainer, 2026-10-31:** the relay's link setting
+  decides. `activity` (the default) returns the activity's Strava address,
+  which fitdocs writes into the page; `relay` keeps the redirect link.
 
 #### Decisions taken at discovery (2026-10-31)
 
@@ -3715,9 +3718,11 @@ Rejected:
   as an update, when its composed text changed.
 - **Links** (maintainer):
   - a page posted to intervals.icu links directly to the activity;
-  - a page posted to Strava carries "View on Strava", pointing at the relay
-    (`/go/<publication id>`). The relay resolves the activity at click time,
-    so the page and fitdocs never hold a Strava identifier.
+  - a page posted to Strava carries "View on Strava". Under the relay's
+    link setting `activity` (the default) it points at the activity on
+    Strava; under `relay` it points at the relay (`/go/<publication id>`),
+    which resolves the activity at click time (revised 2026-10-31,
+    maintainer).
 - **Spec wording and the agent skill** (maintainer):
   - fitdocs is a CLI and contains no agent. The Strava component is
     specified as CLI behaviour.
@@ -3765,8 +3770,9 @@ Rejected:
   fitdocs.**
   - Every outcome is a fitdocs code, with fitdocs-written text.
   - The only exceptions are the links: intervals.icu's direct activity link,
-    and Strava's relay redirect link.
-  - For Strava, nothing crosses the relay boundary at all.
+    and Strava's link (the activity's address, or the relay redirect link).
+  - For Strava, nothing crosses the relay boundary except the landed
+    activity's address under the `activity` link setting.
 - **Strava retention.**
   - The relay stores no Strava Data beyond a ≤7-day cache, and keeps no
     persistent page-to-activity map.
@@ -4004,14 +4010,15 @@ Amendment numbers are the next free number at landing.
 - [x] strava-publish — Strava through the relay:
   - the OAuth connect flow, with encrypted rotating tokens;
   - resolve-by-start-time on every publish, then PUT or a single upload;
-  - the `/go/` redirect link;
+  - the link setting: the activity's Strava address by default, or the
+    `/go/` redirect link;
   - the deauthorization webhook and revoke;
-  - the rate-limit budget, and nothing from Strava crossing the relay;
+  - the rate-limit budget, and nothing else from Strava crossing the relay;
   - the fitdocs relay target, with `OAUTH_BROWSER` driven.
 
   **Brief written 2026-10-31; spec written 2026-10-31.**
   - Phase 14 batch, wave 2, `tasks-generated`, all approvals set.
-  - 18 requirements / 123 criteria, 8 majors / 46 tasks.
+  - 18 requirements / 124 criteria, 8 majors / 46 tasks.
   - Independent Step 3.5 review, two rounds.
   - It extracts `fitdocs.identity.strict` (activity-identity amendment).
   - The relay keeps no Strava cache, and `/go/` lists on every click.

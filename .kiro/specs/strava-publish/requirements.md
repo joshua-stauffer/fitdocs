@@ -30,10 +30,12 @@ for each opted-in page whose post is new or changed, to post it: the relay
 finds the athlete's activity by start time on every publish, with
 activity-identity's strict one-to-one rule, and sets its name and
 description; when none exists and the instance enables uploads, it uploads
-the page's activity file once instead. Nothing the Strava API returns
-leaves the relay: fitdocs receives only outcome codes, and the page links
-to the relay's `/go/<publication id>` address, which finds the activity at
-click time. Strava tokens are stored encrypted and rotate atomically;
+the page's activity file once instead. fitdocs receives outcome codes
+and, where the relay's link setting is `activity` (its default), the Strava
+address of the activity a post landed on, which becomes the page's link;
+where it is `relay`, the page links to the relay's `/go/<publication id>`
+address, which finds the activity at click time. Strava tokens are stored
+encrypted and rotate atomically;
 disconnecting, a Strava-side revocation or deleting the principal removes
 them at once. The relay counts its Strava calls against the application's
 shared limits. The relay serves the privacy policy and consent text, and
@@ -78,8 +80,13 @@ meaning):
   match rule: the same sport, starts within one second, and distances
   within the strict tolerance or, where a distance is absent, elapsed times
   within the strict tolerance.
-- The **link** of a page on a Strava instance is the relay address
-  `<bound relay URL>/go/<publication id>`, shown as "View on Strava".
+- The **link** of a page on a Strava instance is shown as "View on
+  Strava". It is the Strava address of the activity the post landed on,
+  where the relay's answer carries one, and otherwise the relay address
+  `<bound relay URL>/go/<publication id>`.
+- The relay's **link setting** is `activity` (the default) or `relay`. It
+  decides whether the relay's posted and uploaded answers carry the
+  activity's Strava address.
 - **Strava Data** is anything the Strava API returns, as Strava's API
   Agreement defines it; an activity identifier is Strava Data.
 - The **budget** is the relay's own count of its Strava calls against the
@@ -193,7 +200,7 @@ meaning):
 9. The relay documentation shall state how to generate an encryption key, how to rotate keys without downtime, and that changing the token-hashing secret also breaks the match between deauthorization events and stored connections.
 
 ### Requirement 5: Publishing a Post to Strava from the CLI
-**Objective:** As an athlete, I want `fitdocs publish --to <strava instance> --yes` to hand each new or changed post to my relay and report one fitdocs code, so that the post lands on my Strava activity and nothing Strava says comes back to me.
+**Objective:** As an athlete, I want `fitdocs publish --to <strava instance> --yes` to hand each new or changed post to my relay and report one fitdocs code, so that the post lands on my Strava activity and my page links to it.
 
 #### Acceptance Criteria
 1. When `fitdocs publish --yes` sends a post to a Strava instance, the fitdocs CLI shall send the relay one publish request carrying only the publication id, the activity's sport, its start time with offset, its elapsed time and distance (each absent value sent as absent, never as zero), and the post's title and description, and no activity file.
@@ -203,12 +210,12 @@ meaning):
 5. Every request the fitdocs CLI sends to a relay shall be attempted exactly once, whatever the answer, so that the transport's data-mode retry never applies to it.
 6. The fitdocs CLI shall turn each relay answer into exactly one publish-core code that a target may return, by a documented table, and shall accept a publish outcome from the relay only when it is a member of publish-core's vocabulary and of the outcomes that route may answer, treating any other answer as malformed.
 7. If the relay cannot be reached, or answers with something that is not a valid envelope, or reports its own unexpected failure, the fitdocs CLI shall return the unavailable code for a publish request and the unconfirmed code for an upload request, because an upload's result is then unknown.
-8. When the code is posted or uploaded, the fitdocs CLI shall return the link `<bound relay URL>/go/<publication id>`, composed by fitdocs, and shall return no link with any other code.
-9. The fitdocs CLI shall print, log and write nothing a relay returned other than the codes, and shall never receive, hold or write a Strava identifier.
-10. Where the bound relay URL is a loopback `http` address, the page shall carry no "View on Strava" link, because publish-core records only `https` links, and the connectors documentation shall say so.
+8. When the code is posted or uploaded, the fitdocs CLI shall return the link the relay's answer carries, or, where the answer carries none, the link `<bound relay URL>/go/<publication id>`, composed by fitdocs; it shall return no link with any other code.
+9. The fitdocs CLI shall print, log and write nothing a relay returned other than the codes and the link.
+10. Where the relay's answer carries no link and the bound relay URL is a loopback `http` address, the page shall carry no "View on Strava" link, and the connectors documentation shall say so.
 
 ### Requirement 6: Finding the Strava Activity on Every Publish
-**Objective:** As an athlete, I want the relay to find my activity afresh on every publish, by fitdocs's own strict rule, so that a post never lands on the wrong activity and no lasting map of my pages to Strava exists.
+**Objective:** As an athlete, I want the relay to find my activity afresh on every publish, by fitdocs's own strict rule, so that a post never lands on the wrong activity and the relay keeps no lasting map of my pages to Strava.
 
 #### Acceptance Criteria
 1. On every publish and upload request, the relay server shall list the athlete's Strava activities whose start lies within a documented window around the page's start, and shall keep no record that maps a page or a publication to a Strava activity.
@@ -252,15 +259,16 @@ meaning):
 7. The relay server shall let no single principal use more than a documented share of any window, so that one athlete's run cannot exhaust a limit for every athlete.
 
 ### Requirement 10: The "View on Strava" Link
-**Objective:** As an athlete reading a workout page, I want its "View on Strava" link to open the activity on Strava, so that I can reach the post while neither the page nor fitdocs ever holds a Strava identifier.
+**Objective:** As an athlete reading a workout page, I want its "View on Strava" link to open the activity on Strava, so that I can reach the post from the page.
 
 #### Acceptance Criteria
 1. When a publish or upload request lands, the relay server shall record the publication id with its principal and the page's match facts, and nothing from Strava.
-2. When a browser requests `/go/<publication id>` for a recorded publication whose principal is connected, the relay server shall resolve the activity at that moment by the same listing and strict rule a publish uses, and redirect the browser to that activity's page on Strava with a temporary redirect.
+2. When a browser requests `/go/<publication id>` for a recorded publication whose principal is connected, under either link setting, the relay server shall resolve the activity at that moment by the same listing and strict rule a publish uses, and redirect the browser to that activity's page on Strava with a temporary redirect.
 3. If the publication id is malformed or unknown, its principal is not connected, or no single activity matches, the relay server shall serve a fitdocs-written not-found page and redirect nowhere.
 4. The relay server shall serve the link without a relay token, limit link requests per client, and serve a fitdocs-written try-later page when the client limit or the budget refuses.
 5. The relay server shall answer every link request with caching and referrer disabled, and shall not record the Strava activity it resolved.
 6. If a publish or upload request carries a publication id the relay already records for another principal, the relay server shall answer the rejected outcome and change nothing.
+7. The relay's link setting shall default to `activity`. Where it is `activity`, the relay server shall carry the Strava address of the activity in each answer whose outcome is posted or uploaded; where it is `relay`, it shall carry no Strava address in any answer.
 
 ### Requirement 11: Disconnecting and Revocation
 **Objective:** As an athlete, I want disconnecting from the CLI, revoking access on Strava, or the operator deleting my principal to remove my Strava tokens at once, so that the relay can no longer act on my account the moment I withdraw.
@@ -277,11 +285,11 @@ meaning):
 9. The relay package shall provide operator commands that create, show and delete the application's one webhook subscription, printing only fitdocs-written states.
 10. The relay server shall delete a connection's data immediately in each case above, which is within Strava's thirty-day limit.
 
-### Requirement 12: Nothing from Strava Crosses the Relay Boundary
-**Objective:** As an athlete and as the maintainer, I want the relay to keep everything Strava returns inside the request that needed it, so that no Strava Data reaches fitdocs, a log, or a lasting record.
+### Requirement 12: What Crosses the Relay Boundary
+**Objective:** As an athlete and as the maintainer, I want the relay to keep everything Strava returns inside the request that needed it, apart from the activity address its link setting returns, so that no other Strava Data reaches fitdocs and none reaches a log or a lasting record.
 
 #### Acceptance Criteria
-1. Every relay answer to fitdocs shall carry only a relay code, a publish-core outcome and the fields its documented route defines, and no Strava response body, header, identifier, address or text.
+1. Every relay answer to fitdocs shall carry only a relay code, a publish-core outcome and the fields its documented route defines, and no Strava response body, header, identifier, address or text other than the activity address of criterion 10.7.
 2. The relay server shall never log a Strava response body, header, identifier or address, an authorization code, a state value, a Strava token or an encryption key; its log records about Strava calls shall carry only fitdocs-defined classifications.
 3. The relay server shall store no Strava Data beyond the encrypted tokens of live connections: no activity, activity identifier, athlete identifier, profile or cache; its only lasting records for the Strava target shall be the encrypted tokens, the keyed account hash and fitdocs's own publication ids and match facts.
 4. Every page the relay serves for this feature shall be fitdocs-written, shall interpolate only values fitdocs generated or validated, and shall show no text Strava returned.
@@ -291,7 +299,7 @@ meaning):
 **Objective:** As a relay operator, I want the Strava target configured from the environment like everything else in the deploy contract, and absent until I configure it, so that a relay without a Strava application behaves exactly as before.
 
 #### Acceptance Criteria
-1. The relay package shall append to the deploy contract's variable table the Strava application's client id and client secret, the webhook secret, the encryption keys, the relay's public address, the operator's name and support contact, an optional privacy-policy address, the Strava addresses and the rate limits, each with whether it is required, its default, whether it is secret and its meaning.
+1. The relay package shall append to the deploy contract's variable table the Strava application's client id and client secret, the webhook secret, the encryption keys, the relay's public address, the operator's name and support contact, an optional privacy-policy address, the Strava addresses, the rate limits and the link setting, each with whether it is required, its default, whether it is secret and its meaning.
 2. The relay server shall offer the Strava target exactly when the Strava client id is configured; the other required Strava variables shall then be required, and if any is absent or invalid, the relay server and its commands shall refuse to start, naming the variable but never its value.
 3. While the Strava target is not configured, the capabilities endpoint shall list no Strava target, every Strava envelope route shall answer not-offered, and every Strava page and webhook address shall answer not found, with every other relay behaviour unchanged.
 4. When the Strava target is configured, the capabilities endpoint shall list `strava` among its targets.
@@ -320,8 +328,8 @@ meaning):
 **Objective:** As an athlete deciding whether to connect, and as the maintainer bound by Strava's terms, I want the relay's privacy policy, consent text and support contact published with the code and every Strava mention worded to Strava's rules, so that the obligations are met by every deployment of the relay.
 
 #### Acceptance Criteria
-1. The relay server shall serve a privacy policy page that states what the relay receives, stores, sends to Strava and deletes, and when, naming the operator and their support contact; the relay documentation shall name `<public address>/privacy` as the address for a Strava application's privacy-policy field, unless the operator configures another policy address, which the relay's pages then link instead.
-2. The connect page shall show the consent text before the "Connect with Strava" control, stating what the relay will do with the athlete's Strava access and what it will never do.
+1. The relay server shall serve a privacy policy page that states what the relay receives, returns to fitdocs under its link setting, stores, sends to Strava and deletes, and when, naming the operator and their support contact; the relay documentation shall name `<public address>/privacy` as the address for a Strava application's privacy-policy field, unless the operator configures another policy address, which the relay's pages then link instead.
+2. The connect page shall show the consent text before the "Connect with Strava" control, stating what the relay will do with the athlete's Strava access, what it returns to fitdocs under its link setting, and what it will never do.
 3. Every page the relay serves for this feature shall show the operator's support contact.
 4. The relay and fitdocs shall use Strava's name only to name the service, with exactly these brand phrases: "Connect with Strava" on the control that starts authorization, "View on Strava" on the link, and "Compatible with Strava" in documentation; no product or Strava application name of fitdocs or the relay shall contain Strava's name (the connector's id and display name name the service it reaches).
 5. The repository's changelog and documentation shall describe the feature only as compatible with Strava, and this feature shall publish no announcement that references Strava.
