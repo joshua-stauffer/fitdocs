@@ -415,8 +415,8 @@ tests/connectors/test_browser_connect.py      # NEW: engine over a scripted tran
 tests/connectors/test_cli_strava.py           # NEW: connect, --no-browser, disconnect, flag refusals
 tests/connectors/test_strava_wire_examples.py # NEW: decodes the recorded Strava-route exchanges
 .kiro/queue/2026-10-31-strava-publish-site-copy.md   # NEW (written with this spec): site copy follow-up (R9)
-relay/LIVE_CHECK_STRAVA.md                    # NEW (optional task): the maintainer's live-check procedure (R12)
-relay/LIVE_CHECK_STRAVA_RECORD.md             # NEW (optional task): the record template, filled only with maintainer-reported codes
+relay/LIVE_CHECK_STRAVA.md                    # NEW (task 8): the maintainer's live-check procedure (R12)
+relay/LIVE_CHECK_STRAVA_RECORD.md             # NEW (task 8): the record template, filled only with maintainer-reported codes
 ```
 
 ### Modified Files
@@ -1725,8 +1725,8 @@ class BudgetStore(StorageBase, Protocol):
   step for the fitdocs code observed. No implementation, review or
   validation session carries out any step that reaches the real Strava API
   or a relay connected to it; a session fills the template only with the
-  codes the maintainer reports. Both files are the optional task marked
-  `*` in tasks.md.
+  codes the maintainer reports. Writing both files is task 8; carrying out
+  the live check is optional and the maintainer's.
 
 ## Data Models
 
