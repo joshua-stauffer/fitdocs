@@ -246,6 +246,7 @@ meaning):
 4. If a call is not made because the budget is spent, or Strava answers that a limit was reached, the relay server shall answer the rate-limited outcome and make no further Strava call for that request, and where Strava answered it, shall record that window as spent.
 5. The relay server shall keep a documented share of each non-upload window that resolving links may not use, so that following links cannot spend what publishing needs.
 6. The relay server shall keep the budget's counts in the configured database only, so that a restart neither resets nor loses them.
+7. The relay server shall let no single principal use more than a documented share of any window, so that one athlete's run cannot exhaust a limit for every athlete.
 
 ### Requirement 10: The "View on Strava" Link
 **Objective:** As an athlete reading a workout page, I want its "View on Strava" link to open the activity on Strava, so that I can reach the post while neither the page nor fitdocs ever holds a Strava identifier.
