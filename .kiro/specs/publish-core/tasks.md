@@ -602,3 +602,7 @@ live constant.
     confinement-checked like every other writing command.
   - Done when these tests pass in the full suite on macOS and on CI.
   - _Requirements: 1.6, 2.2, 7.5, 8.3, 11.2, 13.5, 13.6, 14.2_
+
+## Implementation Notes
+
+- 1.1: a fresh-interpreter test must run `[sys.executable, "-I", "-B", ...]`: `-I` drops the root conftest's PYTHONDONTWRITEBYTECODE, so without `-B` the child writes `__pycache__` under `src/` and `tests/test_bytecode_hygiene.py` fails later in the full run.
