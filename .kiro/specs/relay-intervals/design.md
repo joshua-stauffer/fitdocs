@@ -154,8 +154,11 @@ the intervals.icu calls.
   approved the maintainer's OAuth application, or a written decision to
   implement before approval (16.1). Until then the record reads
   `pending`.
-- The tasks express it twice: the plan's prerequisites name the gate, and
-  task 1.1 reads the record and stops with BLOCKED when it shows neither.
+- The tasks express it three times: the plan's prerequisites name the gate
+  and say no task is dispatched while task 1.1 is unchecked; task 1.1 reads
+  the record and, when it shows neither, stops the whole run for a human
+  (kiro-impl's `STOP_FOR_HUMAN`, never a skippable task block); and the
+  first task of every later group declares `_Depends: 1.1_`.
 - The gate guards against building on an OAuth contract that cannot yet be
   exercised (TBC-R1 to TBC-R9). Every automated test runs against scripted
   answers either way.
@@ -245,7 +248,9 @@ door:
   identity is `fitdocs.publish.targets.ledger_connector(instance)`: the
   connector's `publish_ledger_connector` when it implements
   `PublishLedgerShared`, else its `connector_id`. The mismatch check is
-  otherwise unchanged.
+  otherwise unchanged. Req 11.6 reads "... or was written for a connector
+  other than the target's ledger identity ..." in place of "for a different
+  connector than the target now uses".
 - **relay-server**:
   - Req 9.2: the variable table gains the seven intervals.icu rows; the
     generic rows' requirement reads "with either target".
@@ -440,6 +445,7 @@ relay/tests/
 │                               #   test_budget.py, test_custody.py, test_consent.py, test_publish.py, test_upload.py,
 │                               #   test_routes.py, test_rules_copy.py, test_boundary_sentinel.py
 └── conformance/test_target_expiry.py   # NEW: an absent expiry stored and read on both backends
+relay/contract/intervals-cases.json      # NEW: ParityCases, the match and resolution cases both suites run
 relay/LIVE_CHECK_INTERVALS.md            # NEW: the maintainer's live-check procedure
 relay/LIVE_CHECK_INTERVALS_RECORD.md     # NEW: the record template
 
@@ -564,7 +570,11 @@ sequenceDiagram
 ```mermaid
 flowchart TD
     Start[publish request] --> Known[gather known activities]
-    Known -->|pull record ambiguous| Ambig[ambiguous]
+    Known -->|pull record ambiguous and no link| Ambig[ambiguous]
+    Known -->|pull record ambiguous with a link| KnownOnly[known only request with the link]
+    KnownOnly --> OnlyHints[relay updates the known activity only]
+    OnlyHints -->|confirmed| Posted
+    OnlyHints -->|absent| Ambig
     Known --> NoFacts{nothing known and no facts}
     NoFacts -->|yes| FactsMissing[activity facts missing]
     NoFacts -->|no| Bounds{post within bounds}
@@ -601,7 +611,14 @@ flowchart TD
 Key decisions:
 - The local steps (known activities, the pull record's ambiguity and
   readability, the file check) are fitdocs's; the remote steps are the
-  relay's. Together they are the direct route's order.
+  relay's. Together they are the direct route's order: the direct route
+  updates the recorded link's activity before it reads the pull record, so
+  an ambiguous pull record with a recorded link sends a known-only request
+  carrying the link alone, and the relay's `not_found` for it becomes
+  `ambiguous`, exactly as the direct route answers after the link's
+  activity is absent.
+- Parity is pinned by one shared case file (ParityCases) that both suites
+  run.
 - An upload request is sent only after a definite `not_found`, with uploads
   on, a readable or absent pull record and an intact file (R11).
 - Every arrow from a failed call carries the answer table's code for that
@@ -652,11 +669,13 @@ Key decisions:
 | 7.4 | Pinned rules | IntervalsRules, SharedCopyPair | `SHARED_MODULES` | — |
 | 7.9 | No page-to-activity map | IntervalsPublisher, storage | physical model | — |
 | 7.10 | Malformed known activities | IntervalsWire, IntervalsRoutes | `parse_intervals_publish_fields` | — |
+| 7.11 | Known activities only | IntervalsPublisher, IntervalsWire | `KnownActivities.only` | Publishing |
 | 8.1, 8.2, 8.9 | Update and repeats | IntervalsPublisher, IntervalsApi | `update_activity`, `_call` | Publishing |
 | 8.3, 8.4, 8.5, 8.6, 8.8 | Upload, confirmation, guard | IntervalsPublisher, IntervalsApi | `upload`, `uploaded_activity` | Publishing |
 | 8.7 | Deadlines | IntervalsPublisher | `PUBLISH_DEADLINE_S`, `UPLOAD_DEADLINE_S` | — |
 | 9.1, 9.2, 9.3, 9.5, 9.6 | One table, two routes | IntervalsRules, IntervalsDirectAmendment, SharedCopyPair, ConnectorsDocs | `ANSWER_CODES`, `answer_code` | — |
 | 9.4 | Not connected | IntervalsCustody | `access` | — |
+| 9.7 | Parity case table | ParityCases | `relay/contract/intervals-cases.json` | Publishing |
 | 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7 | Budget | IntervalsBudget, IntervalsConfig | `spend`, `reserve_upload`, `spend_budget` | — |
 | 11.1, 11.2 | CLI disconnect | BrowserConsentAmendment, IntervalsRelayConnector | `run_disconnect`, `withdraw_consent` | Revocation |
 | 11.3 | Relay disconnect | TargetsCore, IntervalsCustody | `withdraw` | Revocation |
@@ -690,6 +709,7 @@ Key decisions:
 | IntervalsRules | shared | The one definition of intervals.icu answers, ids, listing, match and upload shapes | 7.3, 7.4, 7.5, 7.6, 8.1, 8.5, 9.1, 9.2, 9.3 | stdlib (P0) | Service, State |
 | IntervalsWire | shared | The intervals.icu relay fields and outcome sets | 6.5, 6.9, 7.10, 12.1 | relay_targets (P0) | API |
 | SharedCopyPair | gates | One pinned pair | 7.4, 9.2 | sync script (P0) | Batch |
+| ParityCases | gates | One case file both suites run, pinning equal codes on both routes | 7.4, 9.7 | both suites (P0) | State |
 | LedgerIdentity | fitdocs publish, connectors | Keep a ledger across a route switch | 2.1, 2.2 | protocol (P0), publish-core (P0) | Service |
 | RelayRoute | fitdocs connectors | Consent operations and relay-answer mapping for every relay target | 6.8, 6.9, 14.4 | RelayClient (P0) | Service |
 | BrowserConsentAmendment | fitdocs connectors, cli | Name the service; store the instance's connector | 3.1, 3.3, 11.1, 11.2, 14.3 | browser_connect, disconnect (P0) | Service |
@@ -789,10 +809,11 @@ def uploaded_activity(body: bytes) -> str | None
   tests for these rules, moved with them, plus: a stdlib-only AST check (no
   relative import either); every table value is a `TARGET_CODES` value and
   neither `posted` nor `uploaded` (9.3); the `MatchRefusal` values are
-  `PublishCode` values; a case table for `match_listing` (external id before
-  strict, two strict ambiguous, Strava by instant and by local start, absent
-  excluded) that the relay suite runs too against its copy. Named mutation:
-  swapping `create`'s 5xx cell to `unavailable` reds both suites.
+  `PublishCode` values; the `match` cases of ParityCases (external id
+  before strict, two strict ambiguous, a different sport still matching,
+  Strava by instant and by local start, absent excluded), which the relay
+  suite runs too against its copy. Named mutation: swapping `create`'s 5xx
+  cell to `unavailable` reds both suites.
 
 #### IntervalsWire — appended to `src/fitdocs/connectors/relay_targets.py`
 
@@ -804,8 +825,9 @@ def uploaded_activity(body: bytes) -> str | None
 ```python
 INTERVALS: Final = "intervals"
 KNOWN_ACTIVITIES_FIELD: Final = "known_activities"; MAX_KNOWN_ACTIVITIES: Final = 2
+KNOWN_ONLY_FIELD: Final = "known_only"
 ACTIVITY_ID_FIELD: Final = "activity_id"
-INTERVALS_PUBLISH_FIELDS: Final[frozenset[str]]   # PUBLISH_FIELDS | {"known_activities"}
+INTERVALS_PUBLISH_FIELDS: Final[frozenset[str]]   # PUBLISH_FIELDS | {"known_activities", "known_only"}
 INTERVALS_UPLOAD_FIELDS: Final[frozenset[str]]    # UPLOAD_FIELDS
 INTERVALS_PUBLISH_OUTCOMES: Final[frozenset[str]] # posted, not_found, ambiguous, not_updatable, activity_facts_missing,
                                                   #   not_connected, auth_rejected, permission_denied, rate_limited,
@@ -813,13 +835,18 @@ INTERVALS_PUBLISH_OUTCOMES: Final[frozenset[str]] # posted, not_found, ambiguous
 INTERVALS_UPLOAD_OUTCOMES: Final[frozenset[str]]  # posted, uploaded, ambiguous, not_updatable, activity_facts_missing,
                                                   #   not_connected, auth_rejected, permission_denied, rate_limited,
                                                   #   unavailable, rejected, unconfirmed
-def intervals_publish_fields(facts: PublishFacts, known: tuple[str, ...]) -> dict[str, object]
-def parse_intervals_publish_fields(fields: Mapping[str, object]) -> tuple[PublishFacts, tuple[str, ...]]
+@dataclass(frozen=True)
+class KnownActivities:
+    ids: tuple[str, ...]        # 0 to 2 distinct usable ids, in try order
+    only: bool                  # try these and nothing else; requires at least one id
+def intervals_publish_fields(facts: PublishFacts, known: KnownActivities) -> dict[str, object]
+def parse_intervals_publish_fields(fields: Mapping[str, object]) -> tuple[PublishFacts, KnownActivities]
 def landed_data(activity_id: str) -> dict[str, object]          # {"activity_id": <id>}
 def parse_landed_data(data: Mapping[str, object]) -> str | None # the id when usable, else None
 ```
 - `known_activities` is a JSON array of 0 to 2 distinct strings, each
-  passing `intervals_rules.is_activity_id`; anything else raises
+  passing `intervals_rules.is_activity_id`; `known_only` is a JSON boolean,
+  `true` only with at least one known activity; anything else raises
   `EnvelopeError` with fixed text (7.10). Every other field uses
   strava-publish's `PublishFacts` codec and bounds, including `elapsed_s`
   and `distance_m` both `null` (the relay decides `activity_facts_missing`
@@ -831,7 +858,7 @@ def parse_landed_data(data: Mapping[str, object]) -> str | None # the id when us
 - Implementation Notes: a fitdocs test pins both sets as literals and as
   subsets of `TARGET_CODES`; a relay test pins them within the pinned
   `PublishCode`. Named mutations: adding `not_found` to the upload set;
-  accepting three known activities.
+  accepting three known activities; accepting `known_only` with none.
 
 ### fitdocs connectors
 
@@ -989,21 +1016,26 @@ class IntervalsRelayConnector:         # Connector, PostPublisher, BrowserConsen
   passes it), and the instance's own connection token
   (`session.credentials.value("token")`) for `publish` and
   `withdraw_consent`.
-- **Publish** (per request, in order; `known: list[str]`):
+- **Publish** (per request, in order; `known: list[str]`, `only = False`):
   1. `linked_activity(request.recorded_link)` → append when not `None`.
-  2. `pull_record_activity(session, request.subject)`: `AMBIGUOUS` → that
-     code, no request (6.2); `LOCAL_RECORD_UNREADABLE` → note
+  2. `pull_record_activity(session, request.subject)`: `AMBIGUOUS` with
+     `known` empty → that code, no request; `AMBIGUOUS` with the link's id
+     in `known` → note `record_ambiguous` and set `only = True` (6.2), so the
+     relay tries the link's activity and nothing else, as the direct route
+     does before it reads the pull record; `LOCAL_RECORD_UNREADABLE` → note
      `record_unreadable`; an id → append when not already present.
   3. `known` empty and both `elapsed_s` and `distance_m` `None` →
      `ACTIVITY_FACTS_MISSING`, no request (6.3).
   4. Title or description over `MAX_TITLE_CHARS`/`MAX_DESCRIPTION_CHARS` →
      `REJECTED`, no request (6.4).
   5. One publish request: `target_route(INTERVALS, ACTION_PUBLISH)` with
-     `intervals_publish_fields(facts, tuple(known))`; `answer_code(reply,
+     `intervals_publish_fields(facts, KnownActivities(tuple(known), only))`;
+     `answer_code(reply,
      upload=False, allowed=INTERVALS_PUBLISH_OUTCOMES)`; a `posted` outcome
      whose `parse_landed_data` gives `None` is treated as "ok without an
      outcome" (`unavailable`).
-  6. Only on `NOT_FOUND`: `record_unreadable` → `LOCAL_RECORD_UNREADABLE`;
+  6. Only on `NOT_FOUND`: `record_ambiguous` → `AMBIGUOUS`;
+     `record_unreadable` → `LOCAL_RECORD_UNREADABLE`;
      uploads off → `NOT_FOUND`; `archived_base_file(subject)` `None` →
      `ACTIVITY_FILE_MISSING`; more than `MAX_FIT_BYTES` → `REJECTED` unsent;
      otherwise one upload request with `upload_fields(facts, data)` and
@@ -1121,11 +1153,17 @@ def target_routes(services: RelayServices) -> list[BaseRoute]: ...
 | GET | `/<target>/callback` | claim cookie, state | — | page |
 | GET | `/privacy` | none | — | page |
 
-- Implementation Notes: the lift is one task that moves code and tests and
-  changes no Strava assertion except the privacy page's grouping (tests
-  change only imports and the target argument the shared operations now
-  take); the full
-  relay suite, on both backends, passes before and after. Named mutation:
+- Implementation Notes: the lift is one task group (2.1 to 2.4), each task
+  green on its own. Every moved Strava test keeps every expected value; it
+  may change only its imports, its setup and the construction of the
+  objects it tests (Strava's `Custody` now takes the `TokenVault`;
+  `ConnectFlow` takes `providers`; registry fakes for browser-consent
+  connectors declare `service_name`), the target argument the shared
+  operations now take, the `required_with` shape in the contract pin, the
+  place of moved documentation headings, and the privacy page's grouping
+  (Req 14.2). The full relay suite, on both backends, passes after each
+  task. Each task that creates or moves a relay module updates
+  `relay/tests/test_boundary.py` for it in the same task. Named mutation:
   dropping the session-target check in `page` lets a Strava user code open
   the intervals.icu page.
 
@@ -1165,6 +1203,9 @@ class IntervalsConfig:
     authorize_url: str; token_url: str; api_url: str; limits: IntervalsLimits
 def load_intervals_config(environ: Mapping[str, str]) -> IntervalsConfig | None
 ```
+- `load_targets_config(environ, any_target=...)` receives `any_target` true
+  when either client id is set, so an intervals.icu-only environment
+  requires the four target-neutral variables (13.3).
 - `RelayConfig` gains `intervals: IntervalsConfig | None`. An intervals.icu
   variable set without the client id, a missing secret, an address that is
   neither `https` nor `http` to a loopback host (the rule
@@ -1334,26 +1375,31 @@ class IntervalsCustody:
 | Field | Detail |
 |-------|--------|
 | Intent | Answer one publish or upload request with one code |
-| Requirements | 7.1, 7.2, 7.3, 7.5, 7.6, 7.7, 7.8, 7.9, 8.1-8.9 (each), 9.1, 9.4 |
+| Requirements | 7.1, 7.2, 7.3, 7.5, 7.6, 7.7, 7.8, 7.9, 7.11, 8.1-8.9 (each), 9.1, 9.4 |
 
 ```python
 PUBLISH_DEADLINE_S: Final = 20.0; UPLOAD_DEADLINE_S: Final = 25.0; CALL_TIMEOUT_S: Final = 8.0
+TRANSIENT_REPEATS: Final = 1       # repeats of a listing or an update after a 5xx or a network failure
 @dataclass(frozen=True)
 class Landed: code: PublishCode; activity_id: str        # POSTED or UPLOADED
 class IntervalsPublisher:
     def __init__(self, api: IntervalsApi, custody: IntervalsCustody, budget: IntervalsBudget, *,
                  monotonic: Callable[[], float]) -> None: ...
-    def publish(self, principal_id: str, facts: PublishFacts, known: tuple[str, ...]) -> Landed | PublishCode: ...
+    def publish(self, principal_id: str, facts: PublishFacts, known: KnownActivities) -> Landed | PublishCode: ...
     def upload(self, principal_id: str, facts: PublishFacts, fit: bytes) -> Landed | PublishCode: ...
 ```
 - **A call** (`_call`): spend one unit (refused → `RATE_LIMITED`); timeout
   `min(CALL_TIMEOUT_S, time left)`; a `SERVER_ERROR` or `NETWORK_FAILURE` on
   a listing or an update with time left and budget for one more is repeated
-  once (8.2); an `UNAUTHORIZED` answer calls `custody.rejected`; the code is
+  up to `TRANSIENT_REPEATS` times (8.2); a 429 is never repeated (the direct
+  route's transport waits and repeats one); an `UNAUTHORIZED` answer calls
+  `custody.rejected`; the code is
   `answer_code(kind, answer)` wrapped as the pinned `PublishCode`.
 - **Publish**: `custody.access` (else `NOT_CONNECTED`); each known activity in
   order: update → `SUCCESS` gives `Landed(POSTED, id)`, `NOT_FOUND` adds it
-  to `absent`, any other answer is its code (7.1); both facts absent →
+  to `absent`, any other answer is its code (7.1); with `known.only`, every
+  known activity absent → `NOT_FOUND` with no facts check and no listing
+  (7.11); both facts absent →
   `ACTIVITY_FACTS_MISSING` (7.2); list (`Unreadable` → `UNAVAILABLE`, 7.8);
   `match_listing(..., absent=absent, same_session=<shared.strict>)`:
   `MatchRefusal` → its code; `Matched` → update (`SUCCESS` → posted,
@@ -1437,7 +1483,27 @@ class IntervalsPublisher:
 - **BoundaryAmendment** (`relay/tests/test_boundary.py`): `starlette`
   additionally in `targets/routes.py` and `intervals/routes.py`;
   `targets/pages.py`, `targets/policy.py`, `intervals/policy.py` standard
-  library only; `intervals/api.py` imports no `urllib`.
+  library only (strava-publish's pins on `strava.pages` and `strava.policy`
+  move with the code); `intervals/api.py` imports no `urllib`. The task
+  that creates or moves each module updates the test in the same task, so
+  the suite never goes red between tasks.
+- **ParityCases** (`relay/contract/intervals-cases.json`, 7.4, 9.7): one
+  data file both suites read, as they read `envelope-v1.json`. Its `match`
+  cases give listed entries, page facts, a publication id and an absent set
+  with the expected match. Its `resolution` cases give a resolution state
+  (recorded link, pull record tiers or unreadable, facts, upload setting,
+  file state, intervals.icu's answer per call) with: the expected code; the
+  publish request the relay-routed connector sends (`known_activities`,
+  `known_only`) and whether it sends an upload request; and the relay's
+  answer for that request. The fitdocs suite runs every case through the
+  direct connector over a scripted intervals.icu transport and through the
+  relay-routed connector over a scripted relay (asserting the request it
+  sends and the code it gives for the case's relay answer); the relay suite
+  runs every case's request through `IntervalsPublisher` over a scripted
+  `Outbound` and asserts the case's relay answer. Equal codes on both routes
+  then hold for every case by construction; a case that differs reds one
+  suite. Values are visibly fake (ids `i9000001`..., publication ids of all
+  `0`).
 - **Recorded exchanges** (`relay/contract/envelope-v1.json`): one exchange
   per intervals.icu envelope route answer kind, with visibly fake values
   (tokens of all `a`, publication id of all `0`, activity id `i0000001`);
@@ -1457,8 +1523,12 @@ class IntervalsPublisher:
   activities and local refusals, the direct link, `local_record_unreadable`,
   switching routes (the publish record is kept; connect again on the new
   route), disconnecting, the mapping (strava-publish's table, by
-  reference), the attempt counts (direct up to three, relay up to two, the
-  same code), and the differences (posts over 255 or 8,000 characters and
+  reference), the attempt counts (the direct route's transport makes up to
+  three attempts and waits and repeats after a 429; the relay repeats a
+  listing or an update once after a server or network failure and never
+  after a 429; the code for the final answer is the same; the fitdocs docs
+  test binds the direct figures to `MAX_DATA_ATTEMPTS` and
+  `RETRYABLE_STATUSES`), and the differences (posts over 255 or 8,000 characters and
   files over 16 MiB are refused before any request). It names no URL, so
   the section's existing neutral-scan exemption covers it. `_EXPECTED_HEADINGS`
   and `test_intervals_docs.py`'s subsection list gain the heading in page
@@ -1474,7 +1544,8 @@ class IntervalsPublisher:
   application` (apply at intervals.icu, wait for approval, register
   `<FITDOCS_RELAY_PUBLIC_URL>/intervals/callback`, never another operator's
   credentials). Its variable and policy tables are bound by the relay docs
-  tests.
+  tests, and `### Routes` states the relay's single repeat, which
+  `relay/tests/test_docs_relay.py` binds to `TRANSIENT_REPEATS`.
 - **NetworkStatements** (15.3, R10), written to hold in either landing
   order:
   - each `REWRITTEN_PLACES` statement names `fitdocs publish --yes`; if it
@@ -1535,8 +1606,9 @@ class IntervalsPublisher:
 ### Data Contracts
 - **fitdocs to relay, publish**: `publication_id`, `sport`, `start`,
   `elapsed_s`, `distance_m`, `title`, `description` (strava-publish's codec)
-  and `known_activities` (0-2 ids). **Upload**: the same without
-  `known_activities`, plus `fit` (standard base64).
+  and `known_activities` (0-2 ids) with `known_only` (`true` only with at
+  least one id). **Upload**: the same without `known_activities` and
+  `known_only`, plus `fit` (standard base64).
 - **Relay to fitdocs**: `{"envelope": 1, "code": "ok", "outcome":
   "<code>", "data": {}}`, or `"data": {"activity_id": "<id>"}` beside
   `posted` and `uploaded` only.
@@ -1556,7 +1628,8 @@ class IntervalsPublisher:
 
 | Situation | Response |
 |-----------|----------|
-| pull record ambiguous | `ambiguous`, no request |
+| pull record ambiguous, no recorded link | `ambiguous`, no request |
+| pull record ambiguous, recorded link | a known-only request with the link; `posted` if it takes the update, else `ambiguous` |
 | pull record unreadable | known activities from the link only; on `not_found`, `local_record_unreadable` and no upload request |
 | nothing known, facts absent | `activity_facts_missing`, no request |
 | post or file over the wire bounds | `rejected`, no request |
@@ -1578,20 +1651,25 @@ activity ids `i9000001`..., the key-free scripted transports.
 **fitdocs unit**:
 - `intervals_rules`: the moved intervals-publish tests unchanged; the
   stdlib-only AST check; the table's values within `TARGET_CODES`; the
-  `match_listing` case table.
+  ParityCases `match` cases.
+- ParityCases `resolution` cases through the direct connector and the
+  relay-routed connector, including a recorded link with an ambiguous pull
+  record (posted when the link's activity accepts the update, ambiguous when
+  it is absent, on both routes).
 - `relay_targets` (intervals.icu names): the field codec with 0, 1 and 2
   known activities, a repeat, a malformed id and three refused; the outcome
   set literals within `TARGET_CODES`.
 - `intervals_relay`: settings errors per key; the binding pass; known
   activities from a recorded link, a pull record (base tier, other tier),
   both, and neither; an ambiguous pull record answering `ambiguous` with no
-  request; an unreadable pull record still posting through the link and
+  request when no link is known, and sending a known-only request when one
+  is; an unreadable pull record still posting through the link and
   answering `local_record_unreadable` on `not_found` with uploads on and off;
   facts missing; bounds; the upload request only after `not_found` with
   uploads on and an intact file; a tampered file `activity_file_missing`; a
   landed answer without an id treated as malformed; the link equal to the
   direct route's for the same id; single attempt over a DATA-mode client
-  scripted with 503.
+  scripted with 503, for the publish request and for the upload request.
 - `LedgerIdentity`: the registry rule; `ledger_connector`; the switch
   tests.
 - `relay_route`: the moved Strava mapping tests, plus the intervals.icu

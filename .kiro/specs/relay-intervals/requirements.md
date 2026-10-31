@@ -160,7 +160,7 @@ intervals-publish's terms keep their meaning):
 
 #### Acceptance Criteria
 1. When an instance's connector changes from the intervals.icu connector to the relay-routed connector, or back, `fitdocs publish` shall keep reading and writing that instance's existing publish record, so that a page whose post already landed is reported unchanged and a changed post is sent to the activity it last landed on.
-2. If an instance's existing publish record was written for a connector other than the instance's own or the other intervals.icu route, the fitdocs CLI shall refuse it as it refuses any publish-record mismatch, before any request and any write.
+2. If an instance's existing publish record was written for a connector other than the instance's ledger identity (the intervals.icu connector, for an instance on either intervals.icu route), the fitdocs CLI shall refuse it as it refuses any publish-record mismatch, before any request and any write.
 3. After a route switch, the fitdocs CLI shall report the instance as not connected until `fitdocs connect` connects it on its new route, and shall never use the other route's credential for it.
 4. While a relay-routed instance has a pull record under its own name, left from an earlier direct configuration of that instance, the fitdocs CLI shall read it, read-only, as the direct route does, and shall never write, repair or create it.
 
@@ -202,11 +202,11 @@ intervals-publish's terms keep their meaning):
 
 #### Acceptance Criteria
 1. When `fitdocs publish --yes` sends a post to a relay-routed instance, the fitdocs CLI shall first gather the page's known activities: the activity of the page's recorded link on this instance, then the activity the instance's pull record names for the page's base file or, only when the base file names none, for the page's other files, each identifier in the direct route's identifier form, without repeats.
-2. If the pull record names more than one activity in the tier it takes, the fitdocs CLI shall make no request and return the ambiguous code.
+2. If the pull record names more than one activity in the tier it takes and the page has no recorded link on this instance, the fitdocs CLI shall make no request and return the ambiguous code; where the page has a recorded link, the fitdocs CLI shall send the publish request with that link's activity as the only known activity, asking the relay to try the known activities only, so that the order is the direct route's.
 3. If no activity is known and the page records neither its distance nor its elapsed time, the fitdocs CLI shall make no request and return the activity-facts-missing code.
 4. If the post's title or description exceeds the documented length, the fitdocs CLI shall make no request and return the rejected code.
 5. The fitdocs CLI shall send the relay one publish request carrying only the publication id, the activity's sport, its start time with offset, its elapsed time and distance (each absent value sent as absent, never as zero), the post's title and description, and the known activities in their order, and no activity file.
-6. When the relay answers that no activity matches, the fitdocs CLI shall: where the instance's pull record exists but could not be read, return the local-record-unreadable code whatever the upload setting and send nothing more; otherwise, where uploads are disabled, return the not-found code; where the page's base file is absent from the archive, unreadable, or does not hash to the digest it is archived under, return the activity-file-missing code; where it exceeds the documented size, return the rejected code without sending it; and otherwise send the relay one upload request carrying the same fields, without the known activities, and the file.
+6. When the relay answers that no activity matches, the fitdocs CLI shall: where the request asked for the known activities only, return the ambiguous code and send nothing more; where the instance's pull record exists but could not be read, return the local-record-unreadable code whatever the upload setting and send nothing more; otherwise, where uploads are disabled, return the not-found code; where the page's base file is absent from the archive, unreadable, or does not hash to the digest it is archived under, return the activity-file-missing code; where it exceeds the documented size, return the rejected code without sending it; and otherwise send the relay one upload request carrying the same fields, without the known activities, and the file.
 7. The fitdocs CLI shall send an upload request only after a definite not-found outcome for the same page in the same run, never after a malformed, failed or missing answer.
 8. Every request the fitdocs CLI sends to a relay for a relay-routed instance shall be attempted exactly once, whatever the answer.
 9. The fitdocs CLI shall turn each relay answer into exactly one code a target may return, by the documented table every relay-routed target uses, accepting a publish outcome only when it is a member of publish-core's vocabulary and of the outcomes that route may answer, and treating a posted or uploaded outcome that does not carry an intervals.icu activity identifier in the documented form as a malformed answer.
@@ -226,7 +226,8 @@ intervals-publish's terms keep their meaning):
 7. When no known activity accepts the update and no listed activity is the page's activity, the relay server shall answer the not-found outcome on a publish request and change nothing.
 8. If the listing's answer is not in intervals.icu's documented form, the relay server shall answer the unavailable outcome.
 9. The relay server shall keep no record that maps a page, a publication or a known activity to an intervals.icu activity.
-10. If a publish request names more than two known activities, names one twice, or names one outside the documented identifier form, the relay server shall refuse it as malformed and make no intervals.icu call.
+10. If a publish request names more than two known activities, names one twice, names one outside the documented identifier form, or asks for the known activities only while naming none, the relay server shall refuse it as malformed and make no intervals.icu call.
+11. Where a publish request asks for its known activities only, the relay server shall update them as criterion 1 states and, when none accepts the update, shall answer the not-found outcome without checking the facts and without listing.
 
 ### Requirement 8: Writing the Post on intervals.icu Through the Relay
 **Objective:** As an athlete, I want the relay to set only my activity's name and description, and to create an activity only once when none exists, so that a publish through the relay never duplicates or damages my intervals.icu history.
@@ -252,6 +253,7 @@ intervals-publish's terms keep their meaning):
 4. The relay server shall answer a publish or upload request from a principal with no usable intervals.icu connection with the not-connected outcome.
 5. Every result the direct route's tests pin shall be unchanged once those rules come from the shared module.
 6. Where the two routes differ in how many times a transport repeats a request before the answer reaches the table, the documentation shall say so, and the code each final answer gives shall still be the same.
+7. An automated test shall run one shared table of resolution states (the recorded link, the pull record, the facts, the upload setting, the file, and intervals.icu's answers) through the direct route and, on the fitdocs side and the relay side each against the same table, through the relay route, and shall show that every state gives the same code on both routes.
 
 ### Requirement 10: The intervals.icu Call Budget
 **Objective:** As the operator of a relay whose one intervals.icu application serves every connected athlete, I want the relay to count its own intervals.icu calls against the application's and each athlete's limits and stop before intervals.icu does, so that one athlete's run cannot exhaust the limit for everyone.
@@ -302,7 +304,7 @@ intervals-publish's terms keep their meaning):
 
 #### Acceptance Criteria
 1. A relay offering both targets shall use one connect-session mechanism, one set of encryption keys, one re-encryption command and one privacy-policy address for both, and its privacy policy shall describe each configured target.
-2. Every Strava behaviour strava-publish specifies shall be unchanged, and every Strava test shall keep its assertions, changing only the modules it imports, the target it names where a shared operation now takes one, and, on the privacy policy page, the grouping of the Strava sections under Strava's name.
+2. Every Strava behaviour strava-publish specifies shall be unchanged, and every Strava test shall keep every expected value it asserts; a moved test may change only its imports, its setup and the construction of the objects it tests, the target argument a shared operation now takes, the shape of the conditional-requirement field in the deploy contract's pin, the place of moved documentation headings, and, on the privacy policy page, the grouping of the Strava sections under Strava's name.
 3. The fitdocs CLI's browser-consent connect and disconnect shall name the service of the instance they act on in every line that names a service.
 4. Neither the relay package nor fitdocs shall hold a second copy of the connect-session, token-custody, page, policy or relay-answer mapping machinery for the intervals.icu target.
 

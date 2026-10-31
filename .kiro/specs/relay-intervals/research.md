@@ -218,6 +218,16 @@ Each is behind one function and its tests.
 - **Rationale**: the same order and the same codes as the direct route;
   an unreadable pull record still bars the upload (R11) because fitdocs
   never sends the upload request then.
+- **Parity repair (Step 3.5 review, controller ruling)**: the direct route
+  updates the recorded link's activity before it reads the pull record, so
+  a page with a recorded link and an ambiguous pull record is `posted` when
+  the link's activity takes the update. The first draft answered
+  `ambiguous` locally before any request. Now fitdocs sends the link alone
+  with `known_only: true`; the relay updates only the known activities and
+  answers `not_found` without a facts check or a listing when none takes
+  it; fitdocs maps that `not_found` to `ambiguous`. A shared case file
+  (`relay/contract/intervals-cases.json`) that both suites run pins equal
+  codes on both routes for every resolution state.
 - **Trade-offs**: at most two identifiers in a request; the relay keeps no
   record of them.
 
@@ -274,9 +284,11 @@ Each is behind one function and its tests.
   intervals module importing from `strava/` would make one target depend
   on another.
 - **Trade-offs**: a refactor of landed Strava code inside this spec; every
-  Strava test keeps its assertions and changes only imports, the target
-  argument the shared operations now take, and the privacy page's
-  grouping.
+  Strava test keeps every expected value, and may change only its imports,
+  its setup and object construction, the target argument the shared
+  operations now take, the `required_with` shape, the place of moved doc
+  headings, and the privacy page's grouping (Req 14.2, widened after the
+  Step 3.5 review).
 
 ### Decision: `required_with` becomes a tuple
 - **Selected Approach**: `EnvVar.required_with: tuple[str, ...] = ()`,
@@ -335,8 +347,10 @@ Each is behind one function and its tests.
 ### Decision: the approval gate
 - **Selected Approach**: requirements 16.1, a design section, the
   "Implementation gate" record below, and the first task, which checks that
-  record and stops with BLOCKED when it shows neither an approval nor a
-  written decision to proceed.
+  record and, when it shows neither an approval nor a written decision to
+  proceed, stops the whole run for a human (`STOP_FOR_HUMAN` in kiro-impl's
+  terms, not a skippable BLOCKED); the first task of every later group
+  depends on it, and no task is dispatched while it is unchecked.
 
 ## Synthesis
 - **Generalization**: the relay's connect machinery becomes a
