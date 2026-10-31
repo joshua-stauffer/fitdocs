@@ -63,6 +63,23 @@ inside a vendor platform.
    - **What load gains.** Resting and max HR are derived automatically into
      the benchmark timeline. A hand-recorded value stays in force until
      newer evidence disagrees with it, and any takeover is announced.
+8. **Publishing posts** *(planned: Phase 14 of the roadmap, discovery
+   2026-10-31)*.
+   - **What gets posted.** A workout's title and description go to the
+     platforms where the athlete's training is seen: intervals.icu and
+     Strava first.
+   - **Where the text comes from.** By default it is composed from a
+     per-target template, with values filled in from the page. An
+     athlete-owned `post` region on the page overrides it. Numbers always
+     come from the page's own computed values.
+   - **When it posts.** A page posts only once it has opted in.
+     `fitdocs publish` is a dry run unless told `--yes`.
+   - **What comes back.** Every outcome is one of fitdocs's own codes.
+     Nothing a platform's API returns is printed, logged or written. The
+     page links to the posted activity.
+   - **How it reaches the platforms.** intervals.icu is reached directly
+     with the athlete's API key. Strava is reached through a self-hostable
+     relay, run at fitdocs.ai, which holds one Strava application.
 
 ## Target Use Cases
 
@@ -99,8 +116,9 @@ inside a vendor platform.
   inbox (`connectors`, `intervals-connector`). A second file of an activity
   already held enriches its document instead of duplicating it
   (`activity-identity`, `channel-merge`, `running-dynamics`).)* Still
-  deferred: pushing to platforms (Strava posts, intervals.icu uploads and
-  planned workouts), pulling thresholds or plans, and device sync.
+  deferred: pushing planned workouts, pulling thresholds or plans, and
+  device sync. *(Pushing posts was deferred here too until 2026-10-31.
+  Phase 14 plans it: capability 8 above.)*
   *(Pulling wellness was deferred here too until 2026-10-12. Phase 12
   lifted it: `wellness-pull` drives the reserved `pull-wellness`
   capability.)*

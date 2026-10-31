@@ -55,8 +55,9 @@ third delivers the differentiating feature (training load).
   aggregation views *(lifted in Phase 6, 2026-09-09 — `load-history` owns the
   longitudinal page)*; automated `.fit`
   acquisition *(lifted in Phase 8, 2026-09-23 — `connectors` and
-  `intervals-connector` pull into the inbox; pushing to platforms stays
-  out)*; non-`.fit` formats
+  `intervals-connector` pull into the inbox; pushing to platforms stayed
+  out until Phase 14, 2026-10-31, which plans posts to intervals.icu and
+  Strava)*; non-`.fit` formats
   (GPX/TCX — measured on real HealthFit exports 2026-07-16: GPX sidecars
   are the FIT track re-encoded, mm-level deltas only, so ingesting them
   gains nothing); web UI; cycling and weight-training load methodologies
@@ -1539,7 +1540,8 @@ Rejected:
   - the packaged skill's routine learning the pull.
 - **Out**:
   - any push: Strava posts, intervals.icu uploads or descriptions, planned
-    workouts;
+    workouts *(posts, descriptions and uploads promoted 2026-10-31 to
+    Phase 14; planned workouts stay out)*;
   - pulling thresholds, wellness, workout libraries or plans (wellness
     promoted 2026-10-12 to Phase 12's `wellness-pull`);
   - a direct Garmin Connect connector, and a Garmin export-zip importer;
@@ -1747,8 +1749,10 @@ credential store are designed for them now and built later.
 - **intervals.icu, the rest of the connector.** Auth is a personal API key
   (HTTP Basic, athlete `0`); OAuth would need an approved app. The
   capabilities:
-  - push an activity with post text;
-  - update the name and description of an activity already there;
+  - push an activity with post text *(promoted 2026-10-31 to Phase 14's
+    `intervals-publish`)*;
+  - update the name and description of an activity already there
+    *(promoted 2026-10-31 to Phase 14's `intervals-publish`)*;
   - push planned workouts, including future ones, from the `training-blocks`
     plan source. Upsert by `external_id` works only for OAuth apps; an
     API-key client upserts on `uid` or keeps the event id in the ledger;
@@ -1761,7 +1765,9 @@ credential store are designed for them now and built later.
   - pull wellness and fitness series. *(Wellness promoted 2026-10-12 to
     Phase 12's `wellness-pull`; intervals.icu's computed fitness series
     stay out, because fitdocs computes its own.)*
-- **Strava, push only.**
+- **Strava, push only.** *(Promoted 2026-10-31 to Phase 14's
+  `strava-publish`. Auth changed there: one relay-held app, with per-athlete
+  OAuth, instead of each athlete's own app.)*
   - Auth: OAuth2 with the athlete's own registered app. A Strava
     subscription is required to register one since 2026-06-01. The access
     token lasts 6 h, and the refresh token rotates and must be saved
@@ -1775,7 +1781,9 @@ credential store are designed for them now and built later.
     never rendered, and kept no longer than the terms allow.
 - **Post text.** One templating seam shared by Strava and intervals.icu,
   rendering from a workout page's frontmatter and regions. A skill can have
-  the curating LLM write it instead.
+  the curating LLM write it instead. *(Promoted 2026-10-31 to Phase 14's
+  `publish-core`: per-target templates plus an athlete-owned `post` region,
+  with placeholders filled from the page's own values.)*
 - **A direct Garmin Connect connector, and a Garmin export-zip importer,**
   for athletes without intervals.icu. The importer is the no-login fallback
   (the maintainer's 2026-09-12 backfill route).
@@ -3553,3 +3561,325 @@ script-free) still holds.
 
   It carries the route-maps and workout-docs amendments, and the
   wiki-contract one if it is needed. Dependencies: none
+
+### Phase 14 — publishing posts (discovery 2026-10-31)
+
+**Goal**: publish each workout's post (a title, custom text and its
+metrics) straight from the wiki to intervals.icu and Strava, with no
+retyping, and link the workout page to the posted activity.
+
+The maintainer set the rule this phase is built around (2026-10-31):
+- fitdocs intermediates every exchange with a platform;
+- it returns nothing from a platform's API;
+- it exposes its own publishing interface, with its own success and failure
+  codes, and translates each platform's API into them.
+
+Strava publishing goes through a passthrough relay at fitdocs.ai. Athletes
+register an email from their fitdocs, verify it by email, and receive a
+relay token that authenticates them to the relay's publish API.
+
+The research and viability findings, with their sources, are in the five
+briefs: Strava's terms and API in `.kiro/specs/strava-publish/brief.md`,
+the hosting and email facts in `.kiro/specs/relay-accounts/brief.md`.
+
+**Approach decision — a target-neutral publish core in fitdocs, two
+platform targets, and a self-hostable relay for the one platform that
+needs a held application.**
+
+- **publish-core** owns:
+  - composition: per-target templates, with an athlete-owned `post` region
+    as the override, and placeholders filled from the page's own values;
+  - the per-page opt-in and the dry-run default;
+  - a closed, append-only outcome vocabulary;
+  - the publish ledger;
+  - the page's links block;
+  - `fitdocs publish`, whose targets can be discovered from the CLI.
+- **intervals.icu** is reached directly with the athlete's personal API key,
+  extending the existing connector. This is the default.
+- **Strava** is reached through the relay.
+  - The relay holds one Strava application. Each athlete connects to it by
+    OAuth.
+  - It finds the athlete's activity by start time on every publish, and
+    sets its name and description. It uploads the `.fit` only when no
+    activity exists and uploads are enabled.
+  - It answers fitdocs only with outcome codes.
+- **The relay** lives in this repository as its own deployable package,
+  never in the `fitdocs` wheel. It is a Python ASGI app with PostgreSQL in
+  a container on a DigitalOcean droplet: the data on a block-storage volume,
+  and WAL-G archiving continuously to Spaces in another region. Email goes
+  through a provider's HTTPS API, Resend by default.
+- **An optional relay route to intervals.icu** comes last. It is gated on
+  intervals.icu approving an OAuth app.
+
+Rejected:
+
+- *Each athlete registers their own Strava app* (Phase 8's plan). Since
+  2026-06-01 every registration needs a paid Strava subscription, and the
+  client secret cannot ship in an open-source CLI. A self-hoster still does
+  this, for their own relay.
+- *Gate the Strava work on a written answer from Strava* (offered at
+  discovery). The maintainer chose to build now (below).
+- *DuckDB on Spaces as the relay's store.* A remote DuckDB file opens
+  read-only. DuckLake still needs a catalog database. And an analytics
+  engine is a poor fit for small concurrent token rotations.
+- *SQLite with Litestream* and *managed Postgres*. Both were offered; the
+  maintainer chose a Postgres container on DigitalOcean.
+- *SMTP.* DigitalOcean blocks ports 25, 465 and 587 on droplets. An HTTPS
+  API with a send-only, domain-scoped key is safer, and costs the same at
+  this volume (the free tiers cover it).
+- *Cloudflare Workers + D1* and *AWS serverless* for the relay. Both are
+  harder to self-host, and neither shares the fitdocs vocabulary in Python.
+- *Writing the Strava activity URL into the page.* An activity id is Strava
+  Data (AGR §2.3), cached 7 days at most (POL §6.2), and it would break the
+  maintainer's rule. The page carries a relay redirect link instead.
+
+#### Decisions taken at discovery (2026-10-31)
+
+- **Path E: five new specs, with existing-spec updates carried out inside
+  them** (maintainer, 2026-10-31). The shape is
+  (`publish-core` ∥ `relay-accounts`) → (`intervals-publish` ∥
+  `strava-publish`) → `relay-intervals`.
+- **Build the Strava path now** (maintainer).
+  - Strava's API Agreement and Policy took effect 2026-06-01. Their AI
+    clause (POL §5.3, with "AI Application" undefined) and their
+    intermediary clause (§5.16) are broad.
+  - The maintainer accepted the residual terms risk of building now rather
+    than first asking Strava for written guidance.
+  - The application runs in Single Player Mode, which its owner can raise
+    to 10 athletes. Beyond that is Strava's discretionary review, a
+    maintainer action outside these specs.
+- **The relay lives in this repository and is self-hostable** (maintainer).
+  It is a separate deployable, and `fitdocs.toml` points a relay instance
+  at a URL that defaults to `https://api.fitdocs.ai`.
+- **The relay stack is a Python ASGI app with a PostgreSQL container on
+  DigitalOcean** (maintainer). Durability is a hard requirement ("I don't
+  want to lose user data"), which brings in the volume, WAL archiving to
+  Spaces in another region, and a rehearsed restore.
+- **Email goes through an HTTPS API, not SMTP** (maintainer, after
+  viability). A local relay skips email: it prints the confirmation link,
+  and refuses to do so unless bound to loopback.
+- **Registration is device-style.** The CLI shows a short code. The emailed
+  link opens a page that shows the same code, and a Confirm POST verifies.
+  The waiting CLI receives the token over its private polling secret. This
+  answers the "someone else registered my email" risk and link-scanner
+  prefetch.
+- **intervals.icu has both routes, direct by default** (maintainer). Direct
+  uses the personal key and the existing connector. The relay route is
+  `relay-intervals`.
+- **Post text** (maintainer):
+  - a page-region override with placeholders;
+  - templatable: when the page does not override, a preconfigured per-target
+    template, with values interpolated from the page, is posted.
+- **Posting needs both a page opt-in and `--yes`** (maintainer). Without
+  `--yes`, `fitdocs publish` is a dry run. A published page posts again only
+  as an update, when its composed text changed.
+- **Links** (maintainer):
+  - a page posted to intervals.icu links directly to the activity;
+  - a page posted to Strava carries "View on Strava", pointing at the relay
+    (`/go/<publication id>`). The relay resolves the activity at click time,
+    so the page and fitdocs never hold a Strava identifier.
+- **Spec wording and the agent skill** (maintainer):
+  - fitdocs is a CLI and contains no agent. The Strava component is
+    specified as CLI behaviour.
+  - The packaged agent skill says that fitdocs can publish to several
+    configured backends. It names none of them; the CLI's target listing
+    makes them discoverable.
+
+#### Scope
+
+- **In**:
+  - `fitdocs publish`:
+    - composition, opt-in, dry run;
+    - the closed outcome vocabulary;
+    - the publish ledger and the links block;
+    - target discovery;
+  - the intervals.icu direct target;
+  - the relay:
+    - accounts, email verification, relay tokens, account deletion;
+    - storage, backups, deployment;
+    - the Strava connect flow, publish endpoint, redirect endpoint and
+      revocation handling;
+  - the optional relay route to intervals.icu;
+  - the steering, distribution, connectors, wiki-contract, workout-docs and
+    docs-site amendments those specs carry.
+- **Out**:
+  - reading anything from Strava for display, storage, the index or a page;
+  - planned workouts, photos and media, deleting posts;
+  - fields beyond name and description;
+  - a publish-target plugin kind;
+  - paid plans or charging for any Strava functionality (POL §5.8);
+  - a social layer;
+  - running several relay instances against one database;
+  - a daemon or scheduler.
+
+#### Constraints
+
+- **Nothing a platform's API returns is printed, logged or written by
+  fitdocs.**
+  - Every outcome is a fitdocs code, with fitdocs-written text.
+  - The only exceptions are the links: intervals.icu's direct activity link,
+    and Strava's relay redirect link.
+  - For Strava, nothing crosses the relay boundary at all.
+- **Strava retention.**
+  - The relay stores no Strava Data beyond a ≤7-day cache, and keeps no
+    persistent page-to-activity map.
+  - It deletes an athlete's tokens at once on revocation, and their data
+    within 30 days (POL §7.4), driven by the deauthorization webhook and
+    `/oauth/revoke`.
+- **Identity never guesses** (Phase 8). Remote matching reuses
+  activity-identity's strict rule. It is one-to-one, and ambiguity is
+  reported as a code.
+- **Irreversible writes.** A non-idempotent upload is attempted once.
+  `HttpClient`'s DATA-mode POST retry (`connectors/http.py:297-317`) must
+  not apply to it.
+- **No LLM in the numeric path.** Placeholders are filled by fitdocs from
+  the page's own values. An absent value is never rendered as `0`.
+- **The network.** Only `fitdocs connect`, the relay token commands and
+  `fitdocs publish --yes` make requests, and they go through
+  `connectors/http.py`. Every other command stays as offline as it is
+  today. `tech.md`'s "Network and Credentials" and its "No server" line are
+  amended inside the specs.
+- **Secrets.**
+  - On the fitdocs side, relay and intervals.icu tokens go in the existing
+    credential store.
+  - The relay stores only token hashes and encrypted Strava tokens.
+  - Provider keys and the encryption key come only from the deploy
+    environment.
+- **Relay operations.**
+  - One instance at a time.
+  - Only 80/443 and a restricted SSH are open, behind a DigitalOcean Cloud
+    Firewall. 5432 is never published, because Docker bypasses `ufw`.
+  - The `api` record is DNS-only, with TLS on the droplet.
+- **Strava wording and obligations.**
+  - "Connect with Strava" and "View on Strava", and "Compatible with
+    Strava" in docs.
+  - No announcement referencing Strava without written consent (POL §4.6).
+  - A privacy policy, consent text, a support contact, and a 24-hour breach
+    runbook.
+  - A self-hosted relay needs its own Strava application and subscription.
+- **Shared vocabulary.** The relay and fitdocs share the outcome
+  vocabulary, and the relay must not import the whole `fitdocs` package
+  (duckdb, Pillow, the FIT SDK). The design picks between a dependency-free
+  shared module and a pinned copy with a cross-check test.
+
+#### Boundary Strategy
+
+- **Why this split**:
+  - The fitdocs side (publish-core, intervals-publish) and the relay side
+    (relay-accounts, strava-publish) change for different reasons: page
+    contract against hosted-service operations.
+  - They meet at two narrow seams: the outcome vocabulary and the relay's
+    HTTP envelope.
+  - publish-core and relay-accounts have no dependency on each other beyond
+    the vocabulary, so they run in parallel.
+  - Each target is its own spec, so a platform's terms or API change stays
+    inside one spec.
+- **Shared seams to watch**:
+  - the outcome vocabulary, which is owned by publish-core and used by every
+    target and the relay;
+  - the relay envelope and auth, owned by relay-accounts and consumed by
+    `strava-publish` and `relay-intervals`;
+  - the publish request: the match keys, the post, and the base `.fit`
+    reference;
+  - the `pair_evidence` rule, reused remotely through a shared module or a
+    pinned copy;
+  - the connectors auth styles: relay registration, and `OAUTH_BROWSER`
+    driven for Strava;
+  - `CONTRACT_VERSION`, taken at main + 1 by each lander that changes the
+    page contract (publish-core first).
+
+#### Existing Spec Updates
+
+All of these are carried out inside the new specs, as in Phases 10–13.
+Amendment numbers are the next free number at landing.
+
+- [ ] connectors — the publish operation protocols driving
+  `RESOLVE_REMOTE_ACTIVITY` / `ANNOTATE_REMOTE_ACTIVITY` / `PUSH_ACTIVITY`;
+  PUT and a single-attempt write path in `http.py`; the relay auth style;
+  `OAUTH_BROWSER` driven; the network statements. Carried by publish-core,
+  intervals-publish, relay-accounts and strava-publish.
+- [ ] intervals-connector — the update, upload and resolve endpoints and the
+  status-to-code mapping. Carried by intervals-publish.
+- [ ] wiki-contract — the `post` region, the opt-in mechanism, the links
+  block, and the publish ledger's location. Carried by publish-core.
+- [ ] workout-docs — rendering the `post` placeholder and the links block.
+  Carried by publish-core.
+- [ ] distribution — the wheel and sdist exclude `relay/`, enforced by the
+  release gate. Carried by relay-accounts.
+- [ ] docs-site — the publishing page, the relay self-hosting guide, and the
+  privacy policy (with Strava sections). Carried by publish-core,
+  relay-accounts and strava-publish.
+- [ ] steering — `tech.md` ("No server" and "Network and Credentials") and
+  `structure.md` (`relay/`). Carried by relay-accounts.
+
+#### Direct Implementation Candidates
+
+- [x] `product.md`: capability 8 (publishing posts, planned) added, and post
+  pushing lifted from the "Still deferred" acquisition line, in this
+  discovery change.
+- [ ] Maintainer prerequisites. These are not code, and each is needed
+  before the spec that uses it can be checked live:
+  - a Strava API application, which needs a Strava subscription, with the
+    callback domain `api.fitdocs.ai` (strava-publish);
+  - DigitalOcean: a droplet, a block-storage volume, a Spaces bucket in
+    another region, and a Cloud Firewall (relay-accounts);
+  - a Resend account with a send-only key scoped to the sending domain,
+    plus SPF/DKIM/DMARC and the `api` A record in the Cloudflare zone
+    (relay-accounts);
+  - an intervals.icu OAuth app request at <https://intervals.icu/oauth/apply>
+    (relay-intervals).
+
+#### Follow-on candidates (not scheduled)
+
+- Strava's athlete-capacity review, beyond 10 athletes.
+- More email adapters (Postmark, Mailgun, SMTP on a configurable port) for
+  self-hosters.
+- A publish-target plugin kind, parameterized in `plugins.py` like the
+  connector kind.
+- Planned-workout push to intervals.icu (Phase 8's candidate, still open).
+- Opt-in rules in configuration, such as every new run of a sport, as an
+  alternative to per-page opt-in.
+
+#### Specs (dependency order)
+
+- [ ] publish-core — composition (templates plus the `post` region), opt-in,
+  dry-run-default `fitdocs publish`, the closed outcome vocabulary, the
+  publish ledger, the links block and target discovery. Carries the
+  wiki-contract, workout-docs and docs-site amendments and the agent skill's
+  publishing section, which names no backend. **Brief written 2026-10-31.**
+  Dependencies: none
+- [ ] relay-accounts — the self-hostable relay's foundation in `relay/`:
+  - the ASGI app, PostgreSQL, migrations;
+  - device-style email registration through an HTTPS email API (with a
+    console sender for local mode), relay tokens, account deletion;
+  - the envelope;
+  - the Compose deploy on DigitalOcean, with WAL-G to Spaces and a
+    rehearsed restore;
+  - the fitdocs relay connector and its `connect` flow.
+
+  Carries the steering, distribution, connectors and docs-site amendments.
+  **Brief written 2026-10-31.** Dependencies: none
+- [ ] intervals-publish — the direct intervals.icu target:
+  - resolution through the pull ledger, then a listing window with
+    `pair_evidence`;
+  - name and description through PUT;
+  - a single-attempt upload when the activity is absent and uploads are
+    enabled;
+  - the direct link.
+
+  Carries the connectors and intervals-connector amendments. **Brief written
+  2026-10-31.** Dependencies: publish-core
+- [ ] strava-publish — Strava through the relay:
+  - the OAuth connect flow, with encrypted rotating tokens;
+  - resolve-by-start-time on every publish, then PUT or a single upload;
+  - the `/go/` redirect link;
+  - the deauthorization webhook and revoke;
+  - the rate-limit budget, and nothing from Strava crossing the relay;
+  - the fitdocs relay target, with `OAUTH_BROWSER` driven.
+
+  **Brief written 2026-10-31.** Dependencies: publish-core, relay-accounts
+- [ ] relay-intervals — the optional relay route to intervals.icu. It
+  reuses strava-publish's OAuth machinery and intervals-publish's semantics,
+  and adds a per-instance route setting, direct by default. Implementation
+  is gated on intervals.icu approving the OAuth app. **Brief written
+  2026-10-31.** Dependencies: strava-publish, intervals-publish
