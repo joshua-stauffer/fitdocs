@@ -1121,34 +1121,36 @@ class DuplicateIdentifier(StorageError): ...
 class UnknownPrincipal(StorageError): ...
 class SchemaAhead(StorageError): ...
 
-class PrincipalStore(Protocol):
+class StorageBase(Protocol):                                           # every area protocol's base
+    @property
+    def backend(self) -> Literal["sqlite", "postgres"]: ...
+    def ping(self) -> None: ...                                         # raises StorageUnreachable
+    def close(self) -> None: ...
+class PrincipalStore(StorageBase, Protocol):
     def create_principal(self, principal: NewPrincipal, *, now: int) -> Principal: ...
     def get_principal(self, principal_id: str) -> Principal | None: ...
     def list_principals(self) -> tuple[Principal, ...]: ...             # by created_at, then id
     def delete_principal(self, principal_id: str) -> bool: ...          # cascades owned rows
-class TokenStore(Protocol):
+class TokenStore(StorageBase, Protocol):
     def mint_token(self, token: NewToken, *, principal_id: str | None,
                    new_principal: NewPrincipal | None, now: int) -> TokenRecord: ...   # exactly one of the two
     def find_token(self, token_id: str) -> TokenRecord | None: ...
     def list_tokens(self, principal_id: str | None) -> tuple[TokenSummary, ...]: ...
     def revoke_token(self, token_id: str, *, now: int) -> RevokeResult: ...
-class RateLimitStore(Protocol):
+class RateLimitStore(StorageBase, Protocol):
     def count_request(self, *, key: str, window_s: int, limit: int, now: int) -> RateDecision: ...
-class RecordStore(Protocol):
+class RecordStore(StorageBase, Protocol):
     def put_record(self, *, namespace: str, key: str, value: bytes, expires_at: int, now: int) -> None: ...
     def get_record(self, *, namespace: str, key: str, now: int) -> bytes | None: ...
     def take_record(self, *, namespace: str, key: str, now: int) -> bytes | None: ...
     def delete_record(self, *, namespace: str, key: str) -> bool: ...
-class SchemaStore(Protocol):
+class SchemaStore(StorageBase, Protocol):
     def schema_state(self) -> SchemaState: ...                          # raises StorageUnreachable
     def apply_schema_change(self, change: SchemaChange, *, now: int) -> bool: ...   # False if already applied
-class ServingStore(Protocol):
+class ServingStore(StorageBase, Protocol):
     def claim_serving(self) -> ServingClaim | None: ...                 # None: another instance holds it
 class Storage(PrincipalStore, TokenStore, RateLimitStore, RecordStore, SchemaStore, ServingStore, Protocol):
-    @property
-    def backend(self) -> Literal["sqlite", "postgres"]: ...
-    def ping(self) -> None: ...                                         # raises StorageUnreachable
-    def close(self) -> None: ...
+    ...                                                                 # backend, ping, close come from StorageBase
 ```
 - **Invariants**:
   - Every operation is one transaction, and storage never reads a clock
@@ -1168,10 +1170,22 @@ class Storage(PrincipalStore, TokenStore, RateLimitStore, RecordStore, SchemaSto
       `<database>.serve-lock`;
     - PostgreSQL takes `pg_try_advisory_lock(hashtext('fitdocs-relay:' ||
       current_schema()))` on a dedicated connection held until `release()`.
-- **Extension rule (7.7)**: a later spec adds a `Protocol` area (for
-  example `StravaCustodyStore`), adds it to `Storage`'s bases, implements
-  it in both backends, adds a schema change pair, and adds conformance
-  tests marked with the operations they cover.
+- **`StorageBase`** (`backend`, `ping`, `close`) underlies every area
+  protocol. Both backends implement it first (task 2.3), with coverage
+  markers, so fixture teardown, readiness (`ping`) and the completeness
+  check all have it from the first slice on.
+- **Extension rule (7.7)**: a later spec adds an operation like this:
+  1. It declares an area protocol based on `StorageBase` (for example
+     `class StravaCustodyStore(StorageBase, Protocol)`) and adds it to
+     `Storage`'s bases.
+  2. It implements the area in both `SqliteStorage` and `PostgresStorage`.
+  3. It adds a schema change pair (the next free `NNNN`, identical names in
+     both directories).
+  4. It adds conformance tests under `relay/tests/conformance/`, each
+     carrying the coverage marker for the operations it covers.
+
+  The completeness check fails if any new member has no covering test, and
+  CI runs every test on both backends.
 
 #### SqliteBackend, PostgresBackend, StorageFactory — `storage/sqlite.py`, `storage/postgres.py`, `storage/__init__.py`
 
@@ -1209,14 +1223,19 @@ class Storage(PrincipalStore, TokenStore, RateLimitStore, RecordStore, SchemaSto
 @dataclass(frozen=True)
 class MigrationReport: found: int; left: int; applied: tuple[int, ...]
 def schema_changes(backend: Literal["sqlite", "postgres"]) -> tuple[SchemaChange, ...]   # NNNN_slug.sql, contiguous from 1
-def migrate(storage: Storage, *, now: int) -> MigrationReport      # raises SchemaAhead, StorageError
-def pending(storage: Storage) -> tuple[SchemaChange, ...]
+def migrate(storage: SchemaStore, *, now: int) -> MigrationReport  # raises SchemaAhead, StorageError
+def pending(storage: SchemaStore) -> tuple[SchemaChange, ...]
 ```
 - Each backend's `apply_schema_change` takes its writer lock, re-reads the
   current version, skips the change if it is already applied, and runs the
   change's SQL plus `INSERT INTO relay_schema` in one transaction. A
   failure rolls back to the last applied version.
-- `schema_state().expected` is `len(schema_changes(backend))`.
+- `schema_state().expected` is `len(schema_changes(storage.backend))`.
+- `migrate` and `pending` take the narrow `SchemaStore`, which carries
+  `backend` through `StorageBase`. They can therefore run against a backend
+  that implements only the schema area, and never need stub methods. A
+  backend never satisfies a protocol with methods that raise
+  `NotImplementedError`.
 - `fitdocs-relay migrate --check` exits 3 when changes are pending.
 - Parity: `{f.name for f in sqlite dir} == {f.name for f in postgres dir}`.
 
@@ -1541,6 +1560,14 @@ def create_app(config: RelayConfig, *, extensions: Sequence[RelayExtension] = ()
   `api.fitdocs.ai`, in the intervals entry's form, gains this section's key
   when the section lands. An entry is exercised when at least one of its
   listed paths names the host.
+  - The page preamble (`docs/connectors.md:12-16`) names two shipped
+    connectors, and says the framework sections outside the intervals
+    section describe no online service. It is rewritten to name the three
+    built-in connectors (`folder`, `intervals`, `relay`) and to treat the
+    relay section exactly like the intervals section.
+  - A new pin in `tests/connectors/test_docs.py` binds the preamble's
+    connector list to the built-in connector ids in the registry. Named
+    mutation: deleting `relay` from the preamble reds it.
 - **RelayDocsPage** (2.8, 16.4): `docs/relay.md`, which says it is not
   governed by fitdocs's compatibility policy. It holds:
   - the deploy contract v1 (image, the environment table above, URLs,
