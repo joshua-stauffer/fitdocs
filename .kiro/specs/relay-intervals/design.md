@@ -1406,7 +1406,9 @@ class IntervalsPublisher:
   `NOT_FOUND` → `NOT_FOUND`, else its code); `None` → `NOT_FOUND` (7.7).
 - **Upload**: `custody.access`; both facts absent →
   `ACTIVITY_FACTS_MISSING`; list and match as above with an empty `absent`
-  (8.3): `Matched` → update (`SUCCESS` → posted; `NOT_FOUND` → go on to the
+  (8.3; the upload request carries no absent set, so an activity the
+  publish request found absent but the listing still shows is matched
+  again, a state outside the parity table, see ParityCases): `Matched` → update (`SUCCESS` → posted; `NOT_FOUND` → go on to the
   upload); `MatchRefusal` → its code; then `reserve_upload` (refused →
   `RATE_LIMITED`); `upload` once, never repeated (8.4): an `AnswerClass`
   maps through the `CREATE` column; an `UploadAnswer` without an id, or with
@@ -1494,8 +1496,21 @@ class IntervalsPublisher:
   (recorded link, pull record tiers or unreadable, facts, upload setting,
   file state, intervals.icu's answer per call) with: the expected code; the
   publish request the relay-routed connector sends (`known_activities`,
-  `known_only`) and whether it sends an upload request; and the relay's
-  answer for that request. The fitdocs suite runs every case through the
+  `known_only`), the relay's answer to it, and, when the case sends one, the
+  upload request and the relay's answer to that.
+  - **Scripting rule**: each scripted intervals.icu answer is fixed per call
+    kind and activity (the update of a given id, the listing, the upload)
+    and is returned on every attempt, so the direct route's up to three
+    attempts and the relay's up to two see the same answer. Sequences that
+    change between attempts (503 then 200, 429 then 200) give different
+    codes by design (Req 9.6) and are left to each route's own repeat tests.
+  - **Outside the table**: two known activities that both answer 404 to the
+    update and still appear in the listing and strict-match. The direct
+    route excludes both within its one request and uploads; the relay's
+    upload request carries no absent set, re-lists, and answers
+    `ambiguous`. The state needs intervals.icu to list an activity it has
+    just answered as absent, so it is left outside Req 9.7 and the
+    difference is documented in the connectors docs' relay subsection. The fitdocs suite runs every case through the
   direct connector over a scripted intervals.icu transport and through the
   relay-routed connector over a scripted relay (asserting the request it
   sends and the code it gives for the case's relay answer); the relay suite
@@ -1523,7 +1538,9 @@ class IntervalsPublisher:
   activities and local refusals, the direct link, `local_record_unreadable`,
   switching routes (the publish record is kept; connect again on the new
   route), disconnecting, the mapping (strava-publish's table, by
-  reference), the attempt counts (the direct route's transport makes up to
+  reference), the one resolution state the routes answer differently (an
+  activity intervals.icu answers as absent yet still lists, see
+  ParityCases), the attempt counts (the direct route's transport makes up to
   three attempts and waits and repeats after a 429; the relay repeats a
   listing or an update once after a server or network failure and never
   after a 429; the code for the final answer is the same; the fitdocs docs
