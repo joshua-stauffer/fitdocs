@@ -112,9 +112,11 @@ change: the page contract and layout are publish-core's.
   `single_attempt` semantics (publish-core, R11): the publish operation and
   its tests re-check.
 - A change to `pair_evidence`'s tiers, tolerances or `SessionKey` fields, or
-  an extraction of the rule into a standard-library-only module (possibly by
-  `strava-publish`): the listing match re-checks and imports the extracted
-  leaf.
+  an extraction of the rule into a standard-library-only module
+  (`identity.strict`, by `strava-publish`): the listing match re-checks. This
+  spec keeps importing `identity.matching` in either landing order;
+  switching the intervals connector to `identity.strict` is relay-intervals'
+  amendment (controller ruling R13).
 - A change to `connectors.ledger`'s record shape or `load_ledger`'s
   signature: the pull-record step re-checks.
 - The live check contradicting a TBC-P item: the affected helper, its tests
@@ -825,20 +827,25 @@ def publish(self, session: ConnectorSession, request: PublishRequest) -> Publish
   connectors-page place, added here if relay-server has not yet landed it)
   names `fitdocs publish --yes`; a new predicate
   `_names_publish_command(window)` requires it in every window, with one
-  named mutation per place. The `tech.md` "Network and Credentials" sentence
-  that lists the commands making connector requests names it too (with
-  "one or more update, listing or upload requests per page it posts, for the
-  targets it posts to"), and a separate following sentence states that
-  `fitdocs publish` without `--yes` and `fitdocs publish --targets` make
-  none; the pinned no-request list sentence is not edited (its three pins
+  named mutation per place. `_names_publish_command` is the predicate name
+  shared with `strava-publish` (the same name in both specs), so whichever
+  target lands second finds it and adds nothing. The `tech.md` "Network and
+  Credentials" sentence that lists the commands making connector requests
+  names it too (with "one or more update, listing or upload requests per
+  page it posts, for the targets it posts to"), and a separate following
+  sentence states that "`fitdocs publish` without `--yes` and `fitdocs
+  publish --targets` make none" (skipped when an earlier target recorded
+  it); the pinned no-request list sentence is not edited (its three pins
   stay green).
 - "What leaves your machine" names `fitdocs publish --yes` and says an
   intervals.icu instance's publish requests go to intervals.icu (the bare
   host, linking the section anchor, no URL, so the neutral scan is
   unaffected).
 - Idempotent with `strava-publish`: if a place already names `fitdocs publish
-  --yes`, it is left as it is; the predicate is added once (the second lander
-  finds it and adds nothing); the host line is per target.
+  --yes`, it is left as it is; `_names_publish_command`, the no-request
+  sentence, the connectors Req 14.1 amendment text and the distribution Req
+  10.4 amendment are each added once, skipped when an earlier target
+  recorded them; the host line is per target.
 
 #### Records
 - `CHANGELOG.md` Unreleased (11.4), read through

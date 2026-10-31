@@ -313,15 +313,19 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
     and Credentials"), name `fitdocs publish --yes`, and where a statement
     lists the commands making none, name `fitdocs publish` without `--yes`
     and `fitdocs publish --targets`. In `tech.md`, add them in their own
-    sentences and leave the pinned no-request list sentence unchanged.
+    sentences ("`fitdocs publish` without `--yes` and `fitdocs publish
+    --targets` make none", skipped when an earlier target recorded it) and
+    leave the pinned no-request list sentence unchanged.
   - In "What leaves your machine", say that an intervals.icu instance's
     publish requests go to intervals.icu, by name and section link, with no
     URL.
   - Idempotent: a statement that already names the command (another publish
     target landed first) is left as it is, and the predicate below is added
     only if absent; this task then adds only the intervals.icu host line.
-  - Extend `tests/connectors/test_network_statements.py` with a predicate
-    requiring `fitdocs publish --yes` in every rewritten place's window,
+  - Extend `tests/connectors/test_network_statements.py` with the predicate
+    `_names_publish_command` (the name shared with strava-publish; skipped
+    when an earlier target added it) requiring `fitdocs publish --yes` in
+    every rewritten place's window,
     moving anchors with the text; add the connectors page's "What leaves your
     machine" statement to the rewritten places if relay-server has not
     already added it.

@@ -294,10 +294,11 @@
   loads no identity module; it already loads `contract`, `docmerge`, `model`
   and `yaml` through `folder` and `inbox`, so the claim is about identity
   only. The rule is reused, never restated.
-- **Follow-up**: strava-publish decides, for the relay, whether to extract a
-  standard-library-only core of the rule. If it does, this connector imports
-  that leaf instead (Revalidation Triggers); the cross-spec review
-  reconciles the name.
+- **Follow-up**: strava-publish extracts a standard-library-only core of
+  the rule (`identity.strict`) for the relay. This connector keeps importing
+  `identity.matching` in either landing order; switching it to
+  `identity.strict` is relay-intervals' amendment (controller ruling R13,
+  Revalidation Triggers).
 
 ## Synthesis
 - **Generalization**: the three ways of finding an activity share one
