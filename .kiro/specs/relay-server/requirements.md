@@ -6,9 +6,9 @@ platform whose API needs a registered application. Strava is the case in
 point: an application registration needs a paid Strava subscription since
 2026-06-01, and its client secret cannot ship in an open-source CLI. A relay
 can hold that application and make the platform's calls on the athlete's
-behalf. Two kinds of athlete need one they can reach: one who uses the relay
-the maintainer runs at `https://api.fitdocs.ai`, and one who runs their own
-relay with their own application.
+behalf. Two kinds of athlete need one they can reach: one using the
+maintainer's relay at `https://api.fitdocs.ai`, and one with a self-hosted
+relay holding their own application.
 
 **Current situation.** fitdocs has no server, and no way to authenticate to
 one. The technology steering says "No server, no background jobs." The
@@ -35,7 +35,8 @@ spec ships no publish target: `strava-publish` and `relay-intervals` add them.
 
 Source: `.kiro/specs/relay-server/brief.md`; Phase 14 of
 `.kiro/steering/roadmap.md`. Dependencies: none (wave 1, parallel with
-`publish-core`). Extends `connectors`, `distribution` and the steering. The
+`publish-core`). Extends `connectors`, `distribution`, `wiki-contract` (the
+ownership contract) and the steering. The
 website is not edited by any Phase 14 spec (controller ruling R9, 2026-10-31):
 the site copy this feature needs is recorded as a follow-up for the next
 release.
@@ -89,7 +90,9 @@ Terms used below:
   pasted token or the registration client, `fitdocs disconnect`, and the
   `fitdocs pull` instance selection that keeps relay instances out of a bare
   pull; the rewrite of every repository statement that lists the
-  network-touching commands; the steering, connectors and distribution
+  network-touching commands; the ownership-contract statement for
+  `fitdocs disconnect` and the contract version it advances; the steering,
+  connectors, wiki-contract and distribution
   amendments.
 - **Out of scope**: accounts, sign-up, email, verification pages and every
   other relay-side behaviour of registration (a wrapper's); any publish target
@@ -292,6 +295,8 @@ Terms used below:
 5. Where the instance's connector uses the personal-key or login style, the fitdocs CLI shall remove the instance's credentials file without any request and state that the credential remains valid at the service; where it requires no authentication, the fitdocs CLI shall report that there is nothing to disconnect; where its style is reserved, it shall exit with the configuration-error code naming the style as unsupported by this version.
 6. If NAME is not a configured instance, the fitdocs CLI shall exit with the configuration-error code naming every configured instance.
 7. The fitdocs CLI shall write nothing under the data root during `fitdocs disconnect`, and shall remove nothing but the named instance's credentials file.
+8. The published ownership contract shall state that `fitdocs disconnect` removes the named instance's own credentials file and nothing else (never another instance's file, never anything under the data root), and that `fitdocs connect`, a credential-renewing `fitdocs pull` and `fitdocs disconnect` are the only operations that write to or remove from the credentials store; its overwrite semantics shall gain a `disconnect` entry, and an automated test shall pin both statements.
+9. The ownership contract's version shall advance by one from the value current when this feature lands, with a history entry written with literal version numbers and appended, and the in-tree ownership declarations shall restate the new version.
 
 ### Requirement 15: Network, Secrets and No Relay Text on the fitdocs Side
 **Objective:** As a privacy-conscious fitdocs user, I want the relay reached only by the commands that need it, through the existing transport, with nothing the relay says printed back to me, so that I know exactly when fitdocs talks to a relay and what I see is fitdocs's own words.
@@ -314,6 +319,6 @@ Terms used below:
 4. The repository shall document the relay for operators in one page: the deploy contract (image, variable table, probes, commands, one-replica and state rules) with its version, the envelope and its version, the relay code vocabulary, the operator commands and the seam with its version; automated tests shall bind the page's variable table, code table and version numbers to the code.
 5. The relay's operator page shall include a self-hosting guide covering a local SQLite run, building and running the image from a pinned commit, migrating, minting a token, connecting fitdocs to it, and switching to PostgreSQL; this feature shall edit no website page, and shall record the site copy it makes stale or newly needs (the connecting and self-hosting guides, the CLI reference entries, the privacy-and-network statements) as a follow-up for the next release.
 6. The packaged `fitdocs-workouts` skill shall tell the agent never to run `fitdocs disconnect` itself, beside its existing `fitdocs connect` rule, and an automated test shall pin both.
-7. The `fitdocs` changelog's unreleased section shall record the relay connector, the relay authentication style, `fitdocs connect --register`, `fitdocs disconnect` and the bare-pull selection change, each with the action a user must take; the relay package shall keep its own changelog recording the deploy contract, envelope and seam versions.
+7. The `fitdocs` changelog's unreleased section shall record the relay connector, the relay authentication style, `fitdocs connect --register`, `fitdocs disconnect` and the bare-pull selection change, each with the action a user must take, and shall record the ownership contract's version advance with its action; the relay package shall keep its own changelog recording the deploy contract, envelope and seam versions.
 8. Every new or changed document shall pass every existing documentation and network-statement guard, and no new document shall mention a hosting provider, an email provider or a deployment's infrastructure.
 9. Every repository statement that lists the commands which make network requests — in the README, the documentation and the source docstrings — shall name `fitdocs disconnect` and the registration of `fitdocs connect` beside the existing connector commands, and an automated test shall pin each such statement so that dropping either mention fails it.

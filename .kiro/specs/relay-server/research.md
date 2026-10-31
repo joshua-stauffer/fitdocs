@@ -285,6 +285,34 @@
   - no token `last_used_at`;
   - no `--yes` on operator deletes.
 
+### Decision: relay-server takes the contract version for `fitdocs disconnect` (R13.1)
+- **Context**: `docs/ownership-contract.md:895-906` says of the credentials
+  store that "fitdocs never deletes it or anything in it", and that
+  `connect` and a credential-renewing `pull` are its only writers.
+  `fitdocs disconnect` removes a credentials file, so the stated guarantee
+  changes.
+  - Precedent: connectors raised the version from 5 to 6 when connect and
+    pull changed what fitdocs writes (`src/fitdocs/contract.py:387-398`).
+- **Selected Approach**:
+  - Rewrite the bullet, and add a `disconnect` overwrite entry.
+  - Take `CONTRACT_VERSION` main + 1 at landing, with an appended literal
+    history. This overrides R6 for this spec, by controller ruling.
+  - Regenerate the declaration goldens, and carry a wiki-contract
+    amendment.
+  - The wording holds in either landing order with publish-core, which
+    also takes main + 1.
+  - strava-publish's `OAUTH_BROWSER` disconnect is covered by the same
+    statement, so it adds no bump.
+
+### Decision: canonical envelope key order (R13.4)
+- **Selected Approach**:
+  - An answer's keys are `envelope`, `code`, `data`, then `outcome` when
+    present, in that order. `encode_answer` writes them so, with compact
+    separators.
+  - Decoders accept any order.
+  - The design states the order once, under SharedEnvelopeCodec, and
+    relay-intervals' Data Contracts cite it.
+
 ## Risks & Mitigations
 - uvicorn's cooperative signal re-raise changes the exit status. Mitigation:
   own handlers in `serve`, plus a subprocess shutdown test against the

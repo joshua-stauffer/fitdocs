@@ -25,7 +25,10 @@ Rules for every task:
   and `DEPLOY_CONTRACT_VERSION = 1` are pinned as literals, never derived
   from the live constant.
   - A later bump appends a new literal pin, and the old pins stay.
-  - This spec changes neither `CONTRACT_VERSION` nor `DOC_VERSION`.
+  - `CONTRACT_VERSION` takes main + 1 at landing, in task 8.8 (R13.1,
+    overriding R6): 18 if this lands before publish-core, else 19. Its
+    history entry is appended with the landed literals ("Raised from ``N``
+    to ``N+1`` by relay-server"). `DOC_VERSION` is unchanged.
 - **PostgreSQL is exercised, never skipped.** Every storage task and every
   later relay task that touches storage runs the relay suite twice:
   - without the test URL (PostgreSQL cases skip);
@@ -570,7 +573,11 @@ Rules for every task:
     - in `tests/connectors/test_protocol.py:220-236`, the `AuthStyle` value
       set (adding `relay-token`), its length from 4 to 5, and
       `SUPPORTED_AUTH_STYLES`;
-    - the published surface and its `EXPECTED_ALL` pin;
+    - the published surface and its `EXPECTED_ALL` pin, plus the literal
+      surface count pins at `tests/connectors/test_surface.py:127`
+      (`len(EXPECTED_ALL)` and its set) and `:158` (`len(__all__)`). Raise
+      them by this spec's five names to main + 5 at landing (55 if this
+      lands first), written as literals;
     - the boundary import set for `protocol`.
   - Done when the protocol, registry, credentials, surface and boundary
     tests pass. They show:
@@ -797,8 +804,9 @@ Rules for every task:
       store.
   - Structure steering:
     - a relay server directory entry;
-    - the connectors bullet adds `disconnect` and the standard-library-only
-      shared modules.
+    - the connectors sentence (`structure.md:71-75`) gains `disconnect` and
+      the standard-library-only shared modules, appended after whatever
+      clauses are present at landing.
   - Rewrite the network-statements test's Architecture pin to the new
     literal sentence.
   - Done when the network-statements tests pass against the new literal,
@@ -873,7 +881,8 @@ Rules for every task:
     - `docs/connectors.md` "What leaves your machine", including its "No
       other fitdocs command ever makes a connector request" sentence.
   - Extend `tests/connectors/test_network_statements.py`:
-    - add the connectors-page statement to the rewritten places;
+    - add the connectors-page statement to the rewritten places only if it
+      is absent at landing (intervals-publish may add it first);
     - move anchors with the new text;
     - add a predicate that requires `fitdocs disconnect` in every window,
       with one named mutation per place (dropping `fitdocs disconnect`
@@ -906,13 +915,47 @@ Rules for every task:
     - the disconnect command.
   - distribution: the release exclusion, the skill line, and no image
     published.
+  - wiki-contract: the next free Requirement 2 criterion, stating that
+    `fitdocs disconnect` removes the named instance's own credentials file
+    and nothing else, plus the contract version advance (R13.1).
   - docs-site: no amendment, since the website is not edited (R9).
-  - Done when the connectors and distribution requirements documents each
-    carry their dated amendment naming relay-server and the pin that
-    enforces it.
+  - Done when the connectors, wiki-contract and distribution requirements
+    documents each carry their dated amendment naming relay-server and the
+    pin that enforces it.
   - _Requirements: 1.4, 11.3, 11.4, 11.5, 14.1, 15.1_
 
-- [ ] 8.8 Run the full validation sweep
+- [ ] 8.8 Advance the ownership contract for `fitdocs disconnect`
+  - In the published ownership contract:
+    - rewrite the credentials-store bullet (`docs/ownership-contract.md:
+      895-906`). `fitdocs disconnect` removes the named instance's own
+      credentials file and nothing else, which replaces "fitdocs never
+      deletes it or anything in it". `connect`, a credential-renewing
+      `pull` and `disconnect` are the only operations that write to or
+      remove from the store, one instance's file at a time, never under the
+      data root;
+    - add a `disconnect` entry to "Overwrite Semantics of Every Writing
+      Operation" beside `connect` (around `:1176-1180`);
+    - update the version head and the "what changed" paragraph.
+  - Raise `CONTRACT_VERSION` to one more than its value at landing, and
+    append its history paragraph with the landed literals. The paragraph
+    must read true in either landing order with publish-core.
+  - Regenerate the declaration goldens, and move every literal
+    current-version pin with its paragraph: the asset-write, retimed-rename,
+    index contract-docs and derived-preserved tests, plus publish-core's
+    pins if publish-core landed first.
+  - Add (heading, phrase) pins in `tests/test_ownership_contract.py` for
+    the rewritten bullet and the `disconnect` entry.
+  - Append the changelog line naming the contract version change with its
+    action (run `fitdocs sync` or `fitdocs regen` once to refresh the
+    in-tree ownership declarations).
+  - Done when the contract docs tests, declaration goldens and every
+    version pin pass at the new value. Named mutations:
+    - restoring "never deletes it or anything in it" reds the bullet pin;
+    - deleting the `disconnect` entry reds its pin.
+  - _Requirements: 14.8, 14.9, 16.7_
+  - _Depends: 6.7_
+
+- [ ] 8.9 Run the full validation sweep
   - Run both suites and both sets of gates, the release build and artifact
     check, the site build and checks, the pinned-copy check, and the relay
     workflow locally where possible.

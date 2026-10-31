@@ -9,11 +9,12 @@ relay has no accounts and sends no email. Its operator mints relay tokens,
 and a wrapping deployment may add its own token issuance through a
 documented in-process seam.
 
-**Users**:
-- Operators run the relay locally on a SQLite file or deploy its image
-  against PostgreSQL.
-- fitdocs users configure a relay connector instance, run `fitdocs connect`
-  (with a pasted token or `--register`), and run `fitdocs disconnect`.
+**What it serves**:
+- The relay runs locally on a SQLite file, or from its image against
+  PostgreSQL.
+- On the fitdocs side, a relay connector instance holds the relay URL.
+  `fitdocs connect` stores its token (pasted or registered), and
+  `fitdocs disconnect` revokes it.
 - Later specs (`strava-publish`, `relay-intervals`) add targets on top.
 
 **Impact**:
@@ -23,7 +24,9 @@ documented in-process seam.
 - The connector framework gains a fifth authentication style, a built-in
   `relay` connector, and `fitdocs disconnect`.
 - A bare `fitdocs pull` now selects only the instances that pull.
-- Neither `CONTRACT_VERSION` nor `DOC_VERSION` changes (R6).
+- `CONTRACT_VERSION` takes main + 1 at landing (R13.1, overriding R6),
+  because `fitdocs disconnect` changes the ownership contract's
+  credentials-store guarantee. `DOC_VERSION` is unchanged.
 
 ### Goals
 - A relay that runs locally on SQLite with nothing installed beyond its
@@ -80,9 +83,13 @@ documented in-process seam.
   - `CredentialStore.remove`;
   - the CLI's `connect --register/--email`, `disconnect [--local-only]`
     and the bare-pull selection.
-- **The amendments it carries**: connectors, distribution (release
-  exclusion and the packaged-skill line), and steering (`tech.md` "No
-  server" and "Network and Credentials"; `structure.md` `relay/`) (R7).
+- **The amendments it carries**:
+  - connectors;
+  - wiki-contract: the ownership-contract statement for
+    `fitdocs disconnect` and the contract version advance (R13.1);
+  - distribution: the release exclusion and the packaged-skill line;
+  - steering: `tech.md` "No server" and "Network and Credentials", and the
+    `structure.md` `relay/` entry (R7).
 - **The network statements** (R9): every repository statement that lists the
   network-touching commands (README, `docs/`, docstrings) gains
   `fitdocs disconnect` and the registration of `fitdocs connect`, with pins.
@@ -149,6 +156,9 @@ documented in-process seam.
   and `relay-intervals`.
 - **`SHARED_MODULES`, or a shared module gaining a non-standard-library
   import.** Re-check the pinned-copy test and every relay consumer.
+- **The ownership contract's credentials-store statement or its
+  `disconnect` overwrite entry.** Re-check strava-publish's
+  `OAUTH_BROWSER` disconnect rows, which this statement covers (R13.1).
 
 ### Future extension: planned-workout push (R8)
 Nothing here assumes a completed-activity page:
@@ -187,9 +197,16 @@ cannot name a non-activity target.
   `ANNOTATE_REMOTE_ACTIVITY` and `PUSH_ACTIVITY` are not touched, and
   `OAUTH_BROWSER` stays reserved (`fitdocs disconnect` refuses it until
   strava-publish drives it).
-- **R6**: neither `CONTRACT_VERSION` nor `DOC_VERSION` changes. Every
-  version pin this spec adds (`ENVELOPE_VERSION`, `SEAM_VERSION`,
-  `DEPLOY_CONTRACT_VERSION`) is a literal.
+- **R6**, as overridden by R13.1:
+  - This spec takes `CONTRACT_VERSION` main + 1 at landing: 18 if it lands
+    first, 19 if publish-core lands first. Either landing order holds,
+    because both specs take main + 1.
+  - The history entry is appended, with the landed literals ("Raised from
+    ``N`` to ``N+1`` by relay-server"). It is never derived from the live
+    constant.
+  - `DOC_VERSION` is unchanged.
+  - Every version pin this spec adds (`ENVELOPE_VERSION`, `SEAM_VERSION`,
+    `DEPLOY_CONTRACT_VERSION`) is a literal.
 - **R7**: this spec edits only its own lines:
   - `tech.md` "No server" and "Network and Credentials";
   - the `structure.md` `relay/` entry and its connectors-bullet wording;
@@ -207,6 +224,14 @@ cannot name a non-activity target.
     only.
   - The `outcomes.py` pinned pair is strava-publish's.
   - `RelayClient` keeps `CallMode.AUTH` (see R4).
+- **R13**:
+  - R13.1: OwnershipContractAmendment below.
+  - R13.3: strava-publish adds `RelayClient.post(route, fields, *,
+    max_request_bytes: int | None = None)` as an amendment to this spec;
+    this spec ships `post(route, fields)`.
+  - R13.4: the canonical envelope key order is stated once, under
+    SharedEnvelopeCodec.
+  - R13.7: command behaviour only; no wording about who runs a command.
 
 ### Amendments Carried (each takes the next free amendment number at landing)
 - **connectors**:
@@ -228,6 +253,10 @@ cannot name a non-activity target.
 - **distribution**: the release gate forbids `relay/*` and
   `fitdocs_relay/*`. The packaged skill's never-run-`fitdocs disconnect`
   line. No image is published (CI builds it only).
+- **wiki-contract** (R13.1): a requirement criterion (the next free one in
+  Requirement 2, as compact-chart-assets added 2.22) stating that
+  `fitdocs disconnect` removes the named instance's own credentials file and
+  nothing else, and the contract version advance.
 - **docs-site**: none. The website is not edited (R9), and the follow-up
   queue item records the copy for the next release.
 - **steering**: `tech.md` and `structure.md`, per SteeringAmendment below.
@@ -471,6 +500,16 @@ tests/connectors/test_relay_docs.py             # NEW: docs/relay.md code table 
     paragraph), and the docstrings of `src/fitdocs/cli.py`,
     `src/fitdocs/sync.py` and `src/fitdocs/tiles.py` (three places);
   - `CHANGELOG.md`: Unreleased.
+- **Ownership contract (R13.1)**:
+  - `docs/ownership-contract.md`: the credentials-store bullet, the
+    `disconnect` overwrite entry, the version head and "what changed";
+  - `src/fitdocs/contract.py`: `CONTRACT_VERSION` main + 1, plus its
+    appended history;
+  - the declaration goldens;
+  - `tests/test_ownership_contract.py`: the new pins;
+  - every literal current-version pin (OwnershipContractAmendment).
+- **Surface counts**: `tests/connectors/test_surface.py:127` and `:158`
+  (SurfaceCountPins).
 - **Steering**: `.kiro/steering/tech.md` and `.kiro/steering/structure.md`.
 
 **Connectors boundary table** (new and changed `_ALLOWED_IMPORT_TARGETS`
@@ -583,6 +622,7 @@ stateDiagram-v2
 | 12.1, 12.2, 12.3, 12.4, 12.5, 12.6 | Pasted token | RelayConnectEngine, CliRelay | `run_relay_connect` | — |
 | 13.1, 13.2, 13.3, 13.4, 13.5, 13.6, 13.7, 13.8, 13.9, 13.10, 13.11 | Registration client | RelayConnectEngine, RelayConnector, CliRelay | `run_relay_registration` | Registration client |
 | 14.1, 14.2, 14.3, 14.4, 14.5, 14.6, 14.7 | Disconnect | DisconnectEngine, CliRelay, CredentialsAmendment | `run_disconnect`, `CredentialStore.remove` | — |
+| 14.8, 14.9 | Ownership contract and its version | OwnershipContractAmendment | `docs/ownership-contract.md`, `CONTRACT_VERSION` | — |
 | 15.1, 15.2, 15.3, 15.4, 15.5, 15.6 | fitdocs-side network and text | RelayConnector, RelayClient, RelayConnectEngine, ConnectorsBoundaryAmendment | `HttpClient(AUTH)` | — |
 | 16.1, 16.2 | Steering | SteeringAmendment | tech.md, structure.md | — |
 | 16.3, 16.4, 16.5, 16.6, 16.7, 16.8, 16.9 | Docs, skill, changelogs, network statements | ConnectorsDocs, RelayDocsPage, SiteFollowUp, SkillLine, Changelogs, NetworkStatements, CommandCountPins | repo docs, docstrings, queue item | — |
@@ -610,7 +650,7 @@ stateDiagram-v2
 | RelayLogs | relay | Secret-free JSON logs | 9.8, 9.9 | — | — |
 | Serve + OperatorCli | relay | Process lifecycle and commands | 3, 8.1, 8.6, 9.6, 9.7 | uvicorn (P0) | Batch |
 | RelayImage + RelayWorkflow | relay build | Image and CI | 1.5, 7.6, 9.1, 9.11 | Docker, Actions (P1) | Batch |
-| ReleaseExclusion, SteeringAmendment, ConnectorsDocs, RelayDocsPage, SiteFollowUp, SkillLine, Changelogs, RelayChangelog, NetworkStatements, CommandCountPins | docs and gates | Keep statements true | 1.4, 2.8, 9.12, 16 | — | — |
+| ReleaseExclusion, SteeringAmendment, ConnectorsDocs, RelayDocsPage, SiteFollowUp, SkillLine, Changelogs, RelayChangelog, NetworkStatements, CommandCountPins, SurfaceCountPins, OwnershipContractAmendment | docs and gates | Keep statements true | 1.4, 2.8, 9.12, 14.8, 14.9, 16 | — | — |
 
 ### Shared modules (fitdocs source, pinned into the relay)
 
@@ -731,7 +771,7 @@ class Answer:
 
 class EnvelopeError(ValueError): ...
 
-def encode_answer(answer: Answer) -> bytes            # {"envelope":1,"code":..,"data":{..}[, "outcome":..]}
+def encode_answer(answer: Answer) -> bytes            # canonical form; see "Canonical key order" below
 def decode_answer(raw: bytes) -> Answer               # strict; raises EnvelopeError
 def encode_request(fields: Mapping[str, object]) -> bytes
 def decode_request(raw: bytes, *, required: frozenset[str], allowed: frozenset[str]) -> dict[str, object]
@@ -751,6 +791,15 @@ def parse_issued(data: Mapping[str, object]) -> str            # a TOKEN_RE-vali
 def parse_retry_after(data: Mapping[str, object]) -> int | None
 def parse_envelopes(data: Mapping[str, object]) -> tuple[int, ...]
 ```
+- **Canonical key order (R13.4).** This is the one statement of it, and
+  other specs cite it.
+  - An answer's top-level keys are, in order: `envelope`, `code`, `data`,
+    then `outcome` when present.
+  - `encode_answer` writes that order, with compact separators and UTF-8.
+    Keys inside `data` follow the order the route's schema lists them.
+  - Decoders accept any key order. The canonical form is what the recorded
+    exchanges and every encoder produce, so byte-for-byte replay is
+    deterministic.
 - **Decoding rules**:
   - UTF-8 JSON object, at most `MAX_ANSWER_BYTES`;
   - duplicate keys are refused (`object_pairs_hook`), and so are `NaN` and
@@ -1549,9 +1598,11 @@ def create_app(config: RelayConfig, *, extensions: Sequence[RelayExtension] = ()
     interval) and `fitdocs disconnect` (one revocation call for a relay
     instance, none otherwise), and says relay tokens use the same
     credential store.
-  - `structure.md` gains a "Relay server" directory entry, and its
-    connectors bullet adds `disconnect` and the standard-library-only
-    shared modules.
+  - `structure.md` gains a "Relay server" directory entry. Its connectors
+    sentence (`structure.md:71-75`) gains `disconnect` and the
+    standard-library-only shared modules. They are appended after whatever
+    clauses are present at landing, since publish-core and the target specs
+    append there too.
   - `test_network_statements.py`'s Architecture pin is rewritten to the new
     literal sentence in the same task.
 - **ConnectorsDocs** (16.3): a `docs/connectors.md` section for the relay
@@ -1604,13 +1655,47 @@ def create_app(config: RelayConfig, *, extensions: Sequence[RelayExtension] = ()
   - `tiles.py`, three places.
 
   `docs/connectors.md`'s "What leaves your machine" is rewritten the same
-  way and added as a place. A new predicate requires `fitdocs disconnect`
+  way. It is added as a `REWRITTEN_PLACES` entry only if absent at landing,
+  since intervals-publish may land first and add it. A new predicate requires `fitdocs disconnect`
   in every window. Each place has a named mutation: dropping
   `fitdocs disconnect` from it reds the pin. Anchors move with the text.
 - **CommandCountPins** (R9): the three tests' `len(commands)` literals and
   the cli.py docstring's count word rise to main + 1 at landing (16 and
   "Sixteen" if relay-server lands before publish-core), written as
   literals.
+- **SurfaceCountPins** (M13): `tests/connectors/test_surface.py:127`
+  (`len(EXPECTED_ALL) == 50`, and its set) and `:158` (`len(__all__) ==
+  50`) rise by this spec's five names to main + 5 at landing (55 if this
+  lands first; publish-core's re-export adds its own), written as
+  literals.
+- **OwnershipContractAmendment** (14.8, 14.9; R13.1):
+  - In `docs/ownership-contract.md`, the credentials-store bullet (`:895-906`)
+    is rewritten. It now says `fitdocs disconnect` removes the named
+    instance's own credentials file and nothing else, and it replaces
+    "fitdocs never deletes it or anything in it". `connect`, a
+    credential-renewing `pull` and `disconnect` are the only operations
+    that write to or remove from the store, each one instance's file at a
+    time, never under the data root.
+  - "Overwrite Semantics of Every Writing Operation" (`:1176-1180`) gains a
+    `disconnect` entry beside `connect`: it removes only that instance's
+    credentials file, writes nothing under the data root, and for a relay
+    instance first revokes the token with one request.
+  - The version head and the "what changed" paragraph are updated.
+  - `CONTRACT_VERSION` in `src/fitdocs/contract.py` rises to main + 1 at
+    landing, with an appended history paragraph using the landed literals.
+  - The in-tree declaration goldens are regenerated, because every
+    declaration restates the version. Every literal current-version pin
+    moves with its paragraph:
+    - `tests/test_asset_write_contract_docs.py`;
+    - the retimed-rename docs test;
+    - the index contract-docs test;
+    - the derived-index preserved test;
+    - publish-core's pins, if publish-core landed first.
+  - `tests/test_ownership_contract.py` gains (heading, phrase) pins for the
+    rewritten bullet and the `disconnect` entry. Named mutation: restoring
+    "never deletes it or anything in it" reds the bullet pin.
+  - The statement is general enough that strava-publish's `OAUTH_BROWSER`
+    disconnect rows are covered without a further bump.
 - **SkillLine** (16.6): "Never run `fitdocs disconnect` either: it revokes
   a relay token, which cannot be undone." beside the connect rule, pinned
   next to the existing never-connect pins.
@@ -1619,7 +1704,11 @@ def create_app(config: RelayConfig, *, extensions: Sequence[RelayExtension] = ()
     - Added: the relay connector, `fitdocs connect --register`, and
       `fitdocs disconnect`;
     - Changed: a bare `fitdocs pull` skips non-pulling instances, and the
-      credentials file `auth_style` gains `relay-token` (action: none).
+      credentials file `auth_style` gains `relay-token` (action: none);
+    - Changed: "The ownership contract (wiki-contract) advances from version
+      `N` to `N+1`" (the landed literals): `fitdocs disconnect` removes one
+      instance's credentials file. Action: run `fitdocs sync` or
+      `fitdocs regen` once to refresh the in-tree ownership declarations.
   - `relay/CHANGELOG.md`: fitdocs-relay 0.1.0 with deploy contract 1,
     envelope 1 and seam 1.
   - Pins read through `unreleased_since(text, V0_2_0)`.
