@@ -105,7 +105,7 @@ Rules for every task:
     - accepting a user code with a vowel.
   - _Requirements: 4.1, 4.4, 4.5, 4.6, 4.7, 15.6_
 
-- [ ] 1.3 Scaffold the relay package with its own manifest, lock and boundary guard
+- [x] 1.3 Scaffold the relay package with its own manifest, lock and boundary guard
   - Create the relay package in the relay directory:
     - distribution `fitdocs-relay` 0.1.0, import name `fitdocs_relay`,
       Python 3.11 or later;
@@ -975,3 +975,4 @@ Rules for every task:
 ## Implementation Notes
 - 1.1: vocabulary-wide rules (status iff relay origin, explanation completeness) must iterate the whole registry, not the pinned 22-prefix, or a later spec's appended code escapes them; only the order/name/value pins are prefix-sliced. Explanations are pinned verbatim as literals in the test. (Round 3 was a controller-applied one-line fix verified by the reviewer's own mutation, in place of a third review round.)
 - 1.2: a too-deep fixture must stay under the size limit or the size rule refuses it before the parse path (assert len < limit as the precondition). Fixed-text error rules are tested on every decoder/parser, asserting membership in copied literals, not just canary-absence. relay_envelope also exports is_target_id and the frozen Answer/CapabilitiesData/StartedData; oversize is refused by the codec with one fixed message, the relay's request-too-large comes from the pipeline's body-limit stage. (Round 3 docstring fix controller-applied, verified by reading, in place of a third review round.)
+- 1.3 (controller ruling, departs from design File Structure Plan "[tool.ruff] extends ../pyproject.toml"): relay/pyproject.toml does NOT extend the root ruff config -- with extend, the root's `./relay` exclude is inherited and `--force-exclude` from relay/ finds no files. It copies target-version + select instead. Root excludes only the top-level dir via `extend-exclude = ["./relay"]` (a bare "relay" matched any nested relay/ dir). relay/.python-version pins 3.11. The relay boundary guard pins `scanned == 0` for shared/: task 1.4 MUST change it to the literal count of shared files.

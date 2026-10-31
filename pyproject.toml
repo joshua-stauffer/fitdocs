@@ -85,6 +85,10 @@ docs = ["zensical==0.0.65"]
 [tool.ruff]
 target-version = "py311"
 src = ["src", "tests", "scripts"]
+# The relay is its own project (own manifest, lock and ruff run). "./relay" is
+# anchored to the top-level directory; a bare "relay" also matched any nested
+# directory of that name (observed with ruff --show-files on a scratch probe).
+extend-exclude = ["./relay"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
