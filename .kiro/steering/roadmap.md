@@ -3744,8 +3744,10 @@ Rejected:
     - the Strava connect flow, publish endpoint, redirect endpoint and
       revocation handling;
   - the optional relay route to intervals.icu;
-  - the steering, distribution, connectors, wiki-contract, workout-docs and
-    docs-site amendments those specs carry.
+  - the steering, distribution, connectors, wiki-contract, workout-docs,
+    activity-identity and effort-tags amendments those specs carry. The
+    docs-site work became repo `docs/` pages plus site-copy queue items
+    (spec batch, R9).
 - **Out**:
   - reading anything from Strava for display, storage, the index or a page;
   - planned workouts, photos and media, deleting posts;
@@ -3842,7 +3844,9 @@ Rejected:
   - the connectors auth styles: relay registration, and `OAUTH_BROWSER`
     driven for Strava;
   - `CONTRACT_VERSION`, taken at main + 1 by each lander that changes the
-    page contract (publish-core first).
+    contract: publish-core for the page, and relay-server for the
+    ownership contract's `fitdocs disconnect` statement (spec batch,
+    R13.1). Either may land first.
 
 #### Existing Spec Updates
 
@@ -3857,18 +3861,47 @@ Amendment numbers are the next free number at landing.
 - [ ] intervals-connector — the update, upload and resolve endpoints and the
   status-to-code mapping. Carried by intervals-publish.
 - [ ] wiki-contract — the `post` region, the opt-in mechanism, the links
-  block, and the publish ledger's location. Carried by publish-core.
+  block, and the publish ledger's location. Carried by publish-core. Also
+  the ownership contract's credentials-store statement and a `disconnect`
+  overwrite entry for `fitdocs disconnect`, with `CONTRACT_VERSION` main + 1.
+  Carried by relay-server (spec batch, R13.1).
 - [ ] workout-docs — rendering the `post` placeholder and the links block.
   Carried by publish-core.
+- [ ] activity-identity — the strict tier extracted into the standard-library
+  `fitdocs.identity.strict`, which is pinned into the relay. `matching`
+  calls it, and every result is unchanged. Carried by strava-publish (spec
+  batch).
+- [ ] effort-tags — Req 2.1: the user-owned frontmatter keys also hold
+  `publish`. Carried by publish-core (spec batch).
+- [ ] Phase 14 specs amending each other (spec batch). Each is carried
+  inside the later spec:
+  - strava-publish amends relay-server: its storage areas, routes,
+    deploy-contract rows with the `EnvVar.required_with` tuple, and
+    `RelayClient` (`single_attempt=True`, `max_request_bytes`);
+  - relay-intervals amends strava-publish, lifting the target-neutral relay
+    code into `fitdocs_relay/targets/`;
+  - relay-intervals amends intervals-publish, moving its rules into the
+    standard-library leaf `connectors/intervals_rules.py` on
+    `identity.strict`;
+  - relay-intervals amends publish-core with the ledger-identity hook.
 - [ ] distribution — the wheel and sdist exclude `relay/`, enforced by the
   release gate. Plus the relay's container image, if this repository's CI
   publishes it. The design decides between an image published here and
   deployments building from a pinned commit. Carried by relay-server.
-- [ ] docs-site — the publishing page, the relay self-hosting guide, and the
-  privacy policy (with Strava sections). Carried by publish-core,
-  relay-server and strava-publish.
+- [ ] docs-site — **replaced at the spec batch (2026-10-31)**. A push to
+  `main` deploys fitdocs.ai, and the site describes released versions only.
+  So no Phase 14 spec edits `website/content/`:
+  - the publishing page goes in `docs/publishing.md`;
+  - the relay self-hosting guide goes in `docs/relay.md`;
+  - the privacy policy and consent text are served by the relay
+    (`/privacy`) and documented under `docs/`.
+
+  Each spec records its site copy for the next release as a queue item
+  (`.kiro/queue/2026-10-31-*-site-copy*.md`, five items).
 - [ ] steering — `tech.md` ("No server" and "Network and Credentials") and
-  `structure.md` (`relay/`). Carried by relay-server.
+  `structure.md` (`relay/`). Carried by relay-server. Each other Phase 14
+  spec appends its own clause "after whatever clauses are present at
+  landing".
 
 #### Direct Implementation Candidates
 
@@ -3887,19 +3920,41 @@ Amendment numbers are the next free number at landing.
 - Strava's athlete-capacity review, beyond 10 athletes.
 - A publish-target plugin kind, parameterized in `plugins.py` like the
   connector kind.
-- Planned-workout push to intervals.icu (Phase 8's candidate, still open).
+- Planned-workout push to intervals.icu, including syncing a whole planned
+  training block back (Phase 8's candidate, still open).
+  - The maintainer asked, 2026-10-31, that Phase 14 leave the door open.
+  - Every Phase 14 design therefore carries a "Future extension:
+    planned-workout push" note with a revalidation trigger:
+    - the publish ledger key names the page kind (`workout:<sha256>`);
+    - the publish request carries a `subject`;
+    - activity resolution is a per-target step;
+    - the outcome vocabulary is append-only;
+    - intervals-publish's transport additions (athlete id, `PUT`, the
+      single-attempt mode) stay reusable for a calendar write.
+  - `PUSH_PLANNED_WORKOUT` stays reserved and undriven.
 - Opt-in rules in configuration, such as every new run of a sport, as an
   alternative to per-page opt-in.
 
 #### Specs (dependency order)
 
-- [ ] publish-core — composition (templates plus the `post` region), opt-in,
+- [x] publish-core — composition (templates plus the `post` region), opt-in,
   dry-run-default `fitdocs publish`, the closed outcome vocabulary, the
-  publish ledger, the links block and target discovery. Carries the
-  wiki-contract, workout-docs and docs-site amendments and the agent skill's
-  publishing section, which names no backend. **Brief written 2026-10-31.**
+  publish ledger, the links block and target discovery.
+  - Carries the wiki-contract, workout-docs, connectors, effort-tags and
+    distribution amendments.
+  - Carries the agent skill's publishing section, which names no backend.
+  - Its site copy is a queue item (R9).
+
+  **Brief written 2026-10-31; spec written 2026-10-31.**
+  - Phase 14 batch, wave 1, `tasks-generated`, all approvals set.
+  - 16 requirements / 121 criteria, 9 majors / 27 tasks.
+  - Independent Step 3.5 review, two rounds.
+  - Cross-spec folds: `connectors.protocol` re-exports `PublishCode` and
+    `TARGET_CODES`, and code 35 `local_record_unreadable` is added.
+  - It takes `CONTRACT_VERSION` and `DOC_VERSION` main + 1 at landing.
+
   Dependencies: none
-- [ ] relay-server — the self-hostable relay's foundation in `relay/`:
+- [x] relay-server — the self-hostable relay's foundation in `relay/`:
   - the ASGI app;
   - the storage interface, with a SQLite default and a PostgreSQL extra,
     their migrations, and a conformance suite run on both;
@@ -3912,9 +3967,21 @@ Amendment numbers are the next free number at landing.
     the device-style registration client against a relay that offers
     registration.
 
-  Carries the steering, distribution, connectors and docs-site amendments.
-  **Brief written 2026-10-31.** Dependencies: none
-- [ ] intervals-publish — the direct intervals.icu target:
+  - Carries the steering, distribution, connectors and wiki-contract
+    amendments. `fitdocs disconnect` takes `CONTRACT_VERSION` main + 1 at
+    landing (R13.1).
+  - Its site copy is a queue item (R9).
+
+  **Brief written 2026-10-31; spec written 2026-10-31.**
+  - Phase 14 batch, wave 1, `tasks-generated`, all approvals set.
+  - 16 requirements / 125 criteria, 8 majors / 43 tasks.
+  - Independent Step 3.5 review, two rounds. The PostgreSQL backend is
+    exercised in CI on every storage task.
+  - CI builds the image and pushes nothing; deployments build from a pinned
+    commit.
+
+  Dependencies: none
+- [x] intervals-publish — the direct intervals.icu target:
   - resolution through the pull ledger, then a listing window with
     `pair_evidence`;
   - name and description through PUT;
@@ -3922,9 +3989,19 @@ Amendment numbers are the next free number at landing.
     enabled;
   - the direct link.
 
-  Carries the connectors and intervals-connector amendments. **Brief written
-  2026-10-31.** Dependencies: publish-core
-- [ ] strava-publish — Strava through the relay:
+  Carries the connectors and intervals-connector amendments.
+
+  **Brief written 2026-10-31; spec written 2026-10-31.**
+  - Phase 14 batch, wave 2, `tasks-generated`, all approvals set.
+  - 12 requirements / 67 criteria, 5 majors / 16 tasks, plus the optional
+    maintainer-gated live check 5.2*.
+  - Independent Step 3.5 review, two rounds.
+  - Sport is not compared remotely: the page's sport goes on both keys.
+  - An unreadable pull ledger answers `local_record_unreadable` and never
+    uploads.
+
+  Dependencies: publish-core
+- [x] strava-publish — Strava through the relay:
   - the OAuth connect flow, with encrypted rotating tokens;
   - resolve-by-start-time on every publish, then PUT or a single upload;
   - the `/go/` redirect link;
@@ -3932,9 +4009,96 @@ Amendment numbers are the next free number at landing.
   - the rate-limit budget, and nothing from Strava crossing the relay;
   - the fitdocs relay target, with `OAUTH_BROWSER` driven.
 
-  **Brief written 2026-10-31.** Dependencies: publish-core, relay-server
-- [ ] relay-intervals — the optional relay route to intervals.icu. It
+  **Brief written 2026-10-31; spec written 2026-10-31.**
+  - Phase 14 batch, wave 2, `tasks-generated`, all approvals set.
+  - 18 requirements / 123 criteria, 8 majors / 46 tasks.
+  - Independent Step 3.5 review, two rounds.
+  - It extracts `fitdocs.identity.strict` (activity-identity amendment).
+  - The relay keeps no Strava cache, and `/go/` lists on every click.
+  - **Live Strava steps are maintainer-run only (R12).** No development
+    session talks to the real Strava API. Task 8 writes the procedure and a
+    record template.
+  - It records the maintainer's 2026-10-31 acceptance of the terms risk for
+    user-end use of the packaged skill (R13.2).
+
+  Dependencies: publish-core, relay-server
+- [x] relay-intervals — the optional relay route to intervals.icu. It
   reuses strava-publish's OAuth machinery and intervals-publish's semantics,
-  and adds a per-instance route setting, direct by default. Implementation
-  is gated on intervals.icu approving the OAuth app. **Brief written
-  2026-10-31.** Dependencies: strava-publish, intervals-publish
+  and adds a per-instance route setting, direct by default.
+
+  **Brief written 2026-10-31; spec written 2026-10-31.**
+  - Phase 14 batch, wave 3, `tasks-generated`, all approvals set.
+  - 16 requirements / 110 criteria, 8 majors / 39 tasks, plus the optional
+    findings record 8.2*.
+  - Independent Step 3.5 review: RETURN_TO_DESIGN, then two more rounds.
+    The direct and relay routes give the same code in every resolution
+    state, pinned by the shared case file `relay/contract/intervals-cases.json`.
+  - **Implementation is gated on intervals.icu approving the OAuth app.**
+    Task 1.1 stops the whole run (STOP_FOR_HUMAN) while the gate record in
+    research.md reads pending.
+
+  Dependencies: strava-publish, intervals-publish
+
+#### Spec batch record (2026-10-31)
+
+- **Specs:** all five were written by `/kiro-spec-batch`, scoped to Phase 14.
+  - Integration branch `chore/p14-spec-batch`, one worktree per feature.
+  - Each spec passed an independent Step 3.5 reviewer.
+  - Cross-spec review ran two rounds. Round 1 found 3 important and 13
+    minor issues, fixed and folded. Round 2 found 4 minor wording issues,
+    fixed.
+- **Implementation order:**
+  1. publish-core ∥ relay-server;
+  2. intervals-publish ∥ strava-publish;
+  3. relay-intervals, once its gate opens.
+- **Version numbers.** Every shared literal holds in either landing order
+  within a pair. Specs take main + 1 at landing, with literal histories.
+  This applies to:
+  - `CONTRACT_VERSION` (publish-core and relay-server);
+  - the CLI command count (`publish`, `disconnect`);
+  - the connectors surface count.
+- **Controller rulings (the R-numbers the five specs cite).** Each spec
+  restates the substance where it applies; this is the index.
+  - **R1**: the outcome vocabulary is publish-core's
+    `fitdocs.publish.outcomes`. It is standard library only, closed,
+    append-only and prefix-pinned. Each target owns its mapping.
+  - **R2**: shared vocabularies come from `src/fitdocs/`. The relay holds
+    byte-identical pinned copies, synced by `scripts/sync_relay_shared.py`
+    and checked by `tests/test_relay_shared_copies.py`, which relay-server
+    owns.
+  - **R3**: relay-level answers are relay-server's closed, hyphenated
+    `RelayCode` vocabulary. A publish result travels in the envelope's
+    `outcome` key. No free text crosses the wire.
+  - **R4**: publish-core owns `HttpRequest.single_attempt` and
+    intervals-publish owns `PUT`. There is no second no-retry mechanism.
+  - **R5**: publish-core drives the three publish capabilities.
+    relay-server adds `RELAY_TOKEN`, and strava-publish drives
+    `OAUTH_BROWSER`.
+  - **R6**: only page-contract changes bump `CONTRACT_VERSION`/`DOC_VERSION`,
+    at main + 1 with literal histories. R13.1 extends this to relay-server.
+  - **R7**: shared steering and changelog edits are append-only. Changelog
+    pins read through `unreleased_since(text, V0_2_0)`.
+  - **R8**: keep the planned-workout door open (see Follow-on candidates).
+  - **R9**: no `website/content/` edits; site copy goes in queue items. Any
+    command that newly makes requests rewrites every repo network statement.
+    The CLI command-count pins move by main + 1. strava-publish appends the
+    `outcomes.py` pinned pair.
+  - **R10**: targets map into the existing `TARGET_CODES`. The
+    `fitdocs publish --yes` network statement is idempotent across targets
+    (`_names_publish_command`). Live checks are optional and
+    maintainer-gated. `pair_evidence` reaches the relay through
+    `identity.strict`.
+  - **R11**: targets name `PublishCode`/`TARGET_CODES` only through
+    `fitdocs.connectors.protocol`. A target whose own local record is
+    unreadable answers `local_record_unreadable` once resolution fails, and
+    never uploads.
+  - **R12**: Strava live steps are maintainer-run only. Spec prose never
+    says who runs a command.
+  - **R13**: the cross-spec rulings:
+    - R13.1: relay-server's ownership-contract change for `disconnect`;
+    - R13.2: the recorded terms-risk acceptance;
+    - R13.3: `RelayClient.post(..., max_request_bytes=)`;
+    - R13.4: the canonical envelope key order;
+    - R13.5: the neutral CLI started line;
+    - R13.6: the folds;
+    - R13.7: behaviour wording.
