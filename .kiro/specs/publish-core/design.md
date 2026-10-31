@@ -276,8 +276,9 @@ docs/publishing.md                       # contract-grade publishing reference
   `post(..., single_attempt=False)`.
 - `src/fitdocs/connectors/__init__.py` — `__all__` appends `PostPublisher`,
   `PUBLISH_CAPABILITIES`, `Post`, `CompletedActivity`, `PublishRequest` and
-  `PublishResult` (re-exported from `fitdocs.publish.request`); docstring's
-  allowed-import sentence.
+  `PublishResult` (the value types re-exported through
+  `connectors.protocol`, so the package module's own boundary entry is
+  unchanged); docstring's allowed-import sentence.
 - `src/fitdocs/cli.py` — `publish` command and its options.
 - `src/fitdocs/skills/fitdocs-workouts/SKILL.md` — publishing section.
 - `pyproject.toml` — `tests/publish` in `[tool.mypy].files` (so the
@@ -1238,9 +1239,12 @@ class HttpClient:
   `single_attempt`.
 - `__all__` appends `PostPublisher`, `PUBLISH_CAPABILITIES` and the four
   value types `Post`, `CompletedActivity`, `PublishRequest` and
-  `PublishResult`, re-exported from `fitdocs.publish.request` as the wellness
-  value types are exported (surface count + 6; peers append their own
-  names, so the literal count moves at landing). The single-attempt mode is
+  `PublishResult`. `connectors.protocol` imports the value types from
+  `fitdocs.publish.request` and the package module imports them from
+  `connectors.protocol`, as the wellness value types are exported, so only
+  the protocol and registry boundary entries admit the request leaf
+  (surface count + 6; peers append their own names, so the literal count
+  moves at landing). The single-attempt mode is
   published as a field of the already-published `HttpRequest` (9.8).
 
 ### Packaging and documentation
