@@ -115,8 +115,9 @@ meaning):
   principals, the envelope, the deploy contract's existing rows and the
   relay connector (relay-server); hosting or operating any relay; asking
   Strava for an athlete-capacity review; charging for the feature; any edit
-  to the website's content. Neither `CONTRACT_VERSION` nor `DOC_VERSION`
-  changes: the page contract and layout stay publish-core's.
+  to the website's content. This feature changes neither `CONTRACT_VERSION`
+  nor `DOC_VERSION`: the page contract and layout stay publish-core's, and
+  the ownership statement for `fitdocs disconnect` is relay-server's.
 - **Adjacent expectations**: publish-core hands the target one request per
   page with the publication id, the post and the match facts, keeps the
   ledger and writes the links region, and exposes a single-attempt request
@@ -204,6 +205,7 @@ meaning):
 7. If the relay cannot be reached, or answers with something that is not a valid envelope, or reports its own unexpected failure, the fitdocs CLI shall return the unavailable code for a publish request and the unconfirmed code for an upload request, because an upload's result is then unknown.
 8. When the code is posted or uploaded, the fitdocs CLI shall return the link `<bound relay URL>/go/<publication id>`, composed by fitdocs, and shall return no link with any other code.
 9. The fitdocs CLI shall print, log and write nothing a relay returned other than the codes, and shall never receive, hold or write a Strava identifier.
+10. Where the bound relay URL is a loopback `http` address, the page shall carry no "View on Strava" link, because publish-core records only `https` links, and the connectors documentation shall say so.
 
 ### Requirement 6: Finding the Strava Activity on Every Publish
 **Objective:** As an athlete, I want the relay to find my activity afresh on every publish, by fitdocs's own strict rule, so that a post never lands on the wrong activity and no lasting map of my pages to Strava exists.
@@ -315,7 +317,7 @@ meaning):
 4. The relay code vocabulary shall gain the connect answers (started, pending, granted, refused and expired) by appending them, each with a fixed fitdocs-written explanation and status.
 
 ### Requirement 16: Privacy Policy, Consent, Support Contact and Strava Wording
-**Objective:** As an athlete deciding whether to connect, and as the maintainer bound by Strava's terms, I want the relay's privacy policy, consent text and support contact published with the code and every Strava mention worded to Strava's rules, so that the obligations are met by any operator who runs the relay.
+**Objective:** As an athlete deciding whether to connect, and as the maintainer bound by Strava's terms, I want the relay's privacy policy, consent text and support contact published with the code and every Strava mention worded to Strava's rules, so that the obligations are met by every deployment of the relay.
 
 #### Acceptance Criteria
 1. The relay server shall serve a privacy policy page that states what the relay receives, stores, sends to Strava and deletes, and when, naming the operator and their support contact; the relay documentation shall name `<public address>/privacy` as the address for a Strava application's privacy-policy field, unless the operator configures another policy address, which the relay's pages then link instead.
@@ -331,7 +333,7 @@ meaning):
 #### Acceptance Criteria
 1. The connectors documentation shall describe the Strava connector: its settings, connecting with and without a browser, publishing and uploads, the link, disconnecting, what leaves the machine, the code mapping table, and the default relay's privacy policy address, describing the feature as compatible with Strava.
 2. The relay documentation shall describe the Strava target: its variables, encryption keys and their rotation, the webhook commands, the routes and pages, the data held and when it is deleted, the policy and consent, the operator obligations, and the self-hosting note.
-3. Every repository statement that lists the commands which make network requests shall name `fitdocs publish --yes`, and the connectors documentation's "What leaves your machine" shall name the host a Strava instance's publish requests go to (its bound relay's), whichever Phase 14 target lands first; an automated test shall pin each such statement.
+3. Every repository statement that lists the commands which make network requests shall name `fitdocs publish --yes`, every such statement that lists the commands making none shall name `fitdocs publish` without `--yes` and `fitdocs publish --targets`, the distribution requirements' network criterion (Req 10.4) shall name `fitdocs publish --yes`, and the connectors documentation's "What leaves your machine" shall name the host a Strava instance's publish requests go to (its bound relay's); each is added only where no earlier Phase 14 target added it, so the result is the same in either landing order, and an automated test (the shared `_names_publish_command` predicate) shall pin each such statement.
 4. The technology steering's network and credentials section shall state, in its own sentence, the requests `fitdocs connect`, `fitdocs disconnect` and `fitdocs publish --yes` make for a Strava instance, and the structure steering shall describe the strict rule's standard-library-only module and its pinned copy.
 5. The `fitdocs` changelog's unreleased section shall record the Strava connector, `fitdocs connect --no-browser` and Strava disconnect, and the relay changelog shall record the Strava target, its variables, routes and storage changes.
 6. This feature shall edit no website page, and shall record the site copy it makes stale or newly needs as a follow-up for the next release.

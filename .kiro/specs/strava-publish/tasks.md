@@ -34,9 +34,12 @@ Rules for every task:
   without `FITDOCS_RELAY_TEST_POSTGRES_URL` (the second run with
   `FITDOCS_RELAY_REQUIRE_POSTGRES=1`), using relay-server's local recipe;
   the branch's relay CI run must be green.
-- **No version constant moves.** `CONTRACT_VERSION`, `DOC_VERSION`,
-  `ENVELOPE_VERSION`, `SEAM_VERSION` and `DEPLOY_CONTRACT_VERSION` stay as
-  they are; no command is added, so the CLI command-count pins do not move.
+- **No version constant moves in this spec.** It changes none of
+  `CONTRACT_VERSION`, `DOC_VERSION`, `ENVELOPE_VERSION`, `SEAM_VERSION` and
+  `DEPLOY_CONTRACT_VERSION` (relay-server's own `CONTRACT_VERSION` bump for
+  `fitdocs disconnect`, R13.1, is relay-server's and already covers this
+  spec's disconnect rows); no command is added, so the CLI command-count
+  pins do not move.
   Any pin this spec adds is a literal, never derived from a live constant.
 - **The website is not edited** (R9). Its copy is the queue item
   `.kiro/queue/2026-10-31-strava-publish-site-copy.md`, written with this
@@ -137,9 +140,12 @@ Rules for every task:
   - _Requirements: 4.1, 4.2, 4.7_
 
 - [ ] 2.2 Configure the Strava target from the environment
-  - Give relay-server's environment-variable record a `required_with` field
-    (the variable whose presence makes this one required), rendered in
-    `docs/relay.md`'s Required column as "with `<variable>`".
+  - Give relay-server's environment-variable record a `required_with:
+    tuple[str, ...] = ()` field (required when any named variable is set),
+    rendered in `docs/relay.md`'s Required column as "with `<variable>`",
+    several names joined by " or "; the generic rows carry
+    `("FITDOCS_RELAY_STRAVA_CLIENT_ID",)`, so a later target only appends
+    its own client id.
   - Append the thirteen variables to the deploy contract's table with their
     required flag or `required_with`, default, secret flag and meaning, and
     append them to relay-server's literal full-table pin.
@@ -154,7 +160,8 @@ Rules for every task:
     its binding test reads the contract.
   - Done when configuration tests cover each refusal with a planted secret
     absent from every message, an unconfigured environment loads exactly
-    as before, the contract pins pass, and dropping a row from the docs
+    as before, the contract pins (the full table with the tuples) pass, a
+    two-name tuple renders with " or ", and dropping a row from the docs
     table reds the binding test.
   - _Requirements: 9.1, 13.1, 13.2, 13.5_
 
@@ -172,7 +179,8 @@ Rules for every task:
 
 - [ ] 2.4 Store target connections on both backends
   - Add the schema change pair (the three tables of design.md's physical
-    model, identically named for both backends) and the connection area's
+    model, identically named for both backends, with a nullable
+    `access_expires_at`) and the connection area's
     put (with displacement of another principal's connection to the same
     account, and removal of the principal's link records when its account
     changes), get, list, delete with an optional expected generation, and
@@ -184,7 +192,8 @@ Rules for every task:
   - The new schema change moves the schema counts: update relay-server's
     recorded `/readyz` exchange and every schema-count literal, by
     appended literals.
-  - Done when the conformance suite passes on both backends, the migration
+  - Done when the conformance suite passes on both backends (including a
+    connection stored and read back with no access expiry), the migration
     parity test and the readiness replay pass, deleting a principal removes
     its connection, and the coverage check fails if one member's marker is
     removed.
@@ -299,7 +308,8 @@ Rules for every task:
   - Done when tests over both backends show concurrent requests on an
     expiring token causing exactly one refresh call, a refused refresh
     deleting the connection and revoking its token, an undecryptable
-    connection reading as not connected, and re-encryption counting an
+    connection reading as not connected, a connection with no access
+    expiry used without any refresh call, and re-encryption counting an
     unreadable row and leaving it unchanged.
   - _Requirements: 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 4.7, 4.8, 11.5, 11.10_
 
@@ -469,13 +479,15 @@ Rules for every task:
   - _Requirements: 1.3_
 
 - [ ] 5.3 Attempt every relay request exactly once
-  - The relay client marks every request it builds single-attempt; where
-    it bounds an outgoing body, `post` takes the bound as a keyword
-    defaulting to relay-server's. Its imports, and its boundary row, do not
-    change.
+  - The relay client marks every request it builds single-attempt, and
+    `post(route, fields, *, max_request_bytes: int | None = None)` refuses
+    an encoded body over the bound before any request (`None` keeps
+    relay-server's bound). These are relay-server amendments carried here
+    (R13.3). Its imports, and its boundary row, do not change.
   - Done when a scripted 503 over a data-mode client sees one transport call
-    for a GET and for a POST; named mutation: dropping the mark from POST
-    sees three calls.
+    for a GET and for a POST, and an over-bound body makes no transport
+    call; named mutation (relay-server's, restated): dropping
+    `single_attempt=True` from `post` sees three calls.
   - _Requirements: 5.5_
 
 - [ ] 5.4 Add the Strava connector's settings and consent operations
@@ -509,10 +521,13 @@ Rules for every task:
     non-envelope 502 on the upload route gives `unconfirmed`, an
     upload-route outcome on the publish route maps to `unavailable` with no
     upload request, no request is made for missing facts, an absent file or an
-    oversize file, and the boundary, surface and preamble pins pass; named
+    oversize file, the upload request passes `MAX_UPLOAD_REQUEST_BYTES` as
+    its bound, a loopback `http` relay URL gives a landed code whose link
+    publish-core refuses (`link_refused`, no "View on Strava" link on the
+    page), and the boundary, surface and preamble pins pass; named
     mutation: importing `PublishCode` from `fitdocs.publish.outcomes` reds
     the boundary assertion.
-  - _Requirements: 1.1, 1.7, 5.1, 5.2, 5.3, 5.4, 5.6, 5.7, 5.8, 5.9, 7.8, 8.4_
+  - _Requirements: 1.1, 1.7, 5.1, 5.2, 5.3, 5.4, 5.6, 5.7, 5.8, 5.9, 5.10, 7.8, 8.4_
 
 - [ ] 5.6 Run the browser-consent connect loop
   - The engine of design.md: the relay instance's token first, one start,
@@ -541,6 +556,9 @@ Rules for every task:
     other styles, the printed lines, the browser opener and its failure
     line, and the exit codes; disconnect results printed as for relay
     instances.
+  - The started line is neutral: "NAME: open this address in a browser to
+    connect this instance:" (R13.5); only the relay page says "Connect with
+    Strava".
   - Done when CLI tests pin the printed lines, show no browser call with
     `--no-browser`, exit 2 for each refused flag before any request, exit 1
     when the relay instance has no token, and exit 130 on interrupt.
@@ -582,12 +600,13 @@ Rules for every task:
   - The Strava section of the connectors page with the four subsections of
     design.md, "Compatible with Strava", the settings table, the relay
     instance and public-address prerequisites, both mapping tables, what
-    leaves the machine, and the default relay's policy address; heading
-    rows added in page order; the neutral-scan entry gains the section.
+    leaves the machine, the default relay's policy address, and that a
+    loopback `http` relay gives no "View on Strava" link; heading rows added
+    in page order; the neutral-scan entry gains the section.
   - Done when the connectors docs tests pass, the section names no Strava
     host, and deleting a mapping row from the page reds a binding test
     against the mapping tables.
-  - _Requirements: 16.4, 16.5, 17.1, 17.7_
+  - _Requirements: 5.10, 16.4, 16.5, 17.1, 17.7_
 
 - [ ] 7.2 Document the Strava target for operators
   - The relay page's Strava sections of design.md, including the
@@ -600,14 +619,23 @@ Rules for every task:
   - _Requirements: 4.9, 13.6, 16.1, 16.5, 16.6, 17.2, 17.7_
 
 - [ ] 7.3 Make every network statement name `fitdocs publish --yes` and the Strava host
-  - Written to hold in either landing order with `intervals-publish`:
-    every statement that lists the network-touching commands names
-    `fitdocs publish --yes` (add it where absent, keep it where the other
-    target already added it), and the connectors page's "What leaves your
-    machine" gains the Strava line (its bound relay's URL, never Strava).
-  - Pins require both in every place, with one named mutation per place.
-  - Done when the network-statement tests pass, and removing the command or
-    the Strava line from any place reds its pin.
+  - Written to hold in either landing order with `intervals-publish`; each
+    step is skipped where an earlier target already made it:
+    - every statement that lists the network-touching commands names
+      `fitdocs publish --yes`;
+    - where a statement lists the commands making none (in `tech.md`, in
+      its own sentence after the pinned no-request list, which stays
+      unedited), it states that `fitdocs publish` without `--yes` and
+      `fitdocs publish --targets` make none;
+    - the connectors page's "What leaves your machine" gains the Strava line
+      (its bound relay's URL, never Strava); this line is this spec's own.
+  - Pins in `tests/connectors/test_network_statements.py` use the shared
+    predicate `_names_publish_command(window)`, added only if absent, to
+    require `fitdocs publish --yes` in every place, with one named mutation
+    per place, plus a pin for the Strava line.
+  - Done when the network-statement tests and the three existing `tech.md`
+    list pins pass, and removing the command or the Strava line from any
+    place reds its pin.
   - _Requirements: 17.3_
 
 - [ ] 7.4 Add the steering sentences
@@ -633,11 +661,17 @@ Rules for every task:
 - [ ] 7.6 Record the amendments in the affected specifications
   - connectors, relay-server and activity-identity, each with the items of
     design.md's Amendments Carried, worded like the earlier landed
-    amendments and naming the pin that enforces each; confirm the site-copy
-    queue item still names true lines.
+    amendments and naming the pin that enforces each; distribution's Req
+    10.4 amendment naming `fitdocs publish --yes`, skipped when an earlier
+    target recorded it; confirm the site-copy queue item still names true
+    lines.
+  - Check that the browser-consent disconnect rows agree with relay-server's
+    ownership-contract statement for `fitdocs disconnect` (R13.1); add no
+    version bump.
   - Done when each requirements document carries its dated amendment
-    naming strava-publish.
-  - _Requirements: 15.2, 17.6, 17.8_
+    naming strava-publish (distribution's only if no earlier target
+    recorded it).
+  - _Requirements: 15.2, 17.3, 17.6, 17.8_
 
 - [ ] 7.7 Run the full validation sweep
   - Both suites and gates, the release build and artifact check, the site

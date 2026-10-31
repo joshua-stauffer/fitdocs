@@ -318,7 +318,7 @@
   point the pages at their own policy address instead. `docs/relay.md`
   states the Strava application field value and summarizes the policy; a
   test binds its section list to the policy's sections.
-- **Rationale**: a self-hoster runs their own Strava application and needs
+- **Rationale**: a self-hosted relay needs its own Strava application and
   their own policy page; the text is versioned with the code that it
   describes.
 
@@ -353,6 +353,34 @@
   against `fitdocs.model.Sport` on the fitdocs side.
 - R12: the live check is a maintainer procedure plus a record template; no
   session carries out a step that reaches the real Strava API.
+
+### Decision: Cross-spec rulings R13 applied
+- **Maintainer decision, 2026-10-31 (R13.2)**: the packaged skill's
+  publishing rule stays as publish-core Req 15.4 states it: `fitdocs
+  publish --yes` only on the athlete's request, with no backend named. The
+  maintainer chose this at discovery with Strava's API Policy §5.3 and
+  §5.16 in view, and accepted the residual terms risk of that user-end use
+  of the packaged skill. Development sessions are governed separately by
+  R12, under which no session carries out a step that reaches Strava.
+- **R13.1**: relay-server's ownership-contract statement (disconnect
+  removes the instance's own credentials file and nothing else) covers this
+  spec's browser-consent disconnect rows, which remove only the Strava
+  instance's file. This spec bumps no version.
+- **R13.3**: `RelayClient.post(route, fields, *, max_request_bytes: int |
+  None = None)` is a definite relay-server amendment carried here; the
+  Strava upload request passes `MAX_UPLOAD_REQUEST_BYTES`.
+- **R13.4**: envelope answers use relay-server's canonical key order.
+- **R13.5**: the CLI's started line is neutral ("connect this instance");
+  only the relay page says "Connect with Strava".
+- **R13.6 folds**: `SealedTokens.access_expires_at` and its column are
+  nullable (`None` means no time-based refresh; Strava always writes a
+  value), and `EnvVar.required_with` is a tuple (required when any named
+  variable is set), so relay-intervals appends to it instead of adding a
+  schema change.
+- **M4 and M8**: the network-statement predicate is the shared
+  `_names_publish_command`; the no-request sentence and the distribution
+  Req 10.4 edit are idempotent; a loopback `http` relay yields no link
+  (`link_refused`), which is documented and pinned.
 
 ## Synthesis Outcomes
 - **Generalization**: the connect machinery (sessions, pages, callback,
