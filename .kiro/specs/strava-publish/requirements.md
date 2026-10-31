@@ -174,7 +174,7 @@ meaning):
 7. If the callback reports that the athlete declined, or the granted permissions lack either requested permission, or the code exchange fails, the relay server shall store no token, mark the session refused, and serve a fitdocs-written page with the next step, never showing any text Strava returned.
 8. When a poll presents a session's poll secret with a relay token of the session's principal, the relay server shall answer pending until the session is granted, refused or expired; on the first poll after the grant it shall issue a new relay token for that principal as the connection token, revoke the principal's earlier Strava connection token if any, and answer granted with the new token exactly once.
 9. If a poll presents a relay token of a different principal, or an unknown poll secret, the relay server shall answer as for an unknown session and change nothing.
-10. When a Strava account already connected to another principal is connected again, the relay server shall move the connection to the new principal and delete the earlier connection, its connection token and its link records in the same transaction, so that one Strava account is connected to at most one principal.
+10. When a Strava account already connected to another principal is connected again, the relay server shall move the connection to the new principal, deleting the earlier connection and its link records and revoking its connection token in the same transaction, so that one Strava account is connected to at most one principal.
 11. When a principal that holds a Strava connection connects again, the relay server shall replace the connection; where the newly connected Strava account differs from the earlier one, it shall also delete the principal's earlier link records.
 
 ### Requirement 4: Custody of Strava Tokens
@@ -185,7 +185,7 @@ meaning):
 2. The relay server shall accept several encryption keys, encrypting with the first and decrypting with any, and the relay package shall provide an operator command that re-encrypts every stored token under the first key and reports how many it re-encrypted and how many no configured key can read.
 3. When a connection's access token expires within a documented margin, the relay server shall refresh it before use, and shall allow at most one refresh of a connection in flight at any time, so that no request uses or stores a refresh token that Strava has already replaced.
 4. When a refresh succeeds, the relay server shall replace the connection's tokens in one atomic operation that succeeds only if the connection has not changed since that refresh began, and a request waiting on that refresh shall use the new tokens rather than refresh again.
-5. If Strava refuses a refresh as invalid, the relay server shall delete the connection and its connection token in one transaction unless the connection changed meanwhile; if the refresh fails for a transient reason, it shall leave the stored tokens unchanged.
+5. If Strava refuses a refresh as invalid, the relay server shall delete the connection and revoke its connection token in one transaction unless the connection changed meanwhile; if the refresh fails for a transient reason, it shall leave the stored tokens unchanged.
 6. The relay server shall send a Strava token only in a request header, never in an address, and only to the configured Strava addresses, never to the target of a redirect.
 7. If a connection's stored tokens cannot be decrypted with any configured key, the relay server shall treat the principal as not connected.
 8. The relay server shall store no Strava athlete identifier; it shall keep only a keyed hash of it, sufficient to act on Strava's deauthorization events.
@@ -268,8 +268,8 @@ meaning):
 2. If that request cannot reach the relay, or the relay answers any other code, the fitdocs CLI shall keep the credentials file, print the code with its fitdocs-written explanation and the next step, and exit with the failure code.
 3. Where `--local-only` is given for a Strava instance, the fitdocs CLI shall make no request, remove the instance's credentials file, and state that the Strava connection stays at the relay until it is disconnected there or access is revoked in Strava's settings.
 4. While a Strava instance has no stored connection token, `fitdocs disconnect` shall report that there is nothing to disconnect, make no request, and exit with the success code.
-5. When the relay receives a disconnect request from a principal, it shall ask Strava once to revoke the connection's authorization, then delete the connection's tokens, its connection token and its link records in one transaction whatever Strava answered, and shall answer success, also when the principal held no connection.
-6. When Strava's deauthorization event for a connected account reaches the relay's webhook, the relay server shall delete that account's connection, tokens, connection token and link records at once, and answer within two seconds; it shall acknowledge every other event without storing anything from it.
+5. When the relay receives a disconnect request from a principal, it shall ask Strava once to revoke the connection's authorization, then delete the connection's tokens and link records and revoke its connection token in one transaction whatever Strava answered, and shall answer success, also when the principal held no connection.
+6. When Strava's deauthorization event for a connected account reaches the relay's webhook, the relay server shall delete that account's connection, tokens and link records and revoke its connection token at once, and answer within two seconds; it shall acknowledge every other event without storing anything from it.
 7. The relay server shall accept webhook requests only at an address that carries the configured webhook secret, compared in constant time, shall answer Strava's subscription validation only when its verification token equals that secret, and shall answer any other webhook request with not-found.
 8. When a principal is deleted, the relay server shall delete its Strava connection, tokens and link records in the same transaction.
 9. The relay package shall provide operator commands that create, show and delete the application's one webhook subscription, printing only fitdocs-written states.
@@ -338,9 +338,9 @@ meaning):
 7. Every new or changed document shall pass every existing documentation, network-statement and neutral-scan guard, and no new document shall mention a hosting provider, an email provider or a deployment's infrastructure.
 8. This feature shall not change the packaged agent skill, whose publishing section names no target.
 
-### Requirement 18: An Optional, Maintainer-Gated Live Check
-**Objective:** As the maintainer, I want a documented way to check the whole path against a real Strava application once, so that the scripted tests' picture of Strava is confirmed before release.
+### Requirement 18: An Optional, Maintainer-Run Live Check
+**Objective:** As the maintainer, I want a written procedure for checking the whole path once against my own Strava application, and a template for recording what it showed, so that the scripted tests' picture of Strava is confirmed before release without any implementation session touching Strava.
 
 #### Acceptance Criteria
-1. Where the maintainer explicitly approves it at implementation time, a documented live check shall connect, publish an update, follow the link and disconnect against the maintainer's own Strava application and account, stating beforehand that it writes to that real account.
-2. The live check shall be optional, shall never run in the test suite or in CI, and shall record only fitdocs codes and fitdocs-written observations, never Strava Data.
+1. The repository shall provide a live-check procedure for the maintainer to carry out against the maintainer's own Strava application and account (connect, publish an update, follow the link, disconnect), stating beforehand that it writes to that real account, and a record template for its results.
+2. No implementation, review or validation session shall carry out any step of the live check or any other step that reaches the real Strava API or a relay connected to it; the record template shall be filled only with the fitdocs codes the maintainer reports, never with Strava Data, and the live check shall never run in the test suite or in CI.

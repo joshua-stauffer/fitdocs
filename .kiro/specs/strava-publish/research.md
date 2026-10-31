@@ -303,7 +303,9 @@
   charged window only when every one stays within its ceiling. Each Strava
   call charges the application's overall windows (and the non-upload
   windows unless it is the upload itself), and the principal's own share of
-  each. A link resolution uses a lower ceiling on the non-upload windows.
+  each. A link resolution uses a lower ceiling on the non-upload windows, both the
+  application's and the principal's own (Step 3.5 review finding 3), and the
+  relay serves a `robots.txt` that disallows `/go/`.
 - **Rationale**: no refused call is counted, concurrent requests cannot
   overshoot, and fairness and headroom are ceilings, not separate
   mechanisms.
@@ -337,6 +339,20 @@
   on both keys (accepted by R11). This spec compares Strava's sport type
   through the sport-family table, because Strava states one; a family gap
   fails safe (no match).
+
+### Decision: Step 3.5 repairs and controller ruling R12
+- The keyring precedes the configuration (crypto before config), since the
+  configuration parses the encryption keys.
+- `EnvVar` gains `required_with`, the deploy contract's way to say
+  "required when the Strava client id is set"; the contract version stays 1.
+- On the upload route, `unavailable` and `storage-unreachable` map to
+  `unconfirmed`, because a non-envelope 5xx after the file was sent leaves
+  the result unknown; the relay answers `unconfirmed` for any failure after
+  its upload call.
+- The fitdocs-sports literal lives in the shared wire module, pinned
+  against `fitdocs.model.Sport` on the fitdocs side.
+- R12: the live check is a maintainer procedure plus a record template; no
+  session carries out a step that reaches the real Strava API.
 
 ## Synthesis Outcomes
 - **Generalization**: the connect machinery (sessions, pages, callback,

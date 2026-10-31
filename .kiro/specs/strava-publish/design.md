@@ -12,13 +12,13 @@ connects their Strava account to their relay principal. `fitdocs publish
 by start time and set its name and description, or, when none exists and
 uploads are enabled, to upload the page's activity file once.
 
-**Users**:
-- Athletes configure a Strava instance and run `fitdocs connect`,
-  `fitdocs publish` and `fitdocs disconnect` for it.
-- Relay operators configure their own Strava application through the
-  deploy environment and run the webhook and key-rotation commands.
-- `relay-intervals` reuses the relay's connect machinery for a second
-  provider.
+**Surfaces**:
+- A Strava instance in `fitdocs.toml`, and the behaviour of `fitdocs
+  connect`, `fitdocs publish` and `fitdocs disconnect` for it.
+- The relay's Strava configuration in the deploy environment, and its
+  webhook and key-rotation commands.
+- The relay's connect machinery, which `relay-intervals` reuses for a
+  second provider.
 
 **Impact**:
 - The connector framework drives its last reserved authentication style
@@ -177,6 +177,10 @@ outcome sets.
   not used (no local record of fetched activities exists on this path); an
   upload never runs on unreadable identity state (StravaPublisher, "Upload
   guard").
+- **R12**: no implementation, review or validation session carries out a
+  step that reaches the real Strava API or a relay connected to it. The
+  live check is a maintainer procedure plus a record template (LiveCheck).
+  This design states command behaviour, never who runs a command.
 - **Interpretation of "a PostPublisher on the relay connector"**: the
   publisher is the new `strava` connector, built on relay-server's
   `RelayClient`. The `relay` connector itself gains no capability: a
@@ -214,9 +218,12 @@ outcome sets.
     is configured.
   - Req 7.1: the interface gains the three storage areas; 7.5-7.7 apply to
     them.
-  - Req 9.2: the variable table gains thirteen rows; `DEPLOY_CONTRACT_
-    VERSION` stays 1 (the change is additive). The command list gains
-    `strava`, `reencrypt` and `new-encryption-key`.
+  - Req 9.2: the variable table gains thirteen rows, and `EnvVar` gains
+    `required_with` to express "required when another variable is set";
+    `DEPLOY_CONTRACT_VERSION` stays 1 (the change is additive). The command
+    list gains `strava`, `reencrypt` and `new-encryption-key`. The recorded
+    `/readyz` exchange and every schema-count literal move with the new
+    schema change pair, by appended literals.
   - Req 9.8: logs never carry encryption keys, the Strava client secret,
     the webhook secret, Strava tokens or anything Strava returned.
   - Design "RelayClient": every request is marked `single_attempt=True`.
@@ -338,7 +345,7 @@ violation is a defect):
 - fitdocs: `identity.strict` → `identity.matching`; `relay_codes` →
   `relay_envelope` → `relay_targets` → `protocol` → `relay` → `strava` →
   `browser_connect` / `disconnect` → `cli`.
-- relay: `shared.*` → `contract` → `config` → `crypto` →
+- relay: `shared.*` → `contract` → `crypto` → `config` →
   `storage.interface` → backends → `storage` → `identity`, `ratelimit` →
   `outbound` → `strava.api` → `strava.budget`, `strava.resolve` →
   `strava.custody` → `strava.publish`, `strava.connect`, `strava.webhook`
@@ -408,7 +415,8 @@ tests/connectors/test_browser_connect.py      # NEW: engine over a scripted tran
 tests/connectors/test_cli_strava.py           # NEW: connect, --no-browser, disconnect, flag refusals
 tests/connectors/test_strava_wire_examples.py # NEW: decodes the recorded Strava-route exchanges
 .kiro/queue/2026-10-31-strava-publish-site-copy.md   # NEW (written with this spec): site copy follow-up (R9)
-relay/LIVE_CHECK_STRAVA.md                    # NEW: the live check procedure; running it is the optional, maintainer-gated task
+relay/LIVE_CHECK_STRAVA.md                    # NEW (optional task): the maintainer's live-check procedure (R12)
+relay/LIVE_CHECK_STRAVA_RECORD.md             # NEW (optional task): the record template, filled only with maintainer-reported codes
 ```
 
 ### Modified Files
@@ -437,7 +445,8 @@ relay/LIVE_CHECK_STRAVA.md                    # NEW: the live check procedure; r
 - `scripts/sync_relay_shared.py`, `tests/test_relay_shared_copies.py`:
   three pairs.
 - relay: `pyproject.toml` (`cryptography`), `uv.lock`, `contract.py`
-  (rows, `COMMANDS`), `config.py` (`RelayConfig.targets`, `.strava`),
+  (rows, `EnvVar.required_with`, `COMMANDS`), `config.py`
+  (`RelayConfig.targets`, `.strava`),
   `storage/interface.py`, `storage/sqlite.py`, `storage/postgres.py`,
   `identity.py` (`TokenService.prepare`), `answers.py` (outcome guard),
   `routes.py` (`OFFERED_TARGETS`, capabilities, `RESERVED_PREFIXES`,
@@ -475,10 +484,15 @@ entries, non-standard-library only):
 | Module | Allowed direct imports |
 |--------|------------------------|
 | `relay_targets` | `fitdocs.connectors.relay_codes`, `fitdocs.connectors.relay_envelope` |
-| `protocol` | existing |
+| `protocol` | existing (re-exports `PublishCode` and `TARGET_CODES` per R11) |
+| `relay` | unchanged |
 | `strava` | `errors`, `protocol`, `secrets`, `relay`, `relay_codes`, `relay_envelope`, `relay_targets` (no `fitdocs.publish.*`, R11) |
 | `browser_connect` | `credentials`, `http`, `protocol`, `secrets`, `settings`, `relay_codes` |
 | `fitdocs.connectors` (package) | existing + `fitdocs.connectors.strava` |
+
+Each new module joins `CONNECTORS_MODULE_NAMES` and `_ALLOWED_IMPORT_TARGETS`
+(`tests/connectors/test_boundary.py`, exact equality over the files on
+disk) in the task that creates it.
 
 ## System Flows
 
@@ -722,6 +736,7 @@ MAX_TITLE_CHARS: Final = 255
 MAX_DESCRIPTION_CHARS: Final = 8000
 MAX_FIT_BYTES: Final = 16 * 1024 * 1024
 MAX_UPLOAD_REQUEST_BYTES: Final = 22 * 1024 * 1024
+FITDOCS_SPORTS: Final[frozenset[str]]   # "Ride", "Run", "Swim", "Walk", "Hike", "Rowing", "Workout" (fitdocs.model.Sport)
 PUBLISH_FIELDS: Final[frozenset[str]]   # publication_id, sport, start, elapsed_s, distance_m, title, description
 UPLOAD_FIELDS: Final[frozenset[str]]    # PUBLISH_FIELDS | {"fit"}
 PUBLISH_OUTCOMES: Final[frozenset[str]] # posted, not_found, ambiguous, not_updatable, not_connected, auth_rejected,
@@ -756,6 +771,9 @@ def route_outcome(outcome: str | None, allowed: frozenset[str]) -> str | None
   character; `description` is 0 to 8,000 characters whose only control
   characters are newline and tab. `fit` decodes to at most `MAX_FIT_BYTES`
   bytes whose bytes 8-11 are `.FIT`.
+- `FITDOCS_SPORTS` is the literal set of fitdocs's sport labels; a fitdocs
+  test pins it equal to `{s.value for s in fitdocs.model.Sport}`, so a new
+  fitdocs sport reds it and prompts the relay's family table to follow.
 - `route_outcome` returns `outcome` only when it is in `allowed`;
   otherwise `None`. A fitdocs test asserts both sets are subsets of
   `TARGET_CODES` values, and a relay test asserts every member is a
@@ -916,9 +934,15 @@ UPLOAD_MAPPING: Final[Mapping[RelayCode, PublishCode]]
 | `rate-limited` | `rate_limited` | `rate_limited` |
 | `not-offered` | `not_connected` | `not_connected` |
 | `request-malformed`, `request-too-large` | `rejected` | `rejected` |
-| `unavailable`, `storage-unreachable`, `schema-behind`, `schema-ahead`, `envelope-unsupported` | `unavailable` | `unavailable` |
+| `unavailable`, `storage-unreachable` | `unavailable` | `unconfirmed` |
+| `schema-behind`, `schema-ahead`, `envelope-unsupported` | `unavailable` | `unavailable` |
 | any other code | `unavailable` | `unconfirmed` |
 
+- On the upload route, `unavailable` and `storage-unreachable` map to
+  `unconfirmed` (5.7): `RelayClient` gives `unavailable` for any 5xx that
+  is not an envelope, such as a gateway's answer after the file was sent,
+  so the upload's result is then unknown. A scripted non-envelope 502 on the
+  upload route is pinned to `unconfirmed`.
 - Every value the operations wrap (poll secret, connection token) is
   registered with the session redactor. Nothing from a reply's `data`
   except the parsed fields is read. The module names no Strava host.
@@ -975,9 +999,10 @@ def consent_next_step(code: RelayCode, *, name: str, relay: str, retry_after_s: 
   either mode (relay-server Req 15.2 holds by construction). Named mutation:
   dropping the flag from `post` makes the publish test over a DATA-mode
   client with a scripted 503 see three transport calls.
-- Where `RelayClient` bounds an outgoing body, the bound is per route:
-  `MAX_UPLOAD_REQUEST_BYTES` for the Strava upload route, relay-server's
-  `MAX_REQUEST_BYTES` for every other route.
+- Where `RelayClient` bounds an outgoing body, its `post` takes a keyword
+  `max_request_bytes` defaulting to relay-server's `MAX_REQUEST_BYTES`, and
+  the Strava connector passes `MAX_UPLOAD_REQUEST_BYTES` for the upload
+  route. `relay.py`'s imports do not change.
 
 #### DisconnectAmendment — `src/fitdocs/connectors/disconnect.py`
 
@@ -1024,8 +1049,13 @@ def consent_next_step(code: RelayCode, *, name: str, relay: str, retry_after_s: 
 | Intent | The Strava target's configuration, from the environment only |
 | Requirements | 9.1, 13.1, 13.2, 13.5, 16.1, 16.3 |
 
-Rows appended to `ENVIRONMENT` ("with Strava" means required when
-`FITDOCS_RELAY_STRAVA_CLIENT_ID` is set):
+Rows appended to `ENVIRONMENT`. relay-server's `EnvVar` gains one field,
+`required_with: str | None = None`: the name of the variable whose presence
+makes this one required. "with Strava" below means `required=False,
+required_with="FITDOCS_RELAY_STRAVA_CLIENT_ID"`, and `docs/relay.md`'s
+Required column renders it as "with `FITDOCS_RELAY_STRAVA_CLIENT_ID`"
+(relay-server's docs binding test reads that rendering). The rows are
+also appended to relay-server's literal full-table pin.
 
 | Variable | Required | Default | Secret | Meaning |
 |----------|----------|---------|--------|---------|
@@ -1062,9 +1092,12 @@ def load_strava_config(environ: Mapping[str, str]) -> StravaConfig | None
   missing "with Strava" variable, an invalid value or a 15-minute limit
   above the daily one is a `ConfigError` naming the variable, never its
   value. Without the client id, every Strava variable must be unset.
-- `DEPLOY_CONTRACT_VERSION` stays 1; `COMMANDS` gains `strava`,
-  `reencrypt` and `new-encryption-key`. The relay changelog records the
-  additions.
+- `DEPLOY_CONTRACT_VERSION` stays 1: the rows and the `required_with`
+  field are additive. `COMMANDS` gains `strava`, `reencrypt` and
+  `new-encryption-key` where those commands are built (RelayOperatorCli).
+  The relay changelog records the additions in a new section that restates
+  deploy contract 1, envelope 1 and seam 1, so relay-server's newest-section
+  pin stays true.
 
 #### Keyring — `crypto.py`
 
@@ -1209,8 +1242,11 @@ class StravaBudget:
   windows (`strava:p:<principal>:...`) with ceilings of
   `max(1, floor(limit x PRINCIPAL_SHARE))`. An `UPLOAD` call charges only
   the overall windows (its own and the principal's). With `for_link`, the
-  application's non-upload ceilings are `floor(limit x (1 -
-  LINK_HEADROOM))`.
+  non-upload ceilings of both the application's and the principal's
+  windows are lowered by the headroom: `floor(limit x (1 - LINK_HEADROOM))`
+  and `floor(limit x PRINCIPAL_SHARE x (1 - LINK_HEADROOM))`, so neither
+  the athletes together nor one athlete's own links can spend what that
+  athlete's publishing needs (9.5).
 - `reserve_upload` charges one upload and `reads` non-upload calls in one
   `spend_budget`. OAuth calls (exchange, refresh, revoke) and subscription
   calls charge as `READ`.
@@ -1239,9 +1275,10 @@ def pick(facts: PublishFacts, listing: Listing) -> Candidate | Pick
   `Walk` → {Walk}; `Hike` → {Hike}; `Rowing`, `VirtualRow` → {Rowing};
   every other sport type in Strava's documented list → {Workout}, because
   fitdocs labels every FIT sport it does not name as `Workout`
-  (`ingest/sport.py:42-53`). A type outside the table never matches. A test
-  pins the family values within the literal set of fitdocs sports, and a
-  fitdocs-side test pins that literal against `fitdocs.model.Sport`.
+  (`ingest/sport.py:42-53`). A type outside the table never matches. The
+  fitdocs sports are the literal `FITDOCS_SPORTS` in the shared wire module
+  (a fitdocs test pins it equal to `fitdocs.model.Sport`'s values), and a
+  relay test pins every family value within the pinned copy of it.
 - `pick`: a `full` listing is `MANY`. Otherwise each candidate becomes
   `StrictFacts(sport=facts.sport if facts.sport in family else "", ...)`
   and is compared with the page's facts by `strict_match`; exactly one match
@@ -1349,6 +1386,10 @@ class StravaPublisher:
   A `limited` answer also calls `mark_spent(daily=failure.daily_spent)`.
   After the upload was sent, a list failure during re-resolution gives
   `UNCONFIRMED`. A deadline before the upload gives `UNAVAILABLE`.
+- **After the upload call**: once `create_upload` has been called, any
+  later failure in that request (a storage error writing the publication
+  record, an unexpected exception) is caught by the upload route, logged by
+  type only, and answered `ok` with `unconfirmed`, never `relay-failure`.
 - **`resolve_link`**: a malformed or unknown id, or no connection →
   `NOT_FOUND`; `access_token(for_link=True)` and a `for_link` budget spend
   (refused → `TRY_LATER`); list and pick: one → `"<web>/activities/<id>"`;
@@ -1397,8 +1438,9 @@ class ConnectFlow:
   scope, writes `result: refused`. Otherwise one budget spend (refused:
   `refused`) and `exchange` once (failure: `refused`), `Custody.store_grant`, `result: granted`.
 - `poll`: unknown poll hash or another principal → `EXPIRED` (Req 3.9);
-  `take_record(result:...)`: `granted` → `TokenService.prepare` and
-  `issue_connection_token` → `PollGranted(token)`, and the session records
+  `take_record(result:...)`: `granted` → `TokenService.prepare(label=
+  "connection:strava")` and `issue_connection_token` → `PollGranted(token)`
+  (the label makes `fitdocs-relay token list` show what the token is), and the session records
   are deleted; `refused` → `REFUSED`; no result → `PENDING`.
 
 #### Webhook — `strava/webhook.py`
@@ -1470,6 +1512,7 @@ CONSENT_TEXT: Final[tuple[str, ...]]
 | GET | `/strava/callback` | claim cookie, state | — | page |
 | GET | `/go/{publication_id}` | none | — | 302 or page |
 | GET | `/privacy` | none | — | page |
+| GET | `/robots.txt` | none | — | `User-agent: *` and `Disallow: /go/`, served while Strava is configured |
 | GET, POST | `/strava/webhook/{secret}` | path secret | Strava's | JSON challenge or empty 200 |
 
 - Envelope routes reuse relay-server's authentication, per-token limit,
@@ -1531,7 +1574,9 @@ class BudgetStore(StorageBase, Protocol):
     reset to 1 and no lease; a row of another principal with the same
     `(target, account_key)` is deleted with its publications and its
     connection token revoked; when the same principal's `account_key`
-    changes, that principal's publications for the target are deleted.
+    changes, that principal's publications for the target are deleted. A
+    same-principal put keeps the row's `token_id`, so the next issuance
+    revokes the earlier connection token (3.8).
   - `claim_refresh` succeeds only when the generation matches and no lease
     is live (`lease_until` absent or `<= now`).
   - `swap_tokens` succeeds only when the generation matches and either the
@@ -1568,7 +1613,7 @@ class BudgetStore(StorageBase, Protocol):
   `services.targets` is the offered targets whose configuration is present,
   and the capabilities endpoint lists those only (13.3, 13.4);
   `RESERVED_PREFIXES` appends `/connect/`, `/strava/`, `/go/`,
-  `/privacy`; `ROUTE_BODY_LIMITS = {target_route(STRAVA, ACTION_UPLOAD):
+  `/privacy` and `/robots.txt`; `ROUTE_BODY_LIMITS = {target_route(STRAVA, ACTION_UPLOAD):
   MAX_UPLOAD_REQUEST_BYTES}`, every other route keeping
   `MAX_REQUEST_BYTES`; `core_routes` appends `strava_routes(services)` when
   `services.strava` is set. Unconfigured, the Strava paths fall to the
@@ -1672,9 +1717,16 @@ class BudgetStore(StorageBase, Protocol):
   schema change.
 - **SiteFollowUp** (17.6): `.kiro/queue/2026-10-31-strava-publish-site-
   copy.md`, written with this spec.
-- **LiveCheck** (18): `relay/LIVE_CHECK_STRAVA.md`, an optional procedure
-  run only with the maintainer's explicit go (the optional task marked
-  `*` in tasks.md).
+- **LiveCheck** (18, R12): `relay/LIVE_CHECK_STRAVA.md`, a written
+  procedure the maintainer carries out against the maintainer's own Strava
+  application and account (connect, publish an update, follow the link,
+  disconnect), stating first that it writes to that real account, and
+  `relay/LIVE_CHECK_STRAVA_RECORD.md`, a record template with one row per
+  step for the fitdocs code observed. No implementation, review or
+  validation session carries out any step that reaches the real Strava API
+  or a relay connected to it; a session fills the template only with the
+  codes the maintainer reports. Both files are the optional task marked
+  `*` in tasks.md.
 
 ## Data Models
 
@@ -1739,7 +1791,8 @@ Every assertion names the mutation it dies on (`tech.md` Testing).
   by row; `ACTIVITY_FACTS_MISSING`, `ACTIVITY_FILE_MISSING` and oversize
   without a request; the file sent only after `not_found` with uploads on;
   the link only with a landed code; an `ok` answer whose outcome is
-  `uploaded` on the publish route is `unavailable`. Single attempt: a
+  `uploaded` on the publish route is `unavailable`; a scripted non-envelope
+  502 on the upload route is `unconfirmed`. Single attempt: a
   DATA-mode client scripted with 503 sees one call per request (dies on
   removing `single_attempt=True`).
 - Registry, credentials and protocol pins as listed under Modified Files.
@@ -1762,8 +1815,10 @@ Every assertion names the mutation it dies on (`tech.md` Testing).
   `None`; two seals of one plaintext differ.
 - `pick`: zero, one and two matches; a full listing; a sport type outside
   the table; families.
-- `StravaBudget`: ceilings per kind, link headroom, principal share,
-  `mark_spent`.
+- `StravaBudget`: ceilings per kind, link headroom on both the
+  application's and the principal's non-upload windows (a principal's link
+  refused at its own headroom while its publish is allowed), principal
+  share, `mark_spent`.
 - Pages: every interpolated value escaped; no page contains a planted
   Strava sentinel string the scripted API returned.
 
@@ -1812,9 +1867,11 @@ exchanges decoded by the fitdocs suite.
 
 ## Performance & Scalability
 - A publish costs one list and one update against Strava; an upload at most
-  `1 + 2 + MAX_UPLOAD_POLLS` reserved calls. With the default limits, about
-  fifty updates fit in one 15-minute window, so a large first publish
-  completes over several runs (each run stops at `rate_limited`).
+  `1 + 2 + MAX_UPLOAD_POLLS` reserved calls. With the default limits, the
+  application fits about fifty updates in one 15-minute window, and one
+  principal about twenty-five (two reads each against its share of fifty),
+  or about 250 a day. A large first publish therefore completes over several
+  runs (each run stops at `rate_limited`).
 - Each request finishes within 20 s (publish) or 25 s (upload), under
   fitdocs's 30 s request timeout.
 
