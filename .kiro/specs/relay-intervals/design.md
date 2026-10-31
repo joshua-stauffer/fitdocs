@@ -1109,7 +1109,7 @@ class TokenVault:
 def account_key(pepper: bytes, target: str, account_id: str) -> str: ...
 
 # targets/policy.py
-COMMON_OPENING: Final[tuple[tuple[str, str], ...]]   # Who runs this relay; What fitdocs sends
+COMMON_OPENING: Final[tuple[tuple[str, str], ...]]   # The relay's operator; What fitdocs sends
 COMMON_CLOSING: Final[tuple[tuple[str, str], ...]]   # Security; Contact
 def policy_sections(providers: Sequence[ConsentProvider]) -> tuple[tuple[str, tuple[tuple[str, str], ...]], ...]
 
@@ -1163,7 +1163,8 @@ def target_routes(services: RelayServices) -> list[BaseRoute]: ...
   objects it tests (Strava's `Custody` now takes the `TokenVault`;
   `ConnectFlow` takes `providers`; registry fakes for browser-consent
   connectors declare `service_name`), the target argument the shared
-  operations now take, the `required_with` shape in the contract pin, the
+  operations now take, the four target-neutral rows' `required_with` tuples
+  gaining the intervals.icu client id in the contract pin, the
   place of moved documentation headings, and the privacy page's grouping
   (Req 14.2). The full relay suite, on both backends, passes after each
   task. Each task that creates or moves a relay module updates

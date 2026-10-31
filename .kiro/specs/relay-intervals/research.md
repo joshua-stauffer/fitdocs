@@ -287,7 +287,8 @@ Each is behind one function and its tests.
 - **Trade-offs**: a refactor of landed Strava code inside this spec; every
   Strava test keeps every expected value, and may change only its imports,
   its setup and object construction, the target argument the shared
-  operations now take, the `required_with` shape, the place of moved doc
+  operations now take, the four target-neutral rows' `required_with` tuples
+  gaining the intervals.icu client id, the place of moved doc
   headings, and the privacy page's grouping (Req 14.2, widened after the
   Step 3.5 review).
 

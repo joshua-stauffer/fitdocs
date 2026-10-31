@@ -49,7 +49,8 @@ Rules for every task:
   strava-publish's or intervals-publish's code, their tests keep every
   expected value they assert. A moved test may change only its imports, its
   setup and the construction of the objects it tests, the target argument a
-  shared operation now takes, the `required_with` shape in the contract pin,
+  shared operation now takes, the four target-neutral rows' `required_with`
+  tuples gaining the intervals.icu client id in the contract pin,
   the place of moved documentation headings, and (for the privacy page) the
   grouping of the Strava sections.
 - **The relay boundary test moves with each module.** A task that creates

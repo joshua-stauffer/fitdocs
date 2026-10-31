@@ -1678,8 +1678,10 @@ def create_app(config: RelayConfig, *, extensions: Sequence[RelayExtension] = ()
     time, never under the data root.
   - "Overwrite Semantics of Every Writing Operation" (`:1176-1180`) gains a
     `disconnect` entry beside `connect`: it removes only that instance's
-    credentials file, writes nothing under the data root, and for a relay
-    instance first revokes the token with one request.
+    credentials file, writes nothing under the data root, and, where the
+    instance's auth style revokes at a relay (a relay instance here, and
+    the relay-bound browser-consent instances later specs add), first makes
+    one revocation request.
   - The version head and the "what changed" paragraph are updated.
   - `CONTRACT_VERSION` in `src/fitdocs/contract.py` rises to main + 1 at
     landing, with an appended history paragraph using the landed literals.

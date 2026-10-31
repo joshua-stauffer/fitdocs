@@ -845,7 +845,12 @@ def publish(self, session: ConnectorSession, request: PublishRequest) -> Publish
   --yes`, it is left as it is; `_names_publish_command`, the no-request
   sentence, the connectors Req 14.1 amendment text and the distribution Req
   10.4 amendment are each added once, skipped when an earlier target
-  recorded them; the host line is per target.
+  recorded them. The skip applies per clause: in connectors Req 14.1,
+  `fitdocs publish --yes` among the request commands and the no-request
+  forms (without `--yes`, and `--targets`) are checked and added
+  independently, so a strava-first landing that recorded only its own
+  requests still gets the no-request forms from this spec. The host line
+  is per target.
 
 #### Records
 - `CHANGELOG.md` Unreleased (11.4), read through
