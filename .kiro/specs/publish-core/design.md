@@ -10,7 +10,8 @@ each post to its target through one published contract; every outcome is a
 code from a closed vocabulary; a ledger records what landed; and a
 fitdocs-owned `published` region on the page links to the posted activity.
 
-**Users**: the athlete who runs `fitdocs publish`; the authors of the
+**Users**: `fitdocs publish` composes, previews and posts an athlete's
+workout posts; its other users are the authors of the
 `intervals-publish`, `strava-publish` and `relay-intervals` targets, who
 implement the contract; the relay, which carries a pinned copy of the
 vocabulary; and agents working the athlete's wiki through the packaged
@@ -97,9 +98,13 @@ request reaches any service until a target spec lands.
   `outcomes`, `request`, `links`. It is the only `fitdocs.publish` module
   that imports `fitdocs.connectors`.
 - `fitdocs.publish.engine` and `report`: the modules above.
-- `fitdocs.connectors.protocol` and `fitdocs.connectors.registry` may
-  import `fitdocs.publish.request` (and so `outcomes`), and nothing else
-  from `fitdocs.publish`.
+- `fitdocs.connectors.protocol` may import `fitdocs.publish.request` and
+  `fitdocs.publish.outcomes` (directly: it re-exports `PublishCode` and
+  `TARGET_CODES`); `fitdocs.connectors.registry` may import
+  `fitdocs.publish.request`. Neither imports anything else from
+  `fitdocs.publish`, and no other connectors module imports
+  `fitdocs.publish.*`: connector target modules take the value types,
+  `PublishCode` and `TARGET_CODES` from `connectors.protocol` (R11).
 - `fitdocs/publish/__init__.py` imports nothing, so importing a leaf loads
   no other fitdocs module.
 - No `fitdocs.publish` module imports `render`, `load`, `metrics`,
@@ -275,8 +280,8 @@ docs/publishing.md                       # contract-grade publishing reference
 - `src/fitdocs/connectors/http.py` — `HttpRequest.single_attempt`; `send`;
   `post(..., single_attempt=False)`.
 - `src/fitdocs/connectors/__init__.py` — `__all__` appends `PostPublisher`,
-  `PUBLISH_CAPABILITIES`, `Post`, `CompletedActivity`, `PublishRequest` and
-  `PublishResult` (the value types re-exported through
+  `PUBLISH_CAPABILITIES`, `Post`, `CompletedActivity`, `PublishRequest`,
+  `PublishResult`, `PublishCode` and `TARGET_CODES` (all re-exported through
   `connectors.protocol`, so the package module's own boundary entry is
   unchanged); docstring's allowed-import sentence.
 - `src/fitdocs/cli.py` — `publish` command and its options.
@@ -310,7 +315,8 @@ docs/publishing.md                       # contract-grade publishing reference
 - `docs/ownership-contract.md`, `docs/configuration.md`, `docs/index.md`,
   `CHANGELOG.md`.
 - `.kiro/steering/structure.md` — `fitdocs.publish` entry, and the
-  connectors sentence (its imports, and who imports it).
+  connectors sentence (its imports, and who imports it), appended after
+  whatever clauses that sentence holds at landing.
 - Amendment records in `.kiro/specs/{wiki-contract,workout-docs,connectors,
   effort-tags,distribution}/requirements.md`.
 
@@ -518,12 +524,20 @@ target may return it, S stops the target, St a listing state):
 | 32 | `NOT_ATTEMPTED` | `not_attempted` | F | Nothing was sent, because an earlier result in this run stopped publishing to this target. |
 | 33 | `PUBLISHED_NOT_WRITTEN` | `published_not_written` | F | The outcomes were recorded, but this page's published region could not be rewritten; the next `fitdocs publish --yes` rewrites it. |
 | 34 | `READY` | `ready` | St | This target is configured and has the credentials it needs. |
+| 35 | `LOCAL_RECORD_UNREADABLE` | `local_record_unreadable` | F T | This target could not read its own local record of this connection's activities, so it could not rule out that the activity already exists and uploaded nothing. |
 
 **Implementation Notes**
 - Validation: tests pin the prefix, the flag sets as literal frozensets,
   that every explanation is one sentence ending in `.` with no `{`, and that
   `TARGET_CODES` excludes every code a target must not return (1-14, 16,
-  24, 31-34).
+  24, 31-34) and includes `LOCAL_RECORD_UNREADABLE` (35).
+- `LOCAL_RECORD_UNREADABLE` (R11, appended after `READY`): a target that
+  cannot read its own local record of the connection's activities (for
+  intervals.icu, the pull ledger) cannot rule out that the activity already
+  exists remotely. Its read-only resolution steps still run (a recorded
+  link or a listing match still posts); if resolution then fails, it
+  answers this code whatever its upload setting, and never uploads. The
+  explanation is fitdocs's own text and names no service.
 - Risks: an edit to an existing member breaks the relay's pinned copy;
   the drift check relay-server ships, with the pair strava-publish appends,
   catches it (R2, R9).
@@ -815,12 +829,13 @@ def save_ledger(data_root: Path, ledger: PublishLedger) -> bool: ...
   `<data_root>/.fitdocs/publish/<target>.toml`, under the already-owned
   `.fitdocs/`.
 - **Load** (`configured` maps each configured publish target to its
-  connector id): reads every regular `*.toml` file directly in
-  `.fitdocs/publish/` (stem must be a valid target name) plus an empty
-  ledger for each configured target without a file; reading creates
-  nothing. A configured target's file must name the same `connector`. Any
+  ledger identity, which in this version is its connector id): reads every
+  regular `*.toml` file directly in `.fitdocs/publish/` (stem must be a
+  valid target name) plus an empty ledger for each configured target
+  without a file; reading creates nothing. A configured target's file must
+  name the target's ledger identity in its `connector` key. Any
   unreadable file, invalid TOML, wrong shape, newer `ledger_version`,
-  connector mismatch or violated invariant raises `PublishLedgerError`
+  ledger-identity mismatch or violated invariant raises `PublishLedgerError`
   (exit 2); nothing is rebuilt or overwritten.
 - **Invariants** (checked on load and on save): `page` matches
   `workout:[0-9a-f]{64}` and is unique; `publication_id` matches
@@ -1198,6 +1213,10 @@ def document_summary(frontmatter: Mapping[str, object] | None) -> SummaryReading
 
 ```python
 # protocol.py
+from fitdocs.publish.outcomes import TARGET_CODES, PublishCode      # re-exported (R11)
+from fitdocs.publish.request import (CompletedActivity, Post,       # re-exported
+                                     PublishRequest, PublishResult)
+
 PUBLISH_CAPABILITIES: Final[frozenset[Capability]] = frozenset(
     {Capability.PUSH_ACTIVITY, Capability.ANNOTATE_REMOTE_ACTIVITY,
      Capability.RESOLVE_REMOTE_ACTIVITY})
@@ -1235,16 +1254,21 @@ class HttpClient:
   log or return service text; resolve before creating, with the publication
   id as the idempotency key; `AMBIGUOUS` for several matches and
   `ACTIVITY_FACTS_MISSING` when the facts given cannot identify the
-  activity, never a pick or an upload; a non-idempotent request marked
+  activity, never a pick or an upload; `LOCAL_RECORD_UNREADABLE`, never an
+  upload, when its own local record of the connection's activities cannot
+  be read and resolution fails; a non-idempotent request marked
   `single_attempt`.
-- `__all__` appends `PostPublisher`, `PUBLISH_CAPABILITIES` and the four
+- `__all__` appends `PostPublisher`, `PUBLISH_CAPABILITIES`, the four
   value types `Post`, `CompletedActivity`, `PublishRequest` and
-  `PublishResult`. `connectors.protocol` imports the value types from
-  `fitdocs.publish.request` and the package module imports them from
-  `connectors.protocol`, as the wellness value types are exported, so only
-  the protocol and registry boundary entries admit the request leaf
-  (surface count + 6; peers append their own names, so the literal count
-  moves at landing). The single-attempt mode is
+  `PublishResult`, and `PublishCode` and `TARGET_CODES` (R11).
+  `connectors.protocol` imports the value types from
+  `fitdocs.publish.request` and the two code names from
+  `fitdocs.publish.outcomes`, and the package module imports all six from
+  `connectors.protocol`, as the wellness value types are exported. So only
+  the protocol boundary entry admits both leaves and the registry entry
+  admits the request leaf; connector target modules import these names from
+  `connectors.protocol`, never from `fitdocs.publish.*` (surface count + 8;
+  peers append their own names, so the literal count moves at landing). The single-attempt mode is
   published as a field of the already-published `HttpRequest` (9.8).
 
 ### Packaging and documentation
@@ -1276,8 +1300,8 @@ class HttpClient:
   ledger (location, fields, version, what deleting it means); the
   `published` region; the target obligations (9.6, 10.6); the statement
   that nothing a service returns is printed, logged or written except
-  permitted links. It names no service; each target spec adds its own
-  section. Linked from `docs/index.md` (and `_REQUIRED_ENTRY_POINT_LINKS`),
+  permitted links. It names no service; each target documents itself in
+  its own connector page. Linked from `docs/index.md` (and `_REQUIRED_ENTRY_POINT_LINKS`),
   and declared in `[project.urls]` (16.3); `docs/configuration.md` names the
   table.
 - The documentation site is not edited (16.2, R9). A new queue item,
@@ -1298,7 +1322,8 @@ class HttpClient:
   workouts declaration, the tuple-driven region and key lists change with
   their tuples and the `published` sentence with `CONTRACT_VERSION`.
 - `CHANGELOG.md` Unreleased (16.4), pinned through
-  `tests/_changelog_view.unreleased_since`.
+  `tests/_changelog_view.unreleased_since(text, V0_2_0)` (the entry
+  postdates 0.2.0).
 - Tests (`tests/publish/test_docs.py`): the code table equals `OUTCOMES`
   (values, explanations, flags) and the placeholder table equals
   `PLACEHOLDERS` in order (1.7); the page names no service.
@@ -1345,7 +1370,7 @@ label = "Example"
 Every assertion names the mutation it dies on (`tech.md` Testing).
 
 - **Unit**
-  - Outcomes: literal prefix pin of all 34 values (dies on reorder or
+  - Outcomes: literal prefix pin of all 35 values (dies on reorder or
     rename); literal flag sets; a stdlib-only AST check (dies on a
     `fitdocs` import); subprocess isolation for `outcomes` and `request`
     (dies on an import in `fitdocs/publish/__init__.py`).
@@ -1358,7 +1383,7 @@ Every assertion names the mutation it dies on (`tech.md` Testing).
   - Compose: region grammar (comments, unclosed comment, title-only, missing
     blank line, CRLF); digest changes with title or description only.
   - Settings: field resolution order; each error class with file/table/key.
-  - Ledger: round trip, invariants, newer version, connector mismatch,
+  - Ledger: round trip, invariants, newer version, ledger-identity mismatch,
     unreadable file, write-if-different (mtime unchanged), sort order.
   - Links: line format and order, link/label validation boundary cases,
     splice leaves every other byte unchanged.
@@ -1417,16 +1442,19 @@ Every assertion names the mutation it dies on (`tech.md` Testing).
 - **connectors**: Req 1.2-1.4 (three capabilities driven, four reserved),
   a publish-operation criterion beside 1.5, Req 1.9 outputs, Req 2.3
   validation, Req 2.7 surface, a Req 9 single-attempt criterion; the
-  Allowed Dependencies statement admits `fitdocs.publish.request` in
-  `protocol.py`.
+  Allowed Dependencies statement admits `fitdocs.publish.request` and
+  `fitdocs.publish.outcomes` in `protocol.py` and `fitdocs.publish.request`
+  in `registry.py`.
 - **effort-tags**: Req 2.1's "exactly four user-owned keys" reads as the
   effort tag's four keys; the user-owned set also holds `publish`.
 - **distribution**: Req 8.1 and 8.2 gain publishing (the skill previews and,
   on request, publishes posts, and explains the publish codes).
 - **steering** `structure.md`: a `fitdocs.publish` entry, and the
-  connectors sentence admits `fitdocs.publish.request` among its imports
-  and `fitdocs.publish.targets` beside `cli` among its importers (R7:
-  line-disjoint from relay-server's entries).
+  connectors sentence (structure.md:71-75 at base) admits
+  `fitdocs.publish.request` and `fitdocs.publish.outcomes` among its
+  imports and `fitdocs.publish.targets` beside `cli` among its importers,
+  appended after whatever clauses the sentence holds at landing (R7, M5:
+  line-disjoint from relay-server's and other specs' clauses).
 - No `docs-site` amendment: the site is not edited (R9); its copy is a
   queue item.
 

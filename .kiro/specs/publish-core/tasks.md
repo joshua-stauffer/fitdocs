@@ -39,12 +39,14 @@ live constant.
     `tests/publish` test package; add `tests/publish` to the type checker's
     file list so later test stubs are checked against the protocols they
     implement.
-  - Add the closed vocabulary of 34 codes in the design's order, each with
+  - Add the closed vocabulary of 35 codes in the design's order (the 35th,
+    `local_record_unreadable`, is a target code: a failure, not landed, not
+    stopping), each with
     its fixed one-sentence explanation and its five flags (landed, failure,
     may come from a target, stops the target, a listing state), plus the
     derived code sets and the explanation lookup.
   - The module imports only the standard library.
-  - Tests pin, as literals: the 34 values in order (a prefix pin, so
+  - Tests pin, as literals: the 35 values in order (a prefix pin, so
     appending stays free); each flag set; that every explanation is one
     sentence ending in a full stop with no brace; that the codes a target may
     return exclude every offline, core-assigned and listing-only code.
@@ -196,14 +198,20 @@ live constant.
   - Registration rejects, naming the problem: resolve or push declared
     without annotate; a publish capability declared without a callable
     publish operation or with a label that fails the label rule.
-  - Append the protocol, the capability set and the four request and result
-    value types to the published surface. The value types are re-exported
-    through the protocol module (which imports them from the request leaf),
-    so the package module imports them from the protocol and its own
-    boundary entry (`tests/connectors/test_boundary.py:277`) is unchanged; and move the surface count pins
-    (`tests/connectors/test_surface.py:127, 158`) by six as literals at
-    landing; admit the request leaf in the protocol and registry modules'
-    boundary pins; update the package docstring's allowed-import sentence.
+  - Append the protocol, the capability set, the four request and result
+    value types, and the outcome code type and the set of codes a target may
+    return (R11) to the published surface. All six re-exported names go
+    through the protocol module, which imports the value types from the
+    request leaf and the two code names from the vocabulary leaf, so the
+    package module imports them from the protocol and its own boundary
+    entry (`tests/connectors/test_boundary.py:277`) is unchanged. Connector
+    target modules import these names from the protocol, never from the
+    publish package.
+  - Move the surface count pins (`tests/connectors/test_surface.py:127,
+    158`) by eight as literals at landing; admit the request and vocabulary
+    leaves in the protocol module's boundary pin and the request leaf in the
+    registry module's; update the package docstring's allowed-import
+    sentence.
   - Move the two tests that assume the three are undriven:
     `tests/connectors/test_wellness_protocol.py:176-195` keeps only the four
     capabilities still reserved, and
@@ -302,7 +310,8 @@ live constant.
   - Load every ledger file present plus an empty ledger for each configured
     target without one; reading creates nothing; refuse, naming the file,
     an unreadable file, invalid TOML, a wrong shape, a newer version, a
-    connector other than the target's, and every violated invariant from
+    ledger identity other than the target's (its connector id), and every
+    violated invariant from
     the design; never rewrite a ledger it refused.
   - Save sorted by page, omitting absent fields, atomically and only when
     the bytes change.
@@ -518,7 +527,8 @@ live constant.
     table with explanations and flags; the ledger and what deleting it
     means; the `published` region; the target obligations; the statement
     that nothing a service returns is printed, logged or written except
-    permitted links. It names no service.
+    permitted links. It names no service: each target documents itself in
+    its own connector page.
   - Link it from the documentation index and add it to
     `tests/test_docs_guarantees.py`'s `_REQUIRED_ENTRY_POINT_LINKS`; declare
     it in the package's `[project.urls]`, which the skill's link requires;
@@ -536,7 +546,8 @@ live constant.
 - [ ] 8.4 Write the changelog entry and refresh the site-copy record
   - The changelog's Unreleased section describes publishing, the two
     regions, the `publish` key, both version changes and the `fitdocs regen`
-    action, read through the changelog view helper.
+    action, pinned through `unreleased_since(text, V0_2_0)` from the
+    changelog view helper (the entry postdates 0.2.0).
   - Edit nothing under `website/content/` (R9). Refresh the evidence in
     `.kiro/queue/2026-10-31-publish-core-site-copy.md` to the landed line
     numbers and version values, and add any further site line this
@@ -556,16 +567,18 @@ live constant.
       version change;
     - **connectors**: Req 1.2-1.4 (three driven, four reserved), the publish
       operation criterion, Req 1.9's outputs, Req 2.3's validation, Req 2.7's
-      surface, the single-attempt criterion in Req 9, and the request leaf
-      admitted by the allowed dependencies;
+      surface, the single-attempt criterion in Req 9, and the allowed
+      dependencies admitting the request and vocabulary leaves in the
+      protocol module and the request leaf in the registry module;
     - **effort-tags**: Req 2.1 reads as the effort tag's four keys, the
       user-owned set also holding `publish`;
     - **distribution**: Req 8.1 and 8.2 gain publishing.
   - Add the publish package's entry to the structure steering, and correct
-    both halves of its connectors sentence: the request leaf joins what
-    `connectors` imports, and the publish package's target module joins
-    `cli` among what imports `connectors`; line-disjoint from the relay's
-    entries.
+    both halves of its connectors sentence: the request and vocabulary
+    leaves join what `connectors` imports, and the publish package's target
+    module joins `cli` among what imports `connectors`. Append these clauses
+    after whatever clauses the sentence holds at landing, line-disjoint from
+    the relay's and other specs' entries.
   - Done when each spec carries its dated amendment naming this spec and its
     spec status check is clean.
   - _Requirements: 16.5, 16.6_

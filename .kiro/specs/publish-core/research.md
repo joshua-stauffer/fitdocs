@@ -124,8 +124,11 @@
     be added to `_ALLOWED_IMPORT_TARGETS` deliberately.
 - **Implications**: the request and result value types live in a
   standard-library-only `fitdocs.publish.request` leaf beside
-  `fitdocs.publish.outcomes`; `connectors.protocol` imports only that leaf
-  (which imports `outcomes`). `fitdocs/publish/__init__.py` must import
+  `fitdocs.publish.outcomes`; `connectors.protocol` imports those two
+  leaves only, and re-exports the value types, `PublishCode` and
+  `TARGET_CODES` so that connector target modules never import
+  `fitdocs.publish.*` (controller ruling R11, folded at cross-spec review).
+  `fitdocs/publish/__init__.py` must import
   nothing, or importing the leaf from `connectors` would load
   `contract`/`docio`/`docmerge` transitively.
 
@@ -247,7 +250,15 @@
   re-post updates rather than duplicates; the docs say so.
 - Parallel landers append to `connectors.__all__`, `Capability` docs and
   `CHANGELOG.md`. Mitigation: append-only edits; the surface count pin moves
-  by this spec's six names at landing.
+  by this spec's eight names at landing.
+- Cross-spec folds (controller rulings R11, R13, 2026-10-31): the code
+  `local_record_unreadable` appended at position 35 for a target that cannot
+  read its own local record of the connection's activities (intervals.icu's
+  pull ledger) and so never uploads; the ledger-identity wording of Req 11.6
+  ("the target's ledger identity (its connector id)"), so that
+  relay-intervals' later amendment changes only that definition; the
+  changelog pins anchored at `V0_2_0`; the structure-steering clauses
+  appended after whatever the sentence holds at landing.
 - Site copy goes stale (example `doc_version`, contract version) and has no
   publishing page. Mitigation: per controller ruling R9 the site is not
   edited by a Phase 14 spec; `.kiro/queue/2026-10-31-publish-core-site-copy.md`
