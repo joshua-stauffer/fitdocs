@@ -77,8 +77,9 @@ Terms used below:
   **upload** sends a file that creates an activity.
 - The publish codes (posted, uploaded, not found, ambiguous, not updatable,
   missing activity file, missing activity facts, rejected credentials, missing
-  permission, rate limited, unavailable, refused as invalid, unconfirmed) are
-  publish-core's, with publish-core's fixed explanations.
+  permission, rate limited, unavailable, refused as invalid, unconfirmed, and
+  local record unreadable) are publish-core's, with publish-core's fixed
+  explanations; this feature appends none.
 
 ## Boundary Context
 - **In scope**: the intervals.icu connector as a publish target (its
@@ -142,7 +143,7 @@ Terms used below:
 1. When a publish request carries a recorded link to an intervals.icu activity, the intervals.icu connector shall update that activity first, so that a later post of the same page goes where the earlier one landed.
 2. When a request carries no such link, or intervals.icu answers that the linked activity does not exist, the intervals.icu connector shall look in the instance's pull record for an activity whose pulled original file is one of the page's archived files, taking the page's base file first and the page's other files only when the base file names no activity.
 3. If the pull record maps the page's base file, or failing it the page's other files, to more than one activity, the intervals.icu connector shall answer the ambiguous code and change nothing.
-4. If the instance's pull record is absent or cannot be read, the intervals.icu connector shall continue as criterion 5 states, and shall never create, repair or rewrite the pull record.
+4. If the instance's pull record is absent, the intervals.icu connector shall continue as criterion 5 states; if it cannot be read, the intervals.icu connector shall still update an activity found through the recorded link or the listing, and shall never upload, as Requirement 6 criterion 8 states; in either case it shall never create, repair or rewrite the pull record.
 5. When neither the recorded link nor the pull record identifies an existing activity, the intervals.icu connector shall list the key's athlete's activities in one request over a range of local dates that contains the page's start time in every time zone, so that a page dated at its device's recorded offset is found however intervals.icu dates the activity locally.
 6. The intervals.icu connector shall take as the page's activity the one listed activity that carries the page's publication id as its external identifier, or, when none does, the one listed activity, not imported from Strava, for which the strict rule holds between it and the page, comparing start times as instants.
 7. The intervals.icu connector shall apply the strict rule without comparing sports, because intervals.icu names activity types in a vocabulary of its own, and shall never accept a match by device or by a whole-hour start shift.
@@ -179,6 +180,7 @@ Terms used below:
 5. When intervals.icu answers that the upload created an activity and names exactly one, the intervals.icu connector shall set that activity's name and description with one update, and on intervals.icu's confirmation of that update shall answer the uploaded code with the activity's direct link.
 6. When intervals.icu answers that it already holds the uploaded file as an activity and names exactly one, the intervals.icu connector shall set that activity's name and description with one update, and on confirmation shall answer the posted code with the activity's direct link.
 7. If an upload is answered with a server error, a network failure, or a success that does not name exactly one activity in the documented form or names one already answered as not existing in the same request; or intervals.icu answers the update of an activity the upload created with anything but a confirmation; or answers that an activity the upload named as already held does not exist, the intervals.icu connector shall answer the unconfirmed code, so that the next run looks for the activity, by its publication id among others, before it uploads again.
+8. If uploads are on, the page's activity is not found, and the instance's pull record cannot be read, the intervals.icu connector shall answer the local-record-unreadable code and upload nothing, because the unreadable record may name the activity.
 
 ### Requirement 7: Mapping intervals.icu's Answers into Codes
 **Objective:** As an athlete, I want every outcome stated as one fitdocs code that means the same on every target, so that I know what happened and what to do next.
@@ -231,7 +233,7 @@ Terms used below:
 4. The changelog's unreleased section shall describe publishing to intervals.icu, `publish_upload` and the changed network statements.
 5. The specs this feature extends (`connectors`, `intervals-connector`, and `distribution` unless an earlier publish target already recorded its network change) shall each record an amendment, numbered as the next free amendment at landing, preserving every existing criterion and approval.
 6. The feature shall edit no page of the documentation site, and shall record each site line it makes stale, by file and line, in a follow-up queue item for the next release's site update.
-7. The project structure steering shall state the intervals.icu connector's new dependencies on the publish vocabulary and on activity-identity's match rule.
+7. The project structure steering shall state the intervals.icu connector's new dependency on activity-identity's match rule, and that it names publish codes only through the connector protocol.
 
 ### Requirement 12: The Optional Live Check
 **Objective:** As the maintainer, I want the target's assumptions about intervals.icu confirmed against my own account when I choose to, so that nothing is built on an unconfirmed guess about a service fitdocs cannot test offline.

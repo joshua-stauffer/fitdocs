@@ -157,7 +157,10 @@
 ### Assumptions to be confirmed (TBC-P*, the optional live check)
 - **TBC-P1**: `PUT /activity/{id}` with a body of only `name` and
   `description` changes those two fields and no other, and answers 200; an
-  unknown id answers 404.
+  unknown id answers 404; another athlete's activity answers 403 (then an
+  instance whose key belongs to a different account maps to
+  `permission_denied`, which stops the target; if it answers 404 instead,
+  the flow treats it as absent and the mapping note is amended).
 - **TBC-P2**: the listing with `fields=` returns `distance` in metres,
   `external_id` when set, and `start_date_local`; a Strava stub carries
   `id`, `source` and `start_date_local`.
@@ -255,26 +258,40 @@
 - **Rationale**: a later events write is an `update` or a `create` and maps
   identically.
 
-### Decision: an unreadable pull record is skipped, not reported
-- **Context**: publish-core's target codes have no "local state unreadable"
-  code, and R10 forbids appending one in wave 2.
-- **Selected Approach**: `LedgerError` skips the pull-record step; the
-  listing step still applies the strict rule. A pulled original that the
-  pull record would have named is the same file the archive holds, so if
-  the listing misses it, intervals.icu's file-hash de-duplication answers
-  the upload with 200 and the existing activity, which is then updated.
-- **Trade-offs**: the problem is not reported by `fitdocs publish`;
-  `fitdocs pull` reports it, as it does today.
+### Decision: an unreadable pull record bars the upload (controller ruling R11)
+- **Context**: the first draft skipped an unreadable pull record silently,
+  because no target code said so truthfully. The Step 3.5 review showed the
+  hole: connectors Req 7.6 never treats an unreadable ledger as absent, and a
+  page whose base is a phone copy shifted by whole hours (merged locally at
+  the shifted tier) is reachable on intervals.icu only through the pull
+  record's second tier; the strict listing then misses it, and with uploads
+  on the page would be uploaded as a duplicate.
+- **Selected Approach**: the controller folded a new code,
+  `local_record_unreadable`, into publish-core (appended after `ready`; a
+  target code, a failure, not landed, not stopping). `LedgerError` is noted;
+  the read-only steps (recorded link, listing) still run and may still post;
+  only the upload branch answers `local_record_unreadable` instead of
+  uploading. With uploads off the answer stays `not_found`.
+- **Rationale**: an upload cannot be undone, so it never runs on unreadable
+  identity state; an update to an activity found by other evidence is still
+  safe.
+- **Trade-offs**: none beyond one code; `fitdocs pull` still names the file
+  to fix.
 
 ### Decision: identity import on the publish path only
 - **Context**: `identity.matching` is not standard-library-only; the
   connectors package's import closure is pinned module by module.
 - **Selected Approach**: a function-level import of
   `fitdocs.identity.matching` inside the listing-match helper, admitted in the
-  intervals entry of the boundary pin; module-level imports of
-  `fitdocs.connectors.ledger` and `fitdocs.publish.outcomes`.
+  intervals entry of the boundary pin; a module-level import of
+  `fitdocs.connectors.ledger`. Publish codes come through
+  `fitdocs.connectors.protocol`'s re-export of `PublishCode` and
+  `TARGET_CODES` (controller ruling R11), never from `fitdocs.publish`
+  directly, which publish-core reserves to `protocol` and `registry`.
 - **Rationale**: importing `fitdocs.connectors` (which the CLI does at load)
-  keeps today's module closure; the rule is reused, never restated.
+  loads no identity module; it already loads `contract`, `docmerge`, `model`
+  and `yaml` through `folder` and `inbox`, so the claim is about identity
+  only. The rule is reused, never restated.
 - **Follow-up**: strava-publish decides, for the relay, whether to extract a
   standard-library-only core of the rule. If it does, this connector imports
   that leaf instead (Revalidation Triggers); the cross-spec review

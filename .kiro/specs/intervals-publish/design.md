@@ -86,15 +86,20 @@ change: the page contract and layout are publish-core's.
   library modules (adding `math` and `enum`) and
   `fitdocs.connectors.{errors,http,protocol,secrets}`:
   - `fitdocs.connectors.ledger` (`load_ledger`, `LedgerError`), read-only;
-  - `fitdocs.publish.outcomes` (`PublishCode`), the standard-library-only
-    vocabulary leaf;
   - `fitdocs.identity.matching` (`pair_evidence`, `SessionKey`, `Evidence`,
     `START_TOLERANCE_S`), imported inside the listing-match helper only, so
-    importing `fitdocs.connectors` loads no identity, contract or model
-    module.
+    importing `fitdocs.connectors` loads no identity module (it already
+    loads `contract`, `docmerge`, `model` and `yaml` today, through
+    `folder` and `inbox`). `fitdocs.identity` is not among the connectors
+    guard's forbidden targets; the guard's direct-import pin sees the
+    function-level import, so the intervals entry admits it.
   - The publish value types (`PublishRequest`, `PublishResult`,
-    `CompletedActivity`, `Post`) come through `fitdocs.connectors.protocol`,
-    which publish-core makes re-export them.
+    `CompletedActivity`, `Post`) and the vocabulary names (`PublishCode`,
+    `TARGET_CODES`) come only through `fitdocs.connectors.protocol`, which
+    re-exports them (publish-core; controller ruling R11). The intervals
+    module imports nothing from `fitdocs.publish` directly, keeping
+    publish-core's rule that only `protocol` and `registry` import the
+    publish leaves (publish-core design.md:100-102).
 - It still never imports `urllib.request`, `urllib.error`, `http`, `socket`
   or `ssl`, reads no clock and draws no randomness.
 - `src/fitdocs/connectors/http.py` gains no import.
@@ -102,8 +107,10 @@ change: the page contract and layout are publish-core's.
 
 ### Revalidation Triggers
 - Any change to `PostPublisher`, `PublishRequest`, `CompletedActivity`,
-  `PublishResult`, `TARGET_CODES`, `LANDED_CODES` or `single_attempt`
-  semantics (publish-core): the publish operation and its tests re-check.
+  `PublishResult`, `TARGET_CODES`, `LANDED_CODES`, `local_record_unreadable`,
+  `connectors.protocol`'s re-export of `PublishCode`/`TARGET_CODES`, or
+  `single_attempt` semantics (publish-core, R11): the publish operation and
+  its tests re-check.
 - A change to `pair_evidence`'s tiers, tolerances or `SessionKey` fields, or
   an extraction of the rule into a standard-library-only module (possibly by
   `strava-publish`): the listing match re-checks and imports the extracted
@@ -174,7 +181,7 @@ graph TB
 above it):
 
 ```
-constants, CallKind, AnswerClass, ANSWER_CODES      (stdlib, PublishCode)
+constants, CallKind, AnswerClass, ANSWER_CODES      (stdlib, protocol's PublishCode)
 _answer_class, _answer_code, _activity_link, _linked_activity,
 _listing_window, _multipart_body, _uploaded_activity, _listed_activities
 _record_activity (connectors.ledger), _match_listing (identity.matching, lazy)
@@ -205,11 +212,18 @@ tests/connectors/
 
 ### Modified Files
 - `src/fitdocs/connectors/http.py` — `HttpRequest.method` admits `"PUT"`;
-  `HttpClient.put(...)`; module docstring names the update method.
+  `HttpClient.put(...)`; a module docstring sentence naming the three
+  request methods (none names them today; only the `Literal` at `:98` does).
 - `src/fitdocs/connectors/intervals.py` — capabilities, `link_label`,
   `IntervalsSettings.publish_upload`, `parse_settings`, the publish
   constants, `CallKind`, `AnswerClass`, `ANSWER_CODES`, the helpers and
-  `IntervalsConnector.publish`; module docstring (imports, publish path).
+  `IntervalsConnector.publish`; the module docstring (`:3-9`: "Lists, filters
+  and fetches" and the "imports only the standard library and
+  `fitdocs.connectors.{errors,http,protocol,secrets}`" sentence), rewritten by
+  the task that makes each part stale.
+- `src/fitdocs/connectors/__init__.py` — the package docstring's
+  allowed-import sentence (`:13-16`) admits `fitdocs.identity.matching` in
+  the intervals module's publish path.
 - `tests/connectors/test_http.py` — `PUT` through the client and the urllib
   transport.
 - `tests/connectors/test_intervals.py` (`:118-120`) and
@@ -217,8 +231,8 @@ tests/connectors/
   capability pins become the five-member set; `test_intervals.py` gains the
   `publish_upload` settings cases.
 - `tests/connectors/test_boundary.py` — the intervals entry of
-  `_ALLOWED_IMPORT_TARGETS` adds `fitdocs.connectors.ledger`,
-  `fitdocs.identity.matching` and `fitdocs.publish.outcomes`.
+  `_ALLOWED_IMPORT_TARGETS` adds `fitdocs.connectors.ledger` and
+  `fitdocs.identity.matching` (nothing from `fitdocs.publish`).
 - `tests/connectors/test_docs.py` — `_EXPECTED_HEADINGS` gains `### Publishing`
   after `### Wellness`; the `intervals.icu` exemption entry adds the two new
   test modules.
@@ -240,7 +254,10 @@ tests/connectors/
   sentence for its no-request forms (the pinned no-request list is not
   edited).
 - `.kiro/steering/structure.md` — the connectors sentence states the intervals
-  connector's two new dependencies.
+  connector's dependency on `identity.matching` and that it names publish
+  codes through the protocol; the identity sentence (`:68-71`, "`render`,
+  `sync`, `audit` and `cli` import it") adds the intervals connector's publish
+  path among its importers.
 - `.kiro/specs/connectors/requirements.md`,
   `.kiro/specs/intervals-connector/requirements.md`,
   `.kiro/specs/distribution/requirements.md` — amendment records (next free
@@ -260,7 +277,8 @@ flowchart TD
     UpdLink -->|other answer| Code[that code]
     Record -->|several| Ambig[ambiguous]
     Record -->|one| UpdRec[update that activity]
-    Record -->|none or unreadable| Facts
+    Record -->|none| Facts
+    Record -->|unreadable, noted| Facts
     UpdRec -->|confirmed| Posted
     UpdRec -->|absent| Facts{start aware and distance or elapsed recorded}
     UpdRec -->|other answer| Code
@@ -277,7 +295,9 @@ flowchart TD
     UpdList -->|absent| Absent{uploads on}
     UpdList -->|other answer| Code
     Absent -->|no| NotFound[not found]
-    Absent -->|yes| File{base file present and intact}
+    Absent -->|yes| Unreadable{pull record was unreadable}
+    Unreadable -->|yes| LocalUnreadable[local record unreadable]
+    Unreadable -->|no| File{base file present and intact}
     File -->|no| FileMissing[activity file missing]
     File -->|yes| Up[upload once]
     Up -->|created and names one| Confirm[update the named activity]
@@ -300,6 +320,11 @@ Key decisions:
 - The facts check sits after the two steps that need no facts, so a page
   without distance or elapsed time can still be updated through its link or
   its pull record (3.9).
+- An unreadable pull record never stops the read-only steps (the link, the
+  listing); it only bars the upload, which answers `local_record_unreadable`
+  (controller ruling R11), because that record may name the activity and an
+  upload cannot be undone (3.4, 6.8). connectors Req 7.6 never reads an
+  unreadable ledger as absent.
 
 ## Requirements Traceability
 
@@ -309,7 +334,7 @@ Key decisions:
 | 1.3 | listed as a target | IntervalsDeclaration, PublishTests | publish-core `list_targets` | — |
 | 1.4 | existing key | IntervalsPublisher | `_auth_headers`, `session.credentials` | request |
 | 1.5 | pull unchanged | IntervalsDeclaration | existing pull tests | — |
-| 2.1, 2.2, 2.3 | `publish_upload` | IntervalsDeclaration | `IntervalsSettings.publish_upload`, `parse_settings` | request |
+| 2.1, 2.2, 2.3 | `publish_upload` | IntervalsDeclaration, PublishCliTests | `IntervalsSettings.publish_upload`, `parse_settings`, the CLI exit 2 case | request |
 | 3.1 | recorded link first | ActivityFinding | `_linked_activity` | request |
 | 3.2, 3.3, 3.4 | pull record | ActivityFinding | `_record_activity` | request |
 | 3.5 | listing window | ActivityFinding | `_listing_window`, `_list` | request |
@@ -323,6 +348,7 @@ Key decisions:
 | 6.1, 6.2, 6.3 | upload gate and file | IntervalsPublisher, ActivityWrites | `_upload`, `_base_file` | request |
 | 6.4 | upload once | ActivityWrites | `post(..., single_attempt=True)` | request |
 | 6.5, 6.6, 6.7 | confirmation | IntervalsPublisher, ActivityWrites | `_uploaded_activity`, `_update` | request |
+| 6.8 | unreadable pull record bars the upload | IntervalsPublisher, ActivityFinding | `_record_activity`, `publish` step 5 | request |
 | 7.1 | one target code | IntervalsPublisher | `publish` | — |
 | 7.2-7.6 | answer table | AnswerMapping | `ANSWER_CODES`, `_answer_class` | — |
 | 7.7 | by request kind | AnswerMapping | `CallKind` | — |
@@ -349,9 +375,9 @@ Key decisions:
 | AnswerMapping | connector | answer class to code, link and id rules | 7.1-7.7, 8.2, 8.3 | `PublishCode` (P0) | State |
 | ActivityFinding | connector | link, pull record, listing, match | 3.1-3.8, 4.1, 4.2, 9.3, 9.5 | ledger, identity rule (P0) | Service |
 | ActivityWrites | connector | update and upload requests | 5.1-5.6, 6.2-6.7, 9.2, 9.5 | `HttpClient` (P0) | Service |
-| IntervalsPublisher | connector | the publish operation | 1.4, 3.9, 3.10, 5.3, 6.1, 7.1, 7.8, 8.1, 9.1, 9.4 | the above (P0) | Service |
+| IntervalsPublisher | connector | the publish operation | 1.4, 3.9, 3.10, 5.3, 6.1, 6.8, 7.1, 7.8, 8.1, 9.1, 9.4 | the above (P0) | Service |
 | PublishTests | tests | offline unit coverage | 1.3, 8.1, 9.6 | `FakeTransport` (P0) | — |
-| PublishCliTests | tests | end to end | 9.1, 9.6 | publish-core CLI (P0) | — |
+| PublishCliTests | tests | end to end | 2.3, 9.1, 9.6 | publish-core CLI (P0) | — |
 | ConnectorsDocs | docs | `### Publishing`, table | 11.1-11.3 | — | — |
 | NetworkStatements | docs, tests | `fitdocs publish --yes` named | 10.1-10.4 | relay-server's places (P1) | — |
 | Records | records | changelog, amendments, steering, queue | 11.4-11.7 | — | — |
@@ -557,8 +583,10 @@ def _match_listing(listed: Sequence[ListedActivity], subject: CompletedActivity,
 
 - **Recorded link** (3.1): `_linked_activity(request.recorded_link)`.
 - **Pull record** (3.2-3.4): `load_ledger(session.data_root, session.instance,
-  connector_id=INTERVALS_CONNECTOR_ID)`; `LedgerError` → `None` (skip; never
-  written). Tier one: distinct usable `remote_id`s of entries whose `sha256`
+  connector_id=INTERVALS_CONNECTOR_ID)`; an absent file is an empty ledger
+  (`None`); `LedgerError` → `LOCAL_RECORD_UNREADABLE`, which the operation
+  notes and does not return here (the read-only steps continue; only the
+  upload is barred). The ledger is never written. Tier one: distinct usable `remote_id`s of entries whose `sha256`
   equals the base digest (`subject.source_shas[-1]`); tier two, only when
   tier one is empty: those whose `sha256` is any other source digest. A tier
   with one id answers it; more than one answers `AMBIGUOUS`; both empty, or
@@ -679,7 +707,7 @@ def _upload(session: ConnectorSession, headers: Mapping[str, Secret],
 | Field | Detail |
 |-------|--------|
 | Intent | Answer one publish request with one code |
-| Requirements | 1.4, 3.9, 3.10, 5.3, 5.4, 6.1, 6.5, 6.6, 6.7, 7.1, 7.8, 8.1, 9.1, 9.4 |
+| Requirements | 1.4, 3.4, 3.9, 3.10, 5.3, 5.4, 6.1, 6.5, 6.6, 6.7, 6.8, 7.1, 7.8, 8.1, 9.1, 9.4 |
 
 **Contracts**: Service [x]
 
@@ -694,8 +722,9 @@ def publish(self, session: ConnectorSession, request: PublishRequest) -> Publish
   session.credentials.value("api_key"))`; `absent: set[str]`;
   1. recorded link id → `_update`; `CONFIRMED` → `PublishResult(POSTED,
      link)`; a code → that code; `ABSENT` → add to `absent`.
-  2. `_record_activity`: `AMBIGUOUS` → that; an id not in `absent` →
-     `_update` as in 1.
+  2. `_record_activity`: `AMBIGUOUS` → that; `LOCAL_RECORD_UNREADABLE` →
+     note `record_unreadable` and go on; an id not in `absent` → `_update` as
+     in 1.
   3. facts: `subject.start.utcoffset() is None`, or both
      `subject.distance_m` and `subject.elapsed_s` are `None` →
      `ACTIVITY_FACTS_MISSING`.
@@ -703,8 +732,9 @@ def publish(self, session: ConnectorSession, request: PublishRequest) -> Publish
      `AMBIGUOUS` or `NOT_UPDATABLE` → that; an id → `_update`:
      `CONFIRMED` → `POSTED`, a code → that code, `ABSENT` → step 5; `None` →
      step 5.
-  5. uploads off → `NOT_FOUND`. `_base_file` is `None` →
-     `ACTIVITY_FILE_MISSING`. `_upload` → a code → that code; an answer
+  5. uploads off → `NOT_FOUND`. `record_unreadable` →
+     `LOCAL_RECORD_UNREADABLE` (no file read, no upload). `_base_file` is
+     `None` → `ACTIVITY_FILE_MISSING`. `_upload` → a code → that code; an answer
      naming no usable id, or an id in `absent` → `UNCONFIRMED`; otherwise
      `_update` of the named id: `CONFIRMED` → `UPLOADED` (created) or
      `POSTED` (duplicate) with the link; after a creation anything else →
@@ -768,8 +798,12 @@ def publish(self, session: ConnectorSession, request: PublishRequest) -> Publish
   address the publication id; the listing's address the date window and the
   field names); the direct link and its label; the answer table (a markdown
   table equal to `ANSWER_CODES`) and what `posted`, `uploaded`, `not_found`,
-  `ambiguous`, `not_updatable`, `activity_file_missing` and `unconfirmed`
-  mean for intervals.icu.
+  `ambiguous`, `not_updatable`, `activity_file_missing`,
+  `local_record_unreadable` and `unconfirmed` mean for intervals.icu (an
+  unreadable instance ledger never stops an update, only an upload; `fitdocs
+  pull` names the file to fix). A malformed `publish_upload` is a
+  configuration error for every command that reads the connectors table,
+  `fitdocs pull` included, since it goes through the same settings loader.
 - "The ledger": one sentence that publishing to an intervals.icu instance
   also reads its ledger, never writes it.
 - Tests (`tests/connectors/test_intervals_docs.py`, `test_docs.py`): the
@@ -782,7 +816,8 @@ def publish(self, session: ConnectorSession, request: PublishRequest) -> Publish
 
 #### NetworkStatements (R9, R10)
 - Every place in `REWRITTEN_PLACES` (the eight today plus relay-server's
-  connectors-page place) names `fitdocs publish --yes`; a new predicate
+  connectors-page place, added here if relay-server has not yet landed it)
+  names `fitdocs publish --yes`; a new predicate
   `_names_publish_command(window)` requires it in every window, with one
   named mutation per place. The `tech.md` "Network and Credentials" sentence
   that lists the commands making connector requests names it too (with
@@ -804,8 +839,9 @@ def publish(self, session: ConnectorSession, request: PublishRequest) -> Publish
   `tests/_changelog_view.unreleased_since(text, V0_2_0)`: Added, publishing to
   intervals.icu (the update, the optional upload, `publish_upload`, the
   direct link); Changed, the intervals connector now writes to the account
-  for pages that opt in, and the network statements name `fitdocs publish
-  --yes`. No contract version change; no action needed.
+  for pages that opt in, and, unless an earlier publish target's entry
+  already says so, the network statements name `fitdocs publish --yes`. No
+  contract version change; no action needed.
 - Amendments (11.5), next free number at landing, each "landed by
   intervals-publish":
   - **connectors**: Req 9 criterion 3's bounded retries cover an update that
@@ -814,8 +850,10 @@ def publish(self, session: ConnectorSession, request: PublishRequest) -> Publish
     connector requests and `fitdocs publish` without `--yes` and `fitdocs
     publish --targets` to those that make none (skipped when an earlier
     target recorded it); the design's Allowed Dependencies admit, in the
-    intervals module, the pull ledger reader, the publish vocabulary leaf and
-    (lazily) activity-identity's match rule.
+    intervals module, the pull ledger reader and (lazily) activity-identity's
+    match rule, and record that a connector target names publish codes
+    (`PublishCode`, `TARGET_CODES`) only through `connectors.protocol`'s
+    re-export (R11), never by importing `fitdocs.publish`.
   - **intervals-connector**: Req 1.1 declares the three publish capabilities
     beside pull-activities and pull-wellness; Req 2.4's ignored keys exclude
     `publish_upload`, which is read; the design's "never reads the ledger,
@@ -827,9 +865,11 @@ def publish(self, session: ConnectorSession, request: PublishRequest) -> Publish
     explicit commands with network access (skipped when an earlier target
     recorded it).
 - Steering (11.7): `structure.md`'s connectors sentence states that the
-  intervals connector also imports the publish vocabulary and, on its publish
-  path only, activity-identity's match rule (appended after publish-core's
-  and relay-server's clauses, R7); `tech.md` as under NetworkStatements.
+  intervals connector imports, on its publish path only, activity-identity's
+  match rule and names publish codes through the protocol (appended after
+  whatever clauses are present at landing, R7); the identity sentence's
+  importer list gains the intervals connector's publish path; `tech.md` as
+  under NetworkStatements.
 - Site copy (11.6): `.kiro/queue/2026-10-31-intervals-publish-site-copy.md`,
   written with this spec: `website/content/guides/connectors.md:14` ("It
   never writes to the account."), `website/content/guides/privacy-and-network.md:50`
@@ -874,7 +914,7 @@ an unredirected secret header.
 | any intervals.icu status or transport failure | `ANSWER_CODES` by request kind, or the flow's own success and absence handling |
 | listing body not in documented form | `unavailable` |
 | upload answer not naming one usable activity | `unconfirmed` |
-| pull ledger unreadable | step skipped; listing applies |
+| pull ledger unreadable | step skipped; link and listing still apply; the upload answers `local_record_unreadable` |
 | base file missing, unreadable or altered | `activity_file_missing` |
 | settings object of another connector | `ConnectorError` (fitdocs text) → publish-core `target_error` |
 | any other exception | propagates → publish-core `target_error`, no text kept |
@@ -899,7 +939,7 @@ ids, builder FIT bytes; no value from any real account.
     and id rules (accept `i9000001`; refuse `i9/1`, `i 1`, 65 characters, an
     `http://` link, a link with a query).
   - Finding: recorded link updated first and only once; pull record tiers,
-    ambiguity in each tier, unreadable ledger skipped (file of invalid TOML),
+    ambiguity in each tier, unreadable ledger (file of invalid TOML) skipped for updates and barring the upload with `local_record_unreadable`,
     malformed id ignored; for starts at 00:30 and 23:30 UTC, the window holds
     the local wall-clock start at every offset from -12:00 to +14:00 in
     whole hours; external-id match
@@ -912,6 +952,10 @@ ids, builder FIT bytes; no value from any real account.
     address, query, multipart body equal to the archived bytes; digest
     mismatch → `activity_file_missing`; uploads off → `not_found` with no
     POST; 201 and confirmation → `uploaded`; 200 and confirmation → `posted`;
+    an unreadable pull ledger with uploads on → `local_record_unreadable`
+    with no file read and no POST, with uploads off → `not_found`, and with a
+    recorded link or a listing match → `posted` (the read-only steps still
+    run);
     201 with no id, two ids, a malformed id → `unconfirmed`; confirming update
     404 or 503 after 201 → `unconfirmed`; upload 503 and `TransportError` →
     `unconfirmed` with exactly one transport call; upload 429 →
@@ -928,7 +972,13 @@ ids, builder FIT bytes; no value from any real account.
     run sends nothing (an empty script).
   - The same page after `fitdocs pull` delivered its file from `i9000001`
     (a ledger written by the test): update with no listing.
-  - Uploads on, nothing listed: one upload then one update; `uploaded`.
+  - Uploads on, nothing listed: one upload then one update; `uploaded`; the
+    upload's `external_id` equals the publication id the publish ledger
+    recorded (the CLI mints it randomly, so the test reads it back rather
+    than fixing it).
+  - `publish_upload = "yes"`: `fitdocs publish --yes` exits 2 naming the
+    settings file, the instance, the key and the value, with an empty script
+    and the page and ledgers byte-identical (2.3 at the CLI).
   - `fitdocs publish` (no `--yes`) and `fitdocs publish --targets` with the
     instance configured: an empty script, so any request fails the test.
   - Sentinel strings in every scripted body and header appear in no stdout,
@@ -961,8 +1011,11 @@ ids, builder FIT bytes; no value from any real account.
   `PublishCode` members `POSTED`, `UPLOADED`, `NOT_FOUND`, `AMBIGUOUS`,
   `NOT_UPDATABLE`, `ACTIVITY_FILE_MISSING`, `ACTIVITY_FACTS_MISSING`,
   `AUTH_REJECTED`, `PERMISSION_DENIED`, `RATE_LIMITED`, `UNAVAILABLE`,
-  `REJECTED`, `UNCONFIRMED`, and `HttpRequest.single_attempt` through
-  `HttpClient.post(..., single_attempt=True)`. No code is appended.
+  `REJECTED`, `UNCONFIRMED`, `LOCAL_RECORD_UNREADABLE` (the code the
+  controller folded into publish-core after `ready`, R11), all through
+  `fitdocs.connectors.protocol`'s re-export of `PublishCode` and
+  `TARGET_CODES` (R11), and `HttpRequest.single_attempt` through
+  `HttpClient.post(..., single_attempt=True)`. This spec appends no code.
   publish-core's design says each target spec adds its own documentation
   section, and also pins that `docs/publishing.md` names no service; this
   spec documents the target in `docs/connectors.md` and leaves
@@ -973,8 +1026,10 @@ ids, builder FIT bytes; no value from any real account.
   (append-only), `tests/connectors/test_boundary.py` (each edits its own
   entry), and possibly the identity rule's form (Revalidation Triggers).
 - **relay-server (wave 1)**: its connectors-page network place and
-  `fitdocs disconnect` predicate land first; this spec's predicate is
-  additive.
+  `fitdocs disconnect` predicate are expected to land first; this spec's
+  predicate is additive and its tasks hold in either order (the network
+  task adds the connectors-page place itself if it is missing, and the
+  steering and changelog edits append after whatever clauses are present).
 - **activity-identity**: `pair_evidence`, `SessionKey`, `Evidence`,
   `START_TOLERANCE_S` consumed unchanged.
 - **relay-intervals (downstream)**: reuses the finding order, the strict
