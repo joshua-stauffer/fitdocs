@@ -34,7 +34,7 @@ live constant.
 
 - [ ] 1. Foundation: the shared leaves and the package guard
 
-- [ ] 1.1 Add the publish package and its outcome vocabulary
+- [x] 1.1 Add the publish package and its outcome vocabulary
   - Create the publish package as a marker that imports nothing, and the
     `tests/publish` test package; add `tests/publish` to the type checker's
     file list so later test stubs are checked against the protocols they

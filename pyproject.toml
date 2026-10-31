@@ -274,6 +274,7 @@ files = [
     # dashboards task 1.1: the dashboards test directory.
     "tests/dashboards",
     "tests/wellness",
+    "tests/publish",
     "tests/index/derived/test_wellness_producer.py",
     "tests/hr_benchmarks",
     "tests/recovery",
