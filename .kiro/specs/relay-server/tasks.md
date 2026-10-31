@@ -75,7 +75,7 @@ Rules for every task:
     - deleting one explanation reds the completeness check.
   - _Requirements: 4.2, 4.3, 4.10, 15.6_
 
-- [ ] 1.2 Add the envelope v1 codec beside the vocabulary
+- [x] 1.2 Add the envelope v1 codec beside the vocabulary
   - Define the envelope version, the served versions, the route paths, and
     the field formats and bounds from design.md:
     - token, user code, poll secret, target id and email;
@@ -974,3 +974,4 @@ Rules for every task:
 
 ## Implementation Notes
 - 1.1: vocabulary-wide rules (status iff relay origin, explanation completeness) must iterate the whole registry, not the pinned 22-prefix, or a later spec's appended code escapes them; only the order/name/value pins are prefix-sliced. Explanations are pinned verbatim as literals in the test. (Round 3 was a controller-applied one-line fix verified by the reviewer's own mutation, in place of a third review round.)
+- 1.2: a too-deep fixture must stay under the size limit or the size rule refuses it before the parse path (assert len < limit as the precondition). Fixed-text error rules are tested on every decoder/parser, asserting membership in copied literals, not just canary-absence. relay_envelope also exports is_target_id and the frozen Answer/CapabilitiesData/StartedData; oversize is refused by the codec with one fixed message, the relay's request-too-large comes from the pipeline's body-limit stage. (Round 3 docstring fix controller-applied, verified by reading, in place of a third review round.)

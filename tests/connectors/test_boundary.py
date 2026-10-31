@@ -94,6 +94,7 @@ CONNECTORS_MODULE_NAMES: Final[tuple[str, ...]] = (
     "fitdocs.connectors.pull",
     "fitdocs.connectors.registry",
     "fitdocs.connectors.relay_codes",
+    "fitdocs.connectors.relay_envelope",
     "fitdocs.connectors.secrets",
     "fitdocs.connectors.settings",
 )
@@ -370,6 +371,7 @@ _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
         }
     ),
     "fitdocs.connectors.relay_codes": frozenset(),
+    "fitdocs.connectors.relay_envelope": frozenset({"fitdocs.connectors.relay_codes"}),
     "fitdocs.connectors.secrets": frozenset(),
     "fitdocs.connectors.settings": frozenset(
         {
