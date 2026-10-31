@@ -56,7 +56,7 @@ Rules for every task:
 
 - [ ] 1. Foundation: shared modules, the relay package skeleton, the cross-check and CI
 
-- [ ] 1.1 Add the closed relay code vocabulary to the fitdocs source
+- [x] 1.1 Add the closed relay code vocabulary to the fitdocs source
   - The 22 codes from design.md, in their order, each with:
     - a fitdocs-written explanation;
     - a fixed HTTP status (none for the two client-observed codes);
@@ -971,3 +971,6 @@ Rules for every task:
   - Done when every gate is green and the sync script's check mode reports
     no drift.
   - _Requirements: 16.8_
+
+## Implementation Notes
+- 1.1: vocabulary-wide rules (status iff relay origin, explanation completeness) must iterate the whole registry, not the pinned 22-prefix, or a later spec's appended code escapes them; only the order/name/value pins are prefix-sliced. Explanations are pinned verbatim as literals in the test. (Round 3 was a controller-applied one-line fix verified by the reviewer's own mutation, in place of a third review round.)
