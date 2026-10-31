@@ -35,8 +35,10 @@ spec ships no publish target: `strava-publish` and `relay-intervals` add them.
 
 Source: `.kiro/specs/relay-server/brief.md`; Phase 14 of
 `.kiro/steering/roadmap.md`. Dependencies: none (wave 1, parallel with
-`publish-core`). Extends `connectors`, `distribution`, `docs-site` and the
-steering.
+`publish-core`). Extends `connectors`, `distribution` and the steering. The
+website is not edited by any Phase 14 spec (controller ruling R9, 2026-10-31):
+the site copy this feature needs is recorded as a follow-up for the next
+release.
 
 ## Introduction
 
@@ -86,7 +88,9 @@ Terms used below:
   instance URL, the relay authentication style, `fitdocs connect` with a
   pasted token or the registration client, `fitdocs disconnect`, and the
   `fitdocs pull` instance selection that keeps relay instances out of a bare
-  pull; the steering, connectors, distribution and docs-site amendments.
+  pull; the rewrite of every repository statement that lists the
+  network-touching commands; the steering, connectors and distribution
+  amendments.
 - **Out of scope**: accounts, sign-up, email, verification pages and every
   other relay-side behaviour of registration (a wrapper's); any publish target
   and any third-party OAuth (`strava-publish`, `relay-intervals`); composing
@@ -94,7 +98,8 @@ Terms used below:
   (`publish-core`); hosting or operating any relay instance, TLS termination,
   backups and infrastructure; publishing a container image or a relay
   distribution; running several relay replicas against one database; paid
-  plans, billing and social features.
+  plans, billing and social features; any edit to the website's content (its
+  copy follows a release, through a follow-up item).
 - **Adjacent expectations**: `publish-core` owns the closed outcome
   vocabulary (`fitdocs.publish.outcomes`) and its single-attempt write mode in
   the connector transport; the envelope carries a publish result as one of
@@ -246,7 +251,7 @@ Terms used below:
 2. If a relay instance's URL is neither an absolute `https` URL nor an `http` URL to the local machine's loopback address, or carries a query, fragment or user information, the fitdocs CLI shall stop with a configuration error naming the settings file, the instance and the key, before any network request.
 3. The connector framework shall add a relay authentication style whose single secret credential field is the relay token, stored in the existing per-user credential store and overridable from the instance's `FITDOCS_CONNECTOR_*` environment variable exactly as a personal key is.
 4. The connector framework shall accept a relay connector that declares no capability, and shall reject a connector declaring the relay authentication style that lacks any of the relay operations (token check, registration start, registration poll, revocation, capabilities read).
-5. When `fitdocs pull` runs without instance names, the fitdocs CLI shall pull only from configured instances whose connector pulls activities or wellness, so that a configured relay instance never makes a bare pull fail; when a relay instance is named explicitly, the fitdocs CLI shall report that it pulls nothing, as for any non-pulling instance.
+5. When `fitdocs pull` runs without instance names, the fitdocs CLI shall pull only from configured instances whose connector pulls activities or wellness, so that a configured relay instance never makes a bare pull fail; when a relay instance is named explicitly, the fitdocs CLI shall report that instance's own failure exactly as for any other named instance that does not pull — not connected while no token is stored, otherwise that it pulls nothing — and shall make no relay request.
 6. The fitdocs CLI shall make no relay request during `fitdocs pull`, whether or not relay instances are configured.
 
 ### Requirement 12: Connecting with a Pasted Token
@@ -274,7 +279,7 @@ Terms used below:
 8. If the registration's stated expiry passes without an issued answer, the fitdocs CLI shall stop polling, report the expired code, store nothing, and exit with the failure code.
 9. If the user interrupts the registration, the fitdocs CLI shall stop polling, store nothing, and exit with the interrupt code.
 10. The fitdocs CLI shall never print, store or write the poll secret, and shall never store the email address.
-11. If `--register` or `--email` is given for an instance that is not a relay instance, the fitdocs CLI shall exit with the configuration-error code before any request.
+11. If `--register` or `--email` is given for an instance that is not a relay instance, or `--email` is given without `--register`, the fitdocs CLI shall exit with the configuration-error code before any request.
 
 ### Requirement 14: Disconnecting and Revoking from the CLI
 **Objective:** As a fitdocs user, I want one command that revokes my relay token at the relay and forgets it locally, so that a token I no longer use stops working everywhere.
@@ -307,7 +312,8 @@ Terms used below:
 2. The structure steering shall describe the relay package's directory, its independence from the `fitdocs` package, the pinned-copy rule and the dependency direction of the shared modules.
 3. The connectors documentation shall describe the relay connector, its URL setting and default, the relay token and its environment override, `fitdocs connect` with a pasted token and with `--register`, `fitdocs disconnect`, what leaves the machine for each, and the bare-pull selection rule.
 4. The repository shall document the relay for operators in one page: the deploy contract (image, variable table, probes, commands, one-replica and state rules) with its version, the envelope and its version, the relay code vocabulary, the operator commands and the seam with its version; automated tests shall bind the page's variable table, code table and version numbers to the code.
-5. The website shall gain a guide to connecting fitdocs to a relay and a self-hosting guide covering a local SQLite run, building and running the image, minting a token, connecting fitdocs to it, and switching to PostgreSQL; the website's CLI reference shall document `fitdocs connect --register` and `fitdocs disconnect`, and its privacy-and-network guide shall name what a relay instance sends and when; each page shall pass the website's content contract.
+5. The relay's operator page shall include a self-hosting guide covering a local SQLite run, building and running the image from a pinned commit, migrating, minting a token, connecting fitdocs to it, and switching to PostgreSQL; this feature shall edit no website page, and shall record the site copy it makes stale or newly needs (the connecting and self-hosting guides, the CLI reference entries, the privacy-and-network statements) as a follow-up for the next release.
 6. The packaged `fitdocs-workouts` skill shall tell the agent never to run `fitdocs disconnect` itself, beside its existing `fitdocs connect` rule, and an automated test shall pin both.
 7. The `fitdocs` changelog's unreleased section shall record the relay connector, the relay authentication style, `fitdocs connect --register`, `fitdocs disconnect` and the bare-pull selection change, each with the action a user must take; the relay package shall keep its own changelog recording the deploy contract, envelope and seam versions.
 8. Every new or changed document shall pass every existing documentation and network-statement guard, and no new document shall mention a hosting provider, an email provider or a deployment's infrastructure.
+9. Every repository statement that lists the commands which make network requests — in the README, the documentation and the source docstrings — shall name `fitdocs disconnect` and the registration of `fitdocs connect` beside the existing connector commands, and an automated test shall pin each such statement so that dropping either mention fails it.

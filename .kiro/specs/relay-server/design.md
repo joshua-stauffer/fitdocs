@@ -43,6 +43,7 @@ documented in-process seam.
 - Composing posts, `fitdocs publish`, the outcome vocabulary
   (`publish-core`).
 - Publishing an image or a relay distribution.
+- Any edit to `website/content/` (R9).
 - Hosting, TLS termination, backups, or several replicas per database.
 
 ## Boundary Commitments
@@ -80,9 +81,14 @@ documented in-process seam.
   - the CLI's `connect --register/--email`, `disconnect [--local-only]`
     and the bare-pull selection.
 - **The amendments it carries**: connectors, distribution (release
-  exclusion and the packaged-skill line), docs-site (two guides, the CLI
-  reference, the privacy guide), and steering (`tech.md` "No server" and
-  "Network and Credentials"; `structure.md` `relay/`) (R7).
+  exclusion and the packaged-skill line), and steering (`tech.md` "No
+  server" and "Network and Credentials"; `structure.md` `relay/`) (R7).
+- **The network statements** (R9): every repository statement that lists the
+  network-touching commands (README, `docs/`, docstrings) gains
+  `fitdocs disconnect` and the registration of `fitdocs connect`, with pins.
+- **The CLI command-count pins** (R9): raised to main + 1 at landing, as
+  literals.
+- **No website edit** (R9): the site copy is a new follow-up queue item.
 
 ### Out of Boundary
 - **publish-core's** outcome vocabulary (`fitdocs.publish.outcomes`, R1),
@@ -171,9 +177,12 @@ cannot name a non-activity target.
   and goes through the existing `CallMode.AUTH`, which makes one attempt
   whatever the answer (`connectors/http.py:281-282`). relay-server adds no
   transport mode and does not consume publish-core's single-attempt write
-  mode. `RelayClient` takes its caller's `HttpClient`, so strava-publish
-  passes publish-core's mode for the publish request. The name is
-  reconciled at cross-spec review.
+  mode, which R9 confirms. publish-core's design carries its single
+  attempt on the request (`HttpRequest.single_attempt`), and
+  `RelayClient.post(route, fields)` as shipped here has no parameter for
+  it. Per R9, strava-publish extends `RelayClient` for the publish call and
+  decides which mechanism carries that call's single attempt. relay-server
+  does not add the flag. The cross-spec review checks the choice.
 - **R5**: `AuthStyle.RELAY_TOKEN` is added. `RESOLVE_REMOTE_ACTIVITY`,
   `ANNOTATE_REMOTE_ACTIVITY` and `PUSH_ACTIVITY` are not touched, and
   `OAUTH_BROWSER` stays reserved (`fitdocs disconnect` refuses it until
@@ -184,11 +193,20 @@ cannot name a non-activity target.
 - **R7**: this spec edits only its own lines:
   - `tech.md` "No server" and "Network and Credentials";
   - the `structure.md` `relay/` entry and its connectors-bullet wording;
-  - the self-hosting guide;
-  - its own nav entries (by page frontmatter);
   - its own `protocol.py` and registry members;
   - appended `CHANGELOG.md` entries.
+
+  The self-hosting guide moves into `docs/relay.md` (R9).
 - **R8**: see "Future extension" above.
+- **R9**:
+  - No `website/content/` page is edited. The site copy goes to the queue
+    item `2026-10-31-relay-server-site-copy-at-next-release`.
+  - The network statements and the CLI command-count pins are this spec's
+    to update (NetworkStatements, CommandCountPins).
+  - The headings table in `tests/connectors/test_docs.py` is appended to
+    only.
+  - The `outcomes.py` pinned pair is strava-publish's.
+  - `RelayClient` keeps `CallMode.AUTH` (see R4).
 
 ### Amendments Carried (each takes the next free amendment number at landing)
 - **connectors**:
@@ -210,8 +228,8 @@ cannot name a non-activity target.
 - **distribution**: the release gate forbids `relay/*` and
   `fitdocs_relay/*`. The packaged skill's never-run-`fitdocs disconnect`
   line. No image is published (CI builds it only).
-- **docs-site**: the relay and self-hosting guides, the CLI reference
-  entries, and the privacy guide's relay paragraph.
+- **docs-site**: none. The website is not edited (R9), and the follow-up
+  queue item records the copy for the next release.
 - **steering**: `tech.md` and `structure.md`, per SteeringAmendment below.
   This spec carries them; the controller's merge lands them.
 
@@ -387,8 +405,7 @@ src/fitdocs/connectors/
 scripts/sync_relay_shared.py    # NEW: SHARED_MODULES; writes the copies (--check reports drift)
 .github/workflows/relay.yml     # NEW: the relay job
 docs/relay.md                   # NEW: the operator-facing contract page
-website/content/guides/relay.md                 # NEW: connecting fitdocs to a relay
-website/content/guides/self-hosting-a-relay.md  # NEW: running your own relay
+.kiro/queue/2026-10-31-relay-server-site-copy-at-next-release.md  # NEW: site copy follow-up (R9)
 tests/test_relay_shared_copies.py               # NEW: R2 cross-check
 tests/test_relay_workflow.py                    # NEW: relay.yml pins
 tests/connectors/test_relay_codes.py            # NEW: vocabulary prefix pin, explanations, statuses, origins
@@ -433,14 +450,26 @@ tests/connectors/test_relay_docs.py             # NEW: docs/relay.md code table 
     rules;
   - `tests/connectors/test_docs.py`: the `api.fitdocs.ai` exemption entry;
   - `tests/connectors/test_network_statements.py`: the tech.md "No server"
-    pin rewritten as a literal;
+    pin rewritten as a literal, and the rewritten-places pins extended to
+    require `fitdocs disconnect` and the registration (NetworkStatements);
+  - `tests/connectors/test_protocol.py:220-236`: the `AuthStyle` value set,
+    its length (4 to 5) and `SUPPORTED_AUTH_STYLES`;
+  - `tests/test_cli_skill.py:266-268`, `tests/index/test_cli_index.py:609`
+    and `tests/query/test_cli_query.py:811-812`: the registered-command
+    count, and the cli.py docstring's count word, raised to main + 1 at
+    landing as literals (CommandCountPins);
+  - `tests/connectors/test_docs.py`: `_EXPECTED_HEADINGS` appended with the
+    relay section's headings;
   - `tests/test_release_artifacts.py`: the controls;
   - `tests/test_agent_skill.py`: the disconnect pin.
 - **Docs and changelog**:
-  - `docs/connectors.md`: the relay section;
+  - `docs/connectors.md`: the relay section, and its "What leaves your
+    machine" statement;
   - `docs/index.md`: the `relay.md` row;
-  - `website/content/reference/cli.md`;
-  - `website/content/guides/privacy-and-network.md`;
+  - the network statements in `README.md` ("Route maps"),
+    `docs/configuration.md` (the tiles-section opener and the warm-cache
+    paragraph), and the docstrings of `src/fitdocs/cli.py`,
+    `src/fitdocs/sync.py` and `src/fitdocs/tiles.py` (three places);
   - `CHANGELOG.md`: Unreleased.
 - **Steering**: `.kiro/steering/tech.md` and `.kiro/steering/structure.md`.
 
@@ -556,7 +585,7 @@ stateDiagram-v2
 | 14.1, 14.2, 14.3, 14.4, 14.5, 14.6, 14.7 | Disconnect | DisconnectEngine, CliRelay, CredentialsAmendment | `run_disconnect`, `CredentialStore.remove` | — |
 | 15.1, 15.2, 15.3, 15.4, 15.5, 15.6 | fitdocs-side network and text | RelayConnector, RelayClient, RelayConnectEngine, ConnectorsBoundaryAmendment | `HttpClient(AUTH)` | — |
 | 16.1, 16.2 | Steering | SteeringAmendment | tech.md, structure.md | — |
-| 16.3, 16.4, 16.5, 16.6, 16.7, 16.8 | Docs, skill, changelogs | ConnectorsDocs, RelayDocsPage, SiteGuides, SkillLine, Changelogs | docs and site pages | — |
+| 16.3, 16.4, 16.5, 16.6, 16.7, 16.8, 16.9 | Docs, skill, changelogs, network statements | ConnectorsDocs, RelayDocsPage, SiteFollowUp, SkillLine, Changelogs, NetworkStatements, CommandCountPins | repo docs, docstrings, queue item | — |
 
 ## Components and Interfaces
 
@@ -581,7 +610,7 @@ stateDiagram-v2
 | RelayLogs | relay | Secret-free JSON logs | 9.8, 9.9 | — | — |
 | Serve + OperatorCli | relay | Process lifecycle and commands | 3, 8.1, 8.6, 9.6, 9.7 | uvicorn (P0) | Batch |
 | RelayImage + RelayWorkflow | relay build | Image and CI | 1.5, 7.6, 9.1, 9.11 | Docker, Actions (P1) | Batch |
-| ReleaseExclusion, SteeringAmendment, ConnectorsDocs, RelayDocsPage, SiteGuides, SkillLine, Changelogs, RelayChangelog | docs and gates | Keep statements true | 1.4, 2.8, 9.12, 16 | — | — |
+| ReleaseExclusion, SteeringAmendment, ConnectorsDocs, RelayDocsPage, SiteFollowUp, SkillLine, Changelogs, RelayChangelog, NetworkStatements, CommandCountPins | docs and gates | Keep statements true | 1.4, 2.8, 9.12, 16 | — | — |
 
 ### Shared modules (fitdocs source, pinned into the relay)
 
@@ -729,7 +758,11 @@ def parse_envelopes(data: Mapping[str, object]) -> tuple[int, ...]
   - `envelope` must be an `int` in `SERVED_ENVELOPES`, never a `bool`;
   - `code` must be a `RelayCode` whose origin is `relay`;
   - `data` must be an object;
-  - `outcome` is absent or a non-empty string;
+  - `outcome` is the one optional top-level key: absent, or a non-empty
+    string. This spec validates only that shape. Membership in publish-core's
+    vocabulary is checked by the consuming target once a spec pins
+    `outcomes.py` into the relay (strava-publish, R9). An answer that
+    carries `outcome` decodes with it preserved;
   - any other top-level key is malformed.
 - Each parser enforces its field set exactly, together with its types,
   patterns and bounds.
@@ -868,9 +901,11 @@ class RelayClient:
   - `RelayReply.data` is untrusted. Callers parse it with the codec's
     parsers and never print it.
 - `RelayClient` takes whatever `HttpClient` its caller built.
-  - relay-server always passes `CallMode.AUTH`.
-  - A later publish route passes publish-core's single-attempt write mode
-    (R4).
+  - relay-server always passes `CallMode.AUTH`, which makes exactly one
+    transport call even on a 429 or 5xx answer.
+  - The publish call is strava-publish's. It extends `RelayClient` and
+    decides, against publish-core's `HttpRequest.single_attempt`, which
+    mechanism carries the single attempt (R4, R9). relay-server adds no flag.
 - `parse_settings` errors raise `ConnectorSettingsError` naming `url`.
   - The scheme is `https`, or `http` with host `127.0.0.1`, `::1` or
     `localhost`.
@@ -973,7 +1008,8 @@ def run_disconnect(instance: ConnectorInstance, *, local_only: bool, store: Cred
       `on_started` prints three lines (the email, the user code, the
       confirm-only-if-same instruction) and the minutes remaining.
   - `--register` or `--email` on a non-relay instance exits 2 before any
-    request.
+    request, and so does `--email` without `--register` on a relay
+    instance.
   - With non-interactive standard input and no `--email`, it exits 2,
     naming `FITDOCS_CONNECTOR_<NAME>_TOKEN` for the paste path.
   - Success prints `NAME: connected.`, `Credentials: <path>`,
@@ -991,7 +1027,13 @@ def run_disconnect(instance: ConnectorInstance, *, local_only: bool, store: Cred
     declares `PULL_ACTIVITIES` or `PULL_WELLNESS`.
   - If that is empty while instances exist, it prints "No configured
     connector instance pulls activities or wellness; nothing to pull."
-  - Otherwise behaviour is unchanged. Named instances are unchanged.
+  - Otherwise behaviour is unchanged.
+  - Named instances are unchanged, and `run_pull` is unchanged. A named
+    relay instance therefore reports what `_pull_one` already reports for a
+    non-pulling instance. Credentials resolve first (`pull.py:671`): with no
+    token stored, the instance is not connected; with one stored, it
+    "does not pull activities or wellness" (`pull.py:705-710`). Neither
+    makes a relay request.
 
 ### Relay package
 
@@ -1494,8 +1536,11 @@ def create_app(config: RelayConfig, *, extensions: Sequence[RelayExtension] = ()
   - `test_network_statements.py`'s Architecture pin is rewritten to the new
     literal sentence in the same task.
 - **ConnectorsDocs** (16.3): a `docs/connectors.md` section for the relay
-  connector. It holds the neutral-scan exemption entry for `api.fitdocs.ai`
-  in the intervals entry's form.
+  connector. It covers connecting fitdocs to a relay, and its headings are
+  appended to `_EXPECTED_HEADINGS`. The neutral-scan exemption entry for
+  `api.fitdocs.ai`, in the intervals entry's form, gains this section's key
+  when the section lands. An entry is exercised when at least one of its
+  listed paths names the host.
 - **RelayDocsPage** (2.8, 16.4): `docs/relay.md`, which says it is not
   governed by fitdocs's compatibility policy. It holds:
   - the deploy contract v1 (image, the environment table above, URLs,
@@ -1506,22 +1551,39 @@ def create_app(config: RelayConfig, *, extensions: Sequence[RelayExtension] = ()
     registration format;
   - seam v1;
   - the pepper-rotation statement;
-  - the shared-network-filesystem limit.
+  - the shared-network-filesystem limit;
+  - a self-hosting guide (16.5): a local SQLite run, building the image
+    from a pinned commit, `migrate` then `serve`, minting a token,
+    connecting fitdocs, and switching to PostgreSQL.
 
   It carries no fitdocs release version literal. Its environment table is
   bound in `relay/tests/test_docs_relay.py`, and its code table in
   `tests/connectors/test_relay_docs.py`.
-- **SiteGuides** (16.5):
-  - `website/content/guides/relay.md` ("Connecting to a relay");
-  - `website/content/guides/self-hosting-a-relay.md` ("Running your own
-    relay"), covering a local SQLite run, building the image from a pinned
-    commit, running `migrate` then `serve`, minting a token, connecting
-    fitdocs, and switching to PostgreSQL;
-  - both in section Guides at the next free orders at landing, linking
-    `docs/relay.md` by GitHub URL;
-  - `reference/cli.md` gains `fitdocs connect --register` and
-    `fitdocs disconnect`, and `guides/privacy-and-network.md` gains what a
-    relay instance sends.
+- **SiteFollowUp** (16.5): no `website/content/` edit (R9). The queue item
+  `.kiro/queue/2026-10-31-relay-server-site-copy-at-next-release.md` names
+  the stale or missing site copy, for the next release:
+  - `guides/privacy-and-network.md:50-52` ("No other command contacts a
+    connector");
+  - `guides/connectors.md:12` ("Fitdocs ships two connectors");
+  - `reference/cli.md:50-56` (no `--register`, no `disconnect`);
+  - the missing relay and self-hosting guides.
+- **NetworkStatements** (16.9): each `REWRITTEN_PLACES` statement in
+  `tests/connectors/test_network_statements.py` names `fitdocs disconnect`
+  and the registration of `fitdocs connect` beside the existing commands:
+  - `README.md` (Route maps);
+  - `docs/configuration.md`, twice;
+  - the `cli.py` module docstring;
+  - `sync.py`;
+  - `tiles.py`, three places.
+
+  `docs/connectors.md`'s "What leaves your machine" is rewritten the same
+  way and added as a place. A new predicate requires `fitdocs disconnect`
+  in every window. Each place has a named mutation: dropping
+  `fitdocs disconnect` from it reds the pin. Anchors move with the text.
+- **CommandCountPins** (R9): the three tests' `len(commands)` literals and
+  the cli.py docstring's count word rise to main + 1 at landing (16 and
+  "Sixteen" if relay-server lands before publish-core), written as
+  literals.
 - **SkillLine** (16.6): "Never run `fitdocs disconnect` either: it revokes
   a relay token, which cannot be undone." beside the connect rule, pinned
   next to the existing never-connect pins.
@@ -1631,6 +1693,9 @@ emits no metrics endpoint in v1.
   validation; replay of the wire examples.
 
 **fitdocs**:
+- Single attempt: for the token check, every registration request and the
+  revocation, a scripted 503 and a scripted 429 each produce exactly one
+  transport call. Named mutation: building the client in `CallMode.DATA`.
 - Paste connect, success and each failure, with nothing stored.
 - Registration with a scripted transport and fake `now`/`sleep`: pending,
   slow-down step, issued, refused, expired, local deadline, interrupt.
