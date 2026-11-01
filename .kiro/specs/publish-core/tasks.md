@@ -585,7 +585,7 @@ live constant.
 
 - [ ] 9. Validation
 
-- [ ] 9.1 Prove the end-to-end guarantees
+- [x] 9.1 Prove the end-to-end guarantees
   - Add `fitdocs publish` (a dry run) and `fitdocs publish --targets` to
     the socket-guarded offline-command cases, both with connectors
     configured.

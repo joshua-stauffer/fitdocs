@@ -64,8 +64,10 @@ from unittest.mock import patch
 import pytest
 from typer.testing import CliRunner, Result
 
+import fitdocs.cli as cli_module
 from fitdocs.athlete import ATHLETE_FILE, load_athlete_inputs
 from fitdocs.cli import app
+from fitdocs.connectors import registry as connector_registry
 from fitdocs.connectors.connect import Connected, run_connect
 from fitdocs.connectors.credentials import CredentialStore
 from fitdocs.connectors.http import HttpResponse
@@ -103,6 +105,7 @@ from fitdocs.layout import (
     HISTORY_DIR,
     HISTORY_DOC_STEM,
     OWNED_PATHS,
+    PUBLISH_STATE_DIR,
     SETTINGS_FILE,
     WORKOUTS_DIR,
     settings_path,
@@ -113,6 +116,8 @@ from fitdocs.load.types import InteractionSession
 from fitdocs.performance import derive_benchmarks
 from fitdocs.plans import run_plan
 from fitdocs.plans.reconcile import run_reconcile
+from fitdocs.publish.outcomes import PublishCode
+from fitdocs.publish.request import PublishResult
 from fitdocs.quarantine import load_quarantine
 from fitdocs.settings import load_settings_document
 from fitdocs.sync import drain, regen, sync
@@ -127,6 +132,7 @@ from tests.dashboards._helpers import directive_block, page_text, write_page
 from tests.fixtures import builder
 from tests.fixtures import identity as identity_fixtures
 from tests.load.conftest import ComputingCalculator
+from tests.publish.conftest import ScriptedPublisher
 from tests.recovery.builders import series_value, workout_page
 from tests.support import tiles as tile_factory
 from tests.wellness.builders_series import write_series
@@ -1555,6 +1561,84 @@ def _wrote_wellness_ledger_and_delivery(touched: Sequence[str]) -> bool:
     )
 
 
+# --- the publish entry point (publish-core task 9.1; wiki-contract Req 7.5, 7.6) -
+
+#: The target name :func:`_prepare_publish` configures -- also the ledger's own
+#: file name (:func:`fitdocs.layout.publish_ledger_path`).
+_PUBLISH_TARGET: Final[str] = "alpha"
+_PUBLISH_CONNECTOR_ID: Final[str] = "scripted-alpha"
+_PUBLISH_LINK: Final[str] = "https://example.test/p/confinement"
+
+
+def _prepare_publish(data_root: Path, source_dir: Path) -> None:
+    """Sync the staged sources, configure one scripted target and opt the run
+    page in to it, all before the snapshot so none of it is a measured write."""
+    _prepare_index_build(data_root, source_dir)
+    settings_path(data_root).write_text(
+        f'[connectors.{_PUBLISH_TARGET}]\nconnector = "{_PUBLISH_CONNECTOR_ID}"\n',
+        encoding="utf-8",
+    )
+    (page,) = sorted((data_root / WORKOUTS_DIR).glob("*-run-*.md"))
+    text = page.read_text(encoding="utf-8")
+    close = text.index("---\n", text.index("---\n") + len("---\n"))
+    page.write_text(
+        text[:close] + f"publish: [{_PUBLISH_TARGET}]\n" + text[close:],
+        encoding="utf-8",
+    )
+
+
+def _run_publish(data_root: Path, source_dir: Path) -> None:
+    """``fitdocs publish --yes`` through the CLI, with the scripted target
+    answering ``posted`` with a link, a transport that records and raises, and
+    a socket that raises. The environment isolation and the guards live in a
+    throwaway directory outside the sandbox, so they are never measured."""
+    publisher = ScriptedPublisher(connector_id=_PUBLISH_CONNECTOR_ID)
+    publisher.publish_script.append(PublishResult(PublishCode.POSTED, _PUBLISH_LINK))
+    transport_calls: list[object] = []
+
+    def transport(request: object, timeout: float) -> NoReturn:
+        transport_calls.append(request)
+        raise AssertionError("the publish entry point reached the transport")
+
+    connector_registry.register(publisher)
+    try:
+        with (
+            pytest.MonkeyPatch.context() as monkeypatch,
+            tempfile.TemporaryDirectory() as base_dir,
+        ):
+            isolate_connector_environment(monkeypatch, Path(base_dir))
+            monkeypatch.setattr(socket, "socket", _socket_raises)
+            monkeypatch.setattr(cli_module, "_connector_transport", lambda: transport)
+            result = _CLI_RUNNER.invoke(
+                app, ["publish", "--yes", "--out", str(data_root)]
+            )
+    finally:
+        connector_registry.unregister(_PUBLISH_CONNECTOR_ID)
+    assert result.exit_code == 0, result.output
+    assert transport_calls == []
+    assert len(publisher.publish_calls) == 1
+    (page,) = sorted((data_root / WORKOUTS_DIR).glob("*-run-*.md"))
+    assert (
+        _PUBLISH_LINK in extract_regions(page.read_text(encoding="utf-8"))["published"]
+    )
+    assert (data_root / PUBLISH_STATE_DIR / f"{_PUBLISH_TARGET}.toml").is_file()
+
+
+def _wrote_a_ledger_and_a_published_region(touched: Sequence[str]) -> bool:
+    """The ``publish`` entry point's own non-vacuity check: the target's ledger
+    was written and a workout page was rewritten. The opt-in line was written
+    before the snapshot, so a page the measured run touched is one whose
+    ``published`` region the run filled (:func:`_run_publish` reads the link
+    back out of it)."""
+    ledger = f"data/{PUBLISH_STATE_DIR}/{_PUBLISH_TARGET}.toml" in touched
+    page = any(
+        re.fullmatch(rf"data/{WORKOUTS_DIR}/[^/]+\.md", key)
+        and not key.endswith("/AGENTS.md")
+        for key in touched
+    )
+    return ledger and page
+
+
 def _stage_recovery_pages(data_root: Path, source_dir: Path) -> None:
     workout_page(data_root, "recovery-older", date(2024, 8, 13), 37)
     workout_page(data_root, "recovery-latest", date(2024, 8, 19), 83)
@@ -1788,6 +1872,14 @@ WRITING_ENTRY_POINTS: Final[tuple[EntryPoint, ...]] = (
         prepare=_prepare_wellness_pull,
         run=_run_wellness_pull,
         non_vacuous=_wrote_wellness_ledger_and_delivery,
+    ),
+    # publish-core task 9.1: a posting run through the scripted target, which
+    # writes the target's ledger and a page's `published` region.
+    EntryPoint(
+        id="publish",
+        prepare=_prepare_publish,
+        run=_run_publish,
+        non_vacuous=_wrote_a_ledger_and_a_published_region,
     ),
 )
 
@@ -3638,3 +3730,60 @@ def test_recovery_non_vacuous_distinguishes_real_write_from_empty_run(
         populated,
         populated,
     )
+
+
+def test_publish_is_a_registered_writing_entry_point() -> None:
+    """``publish`` is registered once in :data:`WRITING_ENTRY_POINTS`, with the
+    callables this module defines (an id-only check cannot see a swapped-in
+    stand-in for ``prepare``, ``run`` or ``non_vacuous``)."""
+    assert [entry.id for entry in WRITING_ENTRY_POINTS].count("publish") == 1
+    entry = next(entry for entry in WRITING_ENTRY_POINTS if entry.id == "publish")
+    assert (entry.prepare, entry.run, entry.non_vacuous) == (
+        _prepare_publish,
+        _run_publish,
+        _wrote_a_ledger_and_a_published_region,
+    )
+
+
+@pytest.mark.parametrize(
+    "touched,expected",
+    [
+        (
+            (
+                f"data/{PUBLISH_STATE_DIR}/{_PUBLISH_TARGET}.toml",
+                f"data/{WORKOUTS_DIR}/2021-09-08-run-0146.md",
+            ),
+            True,
+        ),
+        ((f"data/{PUBLISH_STATE_DIR}/{_PUBLISH_TARGET}.toml",), False),
+        ((f"data/{WORKOUTS_DIR}/2021-09-08-run-0146.md",), False),
+        (
+            (
+                f"data/{PUBLISH_STATE_DIR}/other.toml",
+                f"data/{WORKOUTS_DIR}/2021-09-08-run-0146.md",
+            ),
+            False,
+        ),
+        (
+            (
+                f"data/{PUBLISH_STATE_DIR}/{_PUBLISH_TARGET}.toml",
+                f"data/{WORKOUTS_DIR}/AGENTS.md",
+                f"data/{WORKOUTS_DIR}/{ASSETS_SUBDIR}/2021-09-08-run-0146-hero.svg",
+            ),
+            False,
+        ),
+        ((), False),
+    ],
+    ids=[
+        "ledger-and-page",
+        "ledger-only",
+        "page-only",
+        "another-targets-ledger",
+        "ledger-and-non-pages",
+        "empty",
+    ],
+)
+def test_publish_non_vacuity_needs_the_ledger_and_a_page(
+    touched: tuple[str, ...], expected: bool
+) -> None:
+    assert _wrote_a_ledger_and_a_published_region(touched) is expected
