@@ -67,6 +67,7 @@ import fitdocs.performance.engine
 import fitdocs.plans.corpus
 import fitdocs.plans.engine
 import fitdocs.plans.page
+import fitdocs.publish.values
 import fitdocs.render.frontmatter
 import fitdocs.render.sections
 import fitdocs.render.views
@@ -147,6 +148,9 @@ CONVERTED_MODULES: Final[tuple[ModuleType, ...]] = (
     # refs, binding the archive-ref reader by identity.
     fitdocs.compose.archive,
     fitdocs.hr_benchmarks.engine,
+    # publish-core (task 4.2): the placeholder values a post is written from,
+    # read only through the contract's readers.
+    fitdocs.publish.values,
 )
 
 #: The one converted module allowed to name ``yaml`` at all. The frontmatter
@@ -332,6 +336,18 @@ CONTRACT_BINDINGS: Final[dict[str, tuple[str, ...]]] = {
         "is_workout_document",
         "sha_of_ref",
         "source_refs",
+    ),
+    "fitdocs.publish.values": (
+        "DATE_KEY",
+        "SPORT_KEY",
+        "START_TIME_KEY",
+        "document_date",
+        "document_load",
+        "document_modality",
+        "document_source_identity",
+        "document_sport",
+        "document_start_time",
+        "document_summary",
     ),
 }
 
