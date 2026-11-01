@@ -168,10 +168,11 @@ def test_blocks_declaration_names_the_notes_region_and_no_other_region_id() -> N
     # design: BlockDeclaration -- a block page carries exactly one user-owned
     # region, `notes`; a planned-workout page carries none. The text must
     # name `notes` (backticked, like every other region reference) but must
-    # not name any other region id the contract publishes -- today `workout`
-    # (`contract.USER_REGIONS`) and `load` (`contract.TOOL_REGIONS`) --
-    # distinguishing this from `workouts/`'s text, which names `notes` and
-    # `workout` both. Iterates `contract.PRESERVED_REGIONS` (the union of
+    # not name any other preserved region id -- today `workout`, `post`
+    # (`contract.USER_REGIONS`) and `load` (`contract.TOOL_REGIONS`); the
+    # refreshed `published` region is held out by test_publish_contract_docs.py
+    # -- distinguishing this from `workouts/`'s text, which names `notes`,
+    # `workout` and `post`. Iterates `contract.PRESERVED_REGIONS` (the union of
     # user-owned and tool-filled region ids), not only `USER_REGIONS`: a
     # fragment that leaked `load` into the blocks text would be false of
     # this directory (no `load` region exists on a block or planned-workout
