@@ -101,10 +101,16 @@ def test_placement_rules_hold_over_the_package() -> None:
 def test_shared_copies_import_only_stdlib_and_siblings() -> None:
     problems, scanned = check_shared(PACKAGE_ROOT)
     assert problems == []
-    # The shared package does not exist yet; its rule is exercised by the
-    # controls below. Task 1.4 creates it and must change this to the literal
-    # count of its modules (this assertion reds when it arrives).
-    assert scanned == 0
+    # The literal count of the files in shared/: __init__.py plus the two
+    # copies relay-server pins. Each later spec that appends a pair to
+    # scripts/sync_relay_shared.py (strava-publish adds outcomes.py) adds one
+    # file here, so that change must raise this number in the same commit.
+    assert scanned == 3
+    assert sorted(p.name for p in (PACKAGE_ROOT / SHARED_PACKAGE).glob("*.py")) == [
+        "__init__.py",
+        "relay_codes.py",
+        "relay_envelope.py",
+    ]
 
 
 # --- positive controls: each rule can fail ---------------------------------

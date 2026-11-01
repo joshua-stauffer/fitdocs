@@ -170,6 +170,7 @@ files = [
     "tests/test_units.py",
     "tests/test_changelog.py",
     "tests/test_release_artifacts.py",
+    "tests/test_relay_shared_copies.py",
     "tests/test_compatibility_policy.py",
     "tests/test_install_docs.py",
     "tests/test_upgrading_docs.py",
