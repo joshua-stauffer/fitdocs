@@ -6,7 +6,9 @@
 # runs the relay's tests against a PostgreSQL 17 service container pinned by
 # digest, with the require flag set so an unreachable server fails the run
 # instead of skipping the PostgreSQL cases, then the relay's lint, format and
-# type gates. Image steps arrive with task 5.3.
+# type gates. Last, it builds the relay image (nothing is pushed) and smoke-runs
+# it three times with relay/scripts/image_smoke.sh: on SQLite, on a throwaway
+# PostgreSQL, and as a derived image carrying the smoke wrapper.
 #
 # Publishes nothing: no login to any remote store, no upload, no credential, no
 # identity grant. The database password is a throwaway for a
@@ -30,6 +32,7 @@ env:
 jobs:
   relay:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:17@sha256:31ba9c94a03ada9988f2bb493a22a75eef3a185884533e5cdbcd498ea835b08f
@@ -66,3 +69,15 @@ jobs:
 
       - name: Run the strict type check
         run: uv run --directory relay mypy
+
+      - name: Build the relay image
+        run: docker build -t fitdocs-relay:ci relay
+
+      - name: Smoke-run the image on SQLite
+        run: relay/scripts/image_smoke.sh sqlite
+
+      - name: Smoke-run the image on PostgreSQL
+        run: relay/scripts/image_smoke.sh postgres
+
+      - name: Smoke-run a derived image with the smoke wrapper
+        run: relay/scripts/image_smoke.sh derived

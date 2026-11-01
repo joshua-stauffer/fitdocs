@@ -7,7 +7,8 @@ fails rather than skips when that server is unreachable. It publishes nothing.
 Every check parses the YAML and asserts on structure; the whole-text scan is
 only for a word that must not appear anywhere, comments included.
 
-Image steps arrive with task 5.3, which extends the pins here.
+It also builds the relay image and smoke-runs it three times (task 5.3) -- the
+build never pushes, and no step logs in to a registry.
 """
 
 from __future__ import annotations
@@ -240,13 +241,13 @@ _STEP_KEYS = {"name", "uses", "run", "env"}
 
 def test_every_level_allows_only_keys_that_cannot_skip_or_mask_a_step() -> None:
     """Allow-lists at workflow, job, service and step level: nothing like
-    `defaults`, `if`, `continue-on-error`, `timeout-minutes`, `strategy`,
-    `container`, `needs`, `shell` or `working-directory` can be added. Task
-    5.3 extends these sets for its image steps."""
+    `defaults`, `if`, `continue-on-error`, `strategy`, `container`, `needs`,
+    `shell` or `working-directory` can be added; the job's only addition for
+    the image steps is its `timeout-minutes`, pinned below."""
     doc = _workflow()
     # PyYAML reads the bare key `on` as True.
     assert set(doc) == {True, "permissions", "env", "jobs"}
-    assert set(_job(doc)) == {"runs-on", "services", "steps"}
+    assert set(_job(doc)) == {"runs-on", "timeout-minutes", "services", "steps"}
     assert set(_job(doc)["services"]["postgres"]) == {
         "image",
         "env",
@@ -264,10 +265,61 @@ def test_every_level_allows_only_keys_that_cannot_skip_or_mask_a_step() -> None:
     assert set(doc["env"]) == {"TERM", "NO_COLOR"}
 
 
-def test_no_image_step_yet() -> None:
-    """Task 5.3 adds the image build and smoke steps and replaces this pin."""
-    for step in _steps(_workflow()):
-        assert "docker" not in step.get("run", "")
+def test_the_job_has_a_bounded_timeout() -> None:
+    assert _job(_workflow())["timeout-minutes"] == 30
+    # Positive control: removing the key must leave no value to compare.
+    broken = _text().replace("    timeout-minutes: 30\n", "")
+    assert "timeout-minutes" not in _job(_workflow(broken))
+
+
+_BUILD = "docker build -t fitdocs-relay:ci relay"
+_SMOKES = (
+    "relay/scripts/image_smoke.sh sqlite",
+    "relay/scripts/image_smoke.sh postgres",
+    "relay/scripts/image_smoke.sh derived",
+)
+
+
+def _docker_runs(doc: dict[Any, Any]) -> list[str]:
+    return [
+        s["run"].strip()
+        for s in _steps(doc)
+        if isinstance(s.get("run"), str) and "docker" in s["run"]
+    ]
+
+
+def test_the_image_is_built_then_smoke_run_three_times_after_the_gates() -> None:
+    doc = _workflow()
+    steps = _steps(doc)
+    mypy = _run_step(doc, "uv run --directory relay mypy")
+    build = _run_step(doc, _BUILD)
+    smokes = [_run_step(doc, command) for command in _SMOKES]
+    order = [steps.index(s) for s in [mypy, build, *smokes]]
+    assert order == sorted(order) and len(set(order)) == 5
+    # The image steps carry nothing but a name and a command: no secret, no
+    # variable, no action.
+    for step in [build, *smokes]:
+        assert set(step) == {"name", "run"}, step
+
+
+def test_docker_is_used_only_by_the_one_build_step() -> None:
+    assert _docker_runs(_workflow()) == [_BUILD]
+    # Positive control: a second docker command would be listed.
+    extra = _text() + "\n      - name: Extra\n        run: docker run x\n"
+    assert _docker_runs(_workflow(extra)) == [_BUILD, "docker run x"]
+
+
+def test_the_build_step_pushes_nothing_and_no_registry_action_is_used() -> None:
+    doc = _workflow()
+    build = _run_step(doc, _BUILD)
+    assert _FORBIDDEN_RUN_WORDS.search(build["run"]) is None
+    assert "--push" not in build["run"] and "--load" not in build["run"]
+    # Positive controls: the spellings that publish are caught.
+    for run in (_BUILD + " --push", "docker buildx build --push .", "docker push x"):
+        assert _FORBIDDEN_RUN_WORDS.search(run), run
+    # No registry action: the action set is exactly the two pinned above.
+    uses = {s["uses"].split("@")[0] for s in _steps(doc) if "uses" in s}
+    assert uses == {"actions/checkout", "astral-sh/setup-uv"}
 
 
 def test_actionlint_if_available() -> None:
