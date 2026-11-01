@@ -2,7 +2,7 @@
 
 A thin typer shell (design: CliApp, ``src/fitdocs/cli.py``): it parses flags,
 resolves configuration, calls the engine, and reports -- it contains no
-rendering or file-pipeline logic of its own. Fifteen commands are registered
+rendering or file-pipeline logic of its own. Sixteen commands are registered
 on top of the baseline ``--version`` / ``--help`` shell. The tree-processing
 commands documented here are:
 
@@ -47,6 +47,14 @@ statement against the analytics index in a sandbox, or describe its schema.
 [--format text|json] [--out PATH]``
   -- check, redraw or freeze the charts declared on the data root's dashboard
   pages, or list the chart kinds (dashboards Req 14.1).
+* ``fitdocs publish [PAGES...] [--to TARGET]... [--yes] [--targets]
+[--format text|json] [--out PATH]``
+  -- decide, for each workout page that opts in, what each configured publish
+  target would be sent and, with ``--yes``, send it and record the outcome; a
+  run without ``--yes`` sends and writes nothing. It exits 0 when no result
+  carries a failure code, 1 when one does, 2 on a configuration error found
+  before any request or write, and 130 when interrupted with every outcome
+  already received kept (publish-core Req 7.1, 7.10, 8.9).
 
 Two further commands describe the installed tool rather than a tree and sit
 outside the list above: ``fitdocs plugins`` and ``fitdocs skill [NAME]`` --
@@ -423,6 +431,41 @@ _DASHBOARD_TARGETS_ARGUMENT = typer.Argument(
 )
 _DASHBOARD_FORMAT_OPTION = typer.Option(
     _DashboardFormat.TEXT,
+    "--format",
+    case_sensitive=False,
+    help="Report format: text or json.",
+)
+
+
+class _PublishFormat(StrEnum):
+    TEXT = "text"
+    JSON = "json"
+
+
+_PUBLISH_PAGES_ARGUMENT = typer.Argument(
+    None,
+    help=(
+        "Workout pages to consider, each a file name in workouts/ (with or "
+        "without .md) or a path. Omit to consider every workout page."
+    ),
+)
+_PUBLISH_TO_OPTION = typer.Option(
+    None,
+    "--to",
+    help="Consider only this publish target; repeat to name several.",
+)
+_PUBLISH_YES_OPTION = typer.Option(
+    False,
+    "--yes",
+    help="Post what the dry run shows. Without it nothing is sent or written.",
+)
+_PUBLISH_TARGETS_OPTION = typer.Option(
+    False,
+    "--targets",
+    help="List the configured publish targets instead of publishing.",
+)
+_PUBLISH_FORMAT_OPTION = typer.Option(
+    _PublishFormat.TEXT,
     "--format",
     case_sensitive=False,
     help="Report format: text or json.",
@@ -2431,6 +2474,159 @@ def dashboard_command(
         typer.echo(render_text(report, chained=False))
     if report.failed:
         raise typer.Exit(code=_EXIT_FILE_FAILURES)
+
+
+_NO_PUBLISH_TARGET: Final[str] = "No publish target is configured."
+
+
+@app.command("publish")
+def publish_command(
+    pages: list[str] | None = _PUBLISH_PAGES_ARGUMENT,
+    to: list[str] | None = _PUBLISH_TO_OPTION,
+    yes: bool = _PUBLISH_YES_OPTION,
+    targets: bool = _PUBLISH_TARGETS_OPTION,
+    output_format: _PublishFormat = _PUBLISH_FORMAT_OPTION,
+    out: Path | None = _OUT_OPTION,
+) -> None:
+    """Show, or with --yes post, what each publish target would be sent.
+
+    (publish-core design: CliPublish; Req 4.6, 4.8, 7.1, 7.3, 7.4, 7.10, 7.11,
+    8.9.)
+
+    Every preflight check runs, in the design's order, before any request or
+    write, each failure exiting ``2`` and naming what to fix: the data root;
+    the settings document, the inbox settings, the connectors table and the
+    ``[publish]`` table (validated on every invocation, Req 4.8); the ``--to``
+    names; PAGES; the ledgers; and, only with ``--yes`` and a selected target
+    that authenticates, the per-user credentials directory. The run itself
+    is :func:`~fitdocs.publish.engine.run_publish` with the real clock, a
+    random publication id and the real connector transport. Without ``--yes``
+    it sends and writes nothing. Exit ``0`` when no result carries a failure
+    code, ``1`` when one does, ``130`` on an interrupt, after which every
+    outcome already received is on disk (Req 8.9).
+    """
+    # Imported here, not at module top: importing fitdocs.cli loads no publish
+    # module beyond the package marker, outcomes and request (pinned by
+    # tests/publish/test_cli_publish.py).
+    import secrets
+
+    from fitdocs.connectors.settings import ConnectorInstance
+    from fitdocs.publish.engine import PublishPlan, run_publish
+    from fitdocs.publish.ledger import PublishLedgerError, load_ledgers
+    from fitdocs.publish.outcomes import PublishCode
+    from fitdocs.publish.pages import PageSelectionError, select_pages
+    from fitdocs.publish.report import render_json, render_text
+    from fitdocs.publish.settings import load_publish_settings
+    from fitdocs.publish.targets import (
+        TargetChannel,
+        is_publish_target,
+        prepare_target,
+    )
+
+    data_root = _resolved_data_root(out)
+    try:
+        document = load_settings_document(data_root)
+        inbox_settings = load_inbox_settings(document, data_root=data_root)
+        validated_inbox = validate_inbox_paths(data_root, inbox_settings)
+        instances = load_connectors_settings(
+            document,
+            settings_file=settings_path(data_root),
+            context=SettingsContext(
+                data_root=data_root, inbox=validated_inbox.inbox_resolved
+            ),
+        )
+        by_name: dict[str, ConnectorInstance] = {
+            instance.name: instance
+            for instance in instances
+            if is_publish_target(instance)
+        }
+        publish_settings = load_publish_settings(
+            document, settings_file=settings_path(data_root), targets=sorted(by_name)
+        )
+    except SettingsError as exc:
+        _config_error(str(exc))
+
+    if targets:
+        _config_error("fitdocs publish --targets is not available yet.")
+
+    configured = ", ".join(sorted(by_name)) or "none"
+    considered = sorted(set(to)) if to else sorted(by_name)
+    unknown = [name for name in considered if name not in by_name]
+    if unknown:
+        _config_error(
+            f"--to names {', '.join(repr(name) for name in unknown)}, which "
+            f"{'is' if len(unknown) == 1 else 'are'} not a configured publish "
+            f"target; configured publish targets: {configured}"
+        )
+
+    try:
+        selected_pages = select_pages(data_root, pages or [], cwd=Path.cwd())
+    except PageSelectionError as exc:
+        _config_error(str(exc))
+
+    try:
+        ledgers = load_ledgers(
+            data_root, {name: by_name[name].connector.connector_id for name in by_name}
+        )
+    except PublishLedgerError as exc:
+        _config_error(str(exc))
+
+    store: CredentialStore | None = None
+    if yes and any(
+        by_name[name].connector.auth_style is not AuthStyle.NONE for name in considered
+    ):
+        try:
+            credentials_dir = resolve_credentials_dir(os.environ, Path.home())
+            check_outside_data_root(credentials_dir, data_root)
+        except CredentialsLocationError as exc:
+            _config_error(str(exc))
+        store = CredentialStore(credentials_dir)
+
+    def clock() -> datetime:
+        return datetime.now(UTC)
+
+    def open_target(name: str) -> TargetChannel | PublishCode:
+        return prepare_target(
+            by_name[name],
+            data_root=data_root,
+            store=store,
+            environ=os.environ,
+            transport=_connector_transport(),
+            now=clock,
+            sleep=time.sleep,
+        )
+
+    plan = PublishPlan(
+        data_root=data_root,
+        pages=selected_pages,
+        considered=tuple(considered),
+        configured=frozenset(by_name),
+        settings=publish_settings,
+        ledgers=ledgers,
+        posting=yes,
+    )
+    try:
+        report = run_publish(
+            plan,
+            open_target=open_target,
+            now=clock,
+            mint_id=lambda: secrets.token_hex(16),
+        )
+    except KeyboardInterrupt:
+        Console(stderr=True, markup=False, highlight=False, soft_wrap=True).print(
+            "Publish run interrupted; every outcome already received is recorded."
+        )
+        raise typer.Exit(code=_EXIT_INTERRUPTED) from None
+
+    if output_format is _PublishFormat.JSON:
+        typer.echo(render_json(report))
+    elif not by_name and not report.rows:
+        typer.echo(_NO_PUBLISH_TARGET)
+    elif not by_name and not report.failed:
+        typer.echo(render_text(report) + "\n" + _NO_PUBLISH_TARGET)
+    else:
+        typer.echo(render_text(report))
+    _finish(failed=report.failed)
 
 
 def _read_statement(sql: str | None, file: Path | None) -> str:

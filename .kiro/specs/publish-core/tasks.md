@@ -446,7 +446,7 @@ live constant.
 
 - [ ] 7. The `fitdocs publish` command
 
-- [ ] 7.1 Add `fitdocs publish` with its preflight and exit codes
+- [x] 7.1 Add `fitdocs publish` with its preflight and exit codes
   - Arguments and options: PAGES, repeatable `--to`, `--yes`, `--targets`,
     `--format text|json`, `--out`; the publish package is imported lazily,
     pinned by a test that importing the CLI loads no publish module other
@@ -637,3 +637,6 @@ live constant.
 - Controller ruling 6.3: the published-region refresh matches a considered current page to records by its source digests only (no sport/start needed). When it skips a page because records are ambiguous (more than one record in a ledger, or a record matching several pages), it reports a page-level PUBLISHED_NOT_WRITTEN row with a fitdocs-written detail (Req 12.2/12.7); never a silent skip.
 - Controller ruling 6.3: each outcome is saved to the ledger file immediately after it is received, before any other work (Req 8.8/8.9); `at` is the clock read after the answer arrives.
 - For 8.5 (design amendments from 6.3/6.4 rulings): engine step 4 Req 8.6 reading (every pair of an unopened target gets the open code); refresh ambiguity rows (PUBLISHED_NOT_WRITTEN); Report text shape gains `  link: refused`; Report imports publish.targets (design line 210); the target-listing text format (8.3 documents it).
+- Controller ruling 7.1: Req 7.11's "no publish target is configured" sentence is printed in text format only; with --format json the run document is printed unchanged (empty results), so the JSON shape stays stable.
+- Controller ruling 7.1: `--targets` is parsed and exits 2 "not available yet" until 7.2 replaces that branch (7.2 owns the step-2 refusals and the step-5 listing).
+- 7.1: CLI refusal tests must arm the refused action (a scripted POSTED, a reachable credential) so 'nothing sent/written' is not pre-satisfied; the scripted transport's raise is swallowed by TargetChannel.send as target_error, so 'no request' needs an explicit transport_calls == [] / world.calls() == 0.
