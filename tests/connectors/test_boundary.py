@@ -85,6 +85,7 @@ CONNECTORS_MODULE_NAMES: Final[tuple[str, ...]] = (
     "fitdocs.connectors.connect",
     "fitdocs.connectors.credentials",
     "fitdocs.connectors.delivery",
+    "fitdocs.connectors.disconnect",
     "fitdocs.connectors.errors",
     "fitdocs.connectors.folder",
     "fitdocs.connectors.http",
@@ -93,7 +94,9 @@ CONNECTORS_MODULE_NAMES: Final[tuple[str, ...]] = (
     "fitdocs.connectors.protocol",
     "fitdocs.connectors.pull",
     "fitdocs.connectors.registry",
+    "fitdocs.connectors.relay",
     "fitdocs.connectors.relay_codes",
+    "fitdocs.connectors.relay_connect",
     "fitdocs.connectors.relay_envelope",
     "fitdocs.connectors.secrets",
     "fitdocs.connectors.settings",
@@ -284,6 +287,7 @@ _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
             "fitdocs.connectors.intervals",
             "fitdocs.connectors.protocol",
             "fitdocs.connectors.registry",
+            "fitdocs.connectors.relay",
             "fitdocs.connectors.secrets",
         }
     ),
@@ -314,6 +318,16 @@ _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
             "fitdocs.connectors._atomic",
             "fitdocs.connectors.ledger",
             "fitdocs.connectors.protocol",
+        }
+    ),
+    "fitdocs.connectors.disconnect": frozenset(
+        {
+            "fitdocs.connectors.credentials",
+            "fitdocs.connectors.http",
+            "fitdocs.connectors.protocol",
+            "fitdocs.connectors.relay_codes",
+            "fitdocs.connectors.secrets",
+            "fitdocs.connectors.settings",
         }
     ),
     "fitdocs.connectors.errors": frozenset(),
@@ -349,6 +363,7 @@ _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
     "fitdocs.connectors.protocol": frozenset(
         {
             "fitdocs.connectors.http",
+            "fitdocs.connectors.relay_codes",
             "fitdocs.connectors.secrets",
         }
     ),
@@ -370,7 +385,28 @@ _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
             "fitdocs.connectors.protocol",
         }
     ),
+    "fitdocs.connectors.relay": frozenset(
+        {
+            "fitdocs.connectors.errors",
+            "fitdocs.connectors.http",
+            "fitdocs.connectors.protocol",
+            "fitdocs.connectors.relay_codes",
+            "fitdocs.connectors.relay_envelope",
+            "fitdocs.connectors.secrets",
+        }
+    ),
     "fitdocs.connectors.relay_codes": frozenset(),
+    "fitdocs.connectors.relay_connect": frozenset(
+        {
+            "fitdocs.connectors.credentials",
+            "fitdocs.connectors.http",
+            "fitdocs.connectors.protocol",
+            "fitdocs.connectors.relay_codes",
+            "fitdocs.connectors.relay_envelope",
+            "fitdocs.connectors.secrets",
+            "fitdocs.connectors.settings",
+        }
+    ),
     "fitdocs.connectors.relay_envelope": frozenset({"fitdocs.connectors.relay_codes"}),
     "fitdocs.connectors.secrets": frozenset(),
     "fitdocs.connectors.settings": frozenset(

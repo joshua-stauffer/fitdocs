@@ -668,6 +668,12 @@ NEUTRAL_SCAN_EXEMPTIONS: dict[str, frozenset[str]] = {
             "docs/connectors.md#intervals.icu",
         }
     ),
+    "api.fitdocs.ai": frozenset(
+        {
+            "src/fitdocs/connectors/relay.py",
+            "tests/connectors/test_relay.py",
+        }
+    ),
 }
 
 _URL_PATTERN = re.compile(r"https?://[^\s\"')>\]]+", re.IGNORECASE)
@@ -948,6 +954,15 @@ def test_the_scan_finds_the_intervals_host_in_the_connectors_own_module() -> Non
     sources = _real_sources()
     assert "intervals.icu" in _extract_hosts(
         sources["src/fitdocs/connectors/intervals.py"]
+    )
+
+
+def test_the_scan_finds_the_relay_host_in_the_connectors_own_module() -> None:
+    """The generic control above is satisfied by any admitted file; this one
+    pins that ``relay.py`` itself still names the host."""
+    sources = _real_sources()
+    assert "api.fitdocs.ai" in _extract_hosts(
+        sources["src/fitdocs/connectors/relay.py"]
     )
 
 

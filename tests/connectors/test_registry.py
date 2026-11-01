@@ -1131,3 +1131,155 @@ def test_login_connector_with_pull_activities_validates_and_can_pull() -> None:
     session = cast(ConnectorSession, SimpleNamespace())
     result = connector.list_activities(session, None)
     assert result == Listing(activities=())
+
+
+# ---------------------------------------------------------------------------
+# The relay-token style (relay-server Req 11.3, 11.4): an empty capability
+# set is allowed for it alone, and the five relay operations are required.
+# ---------------------------------------------------------------------------
+
+_RELAY_OPERATIONS = (
+    "check_token",
+    "read_capabilities",
+    "start_registration",
+    "poll_registration",
+    "revoke_token",
+)
+
+
+def _make_relay_connector(**overrides: Any) -> SimpleNamespace:
+    fields: dict[str, object] = {
+        "auth_style": AuthStyle.RELAY_TOKEN,
+        "capabilities": frozenset(),
+        "credential_fields": (CredentialField("token", "Relay token", secret=True),),
+    }
+    fields.update({name: _noop for name in _RELAY_OPERATIONS})
+    fields.update(overrides)
+    return _make_connector(**fields)
+
+
+def test_a_complete_relay_connector_with_no_capability_registers() -> None:
+    connector = _make_relay_connector(connector_id="relay-like")
+    assert validate_connector(connector) is None
+    register(connector)
+    assert get("relay-like") is connector
+
+
+def test_a_relay_connector_may_also_declare_capabilities() -> None:
+    connector = _make_relay_connector(
+        capabilities=frozenset({Capability.PULL_THRESHOLDS})
+    )
+    assert validate_connector(connector) is None
+
+
+@pytest.mark.parametrize(
+    "auth_style", [s for s in AuthStyle if s is not AuthStyle.RELAY_TOKEN]
+)
+def test_every_non_relay_style_with_no_capability_is_still_rejected(
+    auth_style: AuthStyle,
+) -> None:
+    fields = (
+        ()
+        if auth_style is AuthStyle.NONE
+        else (CredentialField("token", "Token", secret=True),)
+    )
+    connector = _make_connector(
+        auth_style=auth_style,
+        capabilities=frozenset(),
+        credential_fields=fields,
+        verify=_noop,
+        login=_noop,
+        refresh=_noop,
+    )
+    assert (
+        validate_connector(connector)
+        == "capabilities must be a non-empty frozenset of Capability"
+    )
+
+
+def test_a_relay_connector_with_a_non_frozenset_capability_value_is_rejected() -> None:
+    connector = _make_relay_connector(capabilities=set())
+    assert (
+        validate_connector(connector)
+        == "capabilities must be a non-empty frozenset of Capability"
+    )
+
+
+def test_a_relay_connector_with_a_non_capability_member_is_rejected() -> None:
+    connector = _make_relay_connector(capabilities=frozenset({"pull-activities"}))
+    assert (
+        validate_connector(connector)
+        == "capabilities must be a non-empty frozenset of Capability"
+    )
+
+
+@pytest.mark.parametrize("missing", _RELAY_OPERATIONS)
+def test_a_relay_connector_lacking_one_operation_is_rejected_naming_it(
+    missing: str,
+) -> None:
+    connector = _make_relay_connector(**{missing: None})
+    assert validate_connector(connector) == (
+        f"{missing} must be callable when auth_style is RELAY_TOKEN"
+    )
+    with pytest.raises(InvalidConnectorError, match=missing):
+        register(connector)
+
+
+@pytest.mark.parametrize(
+    ("earlier", "later"),
+    [
+        (_RELAY_OPERATIONS[i], _RELAY_OPERATIONS[j])
+        for i in range(len(_RELAY_OPERATIONS))
+        for j in range(i + 1, len(_RELAY_OPERATIONS))
+    ],
+)
+def test_a_relay_connector_lacking_two_operations_names_the_first_declared(
+    earlier: str, later: str
+) -> None:
+    connector = _make_relay_connector(**{later: None, earlier: None})
+    assert validate_connector(connector) == (
+        f"{earlier} must be callable when auth_style is RELAY_TOKEN"
+    )
+
+
+def test_relay_operations_are_not_required_of_a_personal_key_connector() -> None:
+    connector = _make_connector(
+        auth_style=AuthStyle.API_KEY,
+        credential_fields=(CredentialField("api_key", "API key", secret=True),),
+        verify=_noop,
+    )
+    assert validate_connector(connector) is None
+
+
+def test_a_raising_relay_operation_property_is_named_in_the_reason() -> None:
+    attrs: dict[str, object] = {
+        "connector_id": "generic-connector",
+        "display_name": "Generic Connector",
+        "auth_style": AuthStyle.RELAY_TOKEN,
+        "capabilities": frozenset(),
+        "credential_fields": (CredentialField("token", "Relay token", secret=True),),
+        "parse_settings": _noop,
+        **{name: _noop for name in _RELAY_OPERATIONS},
+    }
+
+    def _boom(self: object) -> object:
+        raise RuntimeError("boom")
+
+    attrs["poll_registration"] = property(_boom)
+    candidate = type("_Candidate", (), attrs)()
+    assert validate_connector(candidate) == (
+        "reading 'poll_registration' raised RuntimeError('boom')"
+    )
+
+
+def test_relay_operations_follow_the_protocols_declared_method_order() -> None:
+    from fitdocs.connectors.protocol import RelayTokenClient
+    from fitdocs.connectors.registry import _RELAY_OPERATIONS as REGISTRY_OPERATIONS
+
+    declared = tuple(
+        name
+        for name, value in vars(RelayTokenClient).items()
+        if callable(value) and not name.startswith("_")
+    )
+    assert len(declared) == 5
+    assert declared == REGISTRY_OPERATIONS
