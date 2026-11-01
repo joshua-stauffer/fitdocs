@@ -1,0 +1,212 @@
+"""Test harness: environment isolation, the test pepper, backend fixtures.
+
+Two variables drive the PostgreSQL half of the conformance suite:
+
+- `FITDOCS_RELAY_TEST_POSTGRES_URL`: a server the suite may create schemas in;
+- `FITDOCS_RELAY_REQUIRE_POSTGRES=1`: an unset URL then fails the PostgreSQL
+  cases instead of skipping them.
+
+Neither is a contract variable (`load_config` refuses any unknown
+`FITDOCS_RELAY_*` name), so both are read once, when this module is imported,
+and every `FITDOCS_RELAY_*` name is then removed from the environment of every
+test. Subprocess tests must build their environment without them.
+"""
+
+from __future__ import annotations
+
+import os
+import uuid
+from collections.abc import Callable, Iterator, Sequence
+from pathlib import Path
+
+import pytest
+
+from fitdocs_relay.config import PostgresTarget, SqliteTarget
+from fitdocs_relay.contract import ENV_PREFIX
+from fitdocs_relay.storage import interface
+
+TEST_POSTGRES_URL_VARIABLE = ENV_PREFIX + "TEST_POSTGRES_URL"
+REQUIRE_POSTGRES_VARIABLE = ENV_PREFIX + "REQUIRE_POSTGRES"
+
+# Captured once; the autouse fixture below removes them from os.environ.
+_POSTGRES_URL: str | None = os.environ.get(TEST_POSTGRES_URL_VARIABLE) or None
+_REQUIRE_POSTGRES: bool = os.environ.get(REQUIRE_POSTGRES_VARIABLE) == "1"
+
+# A fixed, test-only pepper (at least the contract's minimum length).
+TEST_PEPPER = "test-pepper-not-a-secret-0123456789abcdefghijklmnopqrstuv"
+
+COVERS_MARKER = "covers"
+_COVERS_KEY = pytest.StashKey[list[tuple[str, tuple[object, ...]]]]()
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    config.addinivalue_line(
+        "markers",
+        f"{COVERS_MARKER}(*members): the Storage protocol members this test "
+        'covers, each "<declaring protocol>.<member>", e.g. "TokenStore.find_token"',
+    )
+
+
+def pytest_collection_modifyitems(
+    session: pytest.Session, config: pytest.Config, items: list[pytest.Item]
+) -> None:
+    config.stash[_COVERS_KEY] = [
+        (
+            item.nodeid,
+            tuple(arg for m in item.iter_markers(COVERS_MARKER) for arg in m.args),
+        )
+        for item in items
+        if any(True for _ in item.iter_markers(COVERS_MARKER))
+    ]
+
+
+# --- environment ------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _isolate_relay_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No `FITDOCS_RELAY_*` name reaches a test, so `load_config` sees only its own."""
+    for name in [n for n in os.environ if n.startswith(ENV_PREFIX)]:
+        monkeypatch.delenv(name)
+
+
+@pytest.fixture
+def test_pepper() -> str:
+    return TEST_PEPPER
+
+
+# --- the coverage marker ----------------------------------------------------
+
+
+def _members_of(root: type) -> set[str]:
+    """`<declaring protocol>.<member>` for every member of the protocol `root`.
+
+    Walks the protocol classes in `root`'s MRO defined in `root`'s own module,
+    and reads each one's own namespace and annotations.
+    """
+    members: set[str] = set()
+    for cls in root.__mro__:
+        if cls.__module__ != root.__module__ or not getattr(cls, "_is_protocol", False):
+            continue
+        declared = {
+            name
+            for name, value in vars(cls).items()
+            if callable(value) or isinstance(value, property)
+        } | set(vars(cls).get("__annotations__", {}))
+        members |= {
+            f"{cls.__name__}.{name}" for name in declared if not name.startswith("_")
+        }
+    return members
+
+
+@pytest.fixture(scope="session")
+def storage_members() -> set[str]:
+    members = _members_of(interface.Storage)
+    assert members, "the member enumeration found nothing"
+    return members
+
+
+@pytest.fixture(scope="session")
+def members_of() -> Callable[[type], set[str]]:
+    return _members_of
+
+
+def _problems(
+    collected: Sequence[tuple[str, Sequence[object]]], members: set[str]
+) -> list[str]:
+    problems: list[str] = []
+    for nodeid, names in collected:
+        if not names:
+            problems.append(f"{nodeid}: covers() names nothing")
+        for name in names:
+            if not isinstance(name, str):
+                problems.append(f"{nodeid}: covers() argument {name!r} is not a string")
+            elif name not in members:
+                problems.append(f"{nodeid}: {name!r} is not a Storage member")
+    return problems
+
+
+@pytest.fixture(scope="session")
+def marker_problems(
+    storage_members: set[str],
+) -> Callable[[Sequence[tuple[str, Sequence[object]]]], list[str]]:
+    def check(collected: Sequence[tuple[str, Sequence[object]]]) -> list[str]:
+        return _problems(collected, storage_members)
+
+    return check
+
+
+@pytest.fixture
+def collected_covers(
+    pytestconfig: pytest.Config,
+) -> list[tuple[str, tuple[object, ...]]]:
+    return pytestconfig.stash[_COVERS_KEY]
+
+
+# --- backends ---------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def postgres_test_url() -> str:
+    """The test server URL; skips, or fails under the require flag, when unset."""
+    if _POSTGRES_URL is not None:
+        return _POSTGRES_URL
+    if _REQUIRE_POSTGRES:
+        pytest.fail(
+            f"{REQUIRE_POSTGRES_VARIABLE}=1 but "
+            f"{TEST_POSTGRES_URL_VARIABLE} is not set",
+            pytrace=False,
+        )
+    pytest.skip(f"{TEST_POSTGRES_URL_VARIABLE} is not set")
+
+
+@pytest.fixture(params=["sqlite", "postgres"])
+def database_target(
+    request: pytest.FixtureRequest, tmp_path: Path
+) -> Iterator[SqliteTarget | PostgresTarget]:
+    """A fresh, empty database location on each backend.
+
+    SQLite: a path in the test's temporary directory (the file does not exist
+    yet). PostgreSQL: an empty schema created on the test server, selected by
+    the connection's `search_path` and dropped on teardown.
+    """
+    if request.param == "sqlite":
+        yield SqliteTarget(path=tmp_path / "relay.sqlite3")
+        return
+    url: str = request.getfixturevalue("postgres_test_url")
+    yield from _postgres_schema(url)
+
+
+def _postgres_schema(url: str) -> Iterator[PostgresTarget]:
+    # Driver use in the tests: this fixture creates and drops the per-test schema;
+    # test_harness.py also imports psycopg to inspect that schema.
+    try:
+        import psycopg
+        from psycopg import sql
+        from psycopg.conninfo import make_conninfo
+    except ImportError:
+        pytest.fail(
+            f"{TEST_POSTGRES_URL_VARIABLE} is set but psycopg is not installed "
+            "(sync with the relay postgres extra)",
+            pytrace=False,
+        )
+    schema = f"relay_test_{uuid.uuid4().hex}"
+    try:
+        admin = psycopg.connect(url, autocommit=True)
+    except psycopg.OperationalError as error:
+        pytest.fail(
+            f"{TEST_POSTGRES_URL_VARIABLE} is set but the server is unreachable: "
+            f"{type(error).__name__}",
+            pytrace=False,
+        )
+    with admin:
+        admin.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(schema)))
+        try:
+            yield PostgresTarget(
+                conninfo=make_conninfo(url, options=f"-csearch_path={schema}"),
+                password=None,
+            )
+        finally:
+            admin.execute(
+                sql.SQL("DROP SCHEMA {} CASCADE").format(sql.Identifier(schema))
+            )
