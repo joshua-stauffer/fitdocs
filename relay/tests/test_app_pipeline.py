@@ -102,6 +102,7 @@ def services(open_full_storage: Callable[[], Storage]) -> RelayServices:
             store, pepper=pepper, clock=clock, token_limit=60, client_limit=20
         ),
         clock=clock,
+        registration=None,
         ready=False,
     )
 
@@ -555,6 +556,7 @@ def test_an_unmigrated_database_is_not_ready_at_startup(
             store, pepper=pepper, clock=clock, token_limit=1, client_limit=1
         ),
         clock=clock,
+        registration=None,
         ready=True,
     )
     state = store.schema_state()

@@ -39,10 +39,24 @@ from fitdocs_relay.identity import TokenService
 from fitdocs_relay.logs import failure_fields, log_event
 from fitdocs_relay.ratelimit import RateLimiter
 from fitdocs_relay.routes import core_routes, readiness
+from fitdocs_relay.seam import (
+    EXTENSION_ROUTE_PREFIX,
+    SEAM_VERSION,
+    ExtensionContext,
+    ExtensionParts,
+    IssuedToken,
+    RegistrationProvider,
+    RelayExtension,
+    SeamError,
+)
 from fitdocs_relay.shared.relay_codes import RelayCode
 from fitdocs_relay.shared.relay_envelope import MAX_REQUEST_BYTES, SERVED_ENVELOPES
 from fitdocs_relay.storage import open_storage
-from fitdocs_relay.storage.interface import Storage, StorageUnreachable
+from fitdocs_relay.storage.interface import (
+    RevokeResult,
+    Storage,
+    StorageUnreachable,
+)
 
 _LOGGER = logging.getLogger("fitdocs_relay.app")
 _VERSION_PREFIX: Final = re.compile(r"/v([0-9]+)(?:/|$)")
@@ -52,13 +66,149 @@ _METHODS: Final = frozenset(
 )
 
 
+_EXTENSION_NAME: Final = re.compile(r"[a-z][a-z0-9-]{0,31}")
+KEY_MAX_CHARACTERS: Final = 128
+VALUE_MAX_BYTES: Final = 4096
+TTL_MIN_S: Final = 1
+TTL_MAX_S: Final = 2_592_000
+_MSG_KEY: Final = "a record key is 0 to 128 characters"
+_MSG_VALUE: Final = "a record value is 0 to 4096 bytes"
+_MSG_TTL: Final = "a record expiry is 1 to 2592000 seconds"
+_MSG_NAME: Final = (
+    "its name is not 1 to 32 characters of lowercase letters, digits and hyphens,"
+    " starting with a letter"
+)
+_MSG_VERSION: Final = (
+    f"declares a seam version this relay does not implement"
+    f" (it implements seam version {SEAM_VERSION})"
+)
+
+
 @dataclass
 class RelayServices:
     storage: Storage
     tokens: TokenService
     limiter: RateLimiter
     clock: Callable[[], int]
+    registration: RegistrationProvider | None
     ready: bool
+
+
+class _TokenIssuance:
+    """The seam's token operations: the operator's `TokenService`, unchanged."""
+
+    def __init__(self, tokens: TokenService) -> None:
+        self._tokens = tokens
+
+    def issue(self, *, principal_id: str | None, label: str | None) -> IssuedToken:
+        minted = self._tokens.mint(principal_id=principal_id, label=label)
+        return IssuedToken(minted.token_id, minted.principal_id, minted.token)
+
+    def revoke(self, token_id: str) -> bool:
+        """True when the token exists (now revoked), False when it is unknown."""
+        return self._tokens.revoke(token_id) is not RevokeResult.UNKNOWN
+
+    def delete_principal(self, principal_id: str) -> bool:
+        return self._tokens.delete_principal(principal_id)
+
+
+class _ExtensionRecords:
+    """One extension's records: its name is the namespace, the limits are here."""
+
+    def __init__(
+        self, storage: Storage, namespace: str, clock: Callable[[], int]
+    ) -> None:
+        self._storage = storage
+        self._namespace = namespace
+        self._clock = clock
+
+    @staticmethod
+    def _checked_key(key: str) -> str:
+        if not isinstance(key, str) or len(key) > KEY_MAX_CHARACTERS:
+            raise ValueError(_MSG_KEY)
+        return key
+
+    def put(self, key: str, value: bytes, *, ttl_s: int) -> None:
+        self._checked_key(key)
+        if not isinstance(value, bytes) or len(value) > VALUE_MAX_BYTES:
+            raise ValueError(_MSG_VALUE)
+        if type(ttl_s) is not int or not TTL_MIN_S <= ttl_s <= TTL_MAX_S:
+            raise ValueError(_MSG_TTL)
+        now = self._clock()
+        self._storage.put_record(
+            namespace=self._namespace,
+            key=key,
+            value=value,
+            expires_at=now + ttl_s,
+            now=now,
+        )
+
+    def get(self, key: str) -> bytes | None:
+        return self._storage.get_record(
+            namespace=self._namespace, key=self._checked_key(key), now=self._clock()
+        )
+
+    def take(self, key: str) -> bytes | None:
+        return self._storage.take_record(
+            namespace=self._namespace, key=self._checked_key(key), now=self._clock()
+        )
+
+    def delete(self, key: str) -> bool:
+        return self._storage.delete_record(
+            namespace=self._namespace, key=self._checked_key(key)
+        )
+
+
+def _label(name: object) -> str:
+    return ascii(name)[:50] if isinstance(name, str) else f"<{type(name).__name__}>"
+
+
+def _install_extensions(
+    services: RelayServices, extensions: Sequence[RelayExtension]
+) -> list[BaseRoute]:
+    """Build each extension, refusing (naming it and the reason) a wrong seam
+    version, a bad or repeated name, a route outside `/x/<name>/` and a second
+    registration provider; sets `services.registration`. Returns the routes."""
+    routes: list[BaseRoute] = []
+    names: set[str] = set()
+    provider_from: str | None = None
+    for extension in extensions:
+        name = getattr(extension, "name", None)
+        label = _label(name)
+        version = getattr(extension, "seam_version", None)
+        if type(version) is not int or version != SEAM_VERSION:
+            raise SeamError(f"extension {label}: {_MSG_VERSION}")
+        if not isinstance(name, str) or _EXTENSION_NAME.fullmatch(name) is None:
+            raise SeamError(f"extension {label}: {_MSG_NAME}")
+        if name in names:
+            raise SeamError(
+                f"extension {label}: its name is already used by another extension"
+            )
+        names.add(name)
+        context = ExtensionContext(
+            tokens=_TokenIssuance(services.tokens),
+            records=_ExtensionRecords(services.storage, name, services.clock),
+            clock=services.clock,
+            logger=logging.getLogger(f"fitdocs_relay.extension.{name}"),
+        )
+        parts = extension.build(context)
+        if not isinstance(parts, ExtensionParts):
+            raise SeamError(f"extension {label}: build did not return ExtensionParts")
+        prefix = f"{EXTENSION_ROUTE_PREFIX}{name}/"
+        for route in parts.routes:
+            path = getattr(route, "path", None)
+            if not isinstance(path, str) or not path.startswith(prefix):
+                raise SeamError(f"extension {label}: adds a route outside {prefix}")
+            routes.append(route)
+        if parts.registration is not None:
+            if provider_from is not None:
+                raise SeamError(
+                    f"extension {label}: installs a registration provider, but"
+                    f" extension {_label(provider_from)} already installed one"
+                )
+            provider_from = name
+            services.registration = parts.registration
+    return routes
 
 
 def compute_ready(storage: Storage) -> bool:
@@ -229,6 +379,7 @@ def _wall_clock() -> int:
 def create_app(
     config: RelayConfig,
     *,
+    extensions: Sequence[RelayExtension] = (),
     storage: Storage | None = None,
     clock: Callable[[], int] | None = None,
 ) -> Starlette:
@@ -245,6 +396,13 @@ def create_app(
             client_limit=config.client_limit_per_minute,
         ),
         clock=now,
+        registration=None,
         ready=False,
     )
-    return build_app(services, core_routes(services))
+    try:
+        extension_routes = _install_extensions(services, extensions)
+    except BaseException:
+        if storage is None:
+            store.close()  # opened here; nothing else will close it
+        raise
+    return build_app(services, [*core_routes(services), *extension_routes])

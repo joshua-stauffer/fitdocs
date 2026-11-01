@@ -357,8 +357,10 @@ a violation is a defect):
   `secrets` keep their existing positions.
 - relay side: `shared.*` → `contract` → `config` → `storage.interface` →
   `storage.sqlite` / `storage.postgres` / `storage.migrate` → `storage` →
-  `identity`, `ratelimit` → `seam` → `answers` → `routes` → `app` → `serve`
-  → `cli`. `logs` is a leaf that `app`, `serve` and `cli` import.
+  `identity`, `ratelimit` → `answers` → `seam` → `routes` → `app` → `serve`
+  → `cli`. `logs` is a leaf that `app`, `serve` and `cli` import. (Amended
+  2026-11-01, task 4.4 controller ruling: `answers` precedes `seam`, so the
+  seam's envelope helper reuses `answers.answer` instead of a second encoder.)
 
 ### Technology Stack
 

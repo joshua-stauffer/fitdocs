@@ -539,7 +539,7 @@ def test_the_log_carries_the_token_id_only_for_an_authenticated_request(
     relay: Relay,
 ) -> None:
     out = io.StringIO()
-    configure_logging(pepper=PEPPER, password="pw", stream=out)
+    configure_logging(pepper=PEPPER, password="core-routes-db-passw0rd", stream=out)
     logging.getLogger("httpx").setLevel(logging.WARNING)
     token = relay.mint()
     with relay.client() as client:
@@ -563,7 +563,7 @@ def test_a_rate_limited_authenticated_request_still_logs_its_token_id(
 ) -> None:
     relay = make_relay(token_limit=1, client_limit=HIGH)
     out = io.StringIO()
-    configure_logging(pepper=PEPPER, password="pw", stream=out)
+    configure_logging(pepper=PEPPER, password="core-routes-db-passw0rd", stream=out)
     logging.getLogger("httpx").setLevel(logging.WARNING)
     token = relay.mint()
     with relay.client() as client:
