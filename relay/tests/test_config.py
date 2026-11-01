@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
+from tests.test_contract import PINNED_ENVIRONMENT
 
 from fitdocs_relay.config import (
     ConfigError,
@@ -517,41 +518,23 @@ def test_the_loaded_configuration_hides_its_secrets_in_repr() -> None:
 
 # --- the table the reader is bound to ---------------------------------------
 
-TABLE_ROWS = [
-    (URL, True, None, True),
-    (PASSWORD, False, None, True),
-    (PEPPER, True, None, True),
-    (HOST, False, "127.0.0.1", False),
-    (PORT, False, "8080", False),
-    (FORWARDED, False, "", False),
-    (TOKEN_LIMIT, False, "60", False),
-    (CLIENT_LIMIT, False, "20", False),
-    (GRACE, False, "20", False),
-    (LEVEL, False, "info", False),
-    (EXTENSIONS, False, "", False),
-]
 
-
-TABLE_MEANINGS = [
-    "`sqlite:///relative.db`, `sqlite:////absolute/path.db`, or `postgresql://` / "
-    "`postgres://user@host:port/db[?params]`; anything else, including in-memory "
-    "SQLite, is an error",
-    "PostgreSQL password. An error with a SQLite URL, or when the URL already "
-    "carries a password",
-    "Token-hashing secret, at least 43 characters (`fitdocs-relay new-pepper` "
-    "prints one)",
-    "Listen address (the image sets `0.0.0.0`)",
-    "Listen port, 1-65535",
-    "Comma-separated proxy addresses trusted for forwarded client addresses",
-    "Requests per token per minute, 1-100000",
-    "Unauthenticated requests per client address per minute, 1-100000",
-    "Graceful-shutdown wait, 0-600",
-    "`debug`, `info`, `warning` or `error`",
-    "Comma-separated `module:attribute` references to `RelayExtension` objects",
-]
-
-
-def test_the_table_lists_each_variable_with_its_flags() -> None:
-    rows = [(v.name, v.required, v.default, v.secret) for v in ENVIRONMENT]
-    assert rows == TABLE_ROWS
-    assert [v.meaning for v in ENVIRONMENT] == TABLE_MEANINGS
+def test_the_names_used_here_are_the_pinned_tables_variables() -> None:
+    # The table itself, meanings included, is pinned once, in test_contract.py.
+    used = [
+        URL,
+        PASSWORD,
+        PEPPER,
+        HOST,
+        PORT,
+        FORWARDED,
+        TOKEN_LIMIT,
+        CLIENT_LIMIT,
+        GRACE,
+        LEVEL,
+        EXTENSIONS,
+    ]
+    assert used == [row[0] for row in PINNED_ENVIRONMENT]
+    assert [(v.name, v.required, v.default, v.secret) for v in ENVIRONMENT] == [
+        row[:4] for row in PINNED_ENVIRONMENT
+    ]
