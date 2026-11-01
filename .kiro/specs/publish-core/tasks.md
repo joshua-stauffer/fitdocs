@@ -324,7 +324,7 @@ live constant.
   - _Boundary: PublishLedger_
   - _Depends: 1.2_
 
-- [ ] 5.2 (P) Render and splice the published region
+- [x] 5.2 (P) Render and splice the published region
   - Build the region's content from a page's recorded links: empty with no
     link, otherwise `Published:` and each `[label](link)` joined by the
     separator, in target-name order.
@@ -340,7 +340,7 @@ live constant.
   - _Boundary: PublishedRegion_
   - _Depends: 1.2, 2.3_
 
-- [ ] 5.3 (P) Select and read pages
+- [x] 5.3 (P) Select and read pages
   - Select every top-level workout page in file-name order, or the named
     ones: a bare name in `workouts/` with or without `.md`, or a path from
     the working directory to a file directly in `workouts/`; refuse a name
@@ -624,3 +624,6 @@ live constant.
 - Controller ruling 6.1: link_refused is True exactly when a link was offered and not kept, including when the answer's code is outside TARGET_CODES or not a PublishCode (design literal).
 - 2.3: forced pin moves outside design Modified Files: tests/load/test_render.py ((LOAD_PAYLOAD_VERSION, DOC_VERSION) literal) and tests/test_portability.py (HTML-comment allowlist admits POST_PLACEHOLDER by exact equality). 8.5 records them.
 - For 8.1 (from 2.2/2.3 review): docs/ownership-contract.md narrative paragraphs still omit `post`/`publish` -- hand-authored places (~:543), sync --force carry list (~:980), training-history reserved keys (~:165-168); "The Published Region" must name `fitdocs publish --yes` as what replaces hand edits (Req 12.5/13.3) and drop its duplicated lead-in; tests/test_declaration.py:170-178 comment ("today `workout` ... and `load`") is stale. README.md:243 ownership summary omits `post` and `publish` (8.3/8.4).
+- Controller ruling 5.3: base_fit is the archive path of the LAST ref in sources (the base identity's file); None when that ref is foreign/unresolvable or the archive file is absent -- never an extra's file (design 'last digest' read as the base; Req 9.3). A named page that cannot be read (OS error, invalid UTF-8, unparseable frontmatter) is SELECTED and reported by the engine as PAGE_UNREADABLE (Req 7.8 literal); only a readable non-workout page or a non-document is refused at selection.
+- Controller ruling 5.3: a named page's rel/path is the typed name when that name is itself an entry in workouts/ naming the same file (lstat identity); only otherwise (case-variant spelling) the on-disk entry with that identity, first in sorted order. Hard-linked names thus keep the name typed; two names of one file collapse to the first named.
+- 5.2: replace_published matches adjacent begin/end markers (no line between) -- `^begin\n(?:.*?\n)?end$` MULTILINE|DOTALL; morning/load docedit share the old regex gap (queued).
