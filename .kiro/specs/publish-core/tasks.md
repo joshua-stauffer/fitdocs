@@ -262,7 +262,7 @@ live constant.
   - _Boundary: PlaceholderValues_
   - _Depends: 2.1_
 
-- [ ] 4.3 Compose posts and read the post region
+- [x] 4.3 Compose posts and read the post region
   - Read the `post` region: normalize line endings, remove hidden comments
     (an unclosed one is invalid), drop leading and trailing blank lines;
     nothing left means no override; otherwise the first line is the title,
@@ -282,7 +282,7 @@ live constant.
   - _Requirements: 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 4.7, 5.6, 6.1, 6.2, 6.3, 6.4, 6.5_
   - _Boundary: Composer_
 
-- [ ] 4.4 (P) Read the `[publish]` settings and ship the built-in default
+- [x] 4.4 (P) Read the `[publish]` settings and ship the built-in default
   - Ship the built-in default title and description templates from the
     design, parsed against the placeholder names.
   - Read `[publish]` and `[publish.targets.<name>]`: per target and per
@@ -617,3 +617,7 @@ live constant.
 - Controller ruling 5.1: load refuses a publication id shared across two targets' ledgers (Req 10.4; design invariant 'unique' read ledger-wide). Consequence: renaming a target by copying its ledger file is refused (names both files); delete one to recover. docs/publishing.md (8.3) must state it.
 - Controller ruling 5.1: ledger target-name rule `_TARGET_RE` duplicates connectors INSTANCE_NAME_PATTERN (ledger may not import connectors); pinned equal by test. Follow-up: move to a shared leaf.
 - Controller ruling 5.1: save_ledger wraps OSError in PublishLedgerError naming the file.
+- Controller ruling 4.3: "normalized single-line title" = any whitespace run around a line terminator (LF, CR, VT, FF, U+0085, U+2028, U+2029) folds to one space, then strip; never a refusal (design gives no code).
+- Controller ruling 4.3: refusal precedence in compose: title render (VALUE_MISSING) -> description render (VALUE_MISSING) -> empty title (TITLE_EMPTY). Template-error positions in a description count within the description text, not page lines.
+- Controller ruling 4.4: a title template ([publish] / [publish.targets.<name>] title) must be single-line text per ruling 4.2(C): any Unicode Cc (tab included), Zl or Zp is refused naming file/table/key; predicate shared with values.
+- Controller ruling 4.4: PUBLISH_TABLE forces a pin move in tests/test_route_maps_e2e.py::test_the_settings_tables_and_tile_keys_are_the_pre_change_set (compact-chart-assets Req 7.5 snapshot of *_TABLE constants); design Modified Files omitted it; no amendment needed (that Req limits only compact-chart-assets).
