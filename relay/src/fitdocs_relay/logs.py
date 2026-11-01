@@ -19,7 +19,7 @@ import math
 import re
 import sys
 import traceback
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from types import TracebackType
 from typing import IO, Any, Final
@@ -213,13 +213,14 @@ def configure_logging(
     *,
     pepper: str | bytes | None,
     password: str | None,
+    extra_secrets: Sequence[str] = (),
     level: int | str = logging.INFO,
     stream: IO[str] | None = None,
 ) -> logging.Handler:
     """Route every log record, uvicorn's included, to stdout as redacted JSON lines."""
     handler = logging.StreamHandler(sys.stdout if stream is None else stream)
     handler.setFormatter(JsonFormatter())
-    handler.addFilter(RedactingFilter(SecretRedactor(pepper, password)))
+    handler.addFilter(RedactingFilter(SecretRedactor(pepper, password, *extra_secrets)))
     setattr(handler, _HANDLER_MARK, True)
 
     root = logging.getLogger()

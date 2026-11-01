@@ -48,6 +48,23 @@ def restore_logging() -> Iterator[None]:
         logging.getLogger(name).propagate = value
 
 
+def test_extra_secrets_share_one_longest_first_redactor_with_pepper_and_password() -> (
+    None
+):
+    extra = "extra-" + PEPPER + "-tail"
+    buffer = io.StringIO()
+    configure_logging(
+        pepper=PEPPER, password=PASSWORD, extra_secrets=(extra,), stream=buffer
+    )
+    logging.getLogger("fitdocs_relay.test").info(f"a {extra} b {PASSWORD} c {PEPPER}")
+    text = buffer.getvalue()
+    assert "extra-" not in text
+    assert "-tail" not in text
+    assert PASSWORD not in text
+    assert PEPPER not in text
+    assert "a [redacted] b [redacted] c [redacted]" in text
+
+
 @pytest.fixture
 def out() -> io.StringIO:
     buffer = io.StringIO()
