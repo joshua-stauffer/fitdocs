@@ -67,6 +67,7 @@ import fitdocs.performance.engine
 import fitdocs.plans.corpus
 import fitdocs.plans.engine
 import fitdocs.plans.page
+import fitdocs.publish.links
 import fitdocs.publish.values
 import fitdocs.render.frontmatter
 import fitdocs.render.sections
@@ -151,6 +152,9 @@ CONVERTED_MODULES: Final[tuple[ModuleType, ...]] = (
     # publish-core (task 4.2): the placeholder values a post is written from,
     # read only through the contract's readers.
     fitdocs.publish.values,
+    # publish-core (task 5.2): the published-region splice, binding the
+    # region id by identity.
+    fitdocs.publish.links,
 )
 
 #: The one converted module allowed to name ``yaml`` at all. The frontmatter
@@ -337,6 +341,7 @@ CONTRACT_BINDINGS: Final[dict[str, tuple[str, ...]]] = {
         "sha_of_ref",
         "source_refs",
     ),
+    "fitdocs.publish.links": ("PUBLISHED_REGION",),
     "fitdocs.publish.values": (
         "DATE_KEY",
         "SPORT_KEY",
