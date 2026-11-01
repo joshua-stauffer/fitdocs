@@ -2,7 +2,7 @@
 title: Ride 2021-09-07 19:46
 type: workout
 generator: fitdocs
-doc_version: 11
+doc_version: 12
 date: '2021-09-07'
 start_time: '2021-09-07T19:46:40-06:00'
 sport: Ride
@@ -24,6 +24,10 @@ sources:
 # Ride 2021-09-07 19:46
 
 Data source: Garmin SyntheticNoPowerBike
+
+<!-- fitdocs:begin:published -->
+
+<!-- fitdocs:end:published -->
 
 <!-- fitdocs:begin:notes -->
 _Your notes go here. This section is preserved when the document is regenerated._
@@ -58,6 +62,10 @@ _Your notes go here. This section is preserved when the document is regenerated.
 | --- | --- | --- | --- | --- | --- | --- |
 | 0.07 km | 0.07 km | 0:09 | 139 bpm | 148 bpm | 28.8 km/h | – |
 | **Total** | 0.07 km | 0:09 | – | – | 28.8 km/h | – |
+
+<!-- fitdocs:begin:post -->
+<!-- post: to give this page its own post, write the title on one line, then a blank line, then the description. Left empty, the template is used. -->
+<!-- fitdocs:end:post -->
 
 <!-- fitdocs:begin:morning -->
 

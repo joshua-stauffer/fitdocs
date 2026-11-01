@@ -13,7 +13,6 @@ import re
 from pathlib import Path
 
 from fitdocs import contract
-from fitdocs.contract import DOC_VERSION
 from tests._changelog_view import V0_1_0, read_unreleased_since
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -43,7 +42,7 @@ def _local_time_entry() -> str:
 def test_release_note_names_the_advance_to_the_current_version() -> None:
     match = re.search(r"\(`doc_version` (\d+) to (\d+)\)", _local_time_entry())
     assert match is not None
-    assert tuple(map(int, match.groups())) == (DOC_VERSION - 1, DOC_VERSION)
+    assert tuple(map(int, match.groups())) == (10, 11)
 
 
 def test_release_note_states_the_rule_the_action_and_the_renames() -> None:

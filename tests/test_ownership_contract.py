@@ -134,8 +134,13 @@ def test_preserved_regions_equal_contract_exactly() -> None:
 
 
 def test_refreshed_regions_equal_contract_exactly() -> None:
-    section = _section(_read_doc(), "The Morning-Of Region")
-    assert _backticked_list_items(section) == set(contract.REFRESHED_REGIONS)
+    """The two sections' lists are disjoint and their union is the contract set."""
+    doc = _read_doc()
+    morning = _backticked_list_items(_section(doc, "The Morning-Of Region"))
+    published = _backticked_list_items(_section(doc, "The Published Region"))
+    assert morning == {"morning"}
+    assert published == {"published"}
+    assert morning | published == set(contract.REFRESHED_REGIONS)
 
 
 @pytest.mark.parametrize(

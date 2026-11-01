@@ -379,12 +379,16 @@ verbatim rather than replacing:
   strength documents to record exercises, sets, reps, and load). Like
   `notes`, fitdocs writes only the initial placeholder and never overwrites
   hand-authored content.
+- `post` — user-owned. The page's own post for publishing. fitdocs writes a
+  hidden-comment instruction into a brand-new document, which renders as
+  nothing, and never touches this region again.
 - `load` — tool-filled. The training-load pass writes into this region, but
   regeneration still carries its existing content over rather than
   overwriting it, on the same footing as the user-owned regions.
 
 The `morning` region is refreshed rather than preserved; see
-[The Morning-Of Region](#the-morning-of-region).
+[The Morning-Of Region](#the-morning-of-region). The `published` region is
+refreshed too; see [The Published Region](#the-published-region).
 
 A chart region in a dashboard page is the inverse case: it is tool-owned inside
 a page that is yours. fitdocs rewrites the bytes between a chart region's
@@ -417,6 +421,17 @@ Refreshed regions are disjoint from the preserved regions listed above:
 The region sits immediately before Training Load. A fresh render leaves it
 empty; the morning-of pass fills it after the page writes.
 
+## The Published Region
+
+Refreshed regions are disjoint from the preserved regions listed above:
+
+- `published` — fitdocs-owned. A fresh render leaves it empty, so it renders
+  as nothing. It is never user-owned and carries no user content; hand edits
+  there are replaced.
+
+The region sits directly after the page's title and attribution line, before
+`notes`. Regeneration carries its content into the rewritten page.
+
 ## What Regeneration Replaces and Preserves
 
 Regeneration (`fitdocs regen`, and the rewrite path inside `fitdocs sync`)
@@ -424,7 +439,7 @@ replaces **everything outside the preserved regions and the user-owned
 frontmatter keys**: the rest of the frontmatter block, the document body,
 the provenance banner, and every chart asset (see below for how an asset is
 written). It carries **every preserved
-region's content over verbatim** — `notes`, `workout`, and `load` — and
+region's content over verbatim** — `notes`, `workout`, `post`, and `load` — and
 every [user-owned frontmatter key](#user-owned-frontmatter-keys)'s line
 over verbatim alongside them, including while forced re-processing
 (`--force`) is in effect. There is no operation that discards user-owned

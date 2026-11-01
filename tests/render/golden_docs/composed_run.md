@@ -2,7 +2,7 @@
 title: Run 2042-04-13 23:20
 type: workout
 generator: fitdocs
-doc_version: 11
+doc_version: 12
 uuid: 28292a2b-2c2d-2e2f-3031-323334353637
 date: '2042-04-13'
 start_time: '2042-04-13T23:20:00-06:00'
@@ -25,6 +25,10 @@ sources:
 <!-- fitdocs:generated: everything outside the notes/workout/load regions is replaced on regeneration -- see this directory's AGENTS.md -->
 
 # Run 2042-04-13 23:20
+
+<!-- fitdocs:begin:published -->
+
+<!-- fitdocs:end:published -->
 
 <!-- fitdocs:begin:notes -->
 _Your notes go here. This section is preserved when the document is regenerated._
@@ -86,6 +90,10 @@ _Your notes go here. This section is preserved when the document is regenerated.
 | --- | --- | --- | --- | --- | --- |
 | 0.20 km | 0.20 km | 1:18 | 169 bpm | 234 bpm | 5:43 /km |
 | **Total** | 0.20 km | 1:18 | – | – | 6:29 /km |
+
+<!-- fitdocs:begin:post -->
+<!-- post: to give this page its own post, write the title on one line, then a blank line, then the description. Left empty, the template is used. -->
+<!-- fitdocs:end:post -->
 
 <!-- fitdocs:begin:morning -->
 

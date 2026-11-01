@@ -146,7 +146,11 @@ __all__ = [
     "MORNING_REGION",
     "NOTES_PLACEHOLDER",
     "NOTES_REGION",
+    "POST_PLACEHOLDER",
+    "POST_REGION",
     "PRESERVED_REGIONS",
+    "PUBLISHED_PLACEHOLDER",
+    "PUBLISHED_REGION",
     "PUBLISH_KEY",
     "REFRESHED_REGIONS",
     "SESSION_UUID_FIELD",
@@ -200,7 +204,7 @@ __all__ = [
 
 # --- versions ----------------------------------------------------------------
 
-DOC_VERSION: Final[int] = 11
+DOC_VERSION: Final[int] = 12
 """The document-format version stamped on every generated workout document.
 
 Compared arithmetically against the version a document records (Req 5.1-5.3,
@@ -362,6 +366,15 @@ until ``fitdocs regen`` rewrites it. ``regen`` also renames each page whose
 filename fitdocs chose, with its charts, when its corrected local start gives a
 different name (activity-identity Amendment 2, A2.1); a filename the user chose
 is kept.
+
+Raised from ``11`` to ``12`` by publish-core (Req 13.2). Every page gains two
+regions, each rendered with no heading: an empty ``published`` region directly
+after the title and attribution line, which ``fitdocs publish --yes`` fills with
+links to the posted activities, and a ``post`` region directly before the
+``morning`` region, which holds a hidden-comment instruction the athlete
+replaces with the page's own post. A page stamped with a lower version has
+neither region, so ``fitdocs publish`` does not publish it until
+``fitdocs regen`` brings it current with both regions in their fresh form.
 """
 
 CONTRACT_VERSION: Final[str] = "17"
@@ -958,7 +971,13 @@ LOAD_REGION: Final[str] = "load"
 MORNING_REGION: Final[str] = "morning"
 """The fitdocs-owned region refreshed from wellness data outside the page's files."""
 
-USER_REGIONS: Final[tuple[str, ...]] = (NOTES_REGION, WORKOUT_REGION)
+POST_REGION: Final[str] = "post"
+"""The user-owned region holding the page's own post for publishing."""
+
+PUBLISHED_REGION: Final[str] = "published"
+"""The fitdocs-owned region listing links to the page's posted activities."""
+
+USER_REGIONS: Final[tuple[str, ...]] = (NOTES_REGION, WORKOUT_REGION, POST_REGION)
 """The regions a human authors; fitdocs writes only their initial placeholder."""
 
 TOOL_REGIONS: Final[tuple[str, ...]] = (LOAD_REGION,)
@@ -969,12 +988,12 @@ PRESERVED_REGIONS: Final[tuple[str, ...]] = USER_REGIONS + TOOL_REGIONS
 
 The preserved policy is unchanged (1.4).
 
-``("notes", "workout", "load")`` -- the order is contractual: it is the order
+``("notes", "workout", "post", "load")`` -- the order is contractual: it is the order
 these regions appear in a rendered document and the order every enumeration of
 them, published or internal, uses.
 """
 
-REFRESHED_REGIONS: Final[tuple[str, ...]] = (MORNING_REGION,)
+REFRESHED_REGIONS: Final[tuple[str, ...]] = (MORNING_REGION, PUBLISHED_REGION)
 """Regions whose content fitdocs alone writes from data outside the page's files.
 
 The merge carries each region like every other region; its owning pass replaces
@@ -1007,6 +1026,15 @@ import it from here.
 
 MORNING_PLACEHOLDER: Final[str] = ""
 """The empty content of a fresh morning region, filled by the morning-of pass."""
+
+POST_PLACEHOLDER: Final[str] = (
+    "<!-- post: to give this page its own post, write the title on one line, "
+    "then a blank line, then the description. Left empty, the template is used. -->"
+)
+"""A fresh ``post`` region: a hidden instruction that renders as nothing."""
+
+PUBLISHED_PLACEHOLDER: Final[str] = ""
+"""The empty content of a fresh ``published`` region (filled by publishing)."""
 
 # --- pure readers ------------------------------------------------------------
 

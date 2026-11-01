@@ -44,6 +44,10 @@ from fitdocs.contract import (
     MORNING_PLACEHOLDER,
     MORNING_REGION,
     NOTES_REGION,
+    POST_PLACEHOLDER,
+    POST_REGION,
+    PUBLISHED_PLACEHOLDER,
+    PUBLISHED_REGION,
     region_block,
 )
 from fitdocs.layout import asset_rel_path
@@ -84,6 +88,8 @@ __all__ = [
     "load_section",
     "map_section",
     "morning_region",
+    "post_region",
+    "published_region",
     "notes_region",
     "telemetry_chips",
     "zone_strip",
@@ -648,6 +654,16 @@ def load_section() -> str:
 def morning_region() -> str:
     """Reserve the empty location filled by the morning-of pass (1.1)."""
     return region_block(MORNING_REGION, MORNING_PLACEHOLDER)
+
+
+def post_region() -> str:
+    """The user-owned ``post`` region with its hidden-comment placeholder (3.1)."""
+    return region_block(POST_REGION, POST_PLACEHOLDER)
+
+
+def published_region() -> str:
+    """The empty fitdocs-owned ``published`` region (12.1)."""
+    return region_block(PUBLISHED_REGION, PUBLISHED_PLACEHOLDER)
 
 
 def notes_region(placeholder: str) -> str:

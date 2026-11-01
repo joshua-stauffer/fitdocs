@@ -3,7 +3,7 @@
 
 The contents of `workouts/` are written and tool-owned by fitdocs.
 
-This directory holds generated workout documents; the user-owned regions are `notes` and `workout`. The region markers actually present in a document are authoritative for which of them it reserves -- check the document itself rather than assuming.
+This directory holds generated workout documents; the user-owned regions are `notes`, `workout`, and `post`. The region markers actually present in a document are authoritative for which of them it reserves -- check the document itself rather than assuming.
 
 The frontmatter keys `effort`, `effort_distance_m`, `effort_time_s`, `effort_event`, and `publish` are user-owned: fitdocs never writes them and carries them unchanged through regeneration. The rest of the frontmatter block is tool-owned and rebuilt on regeneration.
 

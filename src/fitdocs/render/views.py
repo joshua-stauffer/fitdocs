@@ -76,6 +76,8 @@ from fitdocs.render.sections import (
     map_section,
     morning_region,
     notes_region,
+    post_region,
+    published_region,
     telemetry_chips,
     zone_strip,
 )
@@ -198,8 +200,9 @@ def _assemble(
 def render_run_ride(ctx: DocContext) -> RenderedDoc:
     """Assemble a run/ride document (Req 6.1, route-maps 1.1, 1.2).
 
-    Order: H1 → ``notes`` region → ``## Summary`` → ``## Map`` → ``## Telemetry``
-    → ``## Running Dynamics`` → ``## Splits`` → ``morning`` region
+    Order: H1 → ``published`` region → ``notes`` region → ``## Summary`` → ``## Map``
+    → ``## Telemetry`` → ``## Running Dynamics`` → ``## Splits`` → ``post`` region
+    → ``morning`` region
     → ``## Training Load`` → ``## Device & Data Quality`` → ``## Channel Sources``
     (composed pages only).
     The Map section sits immediately after Summary
@@ -211,6 +214,7 @@ def render_run_ride(ctx: DocContext) -> RenderedDoc:
     """
     blocks: list[str] = [
         *_head(ctx),
+        published_region().rstrip("\n"),
         notes_region(NOTES_PLACEHOLDER).rstrip("\n"),
         _section("Summary", hero_stats(ctx)),
     ]
@@ -239,6 +243,7 @@ def render_run_ride(ctx: DocContext) -> RenderedDoc:
     if splits:
         blocks.append(_section("Splits", splits))
 
+    blocks.append(post_region().rstrip("\n"))
     blocks.append(morning_region().rstrip("\n"))
     blocks.append(_region_section("Training Load", load_section()))
     blocks.append(_section("Device & Data Quality", devices_section(ctx)))
@@ -249,14 +254,16 @@ def render_run_ride(ctx: DocContext) -> RenderedDoc:
 def render_strength(ctx: DocContext) -> RenderedDoc:
     """Assemble a strength document (Req 9.1, 9.5, 9.6).
 
-    Order: H1 → ``notes`` region → ``## Summary`` → ``## Telemetry`` (HR chart
-    when plottable) → ``## Workout`` (workout region) → ``## Recorded Sets``
-    (only when sets exist) → ``morning`` region → ``## Training Load``
+    Order: H1 → ``published`` region → ``notes`` region → ``## Summary``
+    → ``## Telemetry`` (HR chart when plottable) → ``## Workout`` (workout
+    region) → ``## Recorded Sets`` (only when sets exist) → ``post`` region
+    → ``morning`` region → ``## Training Load``
     → ``## Device & Data Quality``
     → ``## Channel Sources`` (composed pages only).
     """
     blocks: list[str] = [
         *_head(ctx),
+        published_region().rstrip("\n"),
         notes_region(NOTES_PLACEHOLDER).rstrip("\n"),
         _section("Summary", hero_stats(ctx)),
     ]
@@ -274,6 +281,7 @@ def render_strength(ctx: DocContext) -> RenderedDoc:
     if sets:
         blocks.append(_section("Recorded Sets", sets))
 
+    blocks.append(post_region().rstrip("\n"))
     blocks.append(morning_region().rstrip("\n"))
     blocks.append(_region_section("Training Load", load_section()))
     blocks.append(_section("Device & Data Quality", devices_section(ctx)))
@@ -284,8 +292,9 @@ def render_strength(ctx: DocContext) -> RenderedDoc:
 def render_generic(ctx: DocContext) -> RenderedDoc:
     """Assemble the generic fallback document (Req 12.1, route-maps 1.1, 1.2).
 
-    Order: H1 → ``notes`` region → ``## Summary`` → ``## Map`` → ``## Telemetry``
-    (when plottable) → ``morning`` region → ``## Training Load``
+    Order: H1 → ``published`` region → ``notes`` region → ``## Summary`` → ``## Map``
+    → ``## Telemetry`` (when plottable) → ``post`` region → ``morning`` region
+    → ``## Training Load``
     → ``## Device & Data Quality`` →
     ``## Channel Sources`` (composed pages only). The
     Map section sits immediately after Summary and before Telemetry, present only
@@ -295,6 +304,7 @@ def render_generic(ctx: DocContext) -> RenderedDoc:
     """
     blocks: list[str] = [
         *_head(ctx),
+        published_region().rstrip("\n"),
         notes_region(NOTES_PLACEHOLDER).rstrip("\n"),
         _section("Summary", hero_stats(ctx)),
     ]
@@ -312,6 +322,7 @@ def render_generic(ctx: DocContext) -> RenderedDoc:
         blocks.append(_section("Telemetry", body))
         assets = assets + tel_assets
 
+    blocks.append(post_region().rstrip("\n"))
     blocks.append(morning_region().rstrip("\n"))
     blocks.append(_region_section("Training Load", load_section()))
     blocks.append(_section("Device & Data Quality", devices_section(ctx)))

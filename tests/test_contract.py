@@ -61,16 +61,16 @@ def test_morning_region_is_the_exact_marker_token() -> None:
     assert contract.MORNING_REGION == "morning"
 
 
-def test_refreshed_regions_are_only_morning() -> None:
-    assert contract.REFRESHED_REGIONS == ("morning",)
+def test_refreshed_regions_are_morning_then_published() -> None:
+    assert contract.REFRESHED_REGIONS == ("morning", "published")
 
 
 def test_refreshed_regions_are_disjoint_from_preserved_regions() -> None:
     assert set(contract.REFRESHED_REGIONS).isdisjoint(contract.PRESERVED_REGIONS)
 
 
-def test_user_regions_are_the_two_hand_authored_ones() -> None:
-    assert contract.USER_REGIONS == ("notes", "workout")
+def test_user_regions_are_the_three_hand_authored_ones() -> None:
+    assert contract.USER_REGIONS == ("notes", "workout", "post")
 
 
 def test_tool_regions_are_the_machine_filled_ones() -> None:
@@ -78,7 +78,7 @@ def test_tool_regions_are_the_machine_filled_ones() -> None:
 
 
 def test_preserved_regions_is_user_then_tool_in_historical_order() -> None:
-    assert contract.PRESERVED_REGIONS == ("notes", "workout", "load")
+    assert contract.PRESERVED_REGIONS == ("notes", "workout", "post", "load")
     assert contract.PRESERVED_REGIONS == contract.USER_REGIONS + contract.TOOL_REGIONS
 
 
@@ -95,6 +95,23 @@ def test_every_preserved_region_is_owned_exactly_once() -> None:
 
 def test_morning_placeholder_is_empty() -> None:
     assert contract.MORNING_PLACEHOLDER == ""
+
+
+def test_post_and_published_region_ids_are_the_exact_marker_tokens() -> None:
+    assert contract.POST_REGION == "post"
+    assert contract.PUBLISHED_REGION == "published"
+
+
+def test_published_placeholder_is_empty() -> None:
+    assert contract.PUBLISHED_PLACEHOLDER == ""
+
+
+def test_post_placeholder_is_one_hidden_comment_with_the_instruction() -> None:
+    assert contract.POST_PLACEHOLDER == (
+        "<!-- post: to give this page its own post, write the title on one line, "
+        "then a blank line, then the description. Left empty, the template is "
+        "used. -->"
+    )
 
 
 def test_load_not_computed_is_the_exact_placeholder_line() -> None:
@@ -1624,3 +1641,14 @@ def test_load_key_lines_carries_only_the_load_entries_verbatim() -> None:
     )
     assert contract.load_key_lines(["no fence", "load_value: 1"]) == ()
     assert contract.load_key_lines(["---", "load_value: 1"]) == ()
+
+
+def test_doc_version_is_twelve_and_its_history_names_the_two_regions() -> None:
+    import inspect
+    import re
+
+    assert contract.DOC_VERSION == 12
+    history = re.sub(r"\s+", " ", inspect.getsource(contract))
+    assert "Raised from ``11`` to ``12`` by publish-core (Req 13.2)." in history
+    assert "an empty ``published`` region directly after the title" in history
+    assert "a ``post`` region directly before the ``morning`` region" in history

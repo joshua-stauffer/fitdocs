@@ -130,7 +130,7 @@ live constant.
     `publish` from the set.
   - _Requirements: 2.1, 2.2, 2.8, 13.3, 13.7_
 
-- [ ] 2.3 Render the `post` and `published` regions on every workout page
+- [x] 2.3 Render the `post` and `published` regions on every workout page
   - Add the two region ids, the `post` region's hidden-comment placeholder
     and the empty `published` placeholder; `post` joins the user-owned
     regions and `published` the refreshed regions; the preserved regions
@@ -622,3 +622,5 @@ live constant.
 - Controller ruling 4.4: a title template ([publish] / [publish.targets.<name>] title) must be single-line text per ruling 4.2(C): any Unicode Cc (tab included), Zl or Zp is refused naming file/table/key; predicate shared with values.
 - Controller ruling 4.4: PUBLISH_TABLE forces a pin move in tests/test_route_maps_e2e.py::test_the_settings_tables_and_tile_keys_are_the_pre_change_set (compact-chart-assets Req 7.5 snapshot of *_TABLE constants); design Modified Files omitted it; no amendment needed (that Req limits only compact-chart-assets).
 - Controller ruling 6.1: link_refused is True exactly when a link was offered and not kept, including when the answer's code is outside TARGET_CODES or not a PublishCode (design literal).
+- 2.3: forced pin moves outside design Modified Files: tests/load/test_render.py ((LOAD_PAYLOAD_VERSION, DOC_VERSION) literal) and tests/test_portability.py (HTML-comment allowlist admits POST_PLACEHOLDER by exact equality). 8.5 records them.
+- For 8.1 (from 2.2/2.3 review): docs/ownership-contract.md narrative paragraphs still omit `post`/`publish` -- hand-authored places (~:543), sync --force carry list (~:980), training-history reserved keys (~:165-168); "The Published Region" must name `fitdocs publish --yes` as what replaces hand edits (Req 12.5/13.3) and drop its duplicated lead-in; tests/test_declaration.py:170-178 comment ("today `workout` ... and `load`") is stale. README.md:243 ownership summary omits `post` and `publish` (8.3/8.4).

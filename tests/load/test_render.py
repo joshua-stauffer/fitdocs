@@ -193,8 +193,12 @@ def test_payload_version_paired_with_doc_version() -> None:
     6):** a page's local date and time follow the offset its file records; the
     load result's shape is unchanged, so ``DOC_VERSION`` advances alone an
     eighth time.
+
+    **The pair became ``(2, 12)`` (publish-core task 2.3):** every page gains
+    the post and published regions; the load result's shape is unchanged, so
+    ``DOC_VERSION`` advances alone a ninth time.
     """
-    assert (LOAD_PAYLOAD_VERSION, contract.DOC_VERSION) == (2, 11), (
+    assert (LOAD_PAYLOAD_VERSION, contract.DOC_VERSION) == (2, 12), (
         f"LOAD_PAYLOAD_VERSION={LOAD_PAYLOAD_VERSION} and "
         f"contract.DOC_VERSION={contract.DOC_VERSION} drifted apart. "
         "Req 11.5 requires that a result-format change also change the "
