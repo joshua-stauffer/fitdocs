@@ -1036,6 +1036,36 @@ def test_inbox_commands_section_states_the_three_routine_sentences() -> None:
         )
 
 
+def test_inbox_commands_section_states_never_run_disconnect_beside_connect() -> None:
+    """Req 16.6 / design.md SkillLine: the ``Commands to run`` prose tells
+    the agent never to run ``fitdocs disconnect``, with the reason (it
+    deletes an instance's stored credentials, which only the athlete can
+    restore, and for a relay instance first revokes the token, which cannot
+    be undone), directly after the never-run-connect rule.
+    Checked absent from the other packaged skill as a positive control."""
+    text = _skill_text(INBOX_SKILL_NAME)
+    _frontmatter, body = _split_frontmatter(text)
+    commands_text = " ".join(_sections(body)["Commands to run"].split())
+
+    connect_rule = (
+        "Never run `fitdocs connect`: it asks the athlete for secrets at a "
+        "terminal, and an agent must never run it."
+    )
+    disconnect_rule = (
+        "Never run `fitdocs disconnect` either: it deletes an instance's stored "
+        "credentials, which only the athlete can restore by connecting again, "
+        "and for a relay instance it first revokes the token at the relay, "
+        "which cannot be undone."
+    )
+
+    assert connect_rule + " " + disconnect_rule in commands_text
+
+    block_text = " ".join(_skill_text(BLOCK_SKILL_NAME).split())
+    assert "fitdocs disconnect" not in block_text, (
+        "positive control failed -- the other skill mentions disconnect too"
+    )
+
+
 def test_inbox_further_reading_links_the_connectors_doc() -> None:
     """The Further reading section's Connectors bullet points at the
     published Connectors page by the exact project URL design.md states --

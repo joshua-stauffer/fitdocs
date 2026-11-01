@@ -36,6 +36,10 @@ Run, routinely, in this order:
    -- never on your own initiative (see Quarantined below). Never run
    `fitdocs connect`: it asks the athlete for secrets at a terminal, and an
    agent must never run it.
+   Never run `fitdocs disconnect` either: it deletes an instance's stored
+   credentials, which only the athlete can restore by connecting again, and
+   for a relay instance it first revokes the token at the relay, which
+   cannot be undone.
 2. `fitdocs check` -- confirms the data root still matches the installed
    contract. Run it after a pull-and-drain to confirm the tree is healthy,
    or any time you want to check the tree without draining anything.
