@@ -21,6 +21,7 @@ if you have not run fitdocs yet; otherwise jump straight to the page you need.
 | [Analytics](analytics.md) | Query the local workout index safely with `fitdocs query`, inspect its schema, and connect another DuckDB client. |
 | [Dashboards](dashboards.md) | Put an index query's answer on a wiki page as a chart: the chart directive, relative and frozen charts, `fitdocs dashboard`, and the registered chart kinds. |
 | [Wellness](wellness.md) | Import daily wellness files, understand source definitions and precedence, and read the CSV series or analytics table. |
+| [Publishing](publishing.md) | Post each workout's title and description to the publish targets you configured: `fitdocs publish`, the `[publish]` templates, the placeholders, every outcome code, the ledger and the published region. |
 | [Recovery](recovery.md) | Generate the recovery page, understand its sections, source baselines and descriptive method, and use the reference-band chart kind. |
 | [Contributing](../CONTRIBUTING.md) | The contributor path: environment setup, what must pass before a change is accepted, and the rule for third-party material. |
 

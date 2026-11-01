@@ -1124,6 +1124,7 @@ _REQUIRED_ENTRY_POINT_LINKS = [
     "../CONTRIBUTING.md",
     "wellness.md",
     "recovery.md",
+    "publishing.md",
 ]
 
 
