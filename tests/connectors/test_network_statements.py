@@ -21,15 +21,19 @@ This module pins three things about the rewrite:
   statements the plan must not touch (``load/engine.py``, ``audit.py``,
   ``docs/contributing-calculators.md``, ``docs/plugins.md``), which stay
   green because they never used these phrases.
-* **Positive half.** Each of the eight rewritten places (``docs/configuration.md``
-  carries two -- the tiles-section opener and the warm-cache paragraph) now
-  names the map tiles, ``fitdocs connect``, and ``fitdocs pull``, within a
+* **Positive half.** Each of the nine rewritten places (``docs/configuration.md``
+  carries two -- the tiles-section opener and the warm-cache paragraph; the
+  connectors page's "What leaves your machine" is the ninth) now
+  names the map tiles, ``fitdocs connect`` (and its registration),
+  ``fitdocs disconnect``, and ``fitdocs pull``, within a
   window bounded by an explicit (start, end) anchor pair scoped to the
-  claim sentence -- never a whole paragraph, so an unrelated later sentence
-  in the same paragraph cannot paper over a dropped mention. The five
+  claim sentence, so an unrelated later sentence in the same paragraph cannot
+  paper over a dropped mention (the connectors-page window is the one
+  exception in shape: it spans two paragraphs, and the second supplies the
+  map-tile wording). The five
   Python-source places also name the connector transport module,
   ``fitdocs.connectors.http``, by its real dotted path -- not "the connector
-  package" or any other paraphrase. None of the eight links
+  package" or any other paraphrase. None of the nine links
   ``docs/connectors.md`` (task 7 declares that page).
 * **List-contents pin.** The seven retired phrases are not just made-up
   substrings: each is a real substring of the *original* sentence this task
@@ -132,8 +136,9 @@ ORIGINAL_SENTENCES: dict[str, str] = {
     ),
 }
 
-# The eight rewritten places: (relative path, label, start anchor, end
-# anchor). Each anchor pair spans the claim sentence (for README.md:66 and
+# The nine rewritten places: (relative path, label, start anchor, end
+# anchor). Nine places in all. Each anchor pair spans the claim sentence
+# (for README.md:66 and
 # tiles.py:7, also the tail of the sentence before it, which carries the
 # tiles wording) and is unique in its file, so `_window_after` extracts
 # only that span -- a later, unrelated sentence in the same
@@ -142,6 +147,9 @@ ORIGINAL_SENTENCES: dict[str, str] = {
 # ``docs/configuration.md`` contributes two places -- the tiles-section
 # opener (which had a retired phrase) and the separate warm-cache paragraph
 # (which never had one but must still name both commands, per the task).
+# ``docs/connectors.md`` contributes the ninth: its window spans two
+# paragraphs of "What leaves your machine" (the command sentence, then the
+# map-tile sentence).
 REWRITTEN_PLACES: list[tuple[str, str, str, str]] = [
     (
         "src/fitdocs/cli.py",
@@ -190,6 +198,12 @@ REWRITTEN_PLACES: list[tuple[str, str, str, str]] = [
         "docs/configuration.md:94-100",
         "Each map tile",
         "which run only when invoked",
+    ),
+    (
+        "docs/connectors.md",
+        "docs/connectors.md:what-leaves",
+        "The only requests any connector instance makes",
+        "network request fitdocs ever makes.",
     ),
 ]
 
@@ -255,6 +269,26 @@ def _names_tiles_and_both_commands(window: str) -> bool:
         "map tile" in collapsed
         and "fitdocs connect" in collapsed
         and "fitdocs pull" in collapsed
+    )
+
+
+def _names_disconnect(window: str) -> bool:
+    return "fitdocs disconnect" in _collapse(window).lower()
+
+
+def _names_registration(window: str) -> bool:
+    """The window mentions the registration `fitdocs connect --register`
+    performs within the connect clause itself -- after `fitdocs connect` and
+    before the next `fitdocs <command>` -- as one of the whole words
+    registration/registering/register (not "registered" or "registry"). A
+    registration word moved into the disconnect clause does not count."""
+    return (
+        re.search(
+            r"fitdocs connect\b(?:(?!fitdocs [a-z]).)*?"
+            r"\bregist(?:ration|ering|er)\b(?:(?!fitdocs [a-z]).)*?fitdocs [a-z]",
+            _collapse(window).lower(),
+        )
+        is not None
     )
 
 
@@ -457,6 +491,159 @@ def test_every_rewritten_place_names_tiles_and_both_commands() -> None:
         )
 
 
+def test_every_rewritten_place_names_disconnect_and_the_registration() -> None:
+    """Req 16.9: a statement listing the network-touching commands names
+    `fitdocs disconnect` and the registration of `fitdocs connect`."""
+    assert len(REWRITTEN_PLACES) == 9, "a place was added or dropped"
+    for rel_path, label, start, end in REWRITTEN_PLACES:
+        text = (_REPO_ROOT / rel_path).read_text(encoding="utf-8")
+        window = _window_after(text, start, end)
+        assert _names_disconnect(window), (
+            f"{label} ({rel_path}) lacks fitdocs disconnect"
+        )
+        assert _names_registration(window), (
+            f"{label} ({rel_path}) lacks the registration of fitdocs connect"
+        )
+
+
+def _mutate_window(text: str, start: str, end: str, pattern: str, repl: str) -> str:
+    """*text* with *pattern* replaced by *repl* only inside the claim window
+    (the rest of the file is untouched). Fails loudly if nothing matched."""
+    s_match = _find_anchor(text, start)
+    e_match = _find_anchor(text, end)
+    window = text[s_match.start() : e_match.end()]
+    mutated, count = re.subn(pattern, repl, window)
+    if count < 1:
+        raise AssertionError(f"{pattern!r} not found inside the window")
+    return text[: s_match.start()] + mutated + text[e_match.end() :]
+
+
+@pytest.mark.parametrize("label", [lbl for _p, lbl, _s, _e in REWRITTEN_PLACES])
+def test_dropping_disconnect_from_a_place_reds_the_disconnect_pin(label: str) -> None:
+    """Named mutation, one per place: rename `fitdocs disconnect` inside that
+    place's own window. The window's other pins stay green (sole failure)."""
+    rel_path, start, end = _place_anchors(label)
+    text = (_REPO_ROOT / rel_path).read_text(encoding="utf-8")
+    assert _names_disconnect(_window_after(text, start, end))  # true before
+    mutated = _mutate_window(
+        text, start, end, r"fitdocs(\s+)disconnect", r"fitdocs\1forget"
+    )
+    window = _window_after(mutated, start, end)
+    assert not _names_disconnect(window)
+    assert _names_tiles_and_both_commands(window)
+    assert _names_registration(window)
+
+
+@pytest.mark.parametrize("label", [lbl for _p, lbl, _s, _e in REWRITTEN_PLACES])
+def test_dropping_the_registration_from_a_place_reds_the_registration_pin(
+    label: str,
+) -> None:
+    """Named mutation, one per place: blank every "regist..." word inside that
+    place's window."""
+    rel_path, start, end = _place_anchors(label)
+    text = (_REPO_ROOT / rel_path).read_text(encoding="utf-8")
+    assert _names_registration(_window_after(text, start, end))  # true before
+    mutated = _mutate_window(text, start, end, r"(?i)regist\w*", "enrolment")
+    window = _window_after(mutated, start, end)
+    assert not _names_registration(window)
+    assert _names_disconnect(window)
+    assert _names_tiles_and_both_commands(window)
+
+
+@pytest.mark.parametrize("label", [lbl for _p, lbl, _s, _e in REWRITTEN_PLACES])
+def test_registered_in_place_of_the_registration_reds_the_registration_pin(
+    label: str,
+) -> None:
+    """Named mutation, one per place: the registration word becomes
+    "registered" (a source that is registered, not a registration the command
+    performs). A bare "regist" substring would stay green."""
+    rel_path, start, end = _place_anchors(label)
+    text = (_REPO_ROOT / rel_path).read_text(encoding="utf-8")
+    mutated = _mutate_window(text, start, end, r"(?i)\bregist\w*", "registered")
+    window = _window_after(mutated, start, end)
+    assert "regist" in _collapse(window).lower()  # the old substring test passes
+    assert not _names_registration(window)
+    assert _names_disconnect(window)
+    assert _names_tiles_and_both_commands(window)
+
+
+@pytest.mark.parametrize(
+    ("label", "old", "new"),
+    [
+        (
+            "README.md:66",
+            "(authenticating once against a configured source, or registering "
+            "with a relay)",
+            "(authenticating once against a registered source)",
+        ),
+        (
+            "cli.py:98",
+            "(one authentication attempt against a configured source, or the "
+            "registration of a relay instance)",
+            "(one authentication attempt against a registered source)",
+        ),
+        (
+            "tiles.py:7",
+            "(relay registration included)",
+            "for every registered connector",
+        ),
+    ],
+)
+def test_rewriting_the_registration_clause_as_a_registered_source_reds_the_pin(
+    label: str, old: str, new: str
+) -> None:
+    """Named mutations O1 (README), O2 (cli.py docstring), O2b (tiles.py:7)."""
+    rel_path, start, end = _place_anchors(label)
+    text = (_REPO_ROOT / rel_path).read_text(encoding="utf-8")
+    assert _names_registration(_window_after(text, start, end))  # true before
+    mutated = _mutate_window(text, start, end, _anchor_pattern(old), new)
+    window = _window_after(mutated, start, end)
+    assert "registered" in window
+    assert not _names_registration(window)
+    assert _names_disconnect(window)
+
+
+@pytest.mark.parametrize(
+    ("label", "old", "new"),
+    [
+        (
+            "tiles.py:407",
+            "``fitdocs connect`` (relay registration included), "
+            "``fitdocs disconnect`` and",
+            "``fitdocs connect``, ``fitdocs disconnect`` (ending a relay "
+            "registration) and",
+        ),
+        (
+            "docs/configuration.md:94-100",
+            "`fitdocs connect` (including a relay registration), "
+            "`fitdocs disconnect` and",
+            "`fitdocs connect`, `fitdocs disconnect` (ending a relay registration) and",
+        ),
+        (
+            "docs/connectors.md:what-leaves",
+            "`fitdocs connect <name>` (including a relay instance's "
+            "registration), `fitdocs disconnect <name>` (a relay revocation,",
+            "`fitdocs connect <name>`, `fitdocs disconnect <name>` (revoking a "
+            "relay registration,",
+        ),
+    ],
+)
+def test_moving_the_registration_into_the_disconnect_clause_reds_the_pin(
+    label: str, old: str, new: str
+) -> None:
+    """Named mutations O12 (tiles.py:407), O13 (configuration.md warm-cache),
+    O14 (connectors.md): the registration word survives in the window but
+    describes `fitdocs disconnect`, not `fitdocs connect`."""
+    rel_path, start, end = _place_anchors(label)
+    text = (_REPO_ROOT / rel_path).read_text(encoding="utf-8")
+    assert _names_registration(_window_after(text, start, end))  # true before
+    mutated = _mutate_window(text, start, end, _anchor_pattern(old), new)
+    window = _window_after(mutated, start, end)
+    assert re.search(r"\bregistration\b", _collapse(window).lower())
+    assert not _names_registration(window)
+    assert _names_disconnect(window)
+
+
 @pytest.mark.parametrize("label", sorted(PYTHON_MODULE_PLACE_LABELS))
 def test_every_python_place_names_the_connector_transport_module(
     label: str,
@@ -554,7 +741,8 @@ def test_dropping_connect_clause_from_configuration_opener_reds_the_positive_pin
     assert _names_tiles_and_both_commands(window_before)  # true before the mutation
     mutated_text = _delete_phrase(
         text,
-        "`fitdocs connect` (authenticating once against a configured source) and",
+        "`fitdocs connect` (authenticating once against a configured source, or "
+        "registering with a relay),",
     )
     mutated_window = _window_after(mutated_text, start, end)
     assert not _names_tiles_and_both_commands(mutated_window)
@@ -596,7 +784,7 @@ def test_dropping_connect_from_sync_reds_the_positive_pin() -> None:
     text = path.read_text(encoding="utf-8")
     window_before = _window_after(text, start, end)
     assert _names_tiles_and_both_commands(window_before)  # true before the mutation
-    mutated_text = _delete_phrase(text, "``fitdocs connect`` and")
+    mutated_text = _delete_phrase(text, "``fitdocs connect`` (registration included),")
     mutated_window = _window_after(mutated_text, start, end)
     assert not _names_tiles_and_both_commands(mutated_window)
 

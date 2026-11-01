@@ -449,10 +449,12 @@ keep their existing format until wellness records are first written.
 ## What leaves your machine
 
 The only requests any connector instance makes are the ones `fitdocs
-connect <name>` and `fitdocs pull` make for that instance, while you are
-running one of those two commands — carrying the one fitdocs User-Agent and
-whatever credentials that instance needs. No other fitdocs command ever
-makes a connector request, configured or not.
+connect <name>` (including a relay instance's registration), `fitdocs
+disconnect <name>` (a relay revocation, unless `--local-only`) and `fitdocs
+pull` make for that instance, while you are running one of those three
+commands — carrying the one fitdocs User-Agent and whatever credentials that
+instance needs (and, when a relay registration starts, your email address). No other fitdocs command ever makes a connector request,
+configured or not.
 
 The only other network access anywhere in fitdocs is fetching basemap map
 tiles for an outdoor activity's Map section — see
@@ -463,7 +465,7 @@ network request fitdocs ever makes.
 To stop an instance from ever being contacted again, delete its
 `[connectors.<name>]` table from `fitdocs.toml`. There is no separate
 opt-out switch to find — an instance with no table simply isn't there for
-either command to use.
+any of those commands to use.
 
 ## The terms-first policy
 
