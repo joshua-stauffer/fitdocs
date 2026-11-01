@@ -251,9 +251,9 @@ CONTRACT_BINDINGS: Final[dict[str, tuple[str, ...]]] = {
     "fitdocs.docio": ("parse_frontmatter",),
     "fitdocs.declaration": (
         "CONTRACT_VERSION",
-        "EFFORT_KEYS",
         "GENERATED_PREFIX",
         "GENERATOR",
+        "USER_KEY_ORDER",
         "USER_REGIONS",
         "is_generated",
     ),

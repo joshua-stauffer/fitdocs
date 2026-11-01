@@ -365,6 +365,7 @@ _CONTRACT_SURFACE = {
     "EFFORT_EVENT_KEY",
     "EFFORT_KEYS",
     "USER_KEYS",
+    "USER_KEY_ORDER",
     "EffortKind",
     "EffortTag",
     "EffortTagProblem",

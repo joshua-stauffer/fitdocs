@@ -2115,13 +2115,14 @@ def _page_task(
                 )
 
         # User-owned frontmatter carry (Req 4.1, 4.2, 4.4, 4.5, 4.6): every
-        # top-level frontmatter entry whose key is user-owned (``effort`` and
-        # its three companions) is carried forward verbatim into the
+        # top-level frontmatter entry whose key is in ``USER_KEYS`` (the four
+        # effort keys and ``publish``) is carried forward verbatim into the
         # rewritten document, including any continuation lines its value
-        # spans -- whether or not it forms a valid effort tag, since carrying
-        # never inspects validity (that check, and its warning, is a
-        # different concern). Computed from ``existing_text``, already read
-        # above for the version gate: no second read, no second parse.
+        # spans -- whether or not its value is valid (a well-formed effort tag, a
+        # usable ``publish`` list), since carrying never inspects validity
+        # (that check, and its warning, is a different concern). Computed from
+        # ``existing_text``, already read above for the version gate: no second
+        # read, no second parse.
         carried = user_owned_lines(existing_text.split("\n"))
 
         # Load-key carry: the three ``load_*`` keys are tool-owned and the

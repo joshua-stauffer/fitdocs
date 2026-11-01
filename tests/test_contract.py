@@ -318,8 +318,9 @@ def test_managed_keys_equals_the_builders_emittable_keys_plus_load_keys() -> Non
     assert emittable, "no emittable keys found -- the AST walk found nothing"
     assert emittable | set(contract.LOAD_KEYS) == set(contract.MANAGED_KEYS)
     # Sibling assertion (task 1.1, Req 1.1, 1.5): the keys the render layer can
-    # actually emit never collide with the user-owned effort-tag keys either --
-    # the same anti-drift discipline, applied to the second boundary.
+    # actually emit never collide with any ``USER_KEYS`` key (the effort
+    # keys and ``publish``) either -- the same anti-drift discipline, applied
+    # to the second boundary.
     assert emittable.isdisjoint(contract.USER_KEYS)
 
 
@@ -344,17 +345,32 @@ def test_effort_key_constants_are_the_four_spellings_in_documentation_order() ->
     )
 
 
-def test_user_keys_equals_the_exact_frozenset_of_effort_keys() -> None:
-    """1.1: USER_KEYS is exactly the frozenset of EFFORT_KEYS, and is a frozenset."""
-    assert frozenset(contract.EFFORT_KEYS) == contract.USER_KEYS
+def test_user_key_order_is_the_effort_keys_then_publish() -> None:
+    """2.2: the documentation-order tuple, literal spellings and order."""
+    assert contract.USER_KEY_ORDER == (
+        "effort",
+        "effort_distance_m",
+        "effort_time_s",
+        "effort_event",
+        "publish",
+    )
+    assert (*contract.EFFORT_KEYS, contract.PUBLISH_KEY) == contract.USER_KEY_ORDER
+
+
+def test_user_keys_is_the_effort_keys_plus_publish() -> None:
+    """1.1, 2.2: USER_KEYS is the frozenset of USER_KEY_ORDER, the four effort
+    keys plus ``publish``, and is a frozenset."""
+    assert frozenset(contract.USER_KEY_ORDER) == contract.USER_KEYS
     assert isinstance(contract.USER_KEYS, frozenset)
-    # The literal spelling pinned by the task's own Observable line -- defeats a
-    # USER_KEYS built from the wrong constants that still happens to equal
-    # frozenset(EFFORT_KEYS) by construction.
+    # Literal spelling, so a USER_KEYS built from the wrong constants that
+    # equals frozenset(USER_KEY_ORDER) by construction still fails.
     assert (
-        frozenset({"effort", "effort_distance_m", "effort_time_s", "effort_event"})
+        frozenset(
+            {"effort", "effort_distance_m", "effort_time_s", "effort_event", "publish"}
+        )
         == contract.USER_KEYS
     )
+    assert "publish" not in contract.EFFORT_KEYS
 
 
 def test_user_keys_is_disjoint_with_managed_keys() -> None:

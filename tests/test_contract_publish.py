@@ -27,9 +27,9 @@ from fitdocs.contract import (
 # --- the publish key -----------------------------------------------------------
 
 
-def test_publish_key_is_the_literal_and_is_not_yet_user_owned() -> None:
+def test_publish_key_is_the_literal_and_is_user_owned() -> None:
     assert PUBLISH_KEY == "publish"
-    assert PUBLISH_KEY not in contract.USER_KEYS
+    assert PUBLISH_KEY in contract.USER_KEYS
 
 
 @pytest.mark.parametrize(
