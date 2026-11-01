@@ -543,7 +543,7 @@ live constant.
   - _Boundary: PublishingDocs_
   - _Depends: 7.1_
 
-- [ ] 8.4 Write the changelog entry and refresh the site-copy record
+- [x] 8.4 Write the changelog entry and refresh the site-copy record
   - The changelog's Unreleased section describes publishing, the two
     regions, the `publish` key, both version changes and the `fitdocs regen`
     action, pinned through `unreleased_since(text, V0_2_0)` from the
