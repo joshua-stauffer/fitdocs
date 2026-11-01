@@ -744,7 +744,7 @@ Rules for every task:
     - the three count pins pass at the new literal.
   - _Requirements: 11.5, 11.6, 14.6, 15.1_
 
-- [ ] 6.8 Decode the recorded exchanges through the fitdocs client
+- [x] 6.8 Decode the recorded exchanges through the fitdocs client
   - Feed every recorded answer from 4.6 through the envelope client with a
     fake transport. Assert the decoded code and the parsed data for each
     route.
@@ -846,7 +846,7 @@ Rules for every task:
     binding, and the page names no hosting or email provider.
   - _Requirements: 2.8, 9.6, 9.10, 16.4, 16.5_
 
-- [ ] 8.4 Document the relay connector and record the changelogs
+- [x] 8.4 Document the relay connector and record the changelogs
   - Rewrite the page preamble (`docs/connectors.md:12-16`).
     - It names the three built-in connectors (`folder`, `intervals`,
       `relay`).
@@ -877,7 +877,7 @@ Rules for every task:
     tests pass with the new entries.
   - _Requirements: 16.3, 16.7_
 
-- [ ] 8.5 Rewrite every network statement to name the relay commands
+- [x] 8.5 Rewrite every network statement to name the relay commands
   - Each statement that lists the network-touching commands names
     `fitdocs disconnect` and the registration of `fitdocs connect` beside
     `fitdocs connect` and `fitdocs pull`:
@@ -1012,3 +1012,6 @@ Rules for every task:
 - 7.1: tests/connectors network guard (conftest `_forbid_network_sockets` + the in-test recorders) now refuses socket.socket, socket.getaddrinfo AND socket.create_connection — relay.example.com has no DNS record, so a guard on socket.socket alone never sees a urllib request to it (getaddrinfo raises first and the code swallows it as a TransportError). Pinned by test_isolation. Controller downgrade: the round-2 pin (test_isolation getaddrinfo/create_connection), conftest docstring and 0o750 mode fix were applied by the controller, verified by mutations MC (guard back to socket only → only that test reds) and G8 (save always chmods 0o700 → registration confinement reds).
 - 8.3: docs/relay.md is bound by relay/tests/test_docs_relay.py (versions, image constants, env table, probe paths, command names, derived-image steps, statement pins for Req 2.8/9.6/not-governed) and tests/connectors/test_relay_docs.py (code table); relay/tests/test_config.py now takes the env table from tests.test_contract.PINNED_ENVIRONMENT (one pin, 5.4 dedupe done). The page documents current limits honestly: wrapper HTTPException → not-offered, restart the relay after restarting its PostgreSQL.
 - 7.2: relay/tests/test_e2e.py runs serve as a subprocess with operator CLI commands against the same database on both backends; the leak scan covers every stream except token mint's stdout (bounded by a fullmatch to one token) and scans each token whole and by its 52-char secret part. Its postgres_url helper accepts the hostless form postgresql:///db (Homebrew) and moves a URL password into FITDOCS_RELAY_DATABASE_PASSWORD; a PG-only test keeps the password in the URL userinfo to exercise serve.database_secrets' URL branch.
+- 6.8: tests/connectors/test_relay_wire_examples.py decodes every exchange in relay/contract/envelope-v1.json through the fitdocs client; it also pins that answers with no route-defined data carry data == {} and that the only unsendable recorded requests are registration-start-malformed and registration-start-too-large.
+- 8.4: docs/connectors.md relay section ends the page (R9 append-only headings); its heading is "Pulling a relay instance" (unique slug); the bare-pull doc line is bound to what the CLI prints (CliRunner), and each changelog entry's "Action:" sentence is pinned. Controller downgrade: the round-2 token-paragraph pins and the Changed-entry order pin were applied by the controller, verified by mutations N1-N3 and N10 (each reds only its test).
+- 8.5: tests/connectors/test_network_statements.py pins nine places; each window must name `fitdocs disconnect` and a registration word inside the `fitdocs connect` clause (before the next `fitdocs <command>`). Controller downgrade: the round-3 connect-clause bound and the O12-O14 named mutations were applied by the controller, verified on disk (O14 reds the main pin; the old predicate reds the three new tests).
