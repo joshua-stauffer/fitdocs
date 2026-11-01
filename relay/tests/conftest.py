@@ -18,13 +18,15 @@ import os
 import uuid
 from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
+from typing import Protocol
 
 import pytest
 
 from fitdocs_relay.config import PostgresTarget, SqliteTarget
 from fitdocs_relay.contract import ENV_PREFIX
 from fitdocs_relay.storage import interface
-from fitdocs_relay.storage.interface import SchemaStore
+from fitdocs_relay.storage.interface import PrincipalStore, SchemaStore, TokenStore
+from fitdocs_relay.storage.migrate import migrate
 
 TEST_POSTGRES_URL_VARIABLE = ENV_PREFIX + "TEST_POSTGRES_URL"
 REQUIRE_POSTGRES_VARIABLE = ENV_PREFIX + "REQUIRE_POSTGRES"
@@ -247,3 +249,72 @@ def open_schema_store(
 def schema_store(open_schema_store: Callable[[], SchemaStore]) -> SchemaStore:
     """A backend on a fresh, empty database, typed as the schema area."""
     return open_schema_store()
+
+
+# Ids whose byte order differs from a locale-aware order (case, '_' and digits):
+# bytes sort A_b, Z, _z, a1, aB, a_b, ab.
+TIED_IDS = ["ab", "Z", "a_b", "aB", "_z", "A_b", "a1"]
+BYTE_ORDER = ["A_b", "Z", "_z", "a1", "aB", "a_b", "ab"]
+
+
+class AccountStore(PrincipalStore, TokenStore, Protocol):
+    """The two areas the principal and token conformance tests exercise."""
+
+
+@pytest.fixture
+def open_account_store(
+    database_target: SqliteTarget | PostgresTarget,
+) -> Iterator[Callable[[], AccountStore]]:
+    """Open a backend instance on the test's database, migrated to the build.
+
+    Every instance opened is closed on teardown, before `database_target`
+    drops the PostgreSQL schema.
+    """
+    opened: list[AccountStore] = []
+
+    def open_one() -> AccountStore:
+        if isinstance(database_target, SqliteTarget):
+            from fitdocs_relay.storage.sqlite import SqliteBackend
+
+            sqlite = SqliteBackend(database_target)
+            migrate(sqlite, now=1)
+            store: AccountStore = sqlite
+        else:
+            from fitdocs_relay.storage.postgres import PostgresBackend
+
+            postgres = PostgresBackend(database_target)
+            migrate(postgres, now=1)
+            store = postgres
+        opened.append(store)
+        return store
+
+    yield open_one
+    for store in opened:
+        store.close()
+
+
+@pytest.fixture
+def account_store(open_account_store: Callable[[], AccountStore]) -> AccountStore:
+    """A migrated, empty backend, typed as the principal and token areas."""
+    return open_account_store()
+
+
+@pytest.fixture
+def ids_sort_by_locale_here(
+    database_target: SqliteTarget | PostgresTarget,
+) -> None:
+    """On PostgreSQL, assert the database's own collation orders `TIED_IDS`
+    differently from bytes; otherwise an ordering test cannot tell `COLLATE "C"`
+    from its absence. A no-op on SQLite, whose ordering is always bytes."""
+    if isinstance(database_target, SqliteTarget):
+        return
+    import psycopg
+
+    with psycopg.connect(database_target.conninfo, autocommit=True) as connection:
+        rows = connection.execute(
+            "SELECT x FROM unnest(%s::text[]) AS x ORDER BY x", (TIED_IDS,)
+        ).fetchall()
+    assert [r[0] for r in rows] != BYTE_ORDER, (
+        "the database collation orders the ids as bytes: "
+        "this ordering check is vacuous here"
+    )

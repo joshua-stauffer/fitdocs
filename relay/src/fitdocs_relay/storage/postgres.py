@@ -10,10 +10,18 @@ import psycopg_pool
 
 from fitdocs_relay.config import PostgresTarget
 from fitdocs_relay.storage.interface import (
+    DuplicateIdentifier,
+    NewPrincipal,
+    NewToken,
+    Principal,
+    RevokeResult,
     SchemaChange,
     SchemaState,
     StorageError,
     StorageUnreachable,
+    TokenRecord,
+    TokenSummary,
+    UnknownPrincipal,
 )
 from fitdocs_relay.storage.migrate import schema_changes
 
@@ -117,6 +125,161 @@ class PostgresBackend:
         self._closed = True
         _guarded(self._pool.close)
 
+    # --- PrincipalStore ------------------------------------------------------
+
+    def create_principal(self, principal: NewPrincipal, *, now: int) -> Principal:
+        self._check_open()
+
+        def work() -> None:
+            with self._pool.connection() as connection:
+                self._insert_principal(connection, principal, now)
+
+        _guarded(work)
+        return Principal(principal.principal_id, principal.label, now)
+
+    def get_principal(self, principal_id: str) -> Principal | None:
+        self._check_open()
+
+        def work() -> tuple[object, ...] | None:
+            with self._pool.connection() as connection:
+                return connection.execute(
+                    "SELECT principal_id, label, created_at FROM principals "
+                    "WHERE principal_id = %s",
+                    (principal_id,),
+                ).fetchone()
+
+        row = _guarded(work)
+        return Principal(*row) if row else None  # type: ignore[arg-type]
+
+    def list_principals(self) -> tuple[Principal, ...]:
+        self._check_open()
+
+        def work() -> list[tuple[object, ...]]:
+            with self._pool.connection() as connection:
+                return connection.execute(
+                    "SELECT principal_id, label, created_at FROM principals "
+                    # "C": byte order, as SQLite's BINARY; the database default
+                    # collation would order ids by locale.
+                    'ORDER BY created_at, principal_id COLLATE "C"'
+                ).fetchall()
+
+        return tuple(Principal(*row) for row in _guarded(work))  # type: ignore[arg-type]
+
+    def delete_principal(self, principal_id: str) -> bool:
+        self._check_open()
+
+        def work() -> bool:
+            # The tokens go with it: ON DELETE CASCADE, in this one transaction.
+            with self._pool.connection() as connection:
+                cursor = connection.execute(
+                    "DELETE FROM principals WHERE principal_id = %s "
+                    "RETURNING principal_id",
+                    (principal_id,),
+                )
+                return cursor.fetchone() is not None
+
+        return _guarded(work)
+
+    # --- TokenStore ----------------------------------------------------------
+
+    def mint_token(
+        self,
+        token: NewToken,
+        *,
+        principal_id: str | None,
+        new_principal: NewPrincipal | None,
+        now: int,
+    ) -> TokenRecord:
+        if (principal_id is None) == (new_principal is None):
+            raise ValueError("exactly one of principal_id and new_principal is given")
+        self._check_open()
+
+        def work() -> str:
+            with self._pool.connection() as connection:
+                if new_principal is not None:
+                    self._insert_principal(connection, new_principal, now)
+                    owner = new_principal.principal_id
+                else:
+                    assert principal_id is not None
+                    # FOR UPDATE: a concurrent delete waits for this mint.
+                    row = connection.execute(
+                        "SELECT principal_id FROM principals "
+                        "WHERE principal_id = %s FOR UPDATE",
+                        (principal_id,),
+                    ).fetchone()
+                    if row is None:
+                        raise UnknownPrincipal("the principal does not exist")
+                    owner = principal_id
+                inserted = connection.execute(
+                    "INSERT INTO tokens (token_id, principal_id, verifier, label, "
+                    "created_at, revoked_at) VALUES (%s, %s, %s, %s, %s, NULL) "
+                    "ON CONFLICT (token_id) DO NOTHING RETURNING token_id",
+                    (token.token_id, owner, token.verifier, token.label, now),
+                ).fetchone()
+                if inserted is None:
+                    raise DuplicateIdentifier("the token identifier already exists")
+                return owner
+
+        owner = _guarded(work)
+        return TokenRecord(
+            token_id=token.token_id,
+            principal_id=owner,
+            verifier=token.verifier,
+            label=token.label,
+            created_at=now,
+            revoked_at=None,
+        )
+
+    def find_token(self, token_id: str) -> TokenRecord | None:
+        self._check_open()
+
+        def work() -> tuple[object, ...] | None:
+            with self._pool.connection() as connection:
+                return connection.execute(
+                    "SELECT token_id, principal_id, verifier, label, created_at, "
+                    "revoked_at FROM tokens WHERE token_id = %s",
+                    (token_id,),
+                ).fetchone()
+
+        row = _guarded(work)
+        return TokenRecord(*row) if row else None  # type: ignore[arg-type]
+
+    def list_tokens(self, principal_id: str | None) -> tuple[TokenSummary, ...]:
+        self._check_open()
+        sql = "SELECT token_id, principal_id, label, created_at, revoked_at FROM tokens"
+        params: tuple[object, ...] = ()
+        if principal_id is not None:
+            sql += " WHERE principal_id = %s"
+            params = (principal_id,)
+        sql += ' ORDER BY created_at, token_id COLLATE "C"'
+
+        def work() -> list[tuple[object, ...]]:
+            with self._pool.connection() as connection:
+                return connection.execute(sql, params).fetchall()
+
+        return tuple(TokenSummary(*row) for row in _guarded(work))  # type: ignore[arg-type]
+
+    def revoke_token(self, token_id: str, *, now: int) -> RevokeResult:
+        self._check_open()
+
+        def work() -> RevokeResult:
+            with self._pool.connection() as connection:
+                row = connection.execute(
+                    "SELECT revoked_at FROM tokens WHERE token_id = %s FOR UPDATE",
+                    (token_id,),
+                ).fetchone()
+                if row is None:
+                    return RevokeResult.UNKNOWN
+                if row[0] is not None:
+                    return RevokeResult.ALREADY_REVOKED
+                connection.execute(
+                    "UPDATE tokens SET revoked_at = %s WHERE token_id = %s",
+                    (now, token_id),
+                )
+                return RevokeResult.REVOKED
+
+        return _guarded(work)
+
     # --- SchemaStore ---------------------------------------------------------
 
     def schema_state(self) -> SchemaState:
@@ -162,6 +325,21 @@ class PostgresBackend:
     def _check_open(self) -> None:
         if self._closed:
             raise StorageUnreachable(_UNREACHABLE)
+
+    @staticmethod
+    def _insert_principal(
+        connection: psycopg.Connection[tuple[object, ...]],
+        principal: NewPrincipal,
+        now: int,
+    ) -> None:
+        inserted = connection.execute(
+            "INSERT INTO principals (principal_id, label, created_at) "
+            "VALUES (%s, %s, %s) ON CONFLICT (principal_id) DO NOTHING "
+            "RETURNING principal_id",
+            (principal.principal_id, principal.label, now),
+        ).fetchone()
+        if inserted is None:
+            raise DuplicateIdentifier("the principal identifier already exists")
 
     @staticmethod
     def _current_version(connection: psycopg.Connection[tuple[object, ...]]) -> int:
