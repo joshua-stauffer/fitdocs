@@ -564,7 +564,7 @@ Rules for every task:
     - bumping a version constant without a changelog line reds.
   - _Requirements: 9.10, 9.12_
 
-- [ ] 6. fitdocs client: the relay connector, connect, register and disconnect
+- [x] 6. fitdocs client: the relay connector, connect, register and disconnect
 
 - [x] 6.1 (P) Admit the relay authentication style into the connector framework
   - Append the relay-token style, mark it supported, and add the relay value
@@ -753,7 +753,7 @@ Rules for every task:
   - _Requirements: 4.4, 15.3_
   - _Depends: 4.6_
 
-- [ ] 7. Integration and validation
+- [x] 7. Integration and validation
 
 - [x] 7.1 Prove the fitdocs side stays offline and confined with a relay configured
   - Add a configured relay instance to the wired root of the socket-guarded
@@ -784,7 +784,7 @@ Rules for every task:
   - _Requirements: 3.5, 9.8_
   - _Depends: 5.2_
 
-- [ ] 8. Documentation, gates, steering and amendments
+- [x] 8. Documentation, gates, steering and amendments
 
 - [x] 8.1 (P) Exclude the relay from the release by gate
   - Add `relay/*` and `fitdocs_relay/*` to the release policy's forbidden
@@ -964,7 +964,7 @@ Rules for every task:
   - _Requirements: 14.8, 14.9, 16.7_
   - _Depends: 6.7_
 
-- [ ] 8.9 Run the full validation sweep
+- [x] 8.9 Run the full validation sweep
   - Run both suites and both sets of gates, the release build and artifact
     check, the site build and checks, the pinned-copy check, and the relay
     workflow locally where possible.
@@ -1018,3 +1018,4 @@ Rules for every task:
 - 8.6: the shipped skill sentence (and design SkillLine, amended) says disconnect deletes an instance's stored credentials, restorable only by connecting again, and for a relay instance first revokes the token, which cannot be undone; the design's earlier literal said every disconnect revokes a relay token (false for API-key/login and --local-only). Controller downgrade: the reviewer's wording was applied by the controller, verified by M1 (delete) and M2 (drop reason).
 - 8.7: amendments landed as connectors Amendment 6, distribution Amendment 6, wiki-contract Amendment 14 (criterion 2.23). If publish-core lands first with amendments in these specs, renumber at rebase. Controller added tests/connectors/test_registry.py::test_a_relay_connector_declaring_a_driven_capability_still_needs_its_operations (M2b reds only it) so the 2.3 "in addition to" clause is pinned; round-3 prose fixes verified by the controller (every cited id exists).
 - 8.8: CONTRACT_VERSION "18" (raised from 17 by relay-server). Second lander vs publish-core: change only the number literals, delete the other's head test (test_version_eighteen_head_states_the_disconnect_change is head-only; test_contract_history_records_the_disconnect_change is history-only). The disconnect entry is general for later relay-bound instances (strava-publish R13.1 relies on it). Controller downgrade: the round-3 pin extensions (generality clause, "credential stays valid") were applied by the controller, verified by R1 and P2. At the docs-stream merge the 8.4 changelog order pin was relaxed from "last two Changed entries" to "adjacent, bare pull then auth_style" so later landers can append; separating the two still reds it.
+- 8.9: full sweep green at 2e0a2c08 (root 28526 passed across four calls incl. sitebuild; relay 1064 / 1556 with PostgreSQL; sync check no drift; release build + artifact check and site build + check clean with a placeholder match file; image smoke sqlite/postgres/derived ok). The real forbidden-strings content is CI-only (specs.yml / release secrets). Controller downgrade: 8.9 is a run-only validation task with no diff; accepted on the recorded command evidence plus branch CI rather than a separate reviewer.
