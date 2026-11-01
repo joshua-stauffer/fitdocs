@@ -188,7 +188,8 @@ _TABLE: Final[tuple[CodeInfo, ...]] = (
         "F",
         (
             "The publish ledger holds more than one record for this page, or one "
-            "record matches several pages, so nothing is sent."
+            "record matches several pages, or a new record's key would match several "
+            "pages, so nothing is sent."
         ),
     ),
     _info(

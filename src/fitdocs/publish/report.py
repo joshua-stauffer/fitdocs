@@ -23,6 +23,7 @@ from fitdocs.publish.outcomes import (
 from fitdocs.publish.targets import TargetRow
 
 __all__ = [
+    "NO_PUBLISH_TARGET",
     "REPORT_FORMAT",
     "render_json",
     "render_targets_json",
@@ -32,11 +33,12 @@ __all__ = [
 
 REPORT_FORMAT: Final[int] = 1
 
+
 _DRY_RUN_LINE: Final[str] = (
     "fitdocs publish: dry run; nothing is sent (add --yes to post)."
 )
 _POSTING_LINE: Final[str] = "fitdocs publish: posting."
-_NO_TARGETS: Final[str] = "No publish target is configured."
+NO_PUBLISH_TARGET: Final[str] = "No publish target is configured."
 
 #: The codes whose row prints the post it would send.
 _POST_PRINTED: Final[frozenset[PublishCode]] = frozenset(
@@ -136,7 +138,7 @@ def render_json(report: PublishReport) -> str:
 def render_targets_text(rows: Sequence[TargetRow]) -> str:
     """One line per target in the order given, then each state's explanation."""
     if not rows:
-        return _NO_TARGETS
+        return NO_PUBLISH_TARGET
     lines = [
         f"{row.name}: {row.connector} ({row.display_name}); "
         f"capabilities: {', '.join(row.capabilities)}; state: {row.state.value}"

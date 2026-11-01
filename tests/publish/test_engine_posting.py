@@ -41,6 +41,7 @@ from tests.publish.test_engine import (
     OTHER_POST,
     SHA_A,
     SHA_B,
+    SHA_C,
     Env,
     _digest,
     _fm,
@@ -949,27 +950,49 @@ class TestAmbiguousRecords:
         assert report.failed is True
         assert _region(page) == "stale"
 
-    def test_a_page_sharing_a_digest_with_another_is_posted_once_and_neither_written(
+    def test_pages_sharing_a_would_be_key_are_both_refused_and_nothing_is_posted(
         self, env: Env
     ) -> None:
         a = env.write("a.md")
         b = env.write("b.md")
-        _script(env.spy.publisher, _posted())
         report = _post_run(env, considered=("alpha",))
         assert _pairs(report) == [
-            ("workouts/a.md", "alpha", PublishCode.POSTED),
-            ("workouts/a.md", None, PublishCode.PUBLISHED_NOT_WRITTEN),
+            ("workouts/a.md", "alpha", PublishCode.LEDGER_CONFLICT),
             ("workouts/b.md", "alpha", PublishCode.LEDGER_CONFLICT),
-            ("workouts/b.md", None, PublishCode.PUBLISHED_NOT_WRITTEN),
         ]
-        assert report.rows[1].detail == (
-            "the alpha ledger record for this page also matches another page, "
-            "so its published region was left as it is"
+        assert report.rows[0].detail == (
+            "the ledger key for this page is also recorded by workouts/b.md"
         )
-        assert len(env.spy.publisher.publish_calls) == 1
+        assert report.rows[1].detail == (
+            "the ledger key for this page is also recorded by workouts/a.md"
+        )
+        assert env.spy.publisher.publish_calls == []
+        assert env.spy.opened == []
         assert _region(a) == ""
         assert _region(b) == ""
-        assert _record_on_disk(env, "alpha", SHA_A).code == "posted"
+
+    def test_a_dry_run_decides_the_shared_key_exactly_as_a_posting_run(
+        self, env: Env
+    ) -> None:
+        env.write("a.md")
+        env.write("b.md")
+        dry = env.run(env.plan(considered=("alpha",)))
+        posting = _post_run(env, considered=("alpha",))
+        assert dry.posting is False
+        assert [(r.page, r.target, r.code, r.detail) for r in dry.rows] == [
+            (r.page, r.target, r.code, r.detail) for r in posting.rows
+        ]
+        assert {r.code for r in dry.rows} == {PublishCode.LEDGER_CONFLICT}
+
+    def test_the_check_uses_the_digest_a_post_would_mint_not_the_first(
+        self, env: Env
+    ) -> None:
+        # Only the first digest is shared; the key a post mints is the last.
+        env.write("a.md", _fm(sources=[_ref(SHA_A), _ref(SHA_B)]))
+        env.write("b.md", _fm(sources=[_ref(SHA_A), _ref(SHA_C)]))
+        _script(env.spy.publisher, _posted(), _posted(LINK_B))
+        report = _post_run(env, considered=("alpha",))
+        assert [r.code for r in report.rows] == [PublishCode.POSTED] * 2
 
     def test_two_linkless_records_still_leave_the_page_alone(self, env: Env) -> None:
         page = env.write(

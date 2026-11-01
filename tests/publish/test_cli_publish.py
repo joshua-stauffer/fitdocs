@@ -1263,3 +1263,11 @@ def test_importing_the_cli_loads_only_the_leaves_of_the_publish_package() -> Non
     assert completed.stdout.strip() == str(
         ["fitdocs.publish", "fitdocs.publish.outcomes", "fitdocs.publish.request"]
     )
+
+
+def test_the_no_target_sentence_is_defined_once_in_report_not_in_the_cli() -> None:
+    from fitdocs.publish.report import NO_PUBLISH_TARGET
+
+    assert NO_PUBLISH_TARGET == "No publish target is configured."
+    cli_source = Path(cli_module.__file__).read_text(encoding="utf-8")
+    assert "publish target is configured" not in cli_source

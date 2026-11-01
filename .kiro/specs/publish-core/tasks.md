@@ -32,7 +32,7 @@ written with this spec, holds its copy. Every version-history pin is written as 
 literals ("Raised from `11` to `12`"), appended, and never derived from the
 live constant.
 
-- [ ] 1. Foundation: the shared leaves and the package guard
+- [x] 1. Foundation: the shared leaves and the package guard
 
 - [x] 1.1 Add the publish package and its outcome vocabulary
   - Create the publish package as a marker that imports nothing, and the
@@ -90,7 +90,7 @@ live constant.
     call and a random-token call.
   - _Requirements: 6.1, 7.5_
 
-- [ ] 2. Page contract: the `publish` key and the two regions
+- [x] 2. Page contract: the `publish` key and the two regions
 
 - [x] 2.1 Add the contract readers publishing needs
   - Add the `publish` key constant and its reader: an absent key or an
@@ -171,7 +171,7 @@ live constant.
       `published` out of the refreshed regions.
   - _Requirements: 3.1, 12.1, 13.2, 13.3, 13.5, 13.6, 13.7_
 
-- [ ] 3. Connector framework: the target contract and single-attempt writes
+- [x] 3. Connector framework: the target contract and single-attempt writes
 
 - [x] 3.1 (P) Add the single-attempt request mode
   - A request marked single-attempt is sent to the transport exactly once,
@@ -225,7 +225,7 @@ live constant.
   - _Boundary: ConnectorChanges (protocol, registry, surface)_
   - _Depends: 1.2_
 
-- [ ] 4. Composition: templates, values and posts
+- [x] 4. Composition: templates, values and posts
 
 - [x] 4.1 (P) Build the template grammar
   - Parse templates left to right into text, placeholders and optional
@@ -301,7 +301,7 @@ live constant.
   - _Boundary: PublishSettings_
   - _Depends: 4.1, 4.2_
 
-- [ ] 5. State and input: the ledger, the published region and pages
+- [x] 5. State and input: the ledger, the published region and pages
 
 - [x] 5.1 (P) Keep the publish ledger
   - Add the ledger location under the tool-owned state directory, one file
@@ -363,7 +363,7 @@ live constant.
   - _Boundary: PageReader_
   - _Depends: 1.2, 2.1, 2.3_
 
-- [ ] 6. Delivery and orchestration
+- [x] 6. Delivery and orchestration
 
 - [x] 6.1 Prepare targets and send to them safely
   - Treat a connector instance as a publish target when its connector
@@ -444,7 +444,7 @@ live constant.
   - _Boundary: Report_
   - _Depends: 6.2_
 
-- [ ] 7. The `fitdocs publish` command
+- [x] 7. The `fitdocs publish` command
 
 - [x] 7.1 Add `fitdocs publish` with its preflight and exit codes
   - Arguments and options: PAGES, repeatable `--to`, `--yes`, `--targets`,
@@ -479,7 +479,7 @@ live constant.
     records no call).
   - _Requirements: 4.8, 14.1, 14.2, 14.3, 14.4, 14.5, 14.6_
 
-- [ ] 8. Contract, skill, documentation and amendments
+- [x] 8. Contract, skill, documentation and amendments
 
 - [x] 8.1 Advance the ownership contract
   - Raise `CONTRACT_VERSION` to one more than its value at landing, with an
@@ -583,7 +583,7 @@ live constant.
     spec status check is clean.
   - _Requirements: 16.5, 16.6_
 
-- [ ] 9. Validation
+- [x] 9. Validation
 
 - [x] 9.1 Prove the end-to-end guarantees
   - Add `fitdocs publish` (a dry run) and `fitdocs publish --targets` to
@@ -642,3 +642,4 @@ live constant.
 - 7.1: CLI refusal tests must arm the refused action (a scripted POSTED, a reachable credential) so 'nothing sent/written' is not pre-satisfied; the scripted transport's raise is swallowed by TargetChannel.send as target_error, so 'no request' needs an explicit transport_calls == [] / world.calls() == 0.
 - 7.2: `--targets` refusal sits at preflight step 2 (one message naming every refused flag); the listing at step 5 after [publish] validation; a credentials directory inside the data root refuses even the read-only listing when a configured target authenticates (design step 5; same as `fitdocs pull`). Listing exits 0 even with failure states.
 - Controller ruling 8.1: `fitdocs publish --yes` may write the credentials store: a target that renews its credentials through its session updates only that instance's credentials file (same as a credential-renewing `fitdocs pull`). The contract states this honestly; no production change to refuse rotation.
+- Controller ruling (validation): a page whose would-be ledger key digest (`subject.source_shas[-1]`, the digest a new record is minted with) is shared with another workout page is refused with LEDGER_CONFLICT when no record exists yet, in dry run and posting alike (Req 7.6, 11.7). Link labels also refuse U+2028/U+2029. 'No publish target is configured.' is defined once, in report.NO_PUBLISH_TARGET.

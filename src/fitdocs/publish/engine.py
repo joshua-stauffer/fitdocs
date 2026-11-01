@@ -312,6 +312,21 @@ def _decide_pair(
                 detail="the ledger record also matches "
                 + ", ".join(rel for rel in shared if rel != page.rel),
             )
+    else:
+        # No record yet: the one a post would mint is keyed by the page's last
+        # source digest (see `_post_pair`), so a page sharing it with another
+        # is refused now, in a dry run exactly as in a posting run.
+        others = [
+            rel for rel in index().get(subject.source_shas[-1], ()) if rel != page.rel
+        ]
+        if others:
+            return _row(
+                page,
+                target,
+                PublishCode.LEDGER_CONFLICT,
+                detail="the ledger key for this page is also recorded by "
+                + ", ".join(others),
+            )
     post = _compose(plan, view, target, values)
     if isinstance(post, Refusal):
         return _row(page, target, post.code, detail=post.detail)

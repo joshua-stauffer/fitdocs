@@ -53,6 +53,11 @@ class PublishResult:
     link: str | None = None
 
 
+# Brackets end a markdown link text; U+2028/U+2029 are line separators that a
+# markdown renderer may treat as a line break inside the one-line region.
+_LABEL_REFUSED = frozenset("[]\u2028\u2029")
+
+
 def _is_control(char: str) -> bool:
     point = ord(char)
     return point < 0x20 or 0x7F <= point <= 0x9F
@@ -75,9 +80,9 @@ def valid_link(link: object) -> bool:
 
 
 def valid_label(label: object) -> bool:
-    """A non-empty, bounded label with no control character or bracket."""
+    """A non-empty, bounded label: no control character, bracket or line separator."""
     if not isinstance(label, str):
         return False
     if not 0 < len(label) <= MAX_LABEL_LENGTH:
         return False
-    return not any(_is_control(c) or c in "[]" for c in label)
+    return not any(_is_control(c) or c in _LABEL_REFUSED for c in label)

@@ -81,7 +81,7 @@ PINNED_EXPLANATIONS = (
     "A placeholder outside an optional clause has no value on this page, so nothing is sent.",  # noqa: E501
     "The composed title is empty, so nothing is sent.",
     "The facts that identify this page's activity are missing, so nothing is sent.",
-    "The publish ledger holds more than one record for this page, or one record matches several pages, so nothing is sent.",  # noqa: E501
+    "The publish ledger holds more than one record for this page, or one record matches several pages, or a new record's key would match several pages, so nothing is sent.",  # noqa: E501
     "The target's activity now carries this page's title and description.",
     "No matching activity existed, so the target created one from this page's activity file with its title and description.",  # noqa: E501
     "The target has no activity matching this page and uploading is not enabled for it, so nothing was changed.",  # noqa: E501

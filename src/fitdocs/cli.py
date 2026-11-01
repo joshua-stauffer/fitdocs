@@ -2476,9 +2476,6 @@ def dashboard_command(
         raise typer.Exit(code=_EXIT_FILE_FAILURES)
 
 
-_NO_PUBLISH_TARGET: Final[str] = "No publish target is configured."
-
-
 @app.command("publish")
 def publish_command(
     pages: list[str] | None = _PUBLISH_PAGES_ARGUMENT,
@@ -2520,6 +2517,7 @@ def publish_command(
     from fitdocs.publish.outcomes import PublishCode
     from fitdocs.publish.pages import PageSelectionError, select_pages
     from fitdocs.publish.report import (
+        NO_PUBLISH_TARGET,
         render_json,
         render_targets_json,
         render_targets_text,
@@ -2660,9 +2658,9 @@ def publish_command(
     if output_format is _PublishFormat.JSON:
         typer.echo(render_json(report))
     elif not by_name and not report.rows:
-        typer.echo(_NO_PUBLISH_TARGET)
+        typer.echo(NO_PUBLISH_TARGET)
     elif not by_name and not report.failed:
-        typer.echo(render_text(report) + "\n" + _NO_PUBLISH_TARGET)
+        typer.echo(render_text(report) + "\n" + NO_PUBLISH_TARGET)
     else:
         typer.echo(render_text(report))
     _finish(failed=report.failed)

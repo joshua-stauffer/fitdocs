@@ -268,6 +268,14 @@ def test_label_refuses_each_bracket(char: str) -> None:
     assert not valid_label(char)
 
 
+@pytest.mark.parametrize("char", ["\u2028", "\u2029"])
+def test_label_refuses_each_unicode_line_separator(char: str) -> None:
+    assert valid_label("ab")
+    assert not valid_label(f"a{char}b")
+    assert not valid_label(f"ab{char}")
+    assert not valid_label(char)
+
+
 def test_label_allows_what_only_the_link_rule_refuses() -> None:
     # The two rules are distinct: a label may hold spaces and other markup.
     assert valid_label("a b")

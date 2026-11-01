@@ -709,12 +709,12 @@ class TestLedgerConflict:
 
     def test_a_record_in_another_targets_ledger_is_no_conflict(self, env: Env) -> None:
         env.write("a.md", _fm(publish=["alpha", "beta"]))
-        env.write("b.md", _fm(sources=[_ref(SHA_C), _ref(SHA_A)], publish="beta"))
+        env.write("b.md", _fm(sources=[_ref(SHA_A), _ref(SHA_C)], publish="beta"))
         records = {"alpha": [_record(SHA_A, digest=_digest(DEFAULT_POST), number=1)]}
         rows = _by_target(env.run(env.plan(records=records)))
         assert rows[("workouts/b.md", "beta")].code is PublishCode.WOULD_POST
 
-    def test_the_page_index_is_read_once_per_run_and_only_for_a_record(
+    def test_the_page_index_is_read_once_per_run_and_only_when_a_pair_is_decided(
         self, env: Env, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         calls: list[Path] = []
@@ -727,8 +727,13 @@ class TestLedgerConflict:
         monkeypatch.setattr(engine_module, "sha_index", counting)
         env.write("a.md", _fm(publish=["alpha", "beta"]))
         env.write("b.md", _fm(sources=[_ref(SHA_B)], publish=["alpha", "beta"]))
-        env.run(env.plan())
+        # Nothing to decide (no target considered): the index is never read.
+        env.run(env.plan(considered=()))
         assert calls == []
+        # A no-record pair checks its would-be key against the index (Req 7.6).
+        env.run(env.plan())
+        assert len(calls) == 1
+        calls.clear()
         records = {
             "alpha": [_record(SHA_A, digest=_digest(DEFAULT_POST), number=1)],
             "beta": [_record(SHA_B, digest=_digest(DEFAULT_POST), number=2)],

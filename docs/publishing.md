@@ -450,7 +450,7 @@ sentences written by fitdocs.
 | `value_missing` | A placeholder outside an optional clause has no value on this page, so nothing is sent. | no | yes | no | no | no |
 | `title_empty` | The composed title is empty, so nothing is sent. | no | yes | no | no | no |
 | `activity_facts_missing` | The facts that identify this page's activity are missing, so nothing is sent. | no | yes | yes | no | no |
-| `ledger_conflict` | The publish ledger holds more than one record for this page, or one record matches several pages, so nothing is sent. | no | yes | no | no | no |
+| `ledger_conflict` | The publish ledger holds more than one record for this page, or one record matches several pages, or a new record's key would match several pages, so nothing is sent. | no | yes | no | no | no |
 | `posted` | The target's activity now carries this page's title and description. | yes | no | yes | no | no |
 | `uploaded` | No matching activity existed, so the target created one from this page's activity file with its title and description. | yes | no | yes | no | no |
 | `not_found` | The target has no activity matching this page and uploading is not enabled for it, so nothing was changed. | no | yes | yes | no | no |
@@ -528,7 +528,12 @@ the ledgers of two targets is refused too, naming the second file, so copying a
 ledger file to rename a target is refused; delete one of the two files to
 recover. If more than one record matches a page, or one record matches more
 than one page, that page and target are reported with `ledger_conflict` and
-nothing is sent for them.
+nothing is sent for them. A page with no record yet is refused the same way when
+the archived-file digest a new record would be keyed by (the last file in its
+`sources`) is also recorded by another workout page; the report names the other
+page. A dry run and `--yes` decide this alike, so the dry run shows exactly what
+`--yes` will do. Give each page its own archived file, or leave one of the pages
+out, to clear it.
 
 Deleting a ledger forgets what was posted to that target. The next
 `fitdocs publish --yes` treats every opted-in page as never posted, decides
@@ -567,7 +572,7 @@ Published: [Club feed](https://example.invalid/a/1) · [Team log](https://exampl
   `  link: refused`.
 - A target declares its link label as fixed text, and the label is the only text
   beside the link in the region. A label is 1 to 64 characters with no control
-  character or square bracket.
+  character, square bracket or Unicode line separator (U+2028, U+2029).
 - When the region cannot be rewritten (the write fails, or the ledger records
   that match the page are ambiguous), fitdocs keeps the
   recorded outcomes, reports the page with `published_not_written`, and rewrites

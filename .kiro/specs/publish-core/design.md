@@ -1550,6 +1550,35 @@ corrected in place. Each item states what is now true of the landed code.
   `[publish.targets.<name>]` `title`) holding any Unicode `Cc` (tab included),
   `Zl` or `Zp` is a `PublishSettingsError` naming the file, the table and the
   key; this widens the PublishSettings error 'a title template with a newline'.
+- **Engine, step 3 shared key** (validation remediation, Req 7.6, 11.7). When
+  a pair has no ledger record, the digest a new record would be keyed by (the
+  expression the engine mints with: the page's last `source_shas` entry) is
+  looked up in `sha_index`; if another workout page records it, the pair is
+  `LEDGER_CONFLICT` with a fitdocs-written detail naming the other page(s), in
+  a dry run and a posting run alike, so the dry run decides exactly what `--yes`
+  acts on. The index is still read lazily and at most once per run (now also for
+  a no-record pair, not only a record). The code's explanation gains "or a new
+  record's key would match several pages" (outcomes table, row 16).
+- **Link label separators** (validation remediation). `valid_label` also
+  refuses U+2028 and U+2029 (a local predicate in `request.py`, which may not
+  import values); the label rule is now: 1 to 64 characters, no control
+  character, square bracket or Unicode line separator. The sentence "No
+  publish target is configured." is defined once, in `report`; the CLI uses
+  it from there, imported where it prints, so `fitdocs.cli` still imports
+  nothing of `fitdocs.publish.report` at module load.
+- **Tests outside the File Structure Plan.** The isolation subprocess checks
+  live in `tests/publish/test_outcomes.py` and `tests/publish/test_request.py`
+  instead of `tests/publish/test_isolation.py`; render goldens live in
+  `tests/render/golden_docs/`. Added: `tests/publish/test_engine_posting.py`,
+  `test_changelog_entry.py`, `test_credentials_rotation.py`,
+  `tests/test_contract_publish.py`, `tests/test_publish_contract_docs.py`,
+  `tests/test_publish_e2e.py`, `tests/test_publish_key_carry_e2e.py`,
+  `tests/test_post_published_regions_e2e.py`. Pin moves (a changed literal or
+  allowlist, no new behaviour): `tests/connectors/conftest.py`,
+  `tests/connectors/test_wellness_pull.py`, `tests/index/*`,
+  `tests/render/test_views.py`, `tests/test_asset_write_contract_docs.py`,
+  `tests/test_retimed_rename_docs.py`, `tests/test_user_owned_lines.py`.
+  Comment-only: `src/fitdocs/sync.py`; the `README.md` ownership summary.
 - **Amendment records.** The five specs record their amendments as
   wiki-contract 14, workout-docs 8, connectors 6, effort-tags 1 and
   distribution 6 (the next free numbers on this branch; the relay-server
