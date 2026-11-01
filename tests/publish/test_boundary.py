@@ -104,6 +104,13 @@ _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
             "fitdocs.publish.request",
         }
     ),
+    "fitdocs.publish.report": frozenset(
+        {
+            "fitdocs.publish.engine",
+            "fitdocs.publish.outcomes",
+            "fitdocs.publish.targets",
+        }
+    ),
     "fitdocs.publish.request": frozenset({"fitdocs.publish.outcomes"}),
     "fitdocs.publish.settings": frozenset(
         {
