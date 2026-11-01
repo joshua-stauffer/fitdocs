@@ -348,6 +348,8 @@ _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
         {
             "fitdocs.connectors.http",
             "fitdocs.connectors.secrets",
+            "fitdocs.publish.outcomes",
+            "fitdocs.publish.request",
         }
     ),
     "fitdocs.connectors.pull": frozenset(
@@ -366,6 +368,7 @@ _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
     "fitdocs.connectors.registry": frozenset(
         {
             "fitdocs.connectors.protocol",
+            "fitdocs.publish.request",
         }
     ),
     "fitdocs.connectors.secrets": frozenset(),

@@ -21,7 +21,7 @@ when the boundary catches something, so the reason says where in the
 declaration the problem was, not only what the underlying exception said.
 It never calls any operation a connector declares (``parse_settings``,
 ``verify``, ``login``, ``refresh``, ``list_activities``, ``fetch_activity``,
-``list_wellness``, ``package_wellness``).
+``list_wellness``, ``package_wellness``, ``publish``).
 Registering (and therefore validating) a connector has no side effects
 (Req 2.2).
 """
@@ -31,11 +31,13 @@ from __future__ import annotations
 import re
 
 from fitdocs.connectors.protocol import (
+    PUBLISH_CAPABILITIES,
     AuthStyle,
     Capability,
     Connector,
     CredentialField,
 )
+from fitdocs.publish.request import valid_label
 
 __all__ = [
     "DuplicateConnectorIdError",
@@ -125,15 +127,20 @@ def validate_connector(obj: object) -> str | None:
     are callable when ``LOGIN`` is the auth style; ``list_activities`` and
     ``fetch_activity`` are callable when ``PULL_ACTIVITIES`` is declared;
     ``list_wellness`` and ``package_wellness`` are callable when
-    ``PULL_WELLNESS`` is declared.
+    ``PULL_WELLNESS`` is declared; ``resolve-remote-activity`` and
+    ``push-activity`` are declared only with ``annotate-remote-activity``;
+    and when any of ``PUBLISH_CAPABILITIES`` is declared, ``publish`` is
+    callable and ``link_label`` passes
+    ``fitdocs.publish.request.valid_label``.
 
-    Every other capability and the reserved ``OAUTH_BROWSER`` auth style
-    impose no operation: this version of fitdocs never invokes them (Req
-    1.4, 1.7).
+    The four reserved capabilities (``PUSH_PLANNED_WORKOUT``,
+    ``PULL_PLANNED_WORKOUTS``, ``PULL_PLANS``, ``PULL_THRESHOLDS``) and the
+    reserved ``OAUTH_BROWSER`` auth style impose no operation: this version of
+    fitdocs never invokes them (Req 1.4, 1.7).
 
     Never calls ``parse_settings``, ``verify``, ``login``, ``refresh``,
-    ``list_activities``, ``fetch_activity``, ``list_wellness``, or
-    ``package_wellness`` -- registration stays
+    ``list_activities``, ``fetch_activity``, ``list_wellness``,
+    ``package_wellness``, or ``publish`` -- registration stays
     side-effect free. Accepts any object without raising: a malformed shape
     (a missing attribute, a raising property, or a raising post-read check
     such as a non-string ``CredentialField.name`` breaking a regex match, or
@@ -221,6 +228,29 @@ def validate_connector(obj: object) -> str | None:
             if not callable(package_wellness):
                 return (
                     "package_wellness must be callable when PULL_WELLNESS is declared"
+                )
+
+        current = "capabilities"
+        if (
+            Capability.RESOLVE_REMOTE_ACTIVITY in capabilities
+            or Capability.PUSH_ACTIVITY in capabilities
+        ) and Capability.ANNOTATE_REMOTE_ACTIVITY not in capabilities:
+            return (
+                "resolve-remote-activity and push-activity require "
+                "annotate-remote-activity"
+            )
+        if capabilities & PUBLISH_CAPABILITIES:
+            current = "publish"
+            publish = getattr(obj, current, None)
+            if not callable(publish):
+                return "publish must be callable when a publish capability is declared"
+
+            current = "link_label"
+            link_label = getattr(obj, current, None)
+            if not valid_label(link_label):
+                return (
+                    "link_label must be a valid label when a publish capability "
+                    "is declared"
                 )
     except Exception as exc:  # noqa: BLE001 - a raising property/check is a reason
         return f"reading {current!r} raised {exc!r}"

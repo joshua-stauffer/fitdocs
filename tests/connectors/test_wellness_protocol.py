@@ -45,13 +45,24 @@ from tests.connectors.conftest import (
 from tests.fixtures.builder import FIT_TIMESTAMP_BASE
 
 
-def test_only_activity_and_wellness_pulls_are_driven() -> None:
+def test_the_pulls_and_publish_capabilities_are_the_driven_set() -> None:
     assert {capability for capability, info in CAPABILITIES.items() if info.driven} == {
         Capability.PULL_ACTIVITIES,
         Capability.PULL_WELLNESS,
+        Capability.PUSH_ACTIVITY,
+        Capability.ANNOTATE_REMOTE_ACTIVITY,
+        Capability.RESOLVE_REMOTE_ACTIVITY,
     }
     assert (
-        frozenset({Capability.PULL_ACTIVITIES, Capability.PULL_WELLNESS})
+        frozenset(
+            {
+                Capability.PULL_ACTIVITIES,
+                Capability.PULL_WELLNESS,
+                Capability.PUSH_ACTIVITY,
+                Capability.ANNOTATE_REMOTE_ACTIVITY,
+                Capability.RESOLVE_REMOTE_ACTIVITY,
+            }
+        )
         == DRIVEN_CAPABILITIES
     )
 
@@ -176,16 +187,13 @@ def test_registration_accepts_both_wellness_operations_without_calling_them() ->
 @pytest.mark.parametrize(
     "capability",
     [
-        Capability.PUSH_ACTIVITY,
-        Capability.ANNOTATE_REMOTE_ACTIVITY,
-        Capability.RESOLVE_REMOTE_ACTIVITY,
         Capability.PUSH_PLANNED_WORKOUT,
         Capability.PULL_PLANNED_WORKOUTS,
         Capability.PULL_PLANS,
         Capability.PULL_THRESHOLDS,
     ],
 )
-def test_other_seven_capabilities_remain_reserved_without_operations(
+def test_other_four_capabilities_remain_reserved_without_operations(
     capability: Capability,
 ) -> None:
     connector = _candidate([])

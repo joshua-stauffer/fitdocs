@@ -8,10 +8,11 @@ only place a connector is registered).
 :data:`CAPABILITIES` is the fixed vocabulary of nine things a connector may
 offer, each carrying a user-facing summary and three flags: whether it
 changes state at the remote service, whether that change is irreversible,
-and whether this version of fitdocs actually drives it (two driven capabilities:
-``PULL_ACTIVITIES`` and ``PULL_WELLNESS`` -- a connector may declare any
-other capability, and the framework accepts the declaration without
-requiring an operation for it or ever invoking it, Req 1.4).
+and whether this version of fitdocs actually drives it (five driven capabilities:
+``PULL_ACTIVITIES``, ``PULL_WELLNESS`` and the three publish capabilities
+:data:`PUBLISH_CAPABILITIES` -- a connector may declare any other
+capability, and the framework accepts the declaration without requiring an
+operation for it or ever invoking it, Req 1.4).
 
 :class:`AuthStyle` is the fixed vocabulary of four ways a connector
 authenticates; ``OAUTH_BROWSER`` is reserved -- a connector may declare it,
@@ -21,9 +22,10 @@ version (Req 1.7).
 :class:`Connector` is the shape every connector implements: an id, a display
 name, one auth style, its capabilities, and its credential fields, plus
 ``parse_settings`` for its own settings keys. :class:`KeyVerifier`,
-:class:`TokenIssuer`, :class:`ActivityPuller`, and :class:`WellnessPuller`
-are the optional-operation protocols a connector implements when its auth
-style or a driven capability requires them (Req 1.1, 1.5, 1.6, 1.9).
+:class:`TokenIssuer`, :class:`ActivityPuller`, :class:`WellnessPuller`, and
+:class:`PostPublisher` are the optional-operation protocols a connector
+implements when its auth style or a driven capability requires them
+(Req 1.1, 1.5, 1.6, 1.9).
 """
 
 from __future__ import annotations
@@ -37,6 +39,51 @@ from typing import Final, Protocol
 
 from fitdocs.connectors.http import HttpClient
 from fitdocs.connectors.secrets import Redactor, Secret
+from fitdocs.publish.outcomes import TARGET_CODES, PublishCode
+from fitdocs.publish.request import (
+    CompletedActivity,
+    Post,
+    PublishRequest,
+    PublishResult,
+)
+
+__all__ = [
+    "CAPABILITIES",
+    "DRIVEN_CAPABILITIES",
+    "PUBLISH_CAPABILITIES",
+    "SUPPORTED_AUTH_STYLES",
+    "TARGET_CODES",
+    "ActivityPuller",
+    "AuthStyle",
+    "Capability",
+    "CapabilityInfo",
+    "CompletedActivity",
+    "Connector",
+    "ConnectorSession",
+    "CredentialAccess",
+    "CredentialField",
+    "Declined",
+    "Deferred",
+    "FetchResult",
+    "Fetched",
+    "Granted",
+    "KeyVerifier",
+    "Listing",
+    "ListingDeferral",
+    "Post",
+    "PostPublisher",
+    "PublishCode",
+    "PublishRequest",
+    "PublishResult",
+    "RemoteActivity",
+    "SettingsContext",
+    "TokenIssuer",
+    "TokenSet",
+    "WellnessDay",
+    "WellnessListing",
+    "WellnessPackage",
+    "WellnessPuller",
+]
 
 
 class Capability(StrEnum):
@@ -62,7 +109,8 @@ class CapabilityInfo:
     separate field so a later capability with an undo path can be a
     reversible remote change without a shape change here. ``driven`` is
     ``True`` for :attr:`Capability.PULL_ACTIVITIES` and
-    :attr:`Capability.PULL_WELLNESS`: the two driven capabilities.
+    :attr:`Capability.PULL_WELLNESS` and the three :data:`PUBLISH_CAPABILITIES`:
+    the five driven capabilities.
     """
 
     capability: Capability
@@ -85,21 +133,21 @@ CAPABILITIES: Final[Mapping[Capability, CapabilityInfo]] = {
         summary="Upload an activity file to the service.",
         changes_remote=True,
         irreversible=True,
-        driven=False,
+        driven=True,
     ),
     Capability.ANNOTATE_REMOTE_ACTIVITY: CapabilityInfo(
         capability=Capability.ANNOTATE_REMOTE_ACTIVITY,
         summary="Write a note or field onto a remote activity.",
         changes_remote=True,
         irreversible=True,
-        driven=False,
+        driven=True,
     ),
     Capability.RESOLVE_REMOTE_ACTIVITY: CapabilityInfo(
         capability=Capability.RESOLVE_REMOTE_ACTIVITY,
         summary="Match a local workout to its remote counterpart.",
         changes_remote=False,
         irreversible=False,
-        driven=False,
+        driven=True,
     ),
     Capability.PUSH_PLANNED_WORKOUT: CapabilityInfo(
         capability=Capability.PUSH_PLANNED_WORKOUT,
@@ -138,8 +186,19 @@ CAPABILITIES: Final[Mapping[Capability, CapabilityInfo]] = {
     ),
 }
 
-DRIVEN_CAPABILITIES: Final[frozenset[Capability]] = frozenset(
-    {Capability.PULL_ACTIVITIES, Capability.PULL_WELLNESS}
+PUBLISH_CAPABILITIES: Final[frozenset[Capability]] = frozenset(
+    {
+        Capability.PUSH_ACTIVITY,
+        Capability.ANNOTATE_REMOTE_ACTIVITY,
+        Capability.RESOLVE_REMOTE_ACTIVITY,
+    }
+)
+"""The three capabilities the publish operation drives; declaring any of
+them requires :class:`PostPublisher`."""
+
+DRIVEN_CAPABILITIES: Final[frozenset[Capability]] = (
+    frozenset({Capability.PULL_ACTIVITIES, Capability.PULL_WELLNESS})
+    | PUBLISH_CAPABILITIES
 )
 
 
@@ -394,3 +453,33 @@ class WellnessPuller(Protocol):
     def package_wellness(
         self, session: ConnectorSession, days: tuple[WellnessDay, ...]
     ) -> WellnessPackage: ...
+
+
+class PostPublisher(Protocol):
+    """Required when any of :data:`PUBLISH_CAPABILITIES` is declared.
+
+    ``link_label`` is the fixed text a published link carries and must pass
+    ``fitdocs.publish.request.valid_label``. ``publish`` answers one
+    :class:`PublishRequest` with one :class:`PublishResult`. A target's
+    obligations:
+
+    - It returns one code from ``TARGET_CODES`` per request.
+    - It returns a link only with a landed code.
+    - It never prints, logs or returns service text (text a service sent).
+    - It resolves the remote activity before creating anything, with the
+      publication id as the idempotency key.
+    - It returns ``AMBIGUOUS`` when several remote activities match, and
+      ``ACTIVITY_FACTS_MISSING`` when the activity facts given cannot
+      identify the activity -- never a pick, and never an upload.
+    - It returns ``LOCAL_RECORD_UNREADABLE``, never an upload, when its own
+      local record of the connection's activities cannot be read and
+      resolution fails.
+    - It marks a request that is not idempotent ``single_attempt``.
+    """
+
+    @property
+    def link_label(self) -> str: ...
+
+    def publish(
+        self, session: ConnectorSession, request: PublishRequest
+    ) -> PublishResult: ...

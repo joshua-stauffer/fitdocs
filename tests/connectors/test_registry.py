@@ -571,7 +571,9 @@ def test_validation_of_login_connector_never_calls_login_or_refresh(
 
 
 def test_a_non_driven_capability_requires_no_operation() -> None:
-    connector = _make_connector(capabilities=frozenset({Capability.PUSH_ACTIVITY}))
+    connector = _make_connector(
+        capabilities=frozenset({Capability.PUSH_PLANNED_WORKOUT})
+    )
     # No push-related attribute exists at all on this object.
     assert validate_connector(connector) is None
 
@@ -1131,3 +1133,167 @@ def test_login_connector_with_pull_activities_validates_and_can_pull() -> None:
     session = cast(ConnectorSession, SimpleNamespace())
     result = connector.list_activities(session, None)
     assert result == Listing(activities=())
+
+
+# ---------------------------------------------------------------------------
+# Publish capabilities (publish-core 3.2, Req 9.1, 9.2)
+# ---------------------------------------------------------------------------
+
+
+def _publisher(
+    capabilities: frozenset[Capability], **overrides: Any
+) -> SimpleNamespace:
+    def publish(session: object, request: object) -> None:
+        raise AssertionError("registration must not call publish")
+
+    fields: dict[str, Any] = {"link_label": "Example label", "publish": publish}
+    fields.update(overrides)
+    return _make_connector(capabilities=capabilities, **fields)
+
+
+_PUSH = Capability.PUSH_ACTIVITY
+_ANNOTATE = Capability.ANNOTATE_REMOTE_ACTIVITY
+_RESOLVE = Capability.RESOLVE_REMOTE_ACTIVITY
+
+_ANNOTATE_REASON = (
+    "resolve-remote-activity and push-activity require annotate-remote-activity"
+)
+
+
+@pytest.mark.parametrize(
+    "capabilities",
+    [
+        frozenset({_ANNOTATE}),
+        frozenset({_ANNOTATE, _RESOLVE}),
+        frozenset({_ANNOTATE, _PUSH}),
+        frozenset({_ANNOTATE, _PUSH, _RESOLVE}),
+        frozenset({_ANNOTATE, _PUSH, _RESOLVE, Capability.PULL_THRESHOLDS}),
+    ],
+    ids=["annotate", "annotate+resolve", "annotate+push", "all-three", "all+other"],
+)
+def test_an_accepted_publishing_connector_is_registered_and_not_called(
+    capabilities: frozenset[Capability],
+) -> None:
+    connector = _publisher(capabilities)
+    assert validate_connector(connector) is None
+    register(connector)
+    assert get(connector.connector_id) is connector
+
+
+@pytest.mark.parametrize(
+    "capabilities",
+    [
+        frozenset({_RESOLVE}),
+        frozenset({_PUSH}),
+        frozenset({_PUSH, _RESOLVE}),
+    ],
+    ids=["resolve", "push", "push+resolve"],
+)
+def test_resolve_or_push_without_annotate_is_rejected_by_name(
+    capabilities: frozenset[Capability],
+) -> None:
+    connector = _publisher(capabilities)
+    assert validate_connector(connector) == _ANNOTATE_REASON
+    with pytest.raises(InvalidConnectorError, match=_ANNOTATE_REASON):
+        register(connector)
+    with pytest.raises(UnknownConnectorError):
+        get(connector.connector_id)
+
+
+@pytest.mark.parametrize(
+    "capability", [_ANNOTATE, _PUSH, _RESOLVE], ids=["annotate", "push", "resolve"]
+)
+@pytest.mark.parametrize("missing", ["absent", "not-callable"])
+def test_a_publish_capability_without_a_callable_publish_is_rejected(
+    capability: Capability, missing: str
+) -> None:
+    capabilities = frozenset({_ANNOTATE, capability})
+    connector = _publisher(capabilities)
+    if missing == "absent":
+        del connector.publish
+    else:
+        connector.publish = 42
+    assert validate_connector(connector) == (
+        "publish must be callable when a publish capability is declared"
+    )
+
+
+@pytest.mark.parametrize(
+    "capability", [_ANNOTATE, _PUSH, _RESOLVE], ids=["annotate", "push", "resolve"]
+)
+@pytest.mark.parametrize(
+    "label",
+    [
+        None,
+        5,
+        "",
+        "x" * 65,
+        "has [bracket",
+        "has ] bracket",
+        "tab\there",
+        "new\nline",
+    ],
+    ids=[
+        "none",
+        "int",
+        "empty",
+        "too-long",
+        "open-bracket",
+        "close-bracket",
+        "tab",
+        "newline",
+    ],
+)
+def test_a_publish_capability_with_an_invalid_label_is_rejected(
+    capability: Capability, label: object
+) -> None:
+    connector = _publisher(frozenset({_ANNOTATE, capability}), link_label=label)
+    assert validate_connector(connector) == (
+        "link_label must be a valid label when a publish capability is declared"
+    )
+
+
+def test_a_label_of_the_maximum_length_is_accepted() -> None:
+    connector = _publisher(frozenset({_ANNOTATE}), link_label="x" * 64)
+    assert validate_connector(connector) is None
+
+
+def test_a_missing_link_label_is_rejected() -> None:
+    connector = _publisher(frozenset({_ANNOTATE}))
+    del connector.link_label
+    assert validate_connector(connector) == (
+        "link_label must be a valid label when a publish capability is declared"
+    )
+
+
+def test_publish_requirements_are_not_imposed_without_a_publish_capability() -> None:
+    connector = _make_connector(
+        capabilities=frozenset({Capability.PULL_THRESHOLDS}),
+        link_label="",
+        publish=42,
+    )
+    assert validate_connector(connector) is None
+
+
+def test_the_annotate_rule_is_checked_before_the_operation_and_label() -> None:
+    connector = _make_connector(capabilities=frozenset({_PUSH}))
+    assert validate_connector(connector) == _ANNOTATE_REASON
+
+
+def test_a_raising_link_label_is_named() -> None:
+    class _Raises:
+        connector_id = "generic-connector"
+        display_name = "Generic"
+        auth_style = AuthStyle.NONE
+        capabilities = frozenset({_ANNOTATE})
+        credential_fields = ()
+        parse_settings = staticmethod(_noop_parse_settings)
+        publish = staticmethod(_noop)
+
+        @property
+        def link_label(self) -> str:
+            raise RuntimeError("boom")
+
+    assert validate_connector(_Raises()) == (
+        "reading 'link_label' raised RuntimeError('boom')"
+    )
