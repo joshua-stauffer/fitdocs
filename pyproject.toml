@@ -178,6 +178,7 @@ files = [
     "tests/test_contributing_doc.py",
     "tests/test_releasing_docs.py",
     "tests/test_ci_workflow.py",
+    "tests/test_relay_workflow.py",
     "tests/test_release_workflow.py",
     "tests/fixtures/identity.py",
     "tests/fixtures/test_identity_fixtures.py",

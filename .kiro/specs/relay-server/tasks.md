@@ -156,7 +156,7 @@ Rules for every task:
     - deleting a pair from the table reds the literal check.
   - _Requirements: 4.9, 1.6_
 
-- [ ] 1.5 Add the relay CI workflow and its pins
+- [x] 1.5 Add the relay CI workflow and its pins
   - A separate workflow on every push and pull request, with
     `contents: read`. It runs one relay job:
     - a PostgreSQL 17 service container pinned by digest, with a
@@ -977,3 +977,4 @@ Rules for every task:
 - 1.2: a too-deep fixture must stay under the size limit or the size rule refuses it before the parse path (assert len < limit as the precondition). Fixed-text error rules are tested on every decoder/parser, asserting membership in copied literals, not just canary-absence. relay_envelope also exports is_target_id and the frozen Answer/CapabilitiesData/StartedData; oversize is refused by the codec with one fixed message, the relay's request-too-large comes from the pipeline's body-limit stage. (Round 3 docstring fix controller-applied, verified by reading, in place of a third review round.)
 - 1.3 (controller ruling, departs from design File Structure Plan "[tool.ruff] extends ../pyproject.toml"): relay/pyproject.toml does NOT extend the root ruff config -- with extend, the root's `./relay` exclude is inherited and `--force-exclude` from relay/ finds no files. It copies target-version + select instead. Root excludes only the top-level dir via `extend-exclude = ["./relay"]` (a bare "relay" matched any nested relay/ dir). relay/.python-version pins 3.11. The relay boundary guard pins `scanned == 0` for shared/: task 1.4 MUST change it to the literal count of shared files.
 - 1.4: the sync command is `SYNC_COMMAND` in scripts/sync_relay_shared.py (`uv run python -B -m scripts.sync_relay_shared [--check]`); docs must reuse that spelling. Controller ruling: the script's extra `--root PATH` option (not in design) is kept as test plumbing for the subprocess tests. Appending a shared pair (strava-publish: outcomes.py) means: append to SHARED_MODULES, run the sync, and raise relay/tests/test_boundary.py's literal shared/ count (now 3) and name list in the same commit. Only shared/__init__.py itself is exempt from the orphan rule.
+- 1.5: tests/test_relay_workflow.py pins relay.yml by allow-lists at every level (top, top env, job, service, every step ⊆ {name,uses,run,env} -- no `with`, test step exact). 5.3 MUST extend these sets for its image steps rather than loosen them; the publish/login/push/upload check is a word match on run bodies, the raw-text scan is `id-token` only. postgres:17 digest from `docker buildx imagetools inspect postgres:17` (2026-11-01). (Round 4 one-token fix controller-applied, verified by the reviewer's two mutations.)
