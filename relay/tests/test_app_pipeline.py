@@ -523,7 +523,7 @@ def config_for(path: Path) -> RelayConfig:
     )
 
 
-def test_core_routes_is_a_skeleton_with_the_design_constants() -> None:
+def test_the_route_table_has_the_design_constants() -> None:
     assert routes.OFFERED_TARGETS == ()
     assert routes.RESERVED_PREFIXES == ("/v", "/livez", "/readyz", "/x/")
 
@@ -936,6 +936,8 @@ def test_an_absurdly_long_declared_length_is_too_large_not_a_failure(
 def test_a_zero_padded_in_limit_length_is_not_refused(
     services: RelayServices,
 ) -> None:
+    services.ready = True  # no lifespan runs here; a versioned path needs readiness
+
     async def receive() -> dict[str, Any]:
         return {"type": "http.request", "body": b"", "more_body": False}
 

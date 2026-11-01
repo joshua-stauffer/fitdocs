@@ -25,7 +25,7 @@ from starlette.applications import Starlette
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import Response
-from starlette.routing import BaseRoute
+from starlette.routing import BaseRoute, Match
 from starlette.types import Message, Receive, Scope, Send
 
 from fitdocs_relay.answers import (
@@ -38,7 +38,7 @@ from fitdocs_relay.config import RelayConfig
 from fitdocs_relay.identity import TokenService
 from fitdocs_relay.logs import failure_fields, log_event
 from fitdocs_relay.ratelimit import RateLimiter
-from fitdocs_relay.routes import core_routes
+from fitdocs_relay.routes import core_routes, readiness
 from fitdocs_relay.shared.relay_codes import RelayCode
 from fitdocs_relay.shared.relay_envelope import MAX_REQUEST_BYTES, SERVED_ENVELOPES
 from fitdocs_relay.storage import open_storage
@@ -63,12 +63,7 @@ class RelayServices:
 
 def compute_ready(storage: Storage) -> bool:
     """True when the store is reachable and at this build's schema version."""
-    try:
-        storage.ping()
-        state = storage.schema_state()
-    except StorageUnreachable:
-        return False
-    return state.current == state.expected
+    return readiness(storage).status_code == 200
 
 
 def _unavailable(request: Request, exc: Exception) -> Response:
@@ -127,6 +122,9 @@ async def _admit(scope: Scope, receive: Receive) -> Response | Receive:
 class RelayApp(Starlette):
     """Starlette with the relay's pipeline in front of its routing."""
 
+    # Whether the store is ready to serve; the factory points it at the services.
+    is_ready: Callable[[], bool] = staticmethod(lambda: False)
+
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await super().__call__(scope, receive, send)
@@ -145,6 +143,15 @@ class RelayApp(Starlette):
             admitted = await _admit(scope, receive)
             if isinstance(admitted, Response):
                 await admitted(scope, receive, watched_send)
+            elif (
+                _VERSION_PREFIX.match(scope["path"])
+                and not self.is_ready()
+                and self._match(scope)
+            ):
+                # After matching, before the handler: a versioned route waits
+                # for readiness, the probes do not, and a path with no route
+                # (or the wrong method) is still `not-offered`.
+                await answer(RelayCode.UNAVAILABLE)(scope, receive, watched_send)
             else:
                 await super().__call__(scope, admitted, watched_send)
         except Exception:
@@ -158,6 +165,15 @@ class RelayApp(Starlette):
                     await answer(RelayCode.RELAY_FAILURE)(scope, receive, watched_send)
         finally:
             self._log(scope, request_id, status, started)
+
+    def _match(self, scope: Scope) -> bool:
+        """True (and the route noted in the scope for the log) when a route
+        matches the request fully."""
+        for route in self.router.routes:
+            if route.matches(scope)[0] is Match.FULL:
+                scope["route"] = route
+                return True
+        return False
 
     @staticmethod
     def _log(scope: Scope, request_id: str, status: int | None, started: float) -> None:
@@ -202,6 +218,7 @@ def build_app(services: RelayServices, routes: Sequence[BaseRoute]) -> RelayApp:
         lifespan=lifespan,
     )
     app.router.redirect_slashes = False
+    app.is_ready = lambda: services.ready
     return app
 
 
