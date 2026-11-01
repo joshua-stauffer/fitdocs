@@ -405,7 +405,7 @@ live constant.
     the ledger directory.
   - _Requirements: 2.3, 2.4, 2.5, 2.6, 7.5, 7.6, 7.7, 7.8, 11.7, 12.6, 13.5_
 
-- [ ] 6.3 Post, record and refresh the published region
+- [x] 6.3 Post, record and refresh the published region
   - For each would-post or would-update pair: open the target on first use
     (a preparation code applies to that pair and stops the target); mint and
     save a publication id before the first request; send; record the code,
@@ -431,7 +431,7 @@ live constant.
       its link.
   - _Requirements: 1.6, 2.7, 3.8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 10.3, 10.4, 10.5, 12.2, 12.5, 12.7, 12.8_
 
-- [ ] 6.4 (P) Render run reports and target listings
+- [x] 6.4 (P) Render run reports and target listings
   - Text: the run's mode line, one line per page and target with its code
     (and fitdocs detail), the post indented for would-post and would-update,
     the link for a posted pair, the counts by code, the not-opted-in count,
@@ -629,3 +629,11 @@ live constant.
 - 5.2: replace_published matches adjacent begin/end markers (no line between) -- `^begin\n(?:.*?\n)?end$` MULTILINE|DOTALL; morning/load docedit share the old regex gap (queued).
 - Controller ruling 6.2: design 'unless --to excludes it' is read from PublishPlan as given (no new field): --to excludes unknown names exactly when it narrowed the targets (set(considered) != configured). A --to naming every configured target is equivalent to no --to, and unknown names are reported (more informative; Req 2.6).
 - 6.2: run_publish(posting=True) raises NotImplementedError until 6.3 replaces that branch. A ledger record 'landed' means digest is not None, never code is not None (an unknown-result/rate-limited attempt is would_post). Test helpers must not couple fields (_record digest/code/at; _snapshot includes the data root) -- the round-1 rejection species.
+- Controller ruling 6.4: JSON row `title`/`description` render the post the row carries (any code), null when the row has none; the report renders what the row holds and decides nothing.
+- Controller ruling 6.4: Req 12.3 "say so in the report": a row with link_refused=True gets an indented `  link: refused` line in the text report (after any post/link lines), any code. The design's text shape omits it -- 8.5 records the amendment.
+- Controller ruling 6.4: the target listing's text format (`name: connector (display_name); capabilities: a, b; state: s`, then each used state's explanation once in vocabulary order; empty listing "No publish target is configured.") is accepted as the implementer's; 8.3 documents it. report imports fitdocs.publish.targets for TargetRow (design line 210 omits it; 8.5 records).
+- Controller ruling 6.3: a page whose sources yield no archived-file digest is ACTIVITY_FACTS_MISSING in both dry run and posting (the ledger cannot key it; Req 7.6 dry run = posting).
+- Controller ruling 6.3: Req 8.6 governs over design step 4: when a target fails to open, EVERY one of its pairs in the run gets the open code (not_connected / credentials_unreadable); NOT_ATTEMPTED is only for pairs after a stopping ANSWER. 8.5 records the design amendment.
+- Controller ruling 6.3: the published-region refresh matches a considered current page to records by its source digests only (no sport/start needed). When it skips a page because records are ambiguous (more than one record in a ledger, or a record matching several pages), it reports a page-level PUBLISHED_NOT_WRITTEN row with a fitdocs-written detail (Req 12.2/12.7); never a silent skip.
+- Controller ruling 6.3: each outcome is saved to the ledger file immediately after it is received, before any other work (Req 8.8/8.9); `at` is the clock read after the answer arrives.
+- For 8.5 (design amendments from 6.3/6.4 rulings): engine step 4 Req 8.6 reading (every pair of an unopened target gets the open code); refresh ambiguity rows (PUBLISHED_NOT_WRITTEN); Report text shape gains `  link: refused`; Report imports publish.targets (design line 210); the target-listing text format (8.3 documents it).
