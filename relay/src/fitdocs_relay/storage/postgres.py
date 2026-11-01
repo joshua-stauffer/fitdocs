@@ -14,9 +14,11 @@ from fitdocs_relay.storage.interface import (
     NewPrincipal,
     NewToken,
     Principal,
+    RateDecision,
     RevokeResult,
     SchemaChange,
     SchemaState,
+    ServingClaim,
     StorageError,
     StorageUnreachable,
     TokenRecord,
@@ -81,6 +83,22 @@ def _guarded(work: Callable[[], _T]) -> _T:
     raise failure(_UNREACHABLE if failure is StorageUnreachable else _FAILED)
 
 
+class _PostgresClaim:
+    """The serving claim: a session advisory lock on its own connection.
+
+    The lock lives as long as the session, so closing the connection (or the
+    process dying) frees it, and a second `release` finds nothing to close.
+    """
+
+    def __init__(self, connection: psycopg.Connection[tuple[object, ...]]) -> None:
+        self._connection: psycopg.Connection[tuple[object, ...]] | None = connection
+
+    def release(self) -> None:
+        connection, self._connection = self._connection, None
+        if connection is not None:
+            _guarded(connection.close)
+
+
 class PostgresBackend:
     """Storage on PostgreSQL: a capped connection pool."""
 
@@ -89,6 +107,8 @@ class PostgresBackend:
         if target.password is not None:
             kwargs["password"] = target.password
         self._closed = False
+        self._conninfo = target.conninfo
+        self._kwargs = kwargs
         # A single connection first: an unreachable server fails here, once,
         # instead of the pool retrying (and logging) in the background.
         _guarded(lambda: psycopg.connect(target.conninfo, **kwargs).close())  # type: ignore[arg-type]
@@ -277,6 +297,128 @@ class PostgresBackend:
                     (now, token_id),
                 )
                 return RevokeResult.REVOKED
+
+        return _guarded(work)
+
+    # --- RateLimitStore ------------------------------------------------------
+
+    def count_request(
+        self, *, key: str, window_s: int, limit: int, now: int
+    ) -> RateDecision:
+        self._check_open()
+        window_start = now - now % window_s
+        window_end = window_start + window_s
+
+        def work() -> int:
+            with self._pool.connection() as connection:
+                # A window that has ended (window_end <= now) is deleted; the
+                # current one, and every other key's current one, is kept.
+                connection.execute(
+                    "DELETE FROM rate_counts WHERE window_end <= %s", (now,)
+                )
+                row = connection.execute(
+                    "INSERT INTO rate_counts (key, window_start, count, window_end) "
+                    "VALUES (%s, %s, 1, %s) "
+                    "ON CONFLICT (key, window_start) "
+                    "DO UPDATE SET count = rate_counts.count + 1 RETURNING count",
+                    (key, window_start, window_end),
+                ).fetchone()
+                assert row is not None
+                count: int = row[0]
+                return count
+
+        count = _guarded(work)
+        if count <= limit:
+            return RateDecision(allowed=True, count=count, retry_after_s=None)
+        return RateDecision(allowed=False, count=count, retry_after_s=window_end - now)
+
+    # --- RecordStore ---------------------------------------------------------
+
+    def put_record(
+        self, *, namespace: str, key: str, value: bytes, expires_at: int, now: int
+    ) -> None:
+        self._check_open()
+
+        def work() -> None:
+            with self._pool.connection() as connection:
+                connection.execute("DELETE FROM records WHERE expires_at <= %s", (now,))
+                connection.execute(
+                    "INSERT INTO records (namespace, key, value, expires_at) "
+                    "VALUES (%s, %s, %s, %s) ON CONFLICT (namespace, key) DO UPDATE "
+                    "SET value = excluded.value, expires_at = excluded.expires_at",
+                    (namespace, key, value, expires_at),
+                )
+
+        _guarded(work)
+
+    def get_record(self, *, namespace: str, key: str, now: int) -> bytes | None:
+        self._check_open()
+
+        def work() -> tuple[object, ...] | None:
+            with self._pool.connection() as connection:
+                return connection.execute(
+                    "SELECT value FROM records "
+                    "WHERE namespace = %s AND key = %s AND expires_at > %s",
+                    (namespace, key, now),
+                ).fetchone()
+
+        row = _guarded(work)
+        return bytes(row[0]) if row else None  # type: ignore[call-overload]
+
+    def take_record(self, *, namespace: str, key: str, now: int) -> bytes | None:
+        self._check_open()
+
+        def work() -> tuple[object, ...] | None:
+            with self._pool.connection() as connection:
+                return connection.execute(
+                    "DELETE FROM records WHERE namespace = %s AND key = %s "
+                    "AND expires_at > %s RETURNING value",
+                    (namespace, key, now),
+                ).fetchone()
+
+        row = _guarded(work)
+        return bytes(row[0]) if row else None  # type: ignore[call-overload]
+
+    def delete_record(self, *, namespace: str, key: str) -> bool:
+        self._check_open()
+
+        def work() -> bool:
+            with self._pool.connection() as connection:
+                return (
+                    connection.execute(
+                        "DELETE FROM records WHERE namespace = %s AND key = %s "
+                        "RETURNING key",
+                        (namespace, key),
+                    ).fetchone()
+                    is not None
+                )
+
+        return _guarded(work)
+
+    # --- ServingStore --------------------------------------------------------
+
+    def claim_serving(self) -> ServingClaim | None:
+        self._check_open()
+
+        def work() -> ServingClaim | None:
+            # Its own connection, not the pool's: the session holds the lock.
+            connection = psycopg.connect(
+                self._conninfo,
+                autocommit=True,
+                **self._kwargs,  # type: ignore[arg-type]
+            )
+            try:
+                row = connection.execute(
+                    "SELECT pg_try_advisory_lock("
+                    "hashtext('fitdocs-relay:' || current_schema()))"
+                ).fetchone()
+            except BaseException:
+                connection.close()
+                raise
+            if row is not None and row[0]:
+                return _PostgresClaim(connection)
+            connection.close()
+            return None
 
         return _guarded(work)
 

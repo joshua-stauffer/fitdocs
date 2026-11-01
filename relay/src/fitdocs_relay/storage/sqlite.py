@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fcntl
 import os
 import sqlite3
 from collections.abc import Iterator
@@ -14,9 +15,11 @@ from fitdocs_relay.storage.interface import (
     NewPrincipal,
     NewToken,
     Principal,
+    RateDecision,
     RevokeResult,
     SchemaChange,
     SchemaState,
+    ServingClaim,
     StorageError,
     StorageUnreachable,
     TokenRecord,
@@ -28,6 +31,7 @@ from fitdocs_relay.storage.migrate import schema_changes
 MINIMUM_SQLITE_VERSION = (3, 35, 0)  # RETURNING
 BUSY_TIMEOUT_MS = 5000
 FILE_MODE = 0o600
+SERVE_LOCK_SUFFIX = ".serve-lock"  # <database>.serve-lock
 
 # Fixed texts: the driver's own message is never carried (it can name values).
 _UNREACHABLE = "the SQLite database cannot be reached"
@@ -51,6 +55,23 @@ def _statements(sql: str) -> Iterator[str]:
                 buffer = ""
     if buffer.strip():
         yield buffer
+
+
+class _SqliteClaim:
+    """The serving claim: an exclusive `flock` on the sidecar file's descriptor.
+
+    The lock belongs to the open file description, so closing the descriptor
+    (or the process dying) frees it, and a second `release` finds nothing to
+    close.
+    """
+
+    def __init__(self, descriptor: int) -> None:
+        self._descriptor: int | None = descriptor
+
+    def release(self) -> None:
+        descriptor, self._descriptor = self._descriptor, None
+        if descriptor is not None:
+            os.close(descriptor)
 
 
 def _run(
@@ -216,6 +237,98 @@ class SqliteBackend:
                 (now, token_id),
             )
         return RevokeResult.REVOKED
+
+    # --- RateLimitStore ------------------------------------------------------
+
+    def count_request(
+        self, *, key: str, window_s: int, limit: int, now: int
+    ) -> RateDecision:
+        window_start = now - now % window_s
+        window_end = window_start + window_s
+        with self._write() as connection:
+            # A window that has ended (window_end <= now) is deleted; the
+            # current one, and every other key's current one, is kept.
+            _run(connection, "DELETE FROM rate_counts WHERE window_end <= ?", (now,))
+            rows = _run(
+                connection,
+                "INSERT INTO rate_counts (key, window_start, count, window_end) "
+                "VALUES (?, ?, 1, ?) "
+                "ON CONFLICT (key, window_start) DO UPDATE SET count = count + 1 "
+                "RETURNING count",
+                (key, window_start, window_end),
+            )
+        count = int(rows[0][0])
+        if count <= limit:
+            return RateDecision(allowed=True, count=count, retry_after_s=None)
+        return RateDecision(allowed=False, count=count, retry_after_s=window_end - now)
+
+    # --- RecordStore ---------------------------------------------------------
+
+    def put_record(
+        self, *, namespace: str, key: str, value: bytes, expires_at: int, now: int
+    ) -> None:
+        with self._write() as connection:
+            _run(connection, "DELETE FROM records WHERE expires_at <= ?", (now,))
+            _run(
+                connection,
+                "INSERT INTO records (namespace, key, value, expires_at) "
+                "VALUES (?, ?, ?, ?) ON CONFLICT (namespace, key) DO UPDATE "
+                "SET value = excluded.value, expires_at = excluded.expires_at",
+                (namespace, key, value, expires_at),
+            )
+
+    def get_record(self, *, namespace: str, key: str, now: int) -> bytes | None:
+        with self._read() as connection:
+            rows = _run(
+                connection,
+                "SELECT value FROM records "
+                "WHERE namespace = ? AND key = ? AND expires_at > ?",
+                (namespace, key, now),
+            )
+        return bytes(rows[0][0]) if rows else None
+
+    def take_record(self, *, namespace: str, key: str, now: int) -> bytes | None:
+        with self._write() as connection:
+            rows = _run(
+                connection,
+                "DELETE FROM records "
+                "WHERE namespace = ? AND key = ? AND expires_at > ? RETURNING value",
+                (namespace, key, now),
+            )
+        return bytes(rows[0][0]) if rows else None
+
+    def delete_record(self, *, namespace: str, key: str) -> bool:
+        with self._write() as connection:
+            rows = _run(
+                connection,
+                "DELETE FROM records WHERE namespace = ? AND key = ? RETURNING key",
+                (namespace, key),
+            )
+        return bool(rows)
+
+    # --- ServingStore --------------------------------------------------------
+
+    def claim_serving(self) -> ServingClaim | None:
+        self._check_open()
+        lock_path = self._path.with_name(self._path.name + SERVE_LOCK_SUFFIX)
+        failed = False
+        try:
+            descriptor = os.open(lock_path, os.O_RDWR | os.O_CREAT, FILE_MODE)
+        except OSError:
+            failed = True
+        if failed:
+            raise StorageUnreachable(_UNREACHABLE)
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            os.close(descriptor)
+            return None
+        except OSError:
+            failed = True
+        if failed:
+            os.close(descriptor)
+            raise StorageError(_FAILED)
+        return _SqliteClaim(descriptor)
 
     # --- SchemaStore ---------------------------------------------------------
 

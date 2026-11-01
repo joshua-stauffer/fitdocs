@@ -25,7 +25,14 @@ import pytest
 from fitdocs_relay.config import PostgresTarget, SqliteTarget
 from fitdocs_relay.contract import ENV_PREFIX
 from fitdocs_relay.storage import interface
-from fitdocs_relay.storage.interface import PrincipalStore, SchemaStore, TokenStore
+from fitdocs_relay.storage.interface import (
+    PrincipalStore,
+    RateLimitStore,
+    RecordStore,
+    SchemaStore,
+    ServingStore,
+    TokenStore,
+)
 from fitdocs_relay.storage.migrate import migrate
 
 TEST_POSTGRES_URL_VARIABLE = ENV_PREFIX + "TEST_POSTGRES_URL"
@@ -297,6 +304,68 @@ def open_account_store(
 def account_store(open_account_store: Callable[[], AccountStore]) -> AccountStore:
     """A migrated, empty backend, typed as the principal and token areas."""
     return open_account_store()
+
+
+class StateStore(RateLimitStore, RecordStore, ServingStore, Protocol):
+    """The three areas the rate-limit, record and serving-claim tests exercise."""
+
+
+@pytest.fixture
+def second_database_target(
+    database_target: SqliteTarget | PostgresTarget,
+    request: pytest.FixtureRequest,
+    tmp_path: Path,
+) -> Iterator[SqliteTarget | PostgresTarget]:
+    """A second, different database location of the same backend kind.
+
+    SQLite: another file in the test's temporary directory. PostgreSQL: another
+    empty schema on the same server, dropped on teardown.
+    """
+    if isinstance(database_target, SqliteTarget):
+        yield SqliteTarget(path=tmp_path / "other.sqlite3")
+        return
+    url: str = request.getfixturevalue("postgres_test_url")
+    yield from _postgres_schema(url)
+
+
+@pytest.fixture
+def open_state_store(
+    database_target: SqliteTarget | PostgresTarget,
+) -> Iterator[Callable[[SqliteTarget | PostgresTarget | None], StateStore]]:
+    """Open a backend instance, migrated to the build, on the test's database
+    (or on the target given). Every instance opened is closed on teardown,
+    before `database_target` drops the PostgreSQL schema.
+    """
+    opened: list[StateStore] = []
+
+    def open_one(target: SqliteTarget | PostgresTarget | None = None) -> StateStore:
+        chosen = database_target if target is None else target
+        if isinstance(chosen, SqliteTarget):
+            from fitdocs_relay.storage.sqlite import SqliteBackend
+
+            sqlite = SqliteBackend(chosen)
+            migrate(sqlite, now=1)
+            store: StateStore = sqlite
+        else:
+            from fitdocs_relay.storage.postgres import PostgresBackend
+
+            postgres = PostgresBackend(chosen)
+            migrate(postgres, now=1)
+            store = postgres
+        opened.append(store)
+        return store
+
+    yield open_one
+    for store in opened:
+        store.close()
+
+
+@pytest.fixture
+def state_store(
+    open_state_store: Callable[[SqliteTarget | PostgresTarget | None], StateStore],
+) -> StateStore:
+    """A migrated, empty backend, typed as the rate-limit, record and claim areas."""
+    return open_state_store(None)
 
 
 @pytest.fixture
