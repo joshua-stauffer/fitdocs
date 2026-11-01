@@ -94,6 +94,7 @@ def bearer_token(request: Request) -> str | None:
     if header is None:
         return None
     scheme, _, rest = header.partition(" ")
+    rest = rest.lstrip(" ")  # RFC 6750: the scheme and the token are split by 1*SP
     if scheme.lower() != _BEARER or not rest:
         return None
     return rest
