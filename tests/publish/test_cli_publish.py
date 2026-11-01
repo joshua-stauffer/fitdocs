@@ -1,6 +1,7 @@
-"""``fitdocs publish`` through the CLI (publish-core task 7.1).
+"""``fitdocs publish`` through the CLI (publish-core tasks 7.1 and 7.2).
 
-Requirements 4.6, 4.8, 7.1, 7.3, 7.4, 7.10, 7.11 and 8.9, over a temporary
+Requirements 4.6, 4.8, 7.1, 7.3, 7.4, 7.10, 7.11, 8.9 and 14.1-14.6 (the
+``TestTargets`` listing), over a temporary
 data root, the scripted publishing connector registered under the instance
 names ``alpha`` and ``beta``, and a transport that records every call and
 raises unless the test allows it (only the test of the transport wiring does).
@@ -18,6 +19,7 @@ only which of two messages is printed.
 from __future__ import annotations
 
 import json
+import os
 import re
 import socket
 import subprocess
@@ -830,6 +832,414 @@ class TestPreflight:
         assert result.exit_code == 2
         assert str(path) in result.stderr
         assert "credentials directory" not in result.stderr
+
+
+KEY_SENTINEL = "sentinel-stored-key-7f3a"
+ENV_SENTINEL = "sentinel-env-key-91bc"
+BROKEN_SENTINEL = "sentinel-broken-file-5d2e"
+
+
+def listed(
+    held: World,
+    name: str,
+    *,
+    display_name: str,
+    capabilities: frozenset[Capability],
+    auth: bool = False,
+) -> ScriptedPublisher:
+    """A publish target with its own display name and declared capabilities."""
+    options: dict[str, object] = {
+        "connector_id": f"scripted-{name}",
+        "display_name": display_name,
+        "capabilities": capabilities,
+    }
+    if auth:
+        options["auth_style"] = AuthStyle.API_KEY
+        options["credential_fields"] = (CredentialField("api_key", "Key", True),)
+    publisher = (KeyedPublisher if auth else ScriptedPublisher)(**options)  # type: ignore[arg-type]
+    held.targets[name] = publisher
+    return publisher
+
+
+def credential_world(held: World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Five targets, written in settings out of name order, one per situation.
+
+    ``zeta`` is stored (ready), ``env`` is ready through the environment,
+    ``alpha`` has nothing (not connected), ``mid`` has an unreadable file and
+    ``plain`` needs no credentials (ready). ``puller`` is not a publish target.
+    """
+    push = Capability.PUSH_ACTIVITY
+    annotate = Capability.ANNOTATE_REMOTE_ACTIVITY
+    resolve = Capability.RESOLVE_REMOTE_ACTIVITY
+    other = Capability.PULL_THRESHOLDS
+    listed(
+        held,
+        "zeta",
+        display_name="Zeta Cloud",
+        capabilities=frozenset({annotate}),
+        auth=True,
+    )
+    listed(
+        held,
+        "env",
+        display_name="Env Cloud",
+        capabilities=frozenset({push, annotate}),
+        auth=True,
+    )
+    listed(
+        held,
+        "alpha",
+        display_name="Alpha Cloud",
+        capabilities=frozenset({annotate, resolve}),
+        auth=True,
+    )
+    listed(
+        held,
+        "mid",
+        display_name="Mid Cloud",
+        capabilities=frozenset({push, annotate, resolve}),
+        auth=True,
+    )
+    listed(
+        held,
+        "plain",
+        display_name="Plain Site",
+        capabilities=frozenset({annotate, other}),
+    )
+    held.target("puller", publish=False)
+    held.settings()
+    register(held)
+    store = CredentialStore(held.credentials)
+    store.save(
+        "zeta",
+        StoredCredentials(
+            connector_id="scripted-zeta",
+            auth_style=AuthStyle.API_KEY,
+            values={"api_key": Secret(KEY_SENTINEL)},
+            expires_at=None,
+            scopes=None,
+        ),
+    )
+    broken = store.path_for("mid")
+    broken.write_text(f"credentials_version = 1\nkey = {BROKEN_SENTINEL!r}\n")
+    broken.chmod(0o644)
+    monkeypatch.setenv(env_var_name("env", "api_key"), ENV_SENTINEL)
+
+
+def listing_rows(held: World, args: list[str]) -> Result:
+    return invoke(["--targets", *args, "--out", str(held.root)])
+
+
+STATE_LINES = [
+    (
+        "alpha: scripted-alpha (Alpha Cloud); "
+        "capabilities: annotate-remote-activity, resolve-remote-activity; "
+        "state: not_connected"
+    ),
+    (
+        "env: scripted-env (Env Cloud); "
+        "capabilities: push-activity, annotate-remote-activity; "
+        "state: ready"
+    ),
+    (
+        "mid: scripted-mid (Mid Cloud); "
+        "capabilities: push-activity, annotate-remote-activity, "
+        "resolve-remote-activity; "
+        "state: credentials_unreadable"
+    ),
+    (
+        "plain: scripted-plain (Plain Site); "
+        "capabilities: annotate-remote-activity; "
+        "state: ready"
+    ),
+    (
+        "zeta: scripted-zeta (Zeta Cloud); "
+        "capabilities: annotate-remote-activity; "
+        "state: ready"
+    ),
+]
+
+
+def _credentials_state(directory: Path) -> dict[str, tuple[bytes | None, int]]:
+    """Every path under ``directory`` with its bytes (files) and mode, so a
+    content change, a created entry or a chmod each shows as a difference."""
+    return {
+        path.relative_to(directory).as_posix(): (
+            path.read_bytes() if path.is_file() else None,
+            path.stat().st_mode,
+        )
+        for path in sorted(directory.rglob("*"))
+    }
+
+
+class TestTargets:
+    def test_text_lists_every_state_in_name_order(
+        self, world: World, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        credential_world(world, monkeypatch)
+        result = listing_rows(world, [])
+        assert result.exit_code == 0, result.output
+        assert result.stdout == "\n".join(
+            [
+                *STATE_LINES,
+                "",
+                f"not_connected: {explanation(PublishCode.NOT_CONNECTED)}",
+                "credentials_unreadable: "
+                f"{explanation(PublishCode.CREDENTIALS_UNREADABLE)}",
+                f"ready: {explanation(PublishCode.READY)}",
+                "",
+            ]
+        )
+
+    def test_json_lists_the_same_rows(
+        self, world: World, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        credential_world(world, monkeypatch)
+        result = listing_rows(world, ["--format", "json"])
+        assert result.exit_code == 0, result.output
+        assert result.stdout.endswith("}\n")
+        states = {
+            "alpha": PublishCode.NOT_CONNECTED,
+            "env": PublishCode.READY,
+            "mid": PublishCode.CREDENTIALS_UNREADABLE,
+            "plain": PublishCode.READY,
+            "zeta": PublishCode.READY,
+        }
+        capabilities = {
+            "alpha": ["annotate-remote-activity", "resolve-remote-activity"],
+            "env": ["push-activity", "annotate-remote-activity"],
+            "mid": [
+                "push-activity",
+                "annotate-remote-activity",
+                "resolve-remote-activity",
+            ],
+            "plain": ["annotate-remote-activity"],
+            "zeta": ["annotate-remote-activity"],
+        }
+        assert json.loads(result.stdout) == {
+            "format": 1,
+            "targets": [
+                {
+                    "name": name,
+                    "connector": f"scripted-{name}",
+                    "display_name": f"{name.capitalize()} "
+                    f"{'Site' if name == 'plain' else 'Cloud'}",
+                    "capabilities": capabilities[name],
+                    "state": states[name].value,
+                    "explanation": explanation(states[name]),
+                }
+                for name in sorted(states)
+            ],
+        }
+
+    def test_the_fixture_puts_each_target_in_the_state_its_name_claims(
+        self, world: World, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        credential_world(world, monkeypatch)
+        store = CredentialStore(world.credentials)
+        assert store.load("zeta") is not None
+        assert store.load("alpha") is None
+        assert env_var_name("alpha", "api_key") not in os.environ
+        assert CredentialStore(world.credentials).path_for("mid").exists()
+
+    def test_no_credential_value_appears_in_either_format(
+        self, world: World, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        credential_world(world, monkeypatch)
+        for args in ([], ["--format", "json"]):
+            result = listing_rows(world, args)
+            assert result.exit_code == 0, result.output
+            assert "ready" in result.stdout
+            for sentinel in (KEY_SENTINEL, ENV_SENTINEL, BROKEN_SENTINEL):
+                assert sentinel not in result.stdout
+                assert sentinel not in result.stderr
+                assert sentinel not in result.output
+
+    def test_it_sends_and_writes_nothing(
+        self, world: World, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        credential_world(world, monkeypatch)
+        world.page("a.md", SHA_A, publish="plain")
+        for each in world.targets.values():
+            each.publish_script.append(POSTED)
+        before = _snapshot(world.root)
+        credentials_before = _credentials_state(world.credentials)
+        assert credentials_before  # the stored and the unreadable file are there
+        for args in ([], ["--format", "json"]):
+            result = listing_rows(world, args)
+            assert result.exit_code == 0, result.output
+        assert _snapshot(world.root) == before
+        assert _credentials_state(world.credentials) == credentials_before
+        assert world.calls() == 0
+        assert world.transport_calls == []
+        assert not publish_ledger_path(world.root, "plain").exists()
+
+    def test_only_publish_targets_are_listed(
+        self, world: World, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        credential_world(world, monkeypatch)
+        assert "puller" in (world.root / "fitdocs.toml").read_text(encoding="utf-8")
+        result = listing_rows(world, [])
+        assert "puller" not in result.stdout
+        result = listing_rows(world, ["--format", "json"])
+        assert [row["name"] for row in json.loads(result.stdout)["targets"]] == [
+            "alpha",
+            "env",
+            "mid",
+            "plain",
+            "zeta",
+        ]
+
+    def test_a_listing_needs_no_credentials_directory_when_nothing_authenticates(
+        self, world: World, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        ready(world, "alpha")
+        monkeypatch.setenv("FITDOCS_CREDENTIALS_DIR", str(world.root / "creds"))
+        result = listing_rows(world, [])
+        assert result.exit_code == 0, result.output
+        assert result.stdout.splitlines()[0] == (
+            "alpha: scripted-alpha (Scripted Publisher); "
+            "capabilities: annotate-remote-activity; state: ready"
+        )
+
+    def test_an_absent_credentials_directory_is_read_not_created(
+        self, world: World, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        ready(world, "alpha", auth=True)
+        parent = world.root.parent / "absent-parent"
+        absent = parent / "creds"
+        monkeypatch.setenv("FITDOCS_CREDENTIALS_DIR", str(absent))
+        assert not absent.exists()
+        assert not parent.exists()
+        result = listing_rows(world, [])
+        assert result.exit_code == 0, result.output
+        assert result.stdout.splitlines()[0].endswith("state: not_connected")
+        assert not absent.exists()
+        assert not parent.exists()
+
+    def test_a_credentials_directory_inside_the_data_root_is_refused(
+        self, world: World, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        ready(world, "alpha", auth=True)
+        monkeypatch.setenv("FITDOCS_CREDENTIALS_DIR", str(world.root / "creds"))
+        before = _snapshot(world.root)
+        result = listing_rows(world, [])
+        assert_refused(world, result, before, mentions="credentials directory")
+
+    def test_the_empty_case_says_so_and_exits_0(self, world: World) -> None:
+        world.settings()
+        before = _snapshot(world.root)
+        result = listing_rows(world, [])
+        assert result.exit_code == 0, result.output
+        assert result.stdout == "No publish target is configured.\n"
+        assert result.stderr == ""
+        assert _snapshot(world.root) == before
+
+    def test_a_connector_that_is_not_a_publish_target_leaves_it_empty(
+        self, world: World
+    ) -> None:
+        world.target("alpha", publish=False)
+        world.settings()
+        register(world)
+        result = listing_rows(world, [])
+        assert result.exit_code == 0, result.output
+        assert result.stdout == "No publish target is configured.\n"
+
+    def test_the_empty_json_shape(self, world: World) -> None:
+        world.settings()
+        result = listing_rows(world, ["--format", "json"])
+        assert result.exit_code == 0, result.output
+        assert json.loads(result.stdout) == {"format": 1, "targets": []}
+
+    def test_json_is_chosen_whatever_the_case_of_the_name(self, world: World) -> None:
+        ready(world, "alpha")
+        result = listing_rows(world, ["--format", "JSON"])
+        assert json.loads(result.stdout)["targets"][0]["name"] == "alpha"
+
+    @pytest.mark.parametrize(
+        ("args", "mention"),
+        [
+            (["a.md"], "PAGES"),
+            (["--to", "alpha"], "--to"),
+            (["--yes"], "--yes"),
+        ],
+    )
+    @pytest.mark.parametrize("empty", [False, True])
+    def test_each_refusal_with_the_refused_action_armed(
+        self, world: World, args: list[str], mention: str, empty: bool
+    ) -> None:
+        if empty:
+            world.target("alpha")
+            register(world)
+            (world.root / "fitdocs.toml").write_text("", encoding="utf-8")
+            assert "[connectors." not in (world.root / "fitdocs.toml").read_text()
+        else:
+            ready(world, "alpha")
+            assert "[connectors.alpha]" in (world.root / "fitdocs.toml").read_text()
+        world.page("a.md", SHA_A)
+        arm(world)
+        before = _snapshot(world.root)
+        result = listing_rows(world, args)
+        assert_refused(world, result, before, mentions=mention)
+        assert world.targets["alpha"].publish_script == [POSTED]
+
+    def test_a_refusal_names_every_refused_flag(self, world: World) -> None:
+        ready(world, "alpha")
+        world.page("a.md", SHA_A)
+        arm(world)
+        before = _snapshot(world.root)
+        result = listing_rows(world, ["a.md", "--to", "alpha", "--yes"])
+        assert_refused(world, result, before, mentions="PAGES, --to, --yes")
+
+    def test_the_refusal_comes_before_the_settings_are_read(self, world: World) -> None:
+        ready(world, "alpha")
+        world.settings("[publish]\nbogus = 1\n")
+        result = listing_rows(world, ["--yes"])
+        assert result.exit_code == 2
+        assert "--yes" in result.stderr
+        assert "bogus" not in result.stderr
+
+    def test_the_publish_table_comes_before_the_credentials_directory(
+        self, world: World, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        ready(world, "alpha", auth=True)
+        world.settings("[publish]\nbogus = 1\n")
+        monkeypatch.setenv("FITDOCS_CREDENTIALS_DIR", str(world.root / "creds"))
+        result = listing_rows(world, [])
+        assert result.exit_code == 2
+        assert "bogus" in result.stderr
+        assert "credentials directory" not in result.stderr
+
+    def test_the_data_root_comes_before_the_refusal(
+        self, world: World, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        empty = tmp_path / "elsewhere"
+        empty.mkdir()
+        monkeypatch.chdir(empty)
+        result = invoke(["--targets", "--yes"])
+        assert result.exit_code == 2
+        assert "FITDOCS_DATA" in result.stderr
+        assert "--yes" not in result.stderr
+
+    @pytest.mark.parametrize("empty", [False, True])
+    def test_a_bad_publish_table_refuses_the_listing(
+        self, world: World, empty: bool
+    ) -> None:
+        if not empty:
+            ready(world, "alpha")
+        world.settings("[publish]\nbogus = 1\n")
+        before = _snapshot(world.root)
+        result = listing_rows(world, [])
+        assert_refused(world, result, before, mentions="unknown key 'bogus'")
+
+    def test_the_listing_comes_before_the_ledgers_are_read(self, world: World) -> None:
+        ready(world, "alpha")
+        path = publish_ledger_path(world.root, "alpha")
+        path.parent.mkdir(parents=True)
+        path.write_text("ledger_version = 99\n", encoding="utf-8")
+        result = listing_rows(world, [])
+        assert result.exit_code == 0, result.output
+        assert result.stdout.startswith("alpha: scripted-alpha")
 
 
 def test_importing_the_cli_loads_only_the_leaves_of_the_publish_package() -> None:

@@ -470,7 +470,7 @@ live constant.
     scripted target in text and JSON.
   - _Requirements: 4.6, 4.8, 7.1, 7.3, 7.4, 7.10, 7.11, 8.9_
 
-- [ ] 7.2 Add the target listing
+- [x] 7.2 Add the target listing
   - `--targets` lists every configured publish target in text or JSON,
     reading the credentials store only for state; it refuses PAGES, `--to`
     and `--yes`; with no target it says so and exits 0.
@@ -640,3 +640,4 @@ live constant.
 - Controller ruling 7.1: Req 7.11's "no publish target is configured" sentence is printed in text format only; with --format json the run document is printed unchanged (empty results), so the JSON shape stays stable.
 - Controller ruling 7.1: `--targets` is parsed and exits 2 "not available yet" until 7.2 replaces that branch (7.2 owns the step-2 refusals and the step-5 listing).
 - 7.1: CLI refusal tests must arm the refused action (a scripted POSTED, a reachable credential) so 'nothing sent/written' is not pre-satisfied; the scripted transport's raise is swallowed by TargetChannel.send as target_error, so 'no request' needs an explicit transport_calls == [] / world.calls() == 0.
+- 7.2: `--targets` refusal sits at preflight step 2 (one message naming every refused flag); the listing at step 5 after [publish] validation; a credentials directory inside the data root refuses even the read-only listing when a configured target authenticates (design step 5; same as `fitdocs pull`). Listing exits 0 even with failure states.

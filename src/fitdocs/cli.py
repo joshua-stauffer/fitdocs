@@ -2491,7 +2491,11 @@ def publish_command(
     """Show, or with --yes post, what each publish target would be sent.
 
     (publish-core design: CliPublish; Req 4.6, 4.8, 7.1, 7.3, 7.4, 7.10, 7.11,
-    8.9.)
+    8.9, 14.1-14.6.)
+
+    With ``--targets`` it lists the configured publish targets and their
+    credential state instead (no PAGES, ``--to`` or ``--yes`` allowed; no
+    request, no write, no credential value shown).
 
     Every preflight check runs, in the design's order, before any request or
     write, each failure exiting ``2`` and naming what to fix: the data root;
@@ -2515,15 +2519,32 @@ def publish_command(
     from fitdocs.publish.ledger import PublishLedgerError, load_ledgers
     from fitdocs.publish.outcomes import PublishCode
     from fitdocs.publish.pages import PageSelectionError, select_pages
-    from fitdocs.publish.report import render_json, render_text
+    from fitdocs.publish.report import (
+        render_json,
+        render_targets_json,
+        render_targets_text,
+        render_text,
+    )
     from fitdocs.publish.settings import load_publish_settings
     from fitdocs.publish.targets import (
         TargetChannel,
         is_publish_target,
+        list_targets,
         prepare_target,
     )
 
     data_root = _resolved_data_root(out)
+    if targets:
+        refused = [
+            flag
+            for flag, given in (("PAGES", pages), ("--to", to), ("--yes", yes))
+            if given
+        ]
+        if refused:
+            _config_error(
+                f"fitdocs publish --targets lists the targets and takes no "
+                f"{', '.join(refused)}."
+            )
     try:
         document = load_settings_document(data_root)
         inbox_settings = load_inbox_settings(document, data_root=data_root)
@@ -2547,7 +2568,25 @@ def publish_command(
         _config_error(str(exc))
 
     if targets:
-        _config_error("fitdocs publish --targets is not available yet.")
+        listing_store: CredentialStore | None = None
+        if any(
+            instance.connector.auth_style is not AuthStyle.NONE
+            for instance in by_name.values()
+        ):
+            try:
+                credentials_dir = resolve_credentials_dir(os.environ, Path.home())
+                check_outside_data_root(credentials_dir, data_root)
+            except CredentialsLocationError as exc:
+                _config_error(str(exc))
+            listing_store = CredentialStore(credentials_dir)
+        rows = list_targets(
+            list(by_name.values()), store=listing_store, environ=os.environ
+        )
+        if output_format is _PublishFormat.JSON:
+            typer.echo(render_targets_json(rows))
+        else:
+            typer.echo(render_targets_text(rows))
+        return
 
     configured = ", ".join(sorted(by_name)) or "none"
     considered = sorted(set(to)) if to else sorted(by_name)
