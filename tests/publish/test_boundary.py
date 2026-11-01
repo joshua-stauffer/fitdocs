@@ -61,6 +61,14 @@ import fitdocs.publish
 #: APPEND a new entry here when you add a module under `fitdocs/publish/`.
 _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
     "fitdocs.publish": frozenset(),
+    "fitdocs.publish.compose": frozenset(
+        {
+            "fitdocs.publish.outcomes",
+            "fitdocs.publish.request",
+            "fitdocs.publish.template",
+            "fitdocs.publish.values",
+        }
+    ),
     "fitdocs.publish.ledger": frozenset(
         {
             "fitdocs.docio",
