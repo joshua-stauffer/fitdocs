@@ -112,3 +112,15 @@ connector is offline beyond the one scenario the confinement guard stages.
    fixture teardown).
 6. Done when each new check has a synthetic positive control that goes red
    and the real tree is clean.
+
+## Addendum (2026-11-01, publish-core)
+The layer-3 network list is shorter still than item 2 says. Besides the
+modules above, the tree-wide allow-list in `tests/connectors/test_boundary.py`
+also misses `_socket`, `_ssl`, `multiprocessing.connection`,
+`logging.handlers`, `poplib`, `nntplib`, `telnetlib`, `asyncore`, `asynchat`,
+`smtpd`, and the URL-fetching `xml.sax`, `xml.dom.xmlbuilder` and
+`xml.dom.pulldom`; any `src/fitdocs` module could open a connection through
+them unflagged (connectors Req 14.2). Surfaced by the publish-core task 1.3
+reviews (the publish package's own guard forbids `xml.sax` and admits only
+`from urllib.parse import ...`).
+
