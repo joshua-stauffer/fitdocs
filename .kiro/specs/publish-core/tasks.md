@@ -110,7 +110,7 @@ live constant.
     with minutes over 59.
   - _Requirements: 2.1, 5.2_
 
-- [ ] 2.2 Make the `publish` key user-owned
+- [x] 2.2 Make the `publish` key user-owned
   - Add the key to the user-owned set through a documentation-order tuple
     (the four effort keys, then `publish`); the workouts declaration lists
     user-owned keys from that tuple.
