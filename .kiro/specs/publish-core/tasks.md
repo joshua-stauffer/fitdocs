@@ -173,7 +173,7 @@ live constant.
 
 - [ ] 3. Connector framework: the target contract and single-attempt writes
 
-- [ ] 3.1 (P) Add the single-attempt request mode
+- [x] 3.1 (P) Add the single-attempt request mode
   - A request marked single-attempt is sent to the transport exactly once,
     whatever the status or network failure, in data and authentication
     modes; the post helper takes the marker as an optional keyword.
