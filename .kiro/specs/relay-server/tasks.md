@@ -54,7 +54,7 @@ Rules for every task:
   an email provider or a deployment's infrastructure. Nothing under `docs/`
   carries the fitdocs release version literal.
 
-- [ ] 1. Foundation: shared modules, the relay package skeleton, the cross-check and CI
+- [x] 1. Foundation: shared modules, the relay package skeleton, the cross-check and CI
 
 - [x] 1.1 Add the closed relay code vocabulary to the fitdocs source
   - The 22 codes from design.md, in their order, each with:
@@ -180,7 +180,7 @@ Rules for every task:
     - changing the service image to an unpinned tag reds it.
   - _Requirements: 1.5, 7.6_
 
-- [ ] 2. Relay storage: configuration, the interface, and each storage area on both backends
+- [x] 2. Relay storage: configuration, the interface, and each storage area on both backends
 
 - [x] 2.1 Read configuration only from the environment against the contract table
   - Define the deploy contract's environment table: each variable's name,
@@ -309,7 +309,7 @@ Rules for every task:
     succeeds.
   - _Requirements: 6.3, 6.4, 7.8, 9.6, 10.3_
 
-- [ ] 2.6 Prove both backends equal under concurrency, complete the coverage rule and select the backend by URL
+- [x] 2.6 Prove both backends equal under concurrency, complete the coverage rule and select the backend by URL
   - Concurrency conformance on both backends:
     - 20 threads counting one key total exactly 20;
     - exactly one thread wins a take;
@@ -983,3 +983,4 @@ Rules for every task:
 - 2.3: backends are SqliteBackend(SqliteTarget)/PostgresBackend(PostgresTarget); conftest `schema_store`/`open_schema_store` fixtures (typed SchemaStore) close via StorageBase.close before the schema drop. SQLite opens per operation with `file:<abs>?mode=rw` (a deleted file is unreachable, never recreated), splits change SQL with sqlite3.complete_statement (executescript would commit). PostgreSQL: after the xact advisory lock, re-read via pg_catalog.pg_tables, NOT to_regclass (stale catalog). is_connection_failure (controller ruling, per design) = sqlstate-less, class 08, 57P01-03, 53300, class 28 -> unreachable; everything else StorageError. The data model is pinned on both backends incl. defaults, uniqueness, FK actions, CHECK/COLLATE absence, PostgreSQL persistence and collation -- any later schema change (0002+) must extend those literals. PostgreSQL text sorts use the DB default collation; storage queries ordering by text ids must be made backend-equal (COLLATE "C"). (Round 3 verified by the controller re-running mutation N4.)
 - 2.4: PostgreSQL text ordering uses COLLATE "C" (byte order = SQLite BINARY); ordering conformance tests take the `ids_sort_by_locale_here` fixture, which FAILS on a C-collation test DB (the check would be vacuous there) -- run PostgreSQL conformance on a non-C database (CI postgres:17 is en_US.utf8). conftest gains AccountStore/open_account_store/account_store, TIED_IDS/BYTE_ORDER. mint_token raises ValueError unless exactly one of principal_id/new_principal. (Round 2 test-only precondition verified by the controller on a C-locale DB.)
 - 2.5: record expiry is exclusive (visible while now < expires_at; put purges expires_at <= now), matching the window rule (window_end <= now ends it); delete_record has no now and returns True for any physical row; close() never releases a serving claim (caller releases, per Serve lifecycle). SQLite claim = fcntl.flock on `<db>.serve-lock` (per open-file-description, so a second storage object in-process is refused); PostgreSQL claim = session advisory lock hashtext('fitdocs-relay:' || current_schema()) on a dedicated connection. Tests that inspect pg_locks must filter by database and key (server-wide reads flake under concurrent runs); purge rules must be tested with mixed window lengths; hash-keyed locks need a deterministic negative-key case. (Round 3 verified by the controller re-running mutation N2.)
+- 2.6 (controller ruling): the count's atomicity is the single upsert statement (design Invariants), not the transaction lock; the Done-when lock-removal mutation is replaced by: splitting the upsert into an unlocked read-modify-write reds the 20-thread test on each backend, and the same split under the lock stays green. open_storage(target) -> Storage is the only factory (lazy PostgreSQL import; MissingPostgresSupport names the postgres extra); conftest `open_full_storage` gives a full Storage. Coverage completeness check skips under -k/-m or partial collection; CI's pinned bare `pytest` step keeps it live.

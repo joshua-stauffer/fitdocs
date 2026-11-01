@@ -24,13 +24,14 @@ import pytest
 
 from fitdocs_relay.config import PostgresTarget, SqliteTarget
 from fitdocs_relay.contract import ENV_PREFIX
-from fitdocs_relay.storage import interface
+from fitdocs_relay.storage import interface, open_storage
 from fitdocs_relay.storage.interface import (
     PrincipalStore,
     RateLimitStore,
     RecordStore,
     SchemaStore,
     ServingStore,
+    Storage,
     TokenStore,
 )
 from fitdocs_relay.storage.migrate import migrate
@@ -387,3 +388,25 @@ def ids_sort_by_locale_here(
         "the database collation orders the ids as bytes: "
         "this ordering check is vacuous here"
     )
+
+
+@pytest.fixture
+def open_full_storage(
+    database_target: SqliteTarget | PostgresTarget,
+) -> Iterator[Callable[[], Storage]]:
+    """Open a backend instance through the factory, migrated to the build, on
+    the test's database, typed as the whole `Storage` protocol. Every instance
+    opened is closed on teardown, before `database_target` drops the PostgreSQL
+    schema.
+    """
+    opened: list[Storage] = []
+
+    def open_one() -> Storage:
+        store = open_storage(database_target)
+        opened.append(store)
+        migrate(store, now=1)
+        return store
+
+    yield open_one
+    for store in opened:
+        store.close()

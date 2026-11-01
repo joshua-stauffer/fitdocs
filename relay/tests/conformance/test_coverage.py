@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+from pathlib import Path
 from typing import Protocol
 
 import pytest
@@ -113,3 +114,40 @@ def test_every_marker_in_the_suite_names_a_real_member(
 ) -> None:
     assert request.session.items, "the session collected nothing"
     assert marker_problems(collected_covers) == []
+
+
+def uncovered(collected: Collected, members: set[str]) -> list[str]:
+    named = {name for _, names in collected for name in names}
+    return sorted(members - named)
+
+
+def test_a_member_no_marker_names_is_uncovered(storage_members: set[str]) -> None:
+    only_one = [("t::a", ("TokenStore.find_token",))]
+    assert uncovered(only_one, storage_members) == sorted(
+        storage_members - {"TokenStore.find_token"}
+    )
+    assert uncovered([("t::a", tuple(storage_members))], storage_members) == []
+
+
+def test_every_storage_member_is_named_by_at_least_one_marker(
+    collected_covers: Collected,
+    storage_members: set[str],
+    request: pytest.FixtureRequest,
+) -> None:
+    suite = Path(__file__).parent
+    modules = sorted(suite.glob("test_*.py"))
+    assert modules, "the walk is looking at the wrong directory"
+    collected_ids = {item.nodeid for item in request.session.items}
+    missing = [
+        m.name
+        for m in modules
+        if not any(
+            i.endswith(f"/{m.name}") or f"{m.name}::" in i for i in collected_ids
+        )
+    ]
+    if missing or request.config.option.keyword or request.config.option.markexpr:
+        pytest.skip(
+            "completeness needs the whole conformance suite collected "
+            f"(not collected, or filtered: {missing or 'a -k/-m filter'})"
+        )
+    assert uncovered(collected_covers, storage_members) == []
