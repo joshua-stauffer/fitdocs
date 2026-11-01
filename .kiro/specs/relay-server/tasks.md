@@ -786,7 +786,7 @@ Rules for every task:
 
 - [ ] 8. Documentation, gates, steering and amendments
 
-- [ ] 8.1 (P) Exclude the relay from the release by gate
+- [x] 8.1 (P) Exclude the relay from the release by gate
   - Add `relay/*` and `fitdocs_relay/*` to the release policy's forbidden
     members.
   - Add positive controls (`relay/pyproject.toml`,
