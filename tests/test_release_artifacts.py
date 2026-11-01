@@ -209,6 +209,9 @@ _NEGATIVE_MEMBERS = (
     "pyproject.toml",
     "src/fitdocs/__init__.py",
     "src/fitdocs/cli.py",
+    # Shares the word "relay" with the excluded server but is the shipped
+    # client connector; a pattern like "*relay*" would wrongly forbid it.
+    "src/fitdocs/connectors/relay.py",
 )
 
 _POSITIVE_MEMBERS = (
@@ -229,6 +232,18 @@ _POSITIVE_MEMBERS = (
     "docs/reference/x.md",  # "docs/*"
     "x.xlsx",  # "*.xlsx"
     "x.gpx",  # "*.gpx"
+)
+
+#: The relay server is deployed separately and never ships in a release
+#: (relay-server Requirement 1.4). Each member is paired with the one pattern
+#: that must catch it, so deleting either pattern reds its own control.
+#: The nested members are the shape a real leak has (`fitdocs_relay` sits
+#: under `relay/src/`, and a wheel build would carry subpackages).
+_RELAY_POSITIVE_MEMBERS = (
+    ("relay/pyproject.toml", "relay/*"),
+    ("relay/src/fitdocs_relay/app.py", "relay/*"),
+    ("fitdocs_relay/__init__.py", "fitdocs_relay/*"),
+    ("fitdocs_relay/storage/models.py", "fitdocs_relay/*"),
 )
 
 
@@ -551,6 +566,19 @@ def test_scan_catches_a_planted_bundling_key() -> None:
     assert hits == ["bundling_state"]
 
 
+@pytest.mark.parametrize(("member", "pattern"), _RELAY_POSITIVE_MEMBERS)
+def test_relay_server_members_are_caught_by_their_own_pattern(
+    member: str, pattern: str
+) -> None:
+    policy = load_policy(REAL_POLICY_PATH)
+    assert pattern in policy.forbidden_members
+    others = [p for p in policy.forbidden_members if p != pattern]
+    assert not any(fnmatch(member, p) for p in others), (
+        f"{member!r} is caught by another pattern, so {pattern!r} is unpinned"
+    )
+    assert fnmatch(member, pattern)
+
+
 # ---------------------------------------------------------------------------
 # Nothing ships: scripts/ and release/ absent from the sdist allowlist
 # ---------------------------------------------------------------------------
@@ -565,6 +593,8 @@ def test_sdist_allowlist_excludes_scripts_and_release() -> None:
     ]
     assert "scripts" not in only_include
     assert "release" not in only_include
+    assert "relay" not in only_include
+    assert "fitdocs_relay" not in only_include
 
 
 # ---------------------------------------------------------------------------
@@ -1208,6 +1238,59 @@ def test_forbidden_member_reported_exactly_once(tmp_path: Path) -> None:
     assert violation.kind == ViolationKind.FORBIDDEN_MEMBER
     assert violation.subject == sdist_path.name
     assert "tests/x.py" in violation.detail
+
+
+def test_relay_server_leak_is_reported_in_an_sdist_and_a_wheel(
+    tmp_path: Path,
+) -> None:
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    wheel_members = dict(_CLEAN_WHEEL_MEMBERS)
+    wheel_members["fitdocs_relay/__init__.py"] = b""
+    wheel_path = _make_wheel(dist_dir, wheel_members, metadata=_CLEAN_METADATA)
+    sdist_members = dict(_CLEAN_SDIST_MEMBERS)
+    sdist_members["relay/pyproject.toml"] = b""
+    sdist_members["relay/src/fitdocs_relay/app.py"] = b""
+    sdist_path = _make_sdist(dist_dir, sdist_members, pkg_info=_CLEAN_METADATA)
+
+    policy = load_policy(REAL_POLICY_PATH)
+    violations = check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT)
+
+    assert {v.kind for v in violations} == {ViolationKind.FORBIDDEN_MEMBER}
+    assert sorted((v.subject, v.detail) for v in violations) == sorted(
+        [
+            (
+                wheel_path.name,
+                "member 'fitdocs_relay/__init__.py' "
+                "matches forbidden pattern 'fitdocs_relay/*'",
+            ),
+            (
+                sdist_path.name,
+                "member 'relay/pyproject.toml' matches forbidden pattern 'relay/*'",
+            ),
+            (
+                sdist_path.name,
+                "member 'relay/src/fitdocs_relay/app.py' "
+                "matches forbidden pattern 'relay/*'",
+            ),
+        ]
+    )
+
+
+def test_relay_connector_client_module_is_not_a_forbidden_member(
+    tmp_path: Path,
+) -> None:
+    dist_dir = tmp_path / "dist"
+    dist_dir.mkdir()
+    wheel_members = dict(_CLEAN_WHEEL_MEMBERS)
+    wheel_members["fitdocs/connectors/relay.py"] = b""
+    _make_wheel(dist_dir, wheel_members, metadata=_CLEAN_METADATA)
+    sdist_members = dict(_CLEAN_SDIST_MEMBERS)
+    sdist_members["src/fitdocs/connectors/relay.py"] = b""
+    _make_sdist(dist_dir, sdist_members, pkg_info=_CLEAN_METADATA)
+
+    policy = load_policy(REAL_POLICY_PATH)
+    assert check_artifacts(dist_dir, policy=policy, repo_root=REPO_ROOT) == ()
 
 
 def test_forbidden_directory_entry_is_reported(tmp_path: Path) -> None:
