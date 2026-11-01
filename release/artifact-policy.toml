@@ -95,6 +95,8 @@ members = [
     "*/.fitdocs/*",
     ".fitdocs/*",
     "agent-log",
+    "relay/*",
+    "fitdocs_relay/*",
 ]
 
 [metadata]
