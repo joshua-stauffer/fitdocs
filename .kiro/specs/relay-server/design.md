@@ -1523,8 +1523,11 @@ def create_app(config: RelayConfig, *, extensions: Sequence[RelayExtension] = ()
   - Exit codes: 0 ok; 1 operation failed (unknown id, unreachable, schema
     not current or ahead); 2 configuration error; 3 migrations pending
     (`--check`).
-  - Every command except `migrate` and `new-pepper` first requires
-    `schema_state().current == expected`.
+  - Every command except `migrate`, `new-pepper` and `serve` first requires
+    `schema_state().current == expected`. (Amended 2026-11-01, task 5.2
+    controller ruling: `serve` does not gate on the schema; the readiness
+    probe reports schema-behind/ahead while serving and the API answers
+    `unavailable` until the schema is current.)
   - Labels are at most 64 printable characters. Listings are tab-separated
     with ISO-8601 UTC times, ordered by `created_at` then id.
 
