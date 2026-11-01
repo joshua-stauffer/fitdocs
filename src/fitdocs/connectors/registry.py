@@ -53,6 +53,13 @@ _REGISTRY: dict[str, Connector] = {}
 
 _CONNECTOR_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 _FIELD_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+_RELAY_OPERATIONS = (
+    "check_token",
+    "read_capabilities",
+    "start_registration",
+    "poll_registration",
+    "revoke_token",
+)
 
 
 class InvalidConnectorError(ValueError):
@@ -116,13 +123,17 @@ def validate_connector(obj: object) -> str | None:
     Checked in design.md's order (Req 2.3): ``connector_id`` matches
     ``^[a-z0-9][a-z0-9-]{0,63}$``; ``display_name`` is a non-empty ``str``;
     ``auth_style`` is an :class:`~fitdocs.connectors.protocol.AuthStyle`;
-    ``capabilities`` is a non-empty ``frozenset`` of
-    :class:`~fitdocs.connectors.protocol.Capability`; ``credential_fields``
+    ``capabilities`` is a ``frozenset`` of
+    :class:`~fitdocs.connectors.protocol.Capability`, non-empty unless the
+    auth style is ``RELAY_TOKEN``; ``credential_fields``
     is a ``tuple`` of :class:`~fitdocs.connectors.protocol.CredentialField`
     with valid, unique names and non-empty labels, empty exactly when
     ``auth_style`` is ``NONE``; ``parse_settings`` is callable; ``verify`` is
     callable when ``API_KEY`` is the auth style; ``login`` and ``refresh``
-    are callable when ``LOGIN`` is the auth style; ``list_activities`` and
+    are callable when ``LOGIN`` is the auth style; ``check_token``,
+    ``read_capabilities``, ``start_registration``, ``poll_registration`` and
+    ``revoke_token`` are callable, in that order, when ``RELAY_TOKEN`` is the
+    auth style; ``list_activities`` and
     ``fetch_activity`` are callable when ``PULL_ACTIVITIES`` is declared;
     ``list_wellness`` and ``package_wellness`` are callable when
     ``PULL_WELLNESS`` is declared.
@@ -161,7 +172,9 @@ def validate_connector(obj: object) -> str | None:
 
         current = "capabilities"
         capabilities = getattr(obj, current, None)
-        if not isinstance(capabilities, frozenset) or not capabilities:
+        if not isinstance(capabilities, frozenset) or (
+            not capabilities and auth_style is not AuthStyle.RELAY_TOKEN
+        ):
             return "capabilities must be a non-empty frozenset of Capability"
         if not all(isinstance(c, Capability) for c in capabilities):
             return "capabilities must be a non-empty frozenset of Capability"
@@ -193,6 +206,14 @@ def validate_connector(obj: object) -> str | None:
             refresh = getattr(obj, current, None)
             if not callable(refresh):
                 return "refresh must be callable when auth_style is LOGIN"
+
+        if auth_style is AuthStyle.RELAY_TOKEN:
+            for operation in _RELAY_OPERATIONS:
+                current = operation
+                if not callable(getattr(obj, current, None)):
+                    return (
+                        f"{operation} must be callable when auth_style is RELAY_TOKEN"
+                    )
 
         current = "capabilities"
         if Capability.PULL_ACTIVITIES in capabilities:

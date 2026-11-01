@@ -349,6 +349,7 @@ _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
     "fitdocs.connectors.protocol": frozenset(
         {
             "fitdocs.connectors.http",
+            "fitdocs.connectors.relay_codes",
             "fitdocs.connectors.secrets",
         }
     ),

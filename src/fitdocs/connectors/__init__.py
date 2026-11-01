@@ -19,7 +19,8 @@ module here reads the system clock directly; ``now`` and ``sleep`` are always
 passed in by the caller.
 
 The published surface (``__all__``) is the 50 names design.md's "PackageInit"
-section lists plus wellness-pull's "PackageSurface" (pinned by
+section lists plus wellness-pull's "PackageSurface" plus relay-server's five
+relay names (55 in all) (pinned by
 ``tests/connectors/test_surface.py``): the protocol layer's types and
 vocabularies, the transport layer, the typed failures, the secret and its
 redactor, and the registration operations. The built-in
@@ -70,6 +71,11 @@ from fitdocs.connectors.protocol import (
     KeyVerifier,
     Listing,
     ListingDeferral,
+    RegistrationPolled,
+    RegistrationStarted,
+    RelayCapabilities,
+    RelayRefused,
+    RelayTokenClient,
     RemoteActivity,
     SettingsContext,
     TokenIssuer,
@@ -142,6 +148,11 @@ __all__ = [
     "WellnessDay",
     "WellnessListing",
     "WellnessPackage",
+    "RelayTokenClient",
+    "RelayRefused",
+    "RelayCapabilities",
+    "RegistrationStarted",
+    "RegistrationPolled",
 ]
 
 # The built-in connectors: registered at import time so `get("folder")` and

@@ -20,12 +20,15 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
+from typing import cast
 
 import pytest
 
 from fitdocs.connectors.connect import (
     Connected,
     ConnectFailed,
+    _env_override,
     run_connect,
 )
 from fitdocs.connectors.credentials import CredentialStore, env_var_name
@@ -582,6 +585,20 @@ def test_login_style_never_reports_an_env_override(tmp_path: Path) -> None:
 
     assert isinstance(result, Connected)
     assert result.env_override == ()
+
+
+def test_relay_token_style_reports_its_overriding_variable() -> None:
+    connector = SimpleNamespace(
+        auth_style=AuthStyle.RELAY_TOKEN,
+        credential_fields=(CredentialField("token", "Relay token", secret=True),),
+    )
+    instance = _instance(name="my-relay", connector=cast(Connector, connector))
+    token_var = env_var_name("my-relay", "token")
+    assert token_var == "FITDOCS_CONNECTOR_MY_RELAY_TOKEN"
+
+    assert _env_override(instance, {token_var: "override"}) == (token_var,)
+    assert _env_override(instance, {token_var: ""}) == ()
+    assert _env_override(instance, {}) == ()
 
 
 # ---------------------------------------------------------------------------
