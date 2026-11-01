@@ -103,6 +103,7 @@ before the morning-of pass fills it.
 from __future__ import annotations
 
 import math
+import re
 import uuid
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass
@@ -134,6 +135,7 @@ __all__ = [
     "GENERATOR_KEY",
     "INDOOR_KEY",
     "InvalidEffortTag",
+    "InvalidPublishKey",
     "LOAD_KEYS",
     "LOAD_NOT_COMPUTED",
     "LOAD_REGION",
@@ -145,6 +147,7 @@ __all__ = [
     "NOTES_PLACEHOLDER",
     "NOTES_REGION",
     "PRESERVED_REGIONS",
+    "PUBLISH_KEY",
     "REFRESHED_REGIONS",
     "SESSION_UUID_FIELD",
     "SOURCES_KEY",
@@ -156,6 +159,7 @@ __all__ = [
     "SPORT_KEY",
     "START_TIME_KEY",
     "SourceIdentityReading",
+    "SummaryReading",
     "TOOL_REGIONS",
     "TYPE_KEY",
     "USER_KEYS",
@@ -170,9 +174,11 @@ __all__ = [
     "document_load_basis",
     "document_load",
     "document_modality",
+    "document_publish_targets",
     "document_sport",
     "document_source_identity",
     "document_start_time",
+    "document_summary",
     "document_uuid",
     "document_version",
     "effort_tag",
@@ -1459,6 +1465,118 @@ def document_source_identity(
         elapsed_s=_non_negative_finite(frontmatter.get(SOURCE_ELAPSED_KEY)),
         distance_m=_non_negative_finite(frontmatter.get(SOURCE_DISTANCE_KEY)),
         device=_non_empty_str(frontmatter.get(SOURCE_DEVICE_KEY)),
+    )
+
+
+# --- publishing: the ``publish`` key and the summary a post reads (Req 2.1, 5.2)
+
+PUBLISH_KEY: Final[str] = "publish"
+"""Frontmatter key naming the targets a page is published to (Req 2.1). Not yet
+in :data:`USER_KEYS`: ownership of the key is a later change."""
+
+
+@dataclass(frozen=True)
+class InvalidPublishKey:
+    """A ``publish`` key that cannot be read as target names; ``detail`` says
+    why, in words fitdocs wrote (never a parser's message)."""
+
+    detail: str
+
+
+def document_publish_targets(
+    frontmatter: Mapping[str, object] | None,
+) -> tuple[str, ...] | InvalidPublishKey:
+    """The target names under :data:`PUBLISH_KEY`, or why the key is invalid (Req 2.1).
+
+    An absent key (or ``None`` frontmatter) and an empty list read as no targets,
+    ``()``. A non-empty ``str`` is a one-name tuple; a list of distinct
+    non-empty ``str`` is that tuple in order. Anything else -- a ``bool``, a
+    number, a mapping, a nested list, an empty or duplicate name, a ``null`` --
+    is an :class:`InvalidPublishKey`. Never raises.
+    """
+    if frontmatter is None or PUBLISH_KEY not in frontmatter:
+        return ()
+    value = frontmatter[PUBLISH_KEY]
+    if isinstance(value, str):
+        if value:
+            return (value,)
+        return InvalidPublishKey("the publish key is an empty name")
+    if isinstance(value, list):
+        names: list[str] = []
+        for item in value:
+            if not isinstance(item, str):
+                return InvalidPublishKey(
+                    "the publish list holds something that is not a name"
+                )
+            if not item:
+                return InvalidPublishKey("the publish list holds an empty name")
+            if item in names:
+                return InvalidPublishKey(
+                    f"the publish list names {item!r} more than once"
+                )
+            names.append(item)
+        return tuple(names)
+    return InvalidPublishKey("the publish key must be one name or a list of names")
+
+
+@dataclass(frozen=True)
+class SummaryReading:
+    """The page's own figures a post is written from; each ``None`` when unusable."""
+
+    title: str | None
+    distance_km: float | None
+    moving_time_s: float | None
+    avg_hr_bpm: int | None
+    avg_power_w: int | None
+    elevation_gain_m: float | None
+    calories_kcal: int | None
+
+
+_MOVING_TIME = re.compile(r"(?:(\d{1,6}):([0-5]\d)|([0-5]?\d)):([0-5]\d)", re.ASCII)
+
+
+def _moving_time_s(value: object) -> float | None:
+    """Seconds from ``h:mm:ss`` or ``m:ss`` (minutes 0-59 in both), else ``None``."""
+    if not isinstance(value, str):
+        return None
+    match = _MOVING_TIME.fullmatch(value)
+    if match is None:
+        return None
+    hours, minutes, only_minutes, seconds = match.groups()
+    if hours is not None:
+        return float(int(hours) * 3600 + int(minutes) * 60 + int(seconds))
+    return float(int(only_minutes) * 60 + int(seconds))
+
+
+def _whole_number(value: object) -> int | None:
+    """A non-negative finite number rounded to a whole ``int`` (the renderer's rule)."""
+    number = _non_negative_finite(value)
+    if number is None:
+        return None
+    return int(round(number))
+
+
+def document_summary(frontmatter: Mapping[str, object] | None) -> SummaryReading:
+    """The page's title and headline figures, each ``None`` when unusable (Req 5.2).
+
+    Reads the keys the workout renderer emits: ``title`` (a non-blank ``str``),
+    ``distance_km`` and ``elevation_gain_m`` (genuine finite non-negative
+    numbers, never ``bool``), ``moving_time`` (only ``h:mm:ss`` or ``m:ss``, read
+    as seconds), and ``avg_hr_bpm``, ``avg_power_w`` and ``calories_kcal`` (the
+    same numbers, rounded to whole). Anything else reads as ``None`` for that
+    field alone. Never raises; ``None`` frontmatter reads as all absent.
+    """
+    if frontmatter is None:
+        return SummaryReading(None, None, None, None, None, None, None)
+    title = frontmatter.get("title")
+    return SummaryReading(
+        title=title if isinstance(title, str) and title.strip() else None,
+        distance_km=_non_negative_finite(frontmatter.get("distance_km")),
+        moving_time_s=_moving_time_s(frontmatter.get("moving_time")),
+        avg_hr_bpm=_whole_number(frontmatter.get("avg_hr_bpm")),
+        avg_power_w=_whole_number(frontmatter.get("avg_power_w")),
+        elevation_gain_m=_non_negative_finite(frontmatter.get("elevation_gain_m")),
+        calories_kcal=_whole_number(frontmatter.get("calories_kcal")),
     )
 
 
