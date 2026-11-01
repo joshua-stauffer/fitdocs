@@ -232,8 +232,18 @@ from fitdocs.connectors.pull import (
     PullReport,
     run_pull,
 )
+from fitdocs.connectors.relay import RelaySettings
+from fitdocs.connectors.relay_connect import (
+    RegistrationEmailError,
+    RegistrationShown,
+    RelayConnected,
+    RelayConnectFailed,
+    RelayTokenFormatError,
+    run_relay_connect,
+    run_relay_registration,
+)
 from fitdocs.connectors.secrets import Redactor
-from fitdocs.connectors.settings import load_connectors_settings
+from fitdocs.connectors.settings import ConnectorInstance, load_connectors_settings
 from fitdocs.history.engine import HistoryReport, run_history
 from fitdocs.hr_benchmarks import (
     HrStageReport,
@@ -471,6 +481,19 @@ _CONNECT_NAME_ARGUMENT = typer.Argument(
         "The name of a configured connector instance (a table under the "
         "connectors table in fitdocs.toml)."
     ),
+)
+_CONNECT_REGISTER_OPTION = typer.Option(
+    False,
+    "--register",
+    help=(
+        "Relay instances only: register an email address with the relay "
+        "and wait for it to issue a token, instead of pasting one."
+    ),
+)
+_CONNECT_EMAIL_OPTION = typer.Option(
+    None,
+    "--email",
+    help="Relay instances only, with --register: the address to register.",
 )
 _PULL_NAMES_ARGUMENT = typer.Argument(
     None,
@@ -1272,10 +1295,118 @@ def _ask_value(prompt: str) -> str:
     return str(typer.prompt(prompt))
 
 
+def _say(line: str) -> None:
+    """Print one plain line to standard output, never wrapped or interpreted."""
+    Console().print(line, markup=False, highlight=False, emoji=False, soft_wrap=True)
+
+
+def _connect_relay(
+    instance: ConnectorInstance,
+    store: CredentialStore,
+    *,
+    register: bool,
+    email: str | None,
+) -> NoReturn:
+    """Connect a relay instance (relay-server design: CliRelay; Req 12.1,
+    12.5, 13.2, 13.11, 15.1).
+
+    Always exits: ``0`` connected, ``1`` the relay (or the network) said no,
+    ``2`` before any request, ``130`` on an interrupt. Nothing is stored
+    unless the engine reports success.
+    """
+    name = instance.name
+    token_variable = env_var_name(name, "token")
+    if not _stdin_is_interactive() and not (register and email is not None):
+        if register:
+            _config_error(
+                f"{name}: standard input is not an interactive terminal; "
+                f"pass --email ADDRESS, or an unattended command can use "
+                f"{token_variable} instead."
+            )
+        _config_error(
+            f"{name}: standard input is not an interactive terminal; "
+            f"an unattended command can use {token_variable} instead."
+        )
+
+    redactor = Redactor()
+
+    def on_started(shown: RegistrationShown) -> None:
+        minutes = shown.expires_in_s // 60
+        remaining = (
+            "less than a minute"
+            if minutes == 0
+            else f"{minutes} minute{'' if minutes == 1 else 's'}"
+        )
+        _say(f"Registering {shown.email}.")
+        _say(f"Your code: {shown.user_code}")
+        _say(
+            "Confirm the registration only if the relay's confirmation page "
+            "shows the same code."
+        )
+        _say(f"This registration expires in {remaining}.")
+
+    try:
+        if register:
+            address = email if email is not None else _ask_value("Email address: ")
+            outcome = run_relay_registration(
+                instance,
+                address,
+                store=store,
+                transport=_connector_transport(),
+                environ=os.environ,
+                now=lambda: datetime.now(UTC),
+                sleep=time.sleep,
+                redactor=redactor,
+                on_started=on_started,
+            )
+        else:
+            outcome = run_relay_connect(
+                instance,
+                _ask_secret("Relay token: "),
+                store=store,
+                transport=_connector_transport(),
+                environ=os.environ,
+                now=lambda: datetime.now(UTC),
+                sleep=time.sleep,
+                redactor=redactor,
+            )
+    except (KeyboardInterrupt, typer.Abort):
+        # typer.prompt turns Ctrl-C and end-of-input into typer.Abort.
+        _say(f"{name}: interrupted; nothing was stored.")
+        raise typer.Exit(code=_EXIT_INTERRUPTED) from None
+    except (RelayTokenFormatError, RegistrationEmailError) as exc:
+        # Fixed text that never repeats the value: not passed through the
+        # redactor, which would mangle it once a short value is registered.
+        _config_error(str(exc))
+    except Exception as exc:  # noqa: BLE001 - mapped to a redacted, typed line
+        _say(f"{type(exc).__name__}: {redactor.redact(str(exc))}")
+        raise typer.Exit(code=_EXIT_FILE_FAILURES) from None
+
+    if isinstance(outcome, RelayConnected):
+        _say(f"{name}: connected.")
+        _say(f"Credentials: {outcome.path}")
+        settings = instance.settings
+        assert isinstance(settings, RelaySettings)
+        _say(f"Relay: {settings.url}")
+        if outcome.env_override:
+            _say(
+                "Overriding environment variables (used instead of the "
+                f"stored values during a pull): {', '.join(outcome.env_override)}"
+            )
+        raise typer.Exit(code=_EXIT_SUCCESS)
+
+    assert isinstance(outcome, RelayConnectFailed)
+    _say(f"{name}: {outcome.code.value}: {outcome.explanation}")
+    _say(outcome.next_step)
+    raise typer.Exit(code=_EXIT_FILE_FAILURES)
+
+
 @app.command("connect")
 def connect_command(
     name: str = _CONNECT_NAME_ARGUMENT,
     out: Path | None = _OUT_OPTION,
+    register: bool = _CONNECT_REGISTER_OPTION,
+    email: str | None = _CONNECT_EMAIL_OPTION,
 ) -> None:
     """Authenticate one configured connector instance once and store its
     credentials only on success.
@@ -1322,6 +1453,12 @@ def connect_command(
     unredacted secret). Nothing is written under the data root either way
     (Req 5.9); this command never touches the inbox, a ledger, or a
     delivery.
+
+    A relay instance (relay-server Req 12, 13, 15.1) is connected by
+    :func:`_connect_relay` instead: a pasted token, or ``--register`` with an
+    address from ``--email`` or a prompt. ``--register`` and ``--email`` on
+    any other instance, and ``--email`` without ``--register``, exit with the
+    configuration-error code before any request.
     """
     data_root = _resolved_data_root(out)
     try:
@@ -1348,6 +1485,11 @@ def connect_command(
         )
 
     connector = instance.connector
+    is_relay = connector.auth_style is AuthStyle.RELAY_TOKEN
+    if (register or email is not None) and not is_relay:
+        _config_error(f"{name}: --register and --email apply only to a relay instance.")
+    if email is not None and not register:
+        _config_error(f"{name}: --email needs --register.")
     if connector.auth_style is AuthStyle.NONE:
         Console().print(
             f"{name}: this connector requires no authentication; nothing to connect.",
@@ -1368,6 +1510,11 @@ def connect_command(
         check_outside_data_root(credentials_dir, data_root)
     except CredentialsLocationError as exc:
         _config_error(str(exc))
+
+    if is_relay:
+        _connect_relay(
+            instance, CredentialStore(credentials_dir), register=register, email=email
+        )
 
     if not _stdin_is_interactive():
         if connector.auth_style is AuthStyle.API_KEY:
