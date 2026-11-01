@@ -187,7 +187,7 @@ live constant.
   - _Requirements: 10.1, 10.2_
   - _Boundary: ConnectorChanges (transport only)_
 
-- [ ] 3.2 (P) Drive the publish capabilities through the publish operation
+- [x] 3.2 (P) Drive the publish capabilities through the publish operation
   - Mark push-activity, annotate-remote-activity and resolve-remote-activity
     driven, keep their remote-change and irreversible marks, keep the four
     other reserved capabilities undriven, and name the three as the publish
@@ -245,7 +245,7 @@ live constant.
   - _Requirements: 4.4, 4.5, 5.7_
   - _Boundary: TemplateGrammar_
 
-- [ ] 4.2 (P) Produce placeholder values from a page
+- [x] 4.2 (P) Produce placeholder values from a page
   - Publish the 17 placeholder names in the design's order and produce each
     as fixed-format text from the contract readers only, or `None`.
   - Derive miles, pace (run modality only) and speed (bike modality only)
@@ -303,7 +303,7 @@ live constant.
 
 - [ ] 5. State and input: the ledger, the published region and pages
 
-- [ ] 5.1 (P) Keep the publish ledger
+- [x] 5.1 (P) Keep the publish ledger
   - Add the ledger location under the tool-owned state directory, one file
     per target, and the page key for a workout page (`workout:` and the
     file digest).
@@ -608,3 +608,12 @@ live constant.
 - 1.1: a fresh-interpreter test must run `[sys.executable, "-I", "-B", ...]`: `-I` drops the root conftest's PYTHONDONTWRITEBYTECODE, so without `-B` the child writes `__pycache__` under `src/` and `tests/test_bytecode_hygiene.py` fails later in the full run.
 - 1.2: link/label rules live in `fitdocs.publish.request` (`valid_link`, `valid_label`); `valid_link` uses `urllib.parse.urlsplit`, so task 1.3's forbidden-name scan must admit `urllib.parse` explicitly while still forbidding network-capable `urllib.request`. Pin dataclass field defaults (only `PublishResult.link` has one) -- defaults survived review twice.
 - 1.3: every new publish module appends one entry to `_ALLOWED_IMPORT_TARGETS` in tests/publish/test_boundary.py (and `_THIRD_PARTY_ALLOWED_MODULES` for tomli_w). The clock/random scan is raw text: docstrings/comments must not quote `datetime.now`, `time.time`, `secrets.token_hex`, `random.` etc. `xml.sax.saxutils` is forbidden (use `html.escape`); `import urllib.parse` bare is forbidden (use `from urllib.parse import ...`). Design Allowed Dependencies' 'no urllib' bullet needs amending to 'no urllib.request/urllib.error/bare import urllib' (task 8.5).
+- Controller ruling 2.1: whitespace-only publish target name is a non-empty str -> accepted by the reader; later unknown-target check handles it (design literal).
+- Controller ruling 1.3: guard admits `urllib.parse` (from-forms only) for the link rule; design 'no urllib' bullet to be amended (8.5).
+- Controller ruling 4.2 (A): empty/whitespace-only load_methodology = no usable methodology -> both load placeholders None.
+- Controller ruling 4.2 (B): load_methodology gets the same single-line text check as title/sport (resolves design PlaceholderValues 'verbatim' vs Composer 'control char never reaches title'); failing it -> both load placeholders None; otherwise verbatim.
+- Controller ruling 4.2 (C): single-line text check rejects Unicode Cc plus U+2028/U+2029 (Req 6.2 single-line title).
+- Controller ruling 4.2: distance_mi derived only from positive distance_km (Req 5.4); recorded zero km renders "0.00" km, miles None.
+- Controller ruling 5.1: load refuses a publication id shared across two targets' ledgers (Req 10.4; design invariant 'unique' read ledger-wide). Consequence: renaming a target by copying its ledger file is refused (names both files); delete one to recover. docs/publishing.md (8.3) must state it.
+- Controller ruling 5.1: ledger target-name rule `_TARGET_RE` duplicates connectors INSTANCE_NAME_PATTERN (ledger may not import connectors); pinned equal by test. Follow-up: move to a shared leaf.
+- Controller ruling 5.1: save_ledger wraps OSError in PublishLedgerError naming the file.
