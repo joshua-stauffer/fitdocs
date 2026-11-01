@@ -1,7 +1,7 @@
 {
   "feature_name": "connectors",
   "created_at": "2026-09-29T15:21:42Z",
-  "updated_at": "2026-10-15T16:21:00Z",
+  "updated_at": "2026-11-01T00:00:00Z",
   "language": "en",
   "phase": "tasks-generated",
   "approvals": {
@@ -38,6 +38,12 @@
       "requirement": "14.1 amended",
       "reason": "recovery task 5.3 adds recovery to the no-connector-request command list, whether or not connectors are configured, preserving existing map-tile behavior.",
       "also": "requirements.md gains Amendment 5 (2026-10-16). The technology steering lists recovery before check; tests/connectors/test_network_statements.py pins the list. The final recovery case in tests/connectors/test_e2e.py stages a synthetic intervals.icu delivery through the inbox and source-free sync in both roots, checks normalized values, and writes the recovery page under the socket guard."
+    },
+    {
+      "date": "2026-11-01",
+      "requirement": "1.4, 1.9, 2.3, 2.7 amended in place (appended tags only); 1.10 and 9.9 added -- Amendment 6, landed by publish-core task 8.5",
+      "reason": "publish-core drives push activity, annotate remote activity and resolve remote activity through one publish operation (five capabilities driven, four reserved), validates the publish operation and link label at registration, adds the single-attempt request mode so a non-idempotent request is sent exactly once, and grows the pinned connectors surface from 50 to 58 names.",
+      "also": "requirements.md gains Amendment 6; design.md gains a dated note admitting fitdocs.publish.request and fitdocs.publish.outcomes in connectors.protocol and fitdocs.publish.request in connectors.registry, and naming fitdocs.publish.targets beside fitdocs.cli as an importer. The relay-server spec also moves the surface count and may take an amendment number here; whichever lands second renumbers and recounts."
     }
   ]
 }

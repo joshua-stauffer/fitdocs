@@ -557,7 +557,7 @@ live constant.
   - _Requirements: 16.2, 16.4_
   - _Depends: 8.1, 8.3_
 
-- [ ] 8.5 Record the amendments
+- [x] 8.5 Record the amendments
   - Take the next free amendment number in each spec at landing and record,
     preserving every existing criterion and approval:
     - **wiki-contract**: criteria for the `post` region, the `published`

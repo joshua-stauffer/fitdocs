@@ -73,7 +73,12 @@ markdown; fixture `.fit` files under `tests/fixtures/`.
   commands) imports only `layout`, `settings`, `inbox` and `version` from
   the rest of the package, and only `cli` imports it; it does not depend
   on rendering, training load, metrics, `.fit` ingestion, or the sync
-  engine. `compose` (one activity from a base and its extras) imports
+  engine. Two standard-library leaves of the publish package join what
+  `connectors` imports: `connectors.protocol` imports `publish.request`
+  and `publish.outcomes`, and `connectors.registry` imports
+  `publish.request`; no other `connectors` module imports `publish`. And
+  `publish.targets` joins `cli` among what imports `connectors`.
+  `compose` (one activity from a base and its extras) imports
   `model` and `identity`, and in `compose.archive` alone `contract`,
   `layout` and `ingest`; `sync`, the load and benchmark passes and
   `render` (its types only: `DocContext`'s provenance field, and
@@ -125,6 +130,20 @@ markdown; fixture `.fit` files under `tests/fixtures/`.
   layer's absence marker and wellness attribution helpers and the chart
   kit's value formatter; only `cli` imports `morning.engine`; `render`
   never imports `morning`.
+- `publish` (target-neutral publishing: the outcome vocabulary, post
+  composition, the per-target ledger and the `fitdocs publish` engine) has
+  standard-library leaves (`outcomes`, `request`, `template`), of which
+  `outcomes` and `request` may be imported by two `connectors` modules
+  (above); `values`, `links` and `pages` read
+  pages through `contract`, `docio`, `docmerge` and `layout`; `compose`,
+  `settings` and `ledger` add `settings`, `layout`, `docio` and `tomli_w`;
+  and only `publish.targets` imports `connectors` (its published surface,
+  `connectors.settings` and `connectors.credentials`). It imports no
+  `render`, `load`, `metrics`, `ingest`, `sync`, `index`, `query`,
+  `dashboards` or `identity`, no network module of its own, and calls no clock
+  or randomness (the CLI injects both). Outside its package, only `cli`
+  imports it (the command imports it lazily), apart from the two `connectors`
+  modules above (`connectors.protocol` and `connectors.registry`); `connectors` never reads a page.
 - `LoadCalculator` implementations declare their required inputs so the CLI
   can prompt for missing data generically — no calculator-specific prompting
   code in the CLI.

@@ -1,7 +1,7 @@
 {
   "feature_name": "workout-docs",
   "created_at": "2026-07-14T22:41:40Z",
-  "updated_at": "2026-10-27T00:00:00Z",
+  "updated_at": "2026-11-01T00:00:00Z",
   "language": "en",
   "phase": "tasks-generated",
   "approvals": {
@@ -194,6 +194,12 @@
       "requirement": "2.11, 7.9 added (appended; no criterion renumbered or reworded) -- Amendment 7, landed by compact-chart-assets task 6.3",
       "reason": "compact-chart-assets draws the hero and running-dynamics lines at output resolution (every plotted point within 0.5 output units of the drawn line) and writes workout chart assets only when their bytes change, replacing a changed one atomically. Both are published behavior of this spec's chart and output requirements.",
       "also": "requirements.md gains Amendment 7; design.md gains a dated note scoping the SvgBuilder 'fixed 2-decimal' statement: 2 decimals by default, 1 for thinned-line coordinates and 4 for a map's basemap placement. DOC_VERSION is unchanged."
+    },
+    {
+      "date": "2026-11-01",
+      "requirement": "6.14, 9.8, 10.7, 10.8, 12.4 added (appended; no criterion renumbered or reworded) -- Amendment 8, landed by publish-core task 8.5",
+      "reason": "publish-core gives every workout page an athlete-owned `post` region (a hidden-comment placeholder, immediately before `morning`) and a fitdocs-owned `published` region (empty in a fresh render, immediately after the document head), so a page can carry its own post and link to the activities it was published to. Both are part of the page format this spec defines.",
+      "also": "requirements.md gains Amendment 8. DOC_VERSION advances from 11 to 12 (publish-core task 2.3); a document stamped 11 or lower is brought current by regeneration. No design.md change."
     }
   ]
 }

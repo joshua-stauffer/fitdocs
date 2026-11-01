@@ -110,7 +110,7 @@ an enumeration rather than guessing at strings.
 **Objective:** As an athlete, I want to mark a workout page as a race, a test or a hard effort, optionally with the official result and the event, so that later features can find my dated maximal performances without reading my prose.
 
 #### Acceptance Criteria
-1. The fitdocs CLI shall recognize exactly four user-owned keys, all flat top-level frontmatter keys: `effort` (the kind), `effort_distance_m` (the official or certified course distance, in metres), `effort_time_s` (the official or chip time, in seconds), and `effort_event` (the event's name, ideally a wikilink to the event's own wiki page).
+1. The fitdocs CLI shall recognize exactly four user-owned keys, all flat top-level frontmatter keys: `effort` (the kind), `effort_distance_m` (the official or certified course distance, in metres), `effort_time_s` (the official or chip time, in seconds), and `effort_event` (the event's name, ideally a wikilink to the event's own wiki page). *(amended by Amendment 1: read as the effort tag's four keys; the published set of user-owned keys also holds `publish`, which belongs to publish-core and is not part of the tag)*
 2. The fitdocs CLI shall accept exactly three effort kinds -- `race`, `test`, and `hard` -- matched exactly and case-sensitively, and shall treat any other value of `effort` as malformed rather than as a fourth kind.
 3. Where a tag carries `effort_distance_m`, the value shall be a positive, finite number of metres; where it carries `effort_time_s`, the value shall be a positive, finite number of seconds; where it carries `effort_event`, the value shall be non-empty text.
 4. Where a tag carries `effort_distance_m`, the tag shall also carry `effort_time_s`, because a course distance is an official result only together with its time; `effort_time_s` may stand alone, because a timed test protocol has a duration and no course.
@@ -165,3 +165,23 @@ an enumeration rather than guessing at strings.
 4. The ownership declaration placed in the generated-documents directory shall name the user-owned frontmatter keys and state that fitdocs never writes them and carries them through regeneration, without claiming which documents carry them; the source-archive declaration shall be unchanged apart from the version identifier it restates.
 5. The enumerated user-owned key list in the published contract shall be held equal to the published set in code by the same conformance mechanism that already holds the managed key list, so that the document cannot drift from behavior without a test failing.
 6. The README's ownership summary shall mention that the effort-tag frontmatter keys are user-owned alongside the user-owned regions, pointing at the published contract for the detail.
+
+## Amendment 1 (2026-11-01): the user-owned key set also holds `publish`, landed by publish-core
+
+`publish-core` adds a fifth user-owned frontmatter key, `publish`, naming the
+publish targets a workout page opts in to. The effort tag is unchanged: it
+still consists of exactly four keys (`effort`, `effort_distance_m`,
+`effort_time_s`, `effort_event`), the same three kinds, the same validation and
+the same typed reader, and `publish` is no part of it, is never read by it and
+never makes a page tagged or malformed. Requirement 2 criterion 2.1's "exactly
+four user-owned keys" is amended in place to read as the effort tag's four
+keys, because the published set of user-owned keys (`contract.USER_KEYS`,
+Requirement 1.1) now holds five: the four tag keys and `publish`. Everything
+Requirement 1 and Requirement 4 say of a user-owned key holds for `publish`
+too: the set is disjoint from the managed set, fitdocs never writes the key,
+and it carries its lines byte-for-byte through every rewrite and
+regeneration. The `publish` reader, its validation and its opt-in semantics
+are publish-core's own (`contract.document_publish_targets`);
+wiki-contract Amendment 14 records the key as user-owned in the published
+contract (criterion 6.11). Existing criteria and approvals are preserved
+word-for-word; nothing is renumbered.

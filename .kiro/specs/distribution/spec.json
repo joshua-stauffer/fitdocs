@@ -1,7 +1,7 @@
 {
   "feature_name": "distribution",
   "created_at": "2026-07-21T08:14:49Z",
-  "updated_at": "2026-10-01T00:00:00Z",
+  "updated_at": "2026-11-01T00:00:00Z",
   "language": "en",
   "phase": "tasks-generated",
   "approvals": {
@@ -37,6 +37,12 @@
       "requirement": "8.1 and 8.2 amended; 10.4 amended",
       "reason": "connectors spec task 9.1: `connectors` adds `fitdocs connect` and `fitdocs pull`, a second network path after the map tiles. The packaged `fitdocs-workouts` skill's routine learns the pull step and its reported-outcome section gains the pull's own channel table; the skill-publication guarantee (8.1) and the reported-outcome-channel guarantee (8.2) read as if the skill only ever processed the inbox. Requirement 10's network guarantee (10.4) read as if the map tiles were the only network path the installed tool could ever reach.",
       "also": "requirements.md gains Amendment 3 (2026-10-01); Requirement 8 criteria 8.1 and 8.2 and Requirement 10 criterion 10.4 are amended in place, each tagged `(amended by Amendment 3: ...)` at the end of the criterion. Nothing renumbered. `connectors` task 8.4 lands the skill routine and `tests/test_agent_skill.py` pin moves this amendment anticipates."
+    },
+    {
+      "date": "2026-11-01",
+      "requirement": "8.1 and 8.2 amended in place (appended tags only) -- Amendment 6, landed by publish-core task 8.5",
+      "reason": "publish-core adds `fitdocs publish` and `fitdocs publish --targets`, and the packaged `fitdocs-workouts` skill gains a publishing section that previews and, when the athlete asks, publishes posts, and explains the publish outcome codes. The skill-publication guarantee (8.1) and the reported-outcome-channel guarantee (8.2) read as if the skill only processed the inbox and pulled.",
+      "also": "requirements.md gains Amendment 6; Requirement 8 criteria 8.1 and 8.2 gain appended tags. Nothing renumbered. Requirement 10.4 is not amended: publish-core ships no target that makes a request. The skill text and tests/test_agent_skill.py pins are publish-core task 8.2."
     }
   ]
 }

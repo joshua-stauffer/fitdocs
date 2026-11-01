@@ -326,6 +326,7 @@ another.
 5. The fitdocs CLI shall produce, for unchanged inputs, document and asset output that differs from the previous release only by the provenance stamp required in Requirement 4 and the document-format version required in Requirement 5.
 6. When the same inputs are rendered repeatedly, the fitdocs CLI shall continue to produce byte-identical output on every invocation.
 7. _(added by Amendment 10)_ The region-ownership policy shall name refreshed regions (`REFRESHED_REGIONS`) as a third class, disjoint from the preserved set, whose content is fitdocs's alone and is replaced, never preserved.
+8. _(added by Amendment 14)_ The region-ownership policy shall name `post` as a user-owned region and `published` as a refreshed region, in the same single policy that every command that reads or rewrites documents applies.
 
 
 ### Requirement 2: Published Ownership Contract
@@ -358,6 +359,8 @@ that I can rely on the boundary instead of inferring it from behavior.
 20. _(added by Amendment 10)_ The ownership contract shall name the `morning` region, state that fitdocs fills it from the wellness series and replaces its content whenever it differs, that it is never user-owned and hand edits there are replaced, and describe the morning-of pass among the operations that overwrite existing content.
 21. _(added by Amendment 10)_ The ownership contract shall state that a workout document's generated content, its `morning` region included, is re-derivable from the wellness series (rebuilt from the archived wellness files and the `[wellness]` settings) as well as from the archived sources, the athlete profile, the configured timezone and the tile source.
 22. _(added by Amendment 13)_ The ownership contract shall state that regeneration leaves a workout chart asset untouched when its regenerated content is identical to the file on disk, and replaces a changed asset without ever exposing partial content, and shall advance its version by one with a statement of what changed.
+23. _(added by Amendment 14)_ The ownership contract shall name the `post` region as user-owned, the `published` region as fitdocs-owned and refreshed by `fitdocs publish --yes` from the publish ledger (replacing hand edits), the `publish` frontmatter key as user-owned, the publish ledger directory `.fitdocs/publish/` as fitdocs-owned tool state, and the `[publish]` table of the settings file.
+24. _(added by Amendment 14)_ The ownership contract shall describe `fitdocs publish` among the operations that write: it writes only the publish ledgers and the `published` region of pages it considers under `--yes`, never the `post` region or any other content, may update a target's own credentials file outside the data root when the target renews its credentials, and writes nothing in a dry run; and shall advance its version by one with a statement of what changed.
 
 
 ### Requirement 3: In-Tree Ownership Declaration
@@ -423,10 +426,11 @@ data silently.
 4. The fitdocs CLI shall continue to preserve unknown keys and sections in the user-editable configuration and athlete-profile files under the data root, and shall state that guarantee in the ownership contract.
 5. _(added by Amendment 1)_ The fitdocs CLI shall publish the complete set of user-owned frontmatter keys as a class distinct from, and disjoint with, the managed key set (6.2), and shall never write a user-owned key into a document.
 6. _(added by Amendment 1)_ The fitdocs CLI shall carry every user-owned key's frontmatter line, including any continuation lines its value spans, byte-for-byte through every operation that rewrites the document. When the fitdocs CLI rebuilds a document's frontmatter block in full, it shall place the carried lines after every managed key and before the closing fence, in the order they appeared in the document being regenerated, and this placement shall be stated as part of the published contract.
-7. _(added by Amendment 1)_ A user-owned key shall be excluded from the unmanaged-key warning (6.3) and from the unmanaged-key finding (8.4); a user-owned key carrying a malformed value shall instead be reported as a finding of its own kind, distinct from the unmanaged-key finding, naming the affected document and the offending key.
+7. _(added by Amendment 1)_ A user-owned key shall be excluded from the unmanaged-key warning (6.3) and from the unmanaged-key finding (8.4); a user-owned key carrying a malformed value shall instead be reported as a finding of its own kind, distinct from the unmanaged-key finding, naming the affected document and the offending key. *(amended by Amendment 14: except `publish`: `fitdocs check` reports no finding for a malformed `publish` value, which `fitdocs publish` reports as `opt_in_invalid`)*
 8. _(added by Amendment 1)_ The ownership declaration placed in the generated-documents directory shall name the user-owned frontmatter keys and shall state that fitdocs never writes them and carries them through regeneration.
 9. _(added by Amendment 4)_ The published managed key set (6.2) shall include the four keys recording a document's base source file -- `source_kind`, `source_elapsed_s`, `source_distance_m` and `source_device` -- and the document's `sources` list, so that regeneration rewrites them and none is reported as an unmanaged key.
 10. _(added by Amendment 12)_ When the fitdocs CLI rebuilds a document's frontmatter block in full and the existing `load` region is hand-authored or was written by an earlier format, so that the training-load pass leaves it untouched, it shall carry the document's `load_value`, `load_methodology` and `load_basis` lines byte-for-byte, placed after every generated managed key and before the carried user-owned lines (6.6), and this exception to 6.1 shall be stated as part of the published contract. For any other `load` region the rebuild carries none of the three and the training-load pass restores or computes them.
+11. _(added by Amendment 14)_ The published set of user-owned frontmatter keys shall also hold `publish`, carried like the effort-tag keys (6.5, 6.6) and excluded from the unmanaged-key warning and finding (6.7); `fitdocs check` reports no finding for a malformed `publish` value, which `fitdocs publish` reports itself.
 
 ### Requirement 7: Regeneration and Overwrite Guarantees
 **Objective:** As a user whose documents fitdocs rewrites, I want the destructive
@@ -530,3 +534,46 @@ contract. `CONTRACT_VERSION` advances from `"16"` to `"17"` (one more than its
 value at landing), with append-only history and a new current-change
 paragraph, following the contract's convention; criterion 2.8 requires the
 version advance. compact-chart-assets task 6.1 makes that change. The write path remains workout-docs's own. No existing criterion or amendment is renumbered.
+
+## Amendment 14 (2026-11-01): the post and published regions, the publish key and the publish statements, landed by publish-core
+
+`publish-core` gives every workout page two new regions and one new
+user-owned frontmatter key, and adds a command, `fitdocs publish`, that writes
+a per-target ledger and one region of a page. That spec owns the vocabulary,
+the composition, the ledger format and the command; this spec owns the
+ownership statements those additions change, recorded here as Requirement 1
+criterion 1.8, Requirement 6 criterion 6.11 and Requirement 2 criteria 2.23 and
+2.24.
+
+The `post` region is user-owned: its fresh content is a hidden comment that
+renders as nothing, and regeneration carries its content verbatim like the
+`notes` region. The `published` region is fitdocs-owned and refreshed (the
+class Amendment 10 introduced): it is empty in a fresh render, `fitdocs publish
+--yes` fills it from the publish ledgers, and a hand edit to it is replaced the
+next time that command considers the page. The `publish` frontmatter key, whose
+value names the publish targets a page opts in to, joins the effort-tag keys in
+`contract.USER_KEYS`: fitdocs never writes it and carries its lines byte-for-byte
+through every rewrite. The ledgers live under `.fitdocs/publish/`, inside the
+already-owned `.fitdocs/` directory, one file per target. `fitdocs publish`
+writes only those ledgers and the `published` region of pages it considers
+under `--yes`; a dry run writes nothing. It never writes the `post` region or
+any other page content. Because publishing needs a target's credentials, a
+`fitdocs publish --yes` run may also update a target's own credentials file
+outside the data root when that target's connector renews its credentials, as a
+credential-renewing `fitdocs pull` does (connectors Requirement 4); it writes
+no credential value into the data root.
+
+The workouts ownership declaration names `post` among the user-owned regions,
+`publish` among the user-owned frontmatter keys, and the `published` region as
+generated content refilled from the publish ledger. `CONTRACT_VERSION` advances
+from `"17"` to `"18"` (one more than its value at landing; the relay-server
+spec also advances it, and whichever lands second takes the next number), with
+append-only history and a new current-change paragraph, following the
+contract's convention; criterion 2.8 requires the advance. Task 8.1 of
+publish-core makes that change. The document-format version also advances, owned by
+workout-docs Amendment 8. Criteria 1.8, 2.23, 2.24 and 6.11 are appended in
+place, each tagged `_(added by Amendment 14)_`, and criterion 6.7 is narrowed
+by an appended tag (its text is unchanged): a malformed `publish` value is not
+a `fitdocs check` finding, because `fitdocs publish` reports it. No existing
+criterion or amendment is renumbered, reworded or withdrawn, and every approval
+is preserved.
