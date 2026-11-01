@@ -2,8 +2,10 @@
 
 Two autouse fixtures run before every test in this package:
 
-* :func:`_forbid_network_sockets` patches :class:`socket.socket` so
-  constructing one raises. Every connector test must reach the transport
+* :func:`_forbid_network_sockets` patches :class:`socket.socket`,
+  :func:`socket.getaddrinfo` and :func:`socket.create_connection` so each
+  raises (a host that does not resolve fails in ``getaddrinfo`` before any
+  socket is constructed). Every connector test must reach the transport
   through ``FakeTransport`` (added in a later task) or a patched
   ``urllib.request.urlopen`` -- never a real socket.
 * :func:`_isolated_connector_environment` calls
@@ -96,7 +98,11 @@ def _forbid_network_sockets(monkeypatch: pytest.MonkeyPatch) -> None:
     def _raise(*args: object, **kwargs: object) -> NoReturn:
         raise RuntimeError("tests/connectors must not open a real network socket")
 
-    monkeypatch.setattr(socket, "socket", _raise)
+    # Name resolution (getaddrinfo, reached through create_connection) runs
+    # before socket.socket, so a request to a host that does not resolve would
+    # otherwise slip past a guard on socket.socket alone.
+    for name in ("socket", "getaddrinfo", "create_connection"):
+        monkeypatch.setattr(socket, name, _raise)
 
 
 @pytest.fixture(autouse=True)

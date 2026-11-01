@@ -755,7 +755,7 @@ Rules for every task:
 
 - [ ] 7. Integration and validation
 
-- [ ] 7.1 Prove the fitdocs side stays offline and confined with a relay configured
+- [x] 7.1 Prove the fitdocs side stays offline and confined with a relay configured
   - Add a configured relay instance to the wired root of the socket-guarded
     offline-commands test. Every listed command still makes no request.
   - Add confinement cases: registration and disconnect write nothing under
@@ -801,7 +801,7 @@ Rules for every task:
   - _Requirements: 1.4_
   - _Boundary: ReleaseExclusion_
 
-- [ ] 8.2 Amend the technology and structure steering
+- [x] 8.2 Amend the technology and structure steering
   - Technology steering:
     - Architecture: "No server, no background jobs." becomes "The `fitdocs`
       CLI runs no server and no background jobs.", followed by the relay
@@ -820,7 +820,7 @@ Rules for every task:
     and restoring the old sentence reds them.
   - _Requirements: 16.1, 16.2_
 
-- [ ] 8.3 Document the relay for operators in one page, with the self-hosting guide
+- [x] 8.3 Document the relay for operators in one page, with the self-hosting guide
   - The relay page holds:
     - a self-hosting guide: a local SQLite run, building the image from a
       pinned commit, migrate then serve, minting a token, connecting
@@ -1008,3 +1008,6 @@ Rules for every task:
   - For 6.6 (from 6.5 review): disconnect_command must catch CredentialStoreError from run_disconnect (corrupt/wrong-mode file on the revoke path, tokenless file) → configuration-error exit, pointing at `fitdocs disconnect NAME --local-only` (which never reads the file); and must print NothingToDisconnect.env_override as Req 14.4's statement (the variable is not revoked and remains set). Catch UnsupportedDisconnect → exit 2; print LOCAL_ONLY_NOTE / SERVICE_NOTE from disconnect.py.
   - 6.6: cli.connect relay path = _connect_relay (paste via getpass "Relay token: "; --register with --email or "Email address: " prompt); misuse checks (--register/--email on non-relay; --email without --register) run right after the instance lookup, before NONE/reserved branches (exit 2, zero requests); (KeyboardInterrupt, typer.Abort) → 130; started lines "Registering <email>." / "Your code: <CODE>" / confirm-only-if-same / "This registration expires in N minute(s)." (floor; "less than a minute"); format/email errors printed unredacted.
 - 6.7: `fitdocs disconnect NAME [--local-only]` lines: success `NAME: disconnected.` / `Credentials removed: <path>` / `Relay code: <code>` / `Note: <note>.`; nothing-to-disconnect + `Environment variable X is not revoked and remains set.` (plural form); failure `NAME: <code>: <explanation>` + next step, exit 1; unsupported → 2; CredentialStoreError → 2 on stderr with one --local-only hint. Bare pull selects by PULL_ACTIVITIES/PULL_WELLNESS capability; empty selection prints `No configured connector instance pulls activities or wellness; nothing to pull.` exit 0. CLI command count is 16 ("Sixteen") — publish-core landing second takes 17.
+- 8.2: steering now says the `fitdocs` CLI runs no server; the relay paragraph (tech.md) and `### Relay server` entry (structure.md) are pinned by tests/connectors/test_network_statements.py::test_steering_publishes_the_relay_server_and_its_network_calls; the shared-module set is worded openly via SHARED_MODULES (strava-publish's outcomes.py append needs no steering rewrite); versions are a pointer to relay/CHANGELOG.md, never literals; network statements are scoped to the `fitdocs` package.
+- 7.1: tests/connectors network guard (conftest `_forbid_network_sockets` + the in-test recorders) now refuses socket.socket, socket.getaddrinfo AND socket.create_connection — relay.example.com has no DNS record, so a guard on socket.socket alone never sees a urllib request to it (getaddrinfo raises first and the code swallows it as a TransportError). Pinned by test_isolation. Controller downgrade: the round-2 pin (test_isolation getaddrinfo/create_connection), conftest docstring and 0o750 mode fix were applied by the controller, verified by mutations MC (guard back to socket only → only that test reds) and G8 (save always chmods 0o700 → registration confinement reds).
+- 8.3: docs/relay.md is bound by relay/tests/test_docs_relay.py (versions, image constants, env table, probe paths, command names, derived-image steps, statement pins for Req 2.8/9.6/not-governed) and tests/connectors/test_relay_docs.py (code table); relay/tests/test_config.py now takes the env table from tests.test_contract.PINNED_ENVIRONMENT (one pin, 5.4 dedupe done). The page documents current limits honestly: wrapper HTTPException → not-offered, restart the relay after restarting its PostgreSQL.

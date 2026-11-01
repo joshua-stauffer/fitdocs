@@ -638,7 +638,8 @@ def test_analytics_index_is_published_in_steering_without_changing_network_scope
     ]
     flat_architecture = " ".join(architecture.split())
     assert (
-        "No server, no background jobs. One database: a derived, disposable "
+        "The `fitdocs` CLI runs no server and no background jobs. One database: "
+        "a derived, disposable "
         "analytics index outside the data root, rebuilt from the documents "
         "and archived `.fit` files, never read back into a document, except the "
         "chart regions and chart assets of dashboard pages under `dashboards/`; "
@@ -701,3 +702,78 @@ def test_recovery_is_named_in_the_no_connector_request_list() -> None:
         "rendering — makes no connector request, whether or not connectors are "
         "configured"
     ) in " ".join(network.split())
+
+
+def test_steering_publishes_the_relay_server_and_its_network_calls() -> None:
+    steering = _REPO_ROOT / ".kiro" / "steering"
+    tech = (steering / "tech.md").read_text(encoding="utf-8")
+    structure = (steering / "structure.md").read_text(encoding="utf-8")
+
+    architecture = tech.split("## Architecture", 1)[1].split("## Core Technologies", 1)[
+        0
+    ]
+    flat_architecture = " ".join(architecture.split())
+    assert "No server, no background jobs." not in flat_architecture
+    assert (
+        "A separately deployed relay server lives in `relay/` (package "
+        "`fitdocs_relay`, Starlette served by uvicorn). It is its own "
+        "distribution with its own dependencies and is never part of the "
+        "`fitdocs` release."
+    ) in flat_architecture
+    assert "SQLite by default and PostgreSQL through an extra" in flat_architecture
+    assert "the `fitdocs` CLI never imports it." in flat_architecture
+    assert (
+        "listed in `SHARED_MODULES` in `scripts/sync_relay_shared.py` (today "
+        "`relay_codes` and `relay_envelope`), which the relay carries as pinned "
+        "copies under `relay/src/fitdocs_relay/shared/` that a cross-check test "
+        "keeps identical to their originals in the `fitdocs` package."
+    ) in flat_architecture
+    assert (
+        "the versions are recorded in `relay/CHANGELOG.md`, tied to the "
+        "constants by `relay/tests/test_contract.py`."
+    ) in flat_architecture
+    assert "v1" not in flat_architecture
+
+    network = tech.split("## Network and Credentials", 1)[1].split(
+        "## Development Standards", 1
+    )[0]
+    flat_network = " ".join(network.split())
+    assert (
+        "Network-capable code in the `fitdocs` package lives in exactly two places"
+    ) in flat_network
+    assert "Both of the package's network paths go through" in flat_network
+    assert (
+        "`fitdocs connect` (one authentication call per attempt; for a "
+        "registering relay instance, a capabilities read, a registration start "
+        "and one poll per stated interval), `fitdocs disconnect` (one "
+        "revocation call for a relay instance, none otherwise)"
+    ) in flat_network
+    assert (
+        "tokens, relay tokens included, are stored per user through the same "
+        "credential store outside the data root"
+    ) in flat_network
+
+    flat_structure = " ".join(structure.split())
+    assert "### Relay server **Location**: `relay/`" in flat_structure
+    assert (
+        "It is a separate distribution with its own dependencies and is never "
+        "shipped in fitdocs's release."
+    ) in flat_structure
+    assert (
+        "`fitdocs_relay` imports nothing from `fitdocs` (its `shared/` copies "
+        "stand in), and `fitdocs` never imports `fitdocs_relay`."
+    ) in flat_structure
+    assert (
+        "byte-identical to their originals, written by "
+        "`scripts/sync_relay_shared.py` and checked by "
+        "`tests/test_relay_shared_copies.py`."
+    ) in flat_structure
+    assert (
+        "(the `fitdocs connect`, `fitdocs disconnect` and `fitdocs pull` commands)"
+    ) in flat_structure
+    assert (
+        "listed in `SHARED_MODULES` in `scripts/sync_relay_shared.py` (today "
+        "`relay_codes` and `relay_envelope`) import nothing else from the "
+        "package: `relay_codes` imports only the standard library, and "
+        "`relay_envelope` only the standard library and `relay_codes`."
+    ) in flat_structure

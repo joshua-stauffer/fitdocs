@@ -32,6 +32,17 @@ templates + chart generation) → `cli`.
 methodology currently bundles data; anything shipped here must be
 redistributable under a license the project can honor.
 
+### Relay server
+**Location**: `relay/`
+**Purpose**: The separately deployed relay server: package `fitdocs_relay`
+(`relay/src/fitdocs_relay/`), its own `pyproject.toml`, tests, `Dockerfile`
+and changelog. It is a separate distribution with its own dependencies and is
+never shipped in fitdocs's release. `fitdocs_relay` imports nothing from
+`fitdocs` (its `shared/` copies stand in), and `fitdocs` never imports
+`fitdocs_relay`. The copies in `relay/src/fitdocs_relay/shared/` are
+byte-identical to their originals, written by `scripts/sync_relay_shared.py`
+and checked by `tests/test_relay_shared_copies.py`.
+
 ### Reference docs
 **Location**: `docs/reference/`
 **Purpose**: Research and methodology writeups backing specs (e.g.
@@ -69,11 +80,17 @@ markdown; fixture `.fit` files under `tests/fixtures/`.
   re-read `.fit` files directly. `identity` (source roles, the match rule and
   held files) imports only `model`, `contract`, `docio`, `layout` and
   `settings`; `render`, `sync`, `audit` and
-  `cli` import it. `connectors` (the `fitdocs connect` and `fitdocs pull`
-  commands) imports only `layout`, `settings`, `inbox` and `version` from
+  `cli` import it. `connectors` (the `fitdocs connect`, `fitdocs disconnect` and
+  `fitdocs pull` commands) imports only `layout`, `settings`, `inbox` and
+  `version` from
   the rest of the package, and only `cli` imports it; it does not depend
   on rendering, training load, metrics, `.fit` ingestion, or the sync
-  engine. `compose` (one activity from a base and its extras) imports
+  engine. The shared modules listed in `SHARED_MODULES` in
+  `scripts/sync_relay_shared.py` (today `relay_codes` and `relay_envelope`)
+  import nothing else from the package: `relay_codes` imports only the
+  standard library, and `relay_envelope` only the standard library and
+  `relay_codes`.
+  `compose` (one activity from a base and its extras) imports
   `model` and `identity`, and in `compose.archive` alone `contract`,
   `layout` and `ingest`; `sync`, the load and benchmark passes and
   `render` (its types only: `DocContext`'s provenance field, and
