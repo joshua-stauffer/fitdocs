@@ -384,7 +384,7 @@ Rules for every task:
   - _Requirements: 9.8, 9.9_
   - _Boundary: RelayLogs_
 
-- [ ] 4. Relay HTTP: the envelope server, probes, core routes and the seam
+- [x] 4. Relay HTTP: the envelope server, probes, core routes and the seam
 
 - [x] 4.1 Serve envelope answers through the request pipeline
   - The answer helper:
@@ -478,7 +478,7 @@ Rules for every task:
     - no email or poll secret appears in captured logs.
   - _Requirements: 5.6, 6.1, 10.4, 10.5, 10.6, 10.9_
 
-- [ ] 4.6 Record the envelope exchanges and replay them against the relay
+- [x] 4.6 Record the envelope exchanges and replay them against the relay
   - The recorded exchanges file covers at least one exchange per route and
     one per relay-origin code, with visibly fake tokens (all `a`).
   - The relay suite seeds state (a known pepper and token, and a test
@@ -992,3 +992,4 @@ Rules for every task:
 - 4.3 rulings: Auth → Rate (design pipeline): a failed authentication counts against the client first, then answers the token code (or rate-limited); a valid token counts only per token; capabilities always counts per client, ignoring any presented token. token_revoke is `async def` (read_request is async) with storage work via run_in_threadpool, authenticating BEFORE reading the body (a bad body from a valid token costs a token count, revokes nothing, answers request-malformed; empty body is request-malformed). RevokeResult UNKNOWN (concurrent principal deletion) → token-unknown; ALREADY_REVOKED (concurrent revoke) → ok. Bearer: case-insensitive scheme, then 1*SP (spaces only; tabs refused); spaces-only value → token-missing. Token-check ok and revoke ok answer data {}. Capabilities read routes.OFFERED_TARGETS at call time; registration False until 4.5. 4.6's replay rows must match these.
 - 4.4: seam.py (SEAM_VERSION=1, design surface pinned whole as DESIGNED_SEAM) imports answers — controller ruling, design.md dependency order amended (answers → seam). create_app(config, *, extensions=(), storage=None, clock=None) and RelayServices(registration before ready) pinned whole as DESIGNED_APP. Seam implementations (_TokenIssuance, _ExtensionRecords, _install_extensions) live in app.py. Refusal messages `extension '<name>': <reason>` (label `<TypeName>` for non-text names); version checked before name; a store create_app opened is closed on any build exception. Records: key ≤128 chars, value ≤4096 bytes, ttl 1..2592000 s (ValueError), per-extension namespace, expiry clock()+ttl exclusive. /x/<name>/ routes: body limit, one log record (route template only), unhandled exception → envelope relay-failure, no readiness gate. capabilities still reports registration false until 4.5 reads services.registration. load_extensions(config.extensions) is wired by 5.1's serve. (Round 2 verified by the controller re-running O7 and O15.)
 - 4.5: POST /v1/registrations ({email}) and POST /v1/registrations/poll ({poll_secret}); without a provider both answer not-offered UNCOUNTED; with one, the request is counted per client BEFORE the body is read (malformed costs a count), then read strictly, then the provider runs. Provider answers validated via the shared codec (parse_started, parse_retry_after) and services.tokens.authenticate; controller ruling: an issued token must authenticate to its stated token_id AND principal_id (stricter than design). Every invalid answer kind raises ProviderAnswerError (no message; logged by type only) → relay-failure; provider exceptions → relay-failure logged by type. capabilities registration = services.registration is not None. Test pattern: keep one started TestClient per address for a whole test (ExitStack) — a TestClient's lifespan end closes the store, so a second `with client:` answers unavailable. 4.6 replay needs this. (Round 2 verified by the controller re-running O3.)
+- 4.6: relay/contract/envelope-v1.json — 29 exchanges (every route, every relay-origin code at its design status), all-`a` fake token; each has request {method,path,headers,body} and answer {status, exact lowercase headers incl. content-length/content-type/cache-control/retry-after, body}; `state.profile` / `state.provider` are relay-test setup keys 6.8 may ignore; one request body (too-large) uses {prefix, fill, count, suffix} — answer bodies are always plain text. Coverage is derived from RELAY_CODES and create_app().routes (appending a code/route reds until recorded). readyz rows record schema 1-of-1 — a 0002 migration must regenerate them.
