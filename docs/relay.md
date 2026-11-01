@@ -409,9 +409,11 @@ clean stop, 1 when another instance holds the database or it cannot start, and
 ## Envelope v1
 
 fitdocs and the relay speak the *envelope*: JSON bodies over HTTPS with a
-closed vocabulary of codes. Every answer is a JSON object with exactly the keys
-`envelope` (the version, `1`), `code` (one code from the table below) and
-`data` (an object whose fields depend on the route). It carries no free text.
+closed vocabulary of codes. Every answer the relay sends is a JSON object with
+exactly the keys `envelope` (the version, `1`), `code` (one code from the table
+below) and `data` (an object whose fields depend on the route); the format also
+reserves an optional `outcome` key, which no route of this relay sends. It
+carries no free text.
 Answers carry `Content-Type: application/json` and `Cache-Control: no-store`.
 A request that names a token sends it as `Authorization: Bearer <token>` and
 never in a URL. Requests with a body are JSON objects of at most 64 KiB, with no
@@ -494,11 +496,15 @@ Registration is offered only while a wrapper has installed a provider
     joined by a hyphen, like `BCDF-GHJK`. fitdocs shows it; the wrapper's own
     page must show the same one.
   - `poll_secret`: 32 to 128 characters from `A-Z`, `a-z`, `0-9`, `_` and `-`.
-  - `interval_s`: how often to poll, 1 to 60 seconds.
+  - `interval_s`: how often to poll, 1 to 60 seconds. Every poll counts
+    against the relay's per-client rate limit (20 a minute by default) and
+    fitdocs ends a registration on `rate-limited`, so a provider should
+    answer 5 seconds or more unless the limit is raised.
   - `expires_in_s`: how long the registration lasts, 60 to 3600 seconds.
 - `POST /v1/registrations/poll` with `{"poll_secret": "<secret>"}`.
   `registration-pending` and `registration-slow-down` carry `{}`; on
-  `registration-slow-down` fitdocs adds 5 seconds to its polling interval.
+  `registration-slow-down` fitdocs adds 5 seconds to its polling interval, up
+to 60 seconds.
   `registration-issued` carries `{"token": "<relay token>"}` once.
   `registration-refused` and `registration-expired` end the registration.
 
@@ -585,7 +591,8 @@ def load_extensions(references: tuple[str, ...]) -> tuple[RelayExtension, ...]: 
   its own. A record is visible until its expiry time.
 - **Provider answers are validated.** The relay checks a `StartAccepted`
   against the registration format above, and requires a `PollIssued` token to
-  authenticate as the token and principal it names. An answer
+  authenticate as the token and principal it names (it does not check how the
+  token was minted). An answer
   outside the format is a `relay-failure`, logged by type only. The relay
   applies its own rate limits before the provider runs.
 
