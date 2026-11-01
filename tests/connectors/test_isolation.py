@@ -53,6 +53,10 @@ def test_an_ordinary_test_has_socket_guard_and_isolated_credentials_dir(
 ) -> None:
     with pytest.raises(RuntimeError):
         socket.socket()
+    with pytest.raises(RuntimeError):
+        socket.getaddrinfo("relay.example.com", 443)
+    with pytest.raises(RuntimeError):
+        socket.create_connection(("relay.example.com", 443))
 
     credentials_dir = Path(os.environ["FITDOCS_CREDENTIALS_DIR"])
     home_dir = Path(os.environ["HOME"])
