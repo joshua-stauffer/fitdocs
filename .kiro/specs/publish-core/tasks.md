@@ -92,7 +92,7 @@ live constant.
 
 - [ ] 2. Page contract: the `publish` key and the two regions
 
-- [ ] 2.1 Add the contract readers publishing needs
+- [x] 2.1 Add the contract readers publishing needs
   - Add the `publish` key constant and its reader: an absent key or an
     empty list reads as no targets; one non-empty name or a list of distinct
     non-empty names reads as those names; anything else reads as an invalid
@@ -227,7 +227,7 @@ live constant.
 
 - [ ] 4. Composition: templates, values and posts
 
-- [ ] 4.1 (P) Build the template grammar
+- [x] 4.1 (P) Build the template grammar
   - Parse templates left to right into text, placeholders and optional
     clauses: `{{` and `}}` escapes, `{name}` placeholders checked against a
     given name set, `{?...}` clauses holding at least one placeholder and no
