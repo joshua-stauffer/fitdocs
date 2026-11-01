@@ -357,7 +357,7 @@ Rules for every task:
   - _Boundary: IdentityService_
   - _Depends: 2.6_
 
-- [ ] 3.2 (P) Limit requests per token and per client
+- [x] 3.2 (P) Limit requests per token and per client
   - Token keys from the token id. Client keys are a keyed hash of the
     address, and an absent address shares one key.
   - Limits come from configuration, in one-minute windows.
@@ -984,3 +984,4 @@ Rules for every task:
 - 2.4: PostgreSQL text ordering uses COLLATE "C" (byte order = SQLite BINARY); ordering conformance tests take the `ids_sort_by_locale_here` fixture, which FAILS on a C-collation test DB (the check would be vacuous there) -- run PostgreSQL conformance on a non-C database (CI postgres:17 is en_US.utf8). conftest gains AccountStore/open_account_store/account_store, TIED_IDS/BYTE_ORDER. mint_token raises ValueError unless exactly one of principal_id/new_principal. (Round 2 test-only precondition verified by the controller on a C-locale DB.)
 - 2.5: record expiry is exclusive (visible while now < expires_at; put purges expires_at <= now), matching the window rule (window_end <= now ends it); delete_record has no now and returns True for any physical row; close() never releases a serving claim (caller releases, per Serve lifecycle). SQLite claim = fcntl.flock on `<db>.serve-lock` (per open-file-description, so a second storage object in-process is refused); PostgreSQL claim = session advisory lock hashtext('fitdocs-relay:' || current_schema()) on a dedicated connection. Tests that inspect pg_locks must filter by database and key (server-wide reads flake under concurrent runs); purge rules must be tested with mixed window lengths; hash-keyed locks need a deterministic negative-key case. (Round 3 verified by the controller re-running mutation N2.)
 - 2.6 (controller ruling): the count's atomicity is the single upsert statement (design Invariants), not the transaction lock; the Done-when lock-removal mutation is replaced by: splitting the upsert into an unlocked read-modify-write reds the 20-thread test on each backend, and the same split under the lock stays green. open_storage(target) -> Storage is the only factory (lazy PostgreSQL import; MissingPostgresSupport names the postgres extra); conftest `open_full_storage` gives a full Storage. Coverage completeness check skips under -k/-m or partial collection; CI's pinned bare `pytest` step keeps it live.
+- 3.2: RateLimiter(storage, *, pepper, clock, token_limit, client_limit) — keys `t:<token_id>` and `c:<hex(HMAC-SHA256(pepper, b"client\0"+address))[:32]>`, absent address `c:unknown`; WINDOW_S=60 constant; limits come from config token_limit_per_minute/client_limit_per_minute (defaults 60/20). Client addresses are not normalised (follow-up queued).
