@@ -520,7 +520,7 @@ live constant.
   - _Boundary: SkillSection_
   - _Depends: 7.2_
 
-- [ ] 8.3 (P) Write the publishing reference
+- [x] 8.3 (P) Write the publishing reference
   - A contract-grade publishing page: command, options, preflight and exit
     codes; `[publish]` and its resolution; the template grammar; the
     placeholder table; the `post` region syntax; the `publish` key; the code
