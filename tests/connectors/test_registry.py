@@ -1173,6 +1173,43 @@ def test_a_relay_connector_may_also_declare_capabilities() -> None:
 
 
 @pytest.mark.parametrize(
+    ("capability", "missing"),
+    [
+        (Capability.PULL_ACTIVITIES, "list_activities"),
+        (Capability.PULL_ACTIVITIES, "fetch_activity"),
+        (Capability.PULL_WELLNESS, "list_wellness"),
+        (Capability.PULL_WELLNESS, "package_wellness"),
+    ],
+)
+def test_a_relay_connector_declaring_a_driven_capability_still_needs_its_operations(
+    capability: Capability, missing: str
+) -> None:
+    """The relay operations are required in addition to, not instead of, the
+    operations a driven capability requires (connectors Amendment 6, 2.3)."""
+    complete = _make_relay_connector(
+        capabilities=frozenset({capability}),
+        list_activities=_noop,
+        fetch_activity=_noop,
+        list_wellness=_noop,
+        package_wellness=_noop,
+    )
+    assert validate_connector(complete) is None
+    operations: dict[str, Any] = {
+        "list_activities": _noop,
+        "fetch_activity": _noop,
+        "list_wellness": _noop,
+        "package_wellness": _noop,
+    }
+    operations[missing] = None
+    connector = _make_relay_connector(
+        capabilities=frozenset({capability}), **operations
+    )
+    assert validate_connector(connector) == (
+        f"{missing} must be callable when {capability.name} is declared"
+    )
+
+
+@pytest.mark.parametrize(
     "auth_style", [s for s in AuthStyle if s is not AuthStyle.RELAY_TOKEN]
 )
 def test_every_non_relay_style_with_no_capability_is_still_rejected(
