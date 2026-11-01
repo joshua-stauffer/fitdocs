@@ -230,7 +230,7 @@ jobs:
       # and uploaded by default since v1.11.0; pinned explicitly `true` so a
       # future default flip cannot silently disable them.
       - name: Publish to the rehearsal index (TestPyPI)
-        uses: pypa/gh-action-pypi-publish@v1.14.2
+        uses: pypa/gh-action-pypi-publish@v1.14.3
         with:
           repository-url: https://test.pypi.org/legacy/
           packages-dir: dist/
@@ -263,7 +263,7 @@ jobs:
       # already-present version"). attestations pinned explicitly `true`
       # for the same reason as the rehearsal job above.
       - name: Publish to the public index (PyPI)
-        uses: pypa/gh-action-pypi-publish@v1.14.2
+        uses: pypa/gh-action-pypi-publish@v1.14.3
         with:
           packages-dir: dist/
           skip-existing: false
