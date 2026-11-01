@@ -182,10 +182,12 @@ Network-capable code lives in exactly two modules (Req 14.2): :mod:`fitdocs.tile
 which fetches missing basemap tiles during ``sync``/``regen`` map rendering
 and only while tile requests are enabled (Req 4.2), and :mod:`fitdocs.connectors.http`,
 the connector transport the connector commands -- ``fitdocs connect``
-(one authentication attempt against a configured source) and ``fitdocs pull``
-(fetching activities from a configured connector) -- send every request
-through. Every other operation -- and the entire ``load`` command -- stays
-fully offline; a warm tile cache makes even map rendering network-free.
+(one authentication attempt against a configured source, or the registration
+of a relay instance), ``fitdocs disconnect`` (one revocation call for a relay
+instance, none otherwise) and ``fitdocs pull`` (fetching activities from a
+configured connector) -- send every request through. Every other operation --
+and the entire ``load`` command -- stays fully offline; a warm tile cache makes
+even map rendering network-free.
 
 Requirements 1.3, 1.4, 1.5, 2.1, 3.5, 8.1, 8.2, 8.3, 8.4, 8.6, 14.1, 14.2, 14.4.
 """
