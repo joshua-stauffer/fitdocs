@@ -222,6 +222,177 @@ def test_auth_mode_still_makes_one_call_when_three_retryable_responses_are_queue
     assert len(transport.requests) == 1
 
 
+# --- Single-attempt requests (publish-core Req 10.1, 10.2) -----------------
+
+_SINGLE_OUTCOMES: list[Any] = [
+    pytest.param(lambda: _response(429), id="429"),
+    pytest.param(lambda: _response(503), id="503"),
+    pytest.param(lambda: _response(500), id="500"),
+    pytest.param(lambda: _response(502), id="502"),
+    pytest.param(lambda: _response(504), id="504"),
+    pytest.param(lambda: TransportError("boom: https://svc.example/w"), id="failure"),
+]
+
+
+def _script_for(outcome: Any) -> list[HttpResponse | TransportError]:
+    # Three of the same outcome are queued, so a retrying implementation has
+    # something to consume; the tests then read the call count and the sleeps.
+    return [outcome(), outcome(), outcome()]
+
+
+def _send_marked(client: HttpClient, outcome: Any, method: Any = "POST") -> None:
+    # A GET carries no body and a POST carries one, so the guard cannot get
+    # away with keying on either the method or the body.
+    request = HttpRequest(
+        method=method,
+        url="https://svc.example/w",
+        body=b"x" if method == "POST" else None,
+        single_attempt=True,
+    )
+    if isinstance(outcome(), TransportError):
+        with pytest.raises(TransportError):
+            client.send(request)
+    else:
+        assert client.send(request).status == outcome().status
+
+
+def test_http_request_is_unmarked_by_default() -> None:
+    assert (
+        HttpRequest(method="GET", url="https://svc.example/w").single_attempt is False
+    )
+
+
+@pytest.mark.parametrize("method", ["GET", "POST"])
+@pytest.mark.parametrize("outcome", _SINGLE_OUTCOMES)
+def test_marked_data_request_is_sent_exactly_once(outcome: Any, method: str) -> None:
+    transport = FakeTransport(_script_for(outcome))
+    client, sleeps = _client(transport, mode=CallMode.DATA)
+
+    _send_marked(client, outcome, method)
+
+    assert len(transport.requests) == 1
+    assert sleeps == []
+
+
+@pytest.mark.parametrize("mode", [CallMode.DATA, CallMode.AUTH])
+def test_marked_request_is_prepared_and_secrets_registered_before_the_call(
+    mode: CallMode,
+) -> None:
+    redactor = Redactor()
+    signed_url = "https://svc.example/signed?sig=abc123"
+    seen: list[tuple[bool, bool, str]] = []
+
+    def checking_transport(request: HttpRequest, timeout: float) -> HttpResponse:
+        # Observed from inside the call: registration after the call is too late.
+        seen.append(
+            (
+                redactor.redact(SECRET_VALUE) == REDACTED,
+                redactor.redact(signed_url) == REDACTED,
+                request.headers["User-Agent"],
+            )
+        )
+        return _response(503)
+
+    sleeps, sleep = _sleeps()
+    client = HttpClient(checking_transport, mode=mode, redactor=redactor, sleep=sleep)
+
+    client.send(
+        HttpRequest(
+            method="POST",
+            url=signed_url,
+            url_is_secret=True,
+            body=b"x",
+            headers={"User-Agent": "caller-agent/1"},
+            secret_headers={"Authorization": Secret(SECRET_VALUE)},
+            single_attempt=True,
+        )
+    )
+
+    assert user_agent() != "caller-agent/1"
+    assert seen == [(True, True, user_agent())]
+    assert sleeps == []
+
+
+@pytest.mark.parametrize("mode", [CallMode.DATA, CallMode.AUTH])
+def test_marked_request_uses_the_clients_timeout_and_returns_the_response_as_is(
+    mode: CallMode,
+) -> None:
+    # A retryable status, so a client that wrongly treats this request as
+    # unmarked consumes the further queued responses.
+    ok = HttpResponse(status=503, headers={"x-k": "v"}, body=b"busy")
+    transport = FakeTransport([ok, ok, ok])
+    client, _ = _client(transport, mode=mode, timeout=7.5)
+
+    response = client.post("https://svc.example/w", body=b"x", single_attempt=True)
+
+    assert response is ok
+    assert transport.timeouts == [7.5]
+    assert DEFAULT_TIMEOUT_SECONDS != 7.5
+
+
+@pytest.mark.parametrize("outcome", _SINGLE_OUTCOMES)
+def test_marked_auth_request_is_sent_exactly_once(outcome: Any) -> None:
+    transport = FakeTransport(_script_for(outcome))
+    client, sleeps = _client(transport, mode=CallMode.AUTH)
+
+    _send_marked(client, outcome)
+
+    assert len(transport.requests) == 1
+    assert sleeps == []
+
+
+@pytest.mark.parametrize("outcome", _SINGLE_OUTCOMES)
+def test_the_same_unmarked_data_request_is_sent_three_times(outcome: Any) -> None:
+    transport = FakeTransport(_script_for(outcome))
+    client, sleeps = _client(transport, mode=CallMode.DATA)
+    request = HttpRequest(method="POST", url="https://svc.example/w", body=b"x")
+
+    if isinstance(outcome(), TransportError):
+        with pytest.raises(TransportError):
+            client.send(request)
+    else:
+        assert client.send(request).status == outcome().status
+
+    assert len(transport.requests) == 3
+    assert sleeps == [2.0, 4.0]
+
+
+@pytest.mark.parametrize("outcome", _SINGLE_OUTCOMES)
+def test_the_same_unmarked_auth_request_is_sent_once(outcome: Any) -> None:
+    transport = FakeTransport(_script_for(outcome))
+    client, _ = _client(transport, mode=CallMode.AUTH)
+    request = HttpRequest(method="POST", url="https://svc.example/w", body=b"x")
+
+    if isinstance(outcome(), TransportError):
+        with pytest.raises(TransportError):
+            client.send(request)
+    else:
+        assert client.send(request).status == outcome().status
+
+    assert len(transport.requests) == 1
+
+
+@pytest.mark.parametrize("mode", [CallMode.DATA, CallMode.AUTH])
+def test_post_marks_the_request_single_attempt_when_asked(mode: CallMode) -> None:
+    transport = FakeTransport([_response(503), _response(503), _response(503)])
+    client, _ = _client(transport, mode=mode)
+
+    client.post("https://svc.example/w", body=b"x", single_attempt=True)
+
+    assert len(transport.requests) == 1
+    assert transport.requests[0].single_attempt is True
+
+
+def test_post_is_unmarked_by_default_and_retries_in_data_mode() -> None:
+    transport = FakeTransport([_response(503), _response(503), _response(503)])
+    client, _ = _client(transport, mode=CallMode.DATA)
+
+    client.post("https://svc.example/w", body=b"x")
+
+    assert len(transport.requests) == 3
+    assert all(r.single_attempt is False for r in transport.requests)
+
+
 # --- DATA mode: bounded retries (Req 9.3) -----------------------------------
 
 

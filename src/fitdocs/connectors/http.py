@@ -93,7 +93,10 @@ _SIGNED_LOCATION_MARKER: Final[str] = "<signed location>"
 class HttpRequest:
     """One outgoing request. ``secret_headers`` are sent unredirected
     (Req 9.6, see :func:`urllib_transport`); ``url_is_secret`` marks a signed
-    download location, never named in a failure message (Req 10.4)."""
+    download location, never named in a failure message (Req 10.4).
+    ``single_attempt`` marks a non-idempotent request: the client sends it to
+    the transport exactly once, in either mode, whatever the status or
+    network failure (publish-core Req 10.1, 10.2)."""
 
     method: Literal["GET", "POST"]
     url: str
@@ -101,6 +104,7 @@ class HttpRequest:
     secret_headers: Mapping[str, Secret] = field(default_factory=dict)
     body: bytes | None = None
     url_is_secret: bool = False
+    single_attempt: bool = False
 
 
 @dataclass(frozen=True)
@@ -278,7 +282,7 @@ class HttpClient:
     def send(self, request: HttpRequest) -> HttpResponse:
         self._register_secrets(request)
         prepared = self._with_composed_user_agent(request)
-        if self._mode is CallMode.AUTH:
+        if self._mode is CallMode.AUTH or prepared.single_attempt:
             return self._transport(prepared, self._timeout)
         return self._send_data(prepared)
 
@@ -341,6 +345,7 @@ class HttpClient:
         body: bytes,
         headers: Mapping[str, str] | None = None,
         secret_headers: Mapping[str, Secret] | None = None,
+        single_attempt: bool = False,
     ) -> HttpResponse:
         return self.send(
             HttpRequest(
@@ -349,6 +354,7 @@ class HttpClient:
                 headers=headers or {},
                 secret_headers=secret_headers or {},
                 body=body,
+                single_attempt=single_attempt,
             )
         )
 
