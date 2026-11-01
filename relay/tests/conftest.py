@@ -24,6 +24,7 @@ import pytest
 from fitdocs_relay.config import PostgresTarget, SqliteTarget
 from fitdocs_relay.contract import ENV_PREFIX
 from fitdocs_relay.storage import interface
+from fitdocs_relay.storage.interface import SchemaStore
 
 TEST_POSTGRES_URL_VARIABLE = ENV_PREFIX + "TEST_POSTGRES_URL"
 REQUIRE_POSTGRES_VARIABLE = ENV_PREFIX + "REQUIRE_POSTGRES"
@@ -210,3 +211,39 @@ def _postgres_schema(url: str) -> Iterator[PostgresTarget]:
             admin.execute(
                 sql.SQL("DROP SCHEMA {} CASCADE").format(sql.Identifier(schema))
             )
+
+
+@pytest.fixture
+def open_schema_store(
+    database_target: SqliteTarget | PostgresTarget,
+) -> Iterator[Callable[[], SchemaStore]]:
+    """Open another backend instance on the test's database.
+
+    Every instance opened is closed on teardown through `StorageBase.close`,
+    before `database_target` drops the PostgreSQL schema. The instances are
+    typed by the one area protocol the schema tests exercise.
+    """
+    opened: list[SchemaStore] = []
+
+    def open_one() -> SchemaStore:
+        store: SchemaStore
+        if isinstance(database_target, SqliteTarget):
+            from fitdocs_relay.storage.sqlite import SqliteBackend
+
+            store = SqliteBackend(database_target)
+        else:
+            from fitdocs_relay.storage.postgres import PostgresBackend
+
+            store = PostgresBackend(database_target)
+        opened.append(store)
+        return store
+
+    yield open_one
+    for store in opened:
+        store.close()
+
+
+@pytest.fixture
+def schema_store(open_schema_store: Callable[[], SchemaStore]) -> SchemaStore:
+    """A backend on a fresh, empty database, typed as the schema area."""
+    return open_schema_store()
