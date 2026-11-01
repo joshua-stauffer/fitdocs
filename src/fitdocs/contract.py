@@ -53,8 +53,8 @@ Three classes of frontmatter key
 Every frontmatter key a fitdocs document may carry falls into exactly one of
 three classes. **Managed** (:data:`MANAGED_KEYS`) keys are written by the
 render layer or the training-load pass and rewritten in full on every
-regeneration. **User-owned** (:data:`USER_KEYS`) keys -- currently the effort
-tag's four keys -- are never written by fitdocs and are carried forward
+regeneration. **User-owned** (:data:`USER_KEYS`) keys -- the effort
+tag's four keys and ``publish`` -- are never written by fitdocs and are carried forward
 verbatim on every rewrite (the three :data:`LOAD_KEYS` lines are carried the
 same way, but only over a ``load`` region the training-load pass will not
 touch; see :func:`load_key_lines`), the same "yours to keep" guarantee
@@ -163,6 +163,7 @@ __all__ = [
     "TOOL_REGIONS",
     "TYPE_KEY",
     "USER_KEYS",
+    "USER_KEY_ORDER",
     "USER_REGIONS",
     "UUID_KEY",
     "WORKOUT_PLACEHOLDER",
@@ -645,7 +646,7 @@ over verbatim when the ``load`` region is hand-authored or prior-format
 (:func:`load_key_lines`), and otherwise leaves them to the training-load pass.
 """
 
-# --- user-owned frontmatter keys: the effort tag (Req 1.1, 2.1) -------------
+# --- user-owned frontmatter keys: the effort tag and ``publish`` (Req 1.1, 2.1, 2.2)
 
 EFFORT_KEY: Final[str] = "effort"
 """Frontmatter key carrying the effort tag's kind (Req 2.1, 2.2)."""
@@ -668,11 +669,20 @@ EFFORT_KEYS: Final[tuple[str, ...]] = (
 """The effort tag's keys in documentation order; also problem-report order
 (Req 2.1, 5.6)."""
 
-USER_KEYS: Final[frozenset[str]] = frozenset(EFFORT_KEYS)
+PUBLISH_KEY: Final[str] = "publish"
+"""Frontmatter key naming the targets a page is published to (Req 2.1). The
+fifth user-owned key (Req 2.2): fitdocs preserves it verbatim, never writes it."""
+
+USER_KEY_ORDER: Final[tuple[str, ...]] = (*EFFORT_KEYS, PUBLISH_KEY)
+"""The user-owned keys in documentation order: the four effort keys, then
+:data:`PUBLISH_KEY` (Req 2.2, 13.3). The workouts declaration lists them in this
+order; :data:`USER_KEYS` is the same keys as a set."""
+
+USER_KEYS: Final[frozenset[str]] = frozenset(USER_KEY_ORDER)
 """Every frontmatter key fitdocs preserves verbatim but never writes (Req 1.1,
-1.2) -- the user-owned class, parallel to :data:`USER_REGIONS` for a region.
+1.2, 2.2) -- the user-owned class, parallel to :data:`USER_REGIONS` for a region.
 Disjoint with :data:`MANAGED_KEYS` (Req 1.1, 1.5): one test pins this set to
-the exact frozenset of :data:`EFFORT_KEYS`, a second pins that it is disjoint
+the exact frozenset of :data:`USER_KEY_ORDER`, a second pins that it is disjoint
 with :data:`MANAGED_KEYS` directly, and a third, the render-layer anti-drift
 test, additionally pins that no key :func:`fitdocs.render.frontmatter.build_frontmatter`
 can emit is in this set.
@@ -1470,10 +1480,6 @@ def document_source_identity(
 
 # --- publishing: the ``publish`` key and the summary a post reads (Req 2.1, 5.2)
 
-PUBLISH_KEY: Final[str] = "publish"
-"""Frontmatter key naming the targets a page is published to (Req 2.1). Not yet
-in :data:`USER_KEYS`: ownership of the key is a later change."""
-
 
 @dataclass(frozen=True)
 class InvalidPublishKey:
@@ -1625,7 +1631,8 @@ def unmanaged_keys(frontmatter: Mapping[str, object]) -> tuple[str, ...]:
     full, so any key outside :data:`MANAGED_KEYS` and :data:`USER_KEYS` is
     dropped by the next regeneration. Naming them is what turns that from
     silent data loss into a warning the user can act on (Req 6.3) and into an
-    audit finding (Req 8.4). A user-owned key -- the effort tag's keys -- is
+    audit finding (Req 8.4). A user-owned key (:data:`USER_KEYS`: the effort
+    tag's keys and ``publish``) is
     never reported here (Req 1.4, 4.7): only a key in neither class is
     unmanaged. The verbatim carry that makes that exemption safe is
     :func:`user_owned_lines`, which the sync engine applies on every rewrite, so

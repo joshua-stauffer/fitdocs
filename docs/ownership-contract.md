@@ -535,26 +535,32 @@ temporary: it survives only until the document is next regenerated.
 In addition to the [user-owned regions](#user-owned-and-tool-filled-regions)
 above, fitdocs recognizes one class of user-owned *frontmatter keys*: the
 four keys of the [effort tag](#the-effort-tag), a hand-added mark of a race,
-test, or otherwise maximal effort.
+test, or otherwise maximal effort, and the `publish` key, the target or list of
+targets you choose to publish a workout to.
 
 - `effort`
 - `effort_distance_m`
 - `effort_time_s`
 - `effort_event`
+- `publish`
 
 fitdocs **never writes** any of these keys — not from the activity, not
 from the athlete profile, not from a computed value, and not as a default.
-A document that carries none of them is simply untagged: there is no
-placeholder, no empty value, and no default written for any of them. Once
-you add one by hand, its frontmatter line — including any continuation
+A document that carries none of them simply has none: there is no
+placeholder, no empty value, and no default written for any of them (with no
+effort key it is untagged; with no `publish` key it is published nowhere).
+Once you add one by hand, its frontmatter line — including any continuation
 lines its value spans, for example a multi-line `effort_event` block
 scalar — is carried forward byte-for-byte through every operation that
 rewrites the document:
 `sync`, `sync --force`, `regen`, and the training-load pass (`load`,
-including `load --recompute`). This holds regardless of whether the tag is
-well-formed: a malformed tag (see [The Effort Tag](#the-effort-tag) below)
+including `load --recompute`). This holds regardless of whether the value is
+valid: a malformed effort tag (see [The Effort Tag](#the-effort-tag) below)
 is preserved exactly as written, never dropped, corrected, or replaced —
-only reported.
+only reported; a `publish` value is carried exactly as written too,
+whether or not it is valid. fitdocs never
+drops, corrects or replaces it, and it never names `publish` in the
+unmanaged-key warning or the `check` finding.
 
 When a document's frontmatter block is *rebuilt in full* (`regen`, and the
 rewrite path inside `sync`), the carried user-owned lines are placed after
@@ -578,14 +584,16 @@ along with it, exactly like a continuation line.
 **Known limitation:** if a document's frontmatter carries the same
 user-owned key more than once — a state only a hand edit can produce, since
 fitdocs never writes these keys itself — every occurrence's lines are
-carried forward on regeneration, but the reader that interprets the effort
-tag reads only the last occurrence's value; the duplicate is not reported
+carried forward on regeneration, but the readers that interpret the key
+(the effort-tag reader, and the reader of `publish`) read only the last
+occurrence's value, as a YAML parser does; the duplicate is not reported
 as an error.
 
 **Deleted-document exception:** like the user-owned regions, a user-owned
 key's content is *copied forward from the existing document*, not derived
 from the archive. If a document is deleted from `workouts/` and later
-regenerated, the regenerated document is untagged, with no warning — the
+regenerated, the regenerated document is untagged and has no `publish` key,
+with no warning — the
 same exception [stated for regions](#overwrite-semantics-of-every-writing-operation)
 applies here.
 

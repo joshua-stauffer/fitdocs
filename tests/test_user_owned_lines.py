@@ -523,3 +523,30 @@ def test_tab_indented_continuation_is_carried() -> None:
         )
     )
     assert user_owned_lines(lines) == ("effort_event: >-", "\tBoston: A Race")
+
+
+# --- the publish key is user-owned (publish-core 2.2, Req 2.2) ----------------
+
+
+def test_publish_entry_is_carried_with_its_continuation_lines() -> None:
+    lines = _lines(
+        "\n".join(
+            [
+                "---",
+                "title: Easy Run",
+                "publish:",
+                "  -   strava   # odd",
+                "",
+                "  - intervals",
+                "sport: running",
+                "---",
+                "",
+            ]
+        )
+    )
+    assert user_owned_lines(lines) == (
+        "publish:",
+        "  -   strava   # odd",
+        "",
+        "  - intervals",
+    )

@@ -47,9 +47,9 @@ from typing import Final
 
 from fitdocs.contract import (
     CONTRACT_VERSION,
-    EFFORT_KEYS,
     GENERATED_PREFIX,
     GENERATOR,
+    USER_KEY_ORDER,
     USER_REGIONS,
     is_generated,
 )
@@ -485,7 +485,8 @@ def declaration_text(directory: str) -> str:
 
     For the directory holding generated workout documents (``workouts/``):
     the written-and-tool-owned statement, the user-owned region names, the
-    user-owned effort-tag frontmatter keys (Req 6.4), the rename a changed
+    user-owned frontmatter keys, ``contract.USER_KEY_ORDER`` (the effort
+    keys and ``publish``) (Req 6.4), the rename a changed
     base may cause (activity-identity Req 9.3), and re-derivability by
     regeneration (Req 3.2), plus the never-add-a-marker rule. For the
     longitudinal history directory (``history/``): the written-and-tool-owned
@@ -530,7 +531,7 @@ def declaration_text(directory: str) -> str:
     never opens with.
     """
     user_regions_list = _english_list(f"`{region}`" for region in USER_REGIONS)
-    user_keys_list = _english_list(f"`{key}`" for key in EFFORT_KEYS)
+    user_keys_list = _english_list(f"`{key}`" for key in USER_KEY_ORDER)
 
     owner = _DASHBOARDS_OWNER if directory == DASHBOARDS_DIR + "/" else f"`{GENERATOR}`"
     owner_block = _OWNER_BLOCK.format(
