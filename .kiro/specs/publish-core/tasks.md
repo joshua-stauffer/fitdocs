@@ -481,7 +481,7 @@ live constant.
 
 - [ ] 8. Contract, skill, documentation and amendments
 
-- [ ] 8.1 Advance the ownership contract
+- [x] 8.1 Advance the ownership contract
   - Raise `CONTRACT_VERSION` to one more than its value at landing, with an
     appended history paragraph naming the two regions, the `publish` key,
     the ledger location, `[publish]` and `fitdocs publish`'s writes.
@@ -641,3 +641,4 @@ live constant.
 - Controller ruling 7.1: `--targets` is parsed and exits 2 "not available yet" until 7.2 replaces that branch (7.2 owns the step-2 refusals and the step-5 listing).
 - 7.1: CLI refusal tests must arm the refused action (a scripted POSTED, a reachable credential) so 'nothing sent/written' is not pre-satisfied; the scripted transport's raise is swallowed by TargetChannel.send as target_error, so 'no request' needs an explicit transport_calls == [] / world.calls() == 0.
 - 7.2: `--targets` refusal sits at preflight step 2 (one message naming every refused flag); the listing at step 5 after [publish] validation; a credentials directory inside the data root refuses even the read-only listing when a configured target authenticates (design step 5; same as `fitdocs pull`). Listing exits 0 even with failure states.
+- Controller ruling 8.1: `fitdocs publish --yes` may write the credentials store: a target that renews its credentials through its session updates only that instance's credentials file (same as a credential-renewing `fitdocs pull`). The contract states this honestly; no production change to refuse rotation.
