@@ -333,7 +333,7 @@ Rules for every task:
       names the extra.
   - _Requirements: 1.2, 1.3, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 9.6_
 
-- [ ] 3. Relay domain services
+- [x] 3. Relay domain services
 
 - [x] 3.1 (P) Mint, verify and revoke relay tokens
   - Token format `fdr1_<id>_<secret>` with base32 parts drawn from
@@ -369,7 +369,7 @@ Rules for every task:
   - _Boundary: RateLimiter_
   - _Depends: 2.6_
 
-- [ ] 3.3 (P) Write secret-free structured logs to standard output
+- [x] 3.3 (P) Write secret-free structured logs to standard output
   - A JSON-lines formatter with the design's fields.
   - A redacting filter for anything matching the token format, the pepper,
     or the database password.
@@ -986,3 +986,4 @@ Rules for every task:
 - 2.6 (controller ruling): the count's atomicity is the single upsert statement (design Invariants), not the transaction lock; the Done-when lock-removal mutation is replaced by: splitting the upsert into an unlocked read-modify-write reds the 20-thread test on each backend, and the same split under the lock stays green. open_storage(target) -> Storage is the only factory (lazy PostgreSQL import; MissingPostgresSupport names the postgres extra); conftest `open_full_storage` gives a full Storage. Coverage completeness check skips under -k/-m or partial collection; CI's pinned bare `pytest` step keeps it live.
 - 3.2: RateLimiter(storage, *, pepper, clock, token_limit, client_limit) — keys `t:<token_id>` and `c:<hex(HMAC-SHA256(pepper, b"client\0"+address))[:32]>`, absent address `c:unknown`; WINDOW_S=60 constant; limits come from config token_limit_per_minute/client_limit_per_minute (defaults 60/20). Client addresses are not normalised (follow-up queued).
 - 3.1: TokenService (identity.py) — verifier hex(HMAC-SHA256(pepper, b"fitdocs-relay-token-v1\0"+id+b"\0"+secret)); authenticate compares (hmac.compare_digest) BEFORE the revoked check (controller ruling: a revoked token with a wrong secret answers token-unknown, so non-holders cannot learn revocation); unknown id computes one dummy verifier + one compare; mint/create_principal retry once on DuplicateIdentifier; MintedToken hides the token from repr/str. mint(principal_id=existing, principal_label=x) ignores the label (5.2's CLI should refuse --principal-label with --principal; follow-up queued). Store-only-verifier tests pin the stored record by equality over every mint shape (absence checks alone let partial/transformed secrets survive).
+- 3.3: logs.py API — configure_logging(*, pepper, password, level=INFO, stream=None) installs one root handler (JSON lines on stdout, ASCII-only), clears uvicorn/uvicorn.error handlers so they propagate, and SILENCES uvicorn.access (propagate=False + NullHandler; controller ruling per design 'access log is off'); log_event(logger, event, *, level, **fields). Failure fields are named `error_type` (str) and `frames` (list of exactly {file: str, line: int, function: str}) — 4.x must use these names; caller-supplied ones are validated and redacted, otherwise dropped. Redaction applies TOKEN_RE before the registered secrets. 5.1 must: call configure_logging before opening storage/claiming; register the DB password from both the password variable and a URL-embedded password (decoded + percent-encoded).
