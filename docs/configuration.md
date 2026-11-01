@@ -362,6 +362,20 @@ Credentials never belong in this file. See
 instance, the built-in folder and intervals.icu connectors, connecting, where credentials
 live, pulling, delivery and removal, and what leaves your machine.
 
+### `[publish]`: templates for `fitdocs publish`
+
+`fitdocs publish` composes each workout page's post (a title and a description)
+for each publish target the page opts in to. The `[publish]` table sets the
+templates it composes from: a title template and a description template for
+every target, and the same pair under `[publish.targets.<name>]` for one
+target. A field of a `[publish.targets.<name>]` table that is unset falls back
+to the same field of `[publish]` first, and then to the built-in default.
+fitdocs reads this table on every `fitdocs publish` invocation, including a
+dry run, and stops with a configuration error before sending or writing
+anything when it is malformed. The targets themselves are
+`[connectors.<name>]` instances. See [`docs/publishing.md`](publishing.md) for
+the command, the template syntax and the placeholders.
+
 ## The athlete profile: `<data-root>/athlete.toml`
 
 Alongside the settings file, an optional `<data-root>/athlete.toml` carries
@@ -492,6 +506,8 @@ progress. There is no per-session peak cache.
 - [`docs/inbox.md`](inbox.md) — the full inbox interface.
 - [`docs/connectors.md`](connectors.md) — configuring and running a
   connector.
+- [`docs/publishing.md`](publishing.md) — `fitdocs publish` and the
+  `[publish]` table.
 - [`docs/plugins.md`](plugins.md) — the plugin platform.
 - [`docs/ownership-contract.md`](ownership-contract.md) — what fitdocs owns
   in your data root and what you own.
