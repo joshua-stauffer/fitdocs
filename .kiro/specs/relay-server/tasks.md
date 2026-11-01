@@ -488,7 +488,7 @@ Rules for every task:
     it.
   - _Requirements: 4.1, 4.3, 4.5_
 
-- [ ] 5. Relay process, operator commands and the image
+- [x] 5. Relay process, operator commands and the image
 
 - [x] 5.1 Run one serving instance with graceful shutdown
   - The server runner, in order:
@@ -551,7 +551,7 @@ Rules for every task:
     - the workflow pin test requires the build step and forbids push.
   - _Requirements: 9.1, 9.11_
 
-- [ ] 5.4 Pin the deploy contract and tie its version to the relay changelog
+- [x] 5.4 Pin the deploy contract and tie its version to the relay changelog
   - A contract pin test fixes, as literals: the contract version, the full
     environment table, the probe paths, the image user, port, entrypoint
     and environment path, and the command list.
@@ -996,3 +996,4 @@ Rules for every task:
 - 5.1: serve.run_server(config, extensions=None) -> int: configure_logging FIRST (one redactor over pepper + DB password as variable, URL userinfo and URL ?password= query, each raw/decoded/encoded via logs.configure_logging(extra_secrets=...)); load_extensions(config.extensions) unless given; open storage; claim (held → serve-refused, 1; StorageError at open/claim → serve-failed type+frames, 1); install _StopRequest SIGTERM/SIGINT handlers that record the signal and set server.should_exit (a startup signal ends cleanly with 0, never swallowed); uvicorn.Server with proxy_headers=True, forwarded_allow_ips=list (never None), access_log=False, lifespan on, timeout_graceful_shutdown=grace; finally release claim, close storage, restore handlers. SeamError propagates (5.2 → exit 2); uvicorn startup failure raises SystemExit(3) (5.2 must map it — collides with 'migrations pending'). Subprocess tests run `python -B -s -E tests/serve_child/entry.py` with FITDOCS_RELAY_*/PYTHON*/FORWARDED_* scrubbed.
 - 5.2: relay CLI (argparse) — outputs pinned in relay/tests/test_cli.py: migrate `schema <found> -> <left>`; --check `schema <current> -> <expected>` (+ 'migrations are pending' on stderr, exit 3); principal list / token list tab-separated, ISO-8601 UTC (`...Z`), created_at then id; mint token alone on stdout, `token_id=`/`principal_id=` on stderr; errors via fixed MSG_* constants (unexpected failures print only the type name). Rulings: serve not schema-gated (design amended); --principal-label with --principal → exit 2; missing postgres extra, usage and label errors → 2; uvicorn SystemExit(3) → 1; SeamError → 2. All output (incl. argparse usage errors, via an environment-built redactor) passes through one SecretRedactor (pepper, DB password var + URL forms, token format); labels in listings are redacted too. 8.3's docs must reuse these literals. (Round 3 one-assertion fix controller-applied, verified by mutation G2.)
 - 5.3: relay/Dockerfile — build stage FROM the digest-pinned python:3.12-slim-bookworm with uv COPY'd from ghcr.io/astral-sh/uv:0.11.24@sha256 (controller ruling: the design's 'build stage uses uv pinned by digest' is met by copying uv by digest; the uv image has no shell); runtime stage same pinned base, env at /opt/fitdocs-relay, uid 10001, /data owned 0700, HOST 0.0.0.0, port 8080, ENTRYPOINT fitdocs-relay CMD serve. relay/LICENSE is a byte copy of the root LICENSE (MIT, pinned). relay/scripts/image_smoke.sh {sqlite|postgres|derived} is pinned WHOLE from `set -euo pipefail` on (tests/test_image.py _SMOKE_CODE) — any edit to the script must update that literal in the same commit. relay.yml: timeout-minutes 30; gates → docker build → smoke sqlite → postgres → derived; no push/login. The static checker derives secret variable names from contract.ENVIRONMENT.
+- 5.4: relay/tests/test_contract.py pins the deploy contract as literals copied from design.md (version 1 with a type pin, the 11-row env table whole and ordered, probes, image user/port/entrypoint/default command/env path, COMMANDS). relay/CHANGELOG.md's newest `## ` section must carry exactly `- Deploy contract version: N`, `- Envelope version: N`, `- Seam version: N` (8.4 keeps this format when finalizing prose); any section whose deploy-contract or seam version differs from the next-older section must contain `**Breaking for deployments:**`. A contract change edits the literals; a version bump also adds a new newest changelog section. The env table is also pinned in test_config.py (follow-up: dedupe at 8.3). (Round 2 verified by the controller re-running O12.)
