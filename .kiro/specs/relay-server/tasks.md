@@ -566,7 +566,7 @@ Rules for every task:
 
 - [ ] 6. fitdocs client: the relay connector, connect, register and disconnect
 
-- [ ] 6.1 (P) Admit the relay authentication style into the connector framework
+- [x] 6.1 (P) Admit the relay authentication style into the connector framework
   - Append the relay-token style, mark it supported, and add the relay value
     types and the relay operation protocol from design.md.
   - Registry:
@@ -595,7 +595,7 @@ Rules for every task:
   - _Boundary: ProtocolAmendment, RegistryAmendment, CredentialsAmendment_
   - _Depends: 1.2_
 
-- [ ] 6.2 Provide the relay connector and the envelope client
+- [x] 6.2 Provide the relay connector and the envelope client
   - The `relay` connector:
     - optional `url` defaulting to `https://api.fitdocs.ai`;
     - URL rules: `https`, or `http` to loopback only; absolute; no query,
@@ -629,7 +629,7 @@ Rules for every task:
     - the registration answers parsed into the protocol types.
   - _Requirements: 11.1, 11.2, 15.2, 15.3, 15.5_
 
-- [ ] 6.3 Connect with a pasted relay token
+- [x] 6.3 Connect with a pasted relay token
   - Refuse a value outside the token format before any request.
   - Make exactly one token check in authentication mode. On `ok`, store the
     token atomically, replacing without revoking.
@@ -650,7 +650,7 @@ Rules for every task:
       the scripted relay body carries extra strings.
   - _Requirements: 12.2, 12.3, 12.4, 12.6, 15.2, 15.4_
 
-- [ ] 6.4 Register against a relay that advertises registration
+- [x] 6.4 Register against a relay that advertises registration
   - Read capabilities first. Without registration, return `not-offered`
     with the ask-the-operator next step.
   - Start with the email. Validate the started answer, report it through
@@ -675,7 +675,7 @@ Rules for every task:
       clock's guard fails it.
   - _Requirements: 13.1, 13.3, 13.4, 13.5, 13.6, 13.7, 13.8, 13.9, 13.10, 15.2, 15.4_
 
-- [ ] 6.5 Disconnect per authentication style
+- [x] 6.5 Disconnect per authentication style
   - Relay instance with a stored token: one revocation with the stored
     token.
     - `ok`, `token-unknown` or `token-revoked` removes the file;
@@ -697,7 +697,7 @@ Rules for every task:
       transport call (named mutation: `CallMode.DATA`).
   - _Requirements: 14.1, 14.2, 14.3, 14.4, 14.5, 14.7, 15.2_
 
-- [ ] 6.6 Wire relay connecting into `fitdocs connect`
+- [x] 6.6 Wire relay connecting into `fitdocs connect`
   - For relay instances:
     - the no-echo token prompt;
     - `--register` with `--email`, or an interactive email prompt;
@@ -716,7 +716,7 @@ Rules for every task:
     connect tests pass unchanged.
   - _Requirements: 12.1, 12.5, 13.2, 13.11, 15.1_
 
-- [ ] 6.7 Add `fitdocs disconnect`, keep relay instances out of a bare pull, and raise the command-count pins
+- [x] 6.7 Add `fitdocs disconnect`, keep relay instances out of a bare pull, and raise the command-count pins
   - The disconnect command takes the shared preflight. An unknown name
     exits 2, naming the configured instances. It prints each result and its
     exit code.
@@ -997,3 +997,14 @@ Rules for every task:
 - 5.2: relay CLI (argparse) — outputs pinned in relay/tests/test_cli.py: migrate `schema <found> -> <left>`; --check `schema <current> -> <expected>` (+ 'migrations are pending' on stderr, exit 3); principal list / token list tab-separated, ISO-8601 UTC (`...Z`), created_at then id; mint token alone on stdout, `token_id=`/`principal_id=` on stderr; errors via fixed MSG_* constants (unexpected failures print only the type name). Rulings: serve not schema-gated (design amended); --principal-label with --principal → exit 2; missing postgres extra, usage and label errors → 2; uvicorn SystemExit(3) → 1; SeamError → 2. All output (incl. argparse usage errors, via an environment-built redactor) passes through one SecretRedactor (pepper, DB password var + URL forms, token format); labels in listings are redacted too. 8.3's docs must reuse these literals. (Round 3 one-assertion fix controller-applied, verified by mutation G2.)
 - 5.3: relay/Dockerfile — build stage FROM the digest-pinned python:3.12-slim-bookworm with uv COPY'd from ghcr.io/astral-sh/uv:0.11.24@sha256 (controller ruling: the design's 'build stage uses uv pinned by digest' is met by copying uv by digest; the uv image has no shell); runtime stage same pinned base, env at /opt/fitdocs-relay, uid 10001, /data owned 0700, HOST 0.0.0.0, port 8080, ENTRYPOINT fitdocs-relay CMD serve. relay/LICENSE is a byte copy of the root LICENSE (MIT, pinned). relay/scripts/image_smoke.sh {sqlite|postgres|derived} is pinned WHOLE from `set -euo pipefail` on (tests/test_image.py _SMOKE_CODE) — any edit to the script must update that literal in the same commit. relay.yml: timeout-minutes 30; gates → docker build → smoke sqlite → postgres → derived; no push/login. The static checker derives secret variable names from contract.ENVIRONMENT.
 - 5.4: relay/tests/test_contract.py pins the deploy contract as literals copied from design.md (version 1 with a type pin, the 11-row env table whole and ordered, probes, image user/port/entrypoint/default command/env path, COMMANDS). relay/CHANGELOG.md's newest `## ` section must carry exactly `- Deploy contract version: N`, `- Envelope version: N`, `- Seam version: N` (8.4 keeps this format when finalizing prose); any section whose deploy-contract or seam version differs from the next-older section must contain `**Breaking for deployments:**`. A contract change edits the literals; a version bump also adds a new newest changelog section. The env table is also pinned in test_config.py (follow-up: dedupe at 8.3). (Round 2 verified by the controller re-running O12.)
+- Group 6 (client stream impl/rs-client, merged e6d8f984) notes:
+  - 6.1: AuthStyle.RELAY_TOKEN + RelayRefused/RelayCapabilities/RegistrationStarted/RegistrationPolled/RelayTokenClient pinned whole by AST literals equal to design.md's ProtocolAmendment block (test_protocol.py _RELAY_DESIGN_RENDERINGS); registry._RELAY_OPERATIONS tied to RelayTokenClient's method order; CredentialStore.remove(name) -> bool touches only <name>.toml (never the directory). Surface pins are literal 55 -- the second lander of relay-server/publish-core re-counts. run_connect has NO relay branch yet: 6.3 must add relay dispatch and test it through run_connect/the CLI.
+  - 6.2: relay.RelayClient/RelayConnector/RelayReply/RelaySettings; the client requires `{}` data on token-check ok, revoke ok, registration-pending and -slow-down (relay side 4.x and envelope-v1 recorded exchanges must send {} there). Controller ruling: client never fabricates a relay-origin code; an unencodable request raises EnvelopeError (caller defect), nothing sent. Retry-After header honoured only on a non-envelope 429. Tests build loopback URLs as "http://" + host because the neutral scan admits localhost but not 127.0.0.1/::1 (follow-up queued; 8.4's docs must avoid loopback literals or extend the scan).
+  - 6.3 (controller ruling, supersedes the 6.1 note): relay connects do NOT go through run_connect — design routes them through the separate `run_relay_connect` (CliRelay calls it); run_connect keeps its AssertionError for RELAY_TOKEN; 6.6's CLI must dispatch RELAY_TOKEN instances to run_relay_connect / registration. relay_connect.py: run_relay_connect, relay_next_step (total over RelayCode; texts pinned as literals — 6.4/6.5 that need different next steps, e.g. disconnect's "retry, or --local-only", must extend it deliberately and update the pins), RelayConnected/RelayConnectFailed/RelayTokenFormatError. Registration codes on the token route surface as answer-malformed.
+  - For 6.6 (CLI): RelayTokenFormatError's message is fixed text that never contains the value, but run_relay_connect registers the refused value for redaction BEFORE the format check, so `redactor.redact(str(exc))` (the CLI's usual pattern, cli.py ~1408/1644) mangles it when a short paste was entered ("Th<redacted>t is not <redacted> rel<redacted>y token…"). Print RelayTokenFormatError's message without passing it through redaction (pin it with a short paste like "a").
+  - For 6.5: relay_next_step(code, *, name, retry_after_s) has no route context; Req 14.2 needs disconnect's next step "retry, or --local-only" — compose in disconnect.py (preferred, no design-signature change) or amend design deliberately.
+  - 6.4 (controller ruling): RegistrationEmailError + EMAIL_FORMAT_MESSAGE ("That is not a plausible email address.") are a recorded departure from design — the engine (run_relay_registration) is the single email validator; 6.6's CLI must catch RegistrationEmailError → exit 2 and NOT add a second is_email check/message. Deadline inclusive (now >= expires_at → registration-expired). Loop: sleep → deadline check → poll.
+  - For 6.8: the recorded exchanges file is relay/contract/envelope-v1.json (on impl/relay-server; merge it into the client stream first). Ignore state.profile/state.provider; answer bodies are plain text (assert it); only the too-large REQUEST body uses {prefix, fill, count, suffix}. Decode every recorded answer through RelayClient with a fake transport.
+  - For 6.6 (from 6.5 review): disconnect_command must catch CredentialStoreError from run_disconnect (corrupt/wrong-mode file on the revoke path, tokenless file) → configuration-error exit, pointing at `fitdocs disconnect NAME --local-only` (which never reads the file); and must print NothingToDisconnect.env_override as Req 14.4's statement (the variable is not revoked and remains set). Catch UnsupportedDisconnect → exit 2; print LOCAL_ONLY_NOTE / SERVICE_NOTE from disconnect.py.
+  - 6.6: cli.connect relay path = _connect_relay (paste via getpass "Relay token: "; --register with --email or "Email address: " prompt); misuse checks (--register/--email on non-relay; --email without --register) run right after the instance lookup, before NONE/reserved branches (exit 2, zero requests); (KeyboardInterrupt, typer.Abort) → 130; started lines "Registering <email>." / "Your code: <CODE>" / confirm-only-if-same / "This registration expires in N minute(s)." (floor; "less than a minute"); format/email errors printed unredacted.
+- 6.7: `fitdocs disconnect NAME [--local-only]` lines: success `NAME: disconnected.` / `Credentials removed: <path>` / `Relay code: <code>` / `Note: <note>.`; nothing-to-disconnect + `Environment variable X is not revoked and remains set.` (plural form); failure `NAME: <code>: <explanation>` + next step, exit 1; unsupported → 2; CredentialStoreError → 2 on stderr with one --local-only hint. Bare pull selects by PULL_ACTIVITIES/PULL_WELLNESS capability; empty selection prints `No configured connector instance pulls activities or wellness; nothing to pull.` exit 0. CLI command count is 16 ("Sixteen") — publish-core landing second takes 17.
