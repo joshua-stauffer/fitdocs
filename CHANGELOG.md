@@ -40,6 +40,14 @@ recorded as one.
   documents; page text is unchanged. Action: run `fitdocs regen` once to
   rewrite the chart files of an existing archive in the compact form. Later
   regens leave every chart file whose bytes are unchanged untouched.
+- The generated document and ownership contract advances from version 17 to
+  18 (contract version 18): the new `fitdocs disconnect` command removes the
+  named connector instance's own credentials file, and nothing else, from the
+  credentials store outside the data root; `connect`, a credential-renewing
+  `pull` and `disconnect` are the only operations that write to or remove from
+  the store. Contract version 18 needs nothing for existing documents. Action:
+  run `fitdocs sync` or `fitdocs regen` once to refresh the in-tree ownership
+  declarations to the new version.
 
 ## [0.2.0] - 2026-10-19
 

@@ -357,7 +357,7 @@ different name (activity-identity Amendment 2, A2.1); a filename the user chose
 is kept.
 """
 
-CONTRACT_VERSION: Final[str] = "17"
+CONTRACT_VERSION: Final[str] = "18"
 """The published ownership contract's version identifier (Req 2.8).
 
 A *string*, and deliberately not comparable with :data:`DOC_VERSION`: it
@@ -501,6 +501,17 @@ hidden temporary file beside it and swapped into place, so its path holds
 either the previous complete file or the new complete file, never a partial
 one. Which paths fitdocs owns, and its removal of assets that a rewritten page
 no longer links, are unchanged. Nothing is needed for existing documents.
+
+Raised from ``17`` to ``18`` by relay-server (Req 14.8, 14.9) because the stated
+guarantee about the connector credentials store changed. The store sits outside
+the data root and is not owned by fitdocs; it was never deleted from, and now
+``fitdocs disconnect`` removes the named instance's own credentials file and
+nothing else, never the directory and never another instance's file.
+``fitdocs connect``, a credential-renewing ``fitdocs pull`` and ``fitdocs
+disconnect`` are the only operations that write to or remove from the store, one
+instance's file at a time and never under the data root. Which paths fitdocs owns
+under the data root are unchanged. Run ``fitdocs sync`` or ``fitdocs regen`` once
+to refresh the in-tree ownership declarations.
 """
 
 # --- document vocabulary -----------------------------------------------------
