@@ -365,7 +365,7 @@ live constant.
 
 - [ ] 6. Delivery and orchestration
 
-- [ ] 6.1 Prepare targets and send to them safely
+- [x] 6.1 Prepare targets and send to them safely
   - Treat a connector instance as a publish target when its connector
     declares annotate-remote-activity.
   - List targets with their state (ready, not connected, unreadable
@@ -621,3 +621,4 @@ live constant.
 - Controller ruling 4.3: refusal precedence in compose: title render (VALUE_MISSING) -> description render (VALUE_MISSING) -> empty title (TITLE_EMPTY). Template-error positions in a description count within the description text, not page lines.
 - Controller ruling 4.4: a title template ([publish] / [publish.targets.<name>] title) must be single-line text per ruling 4.2(C): any Unicode Cc (tab included), Zl or Zp is refused naming file/table/key; predicate shared with values.
 - Controller ruling 4.4: PUBLISH_TABLE forces a pin move in tests/test_route_maps_e2e.py::test_the_settings_tables_and_tile_keys_are_the_pre_change_set (compact-chart-assets Req 7.5 snapshot of *_TABLE constants); design Modified Files omitted it; no amendment needed (that Req limits only compact-chart-assets).
+- Controller ruling 6.1: link_refused is True exactly when a link was offered and not kept, including when the answer's code is outside TARGET_CODES or not a PublishCode (design literal).
