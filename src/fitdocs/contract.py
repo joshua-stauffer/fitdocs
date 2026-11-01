@@ -377,7 +377,7 @@ neither region, so ``fitdocs publish`` does not publish it until
 ``fitdocs regen`` brings it current with both regions in their fresh form.
 """
 
-CONTRACT_VERSION: Final[str] = "17"
+CONTRACT_VERSION: Final[str] = "18"
 """The published ownership contract's version identifier (Req 2.8).
 
 A *string*, and deliberately not comparable with :data:`DOC_VERSION`: it
@@ -521,6 +521,24 @@ hidden temporary file beside it and swapped into place, so its path holds
 either the previous complete file or the new complete file, never a partial
 one. Which paths fitdocs owns, and its removal of assets that a rewritten page
 no longer links, are unchanged. Nothing is needed for existing documents.
+
+Raised from ``17`` to ``18`` by publish-core (Req 13.1, 13.3) because the stated
+guarantees about a workout page's regions and keys, and about what a writing
+command writes, changed. A workout page reserves a user-owned ``post`` region,
+which fitdocs writes only as a hidden-comment placeholder in a new page and
+carries unchanged, and a fitdocs-owned ``published`` region that ``fitdocs
+publish --yes`` fills from the publish ledger and that a fresh render leaves
+empty. The ``publish`` frontmatter key is user-owned: fitdocs never writes it
+and carries it unchanged. The publish ledgers, one TOML file per publish target
+under ``.fitdocs/publish/``, sit in the tool-owned state, and the settings file
+gains a ``[publish]`` table that fitdocs only reads. ``fitdocs publish`` writes
+only those ledgers and the ``published`` region of pages in the data root:
+never the ``post`` region or any other content of a page. A publish target that
+renews its credentials through its session updates only that instance's
+credentials file, as a credential-renewing ``fitdocs pull`` does. Run
+``fitdocs regen`` once to bring existing pages current with both regions;
+``fitdocs publish`` does not publish a page stamped with an older
+document-format version.
 """
 
 # --- document vocabulary -----------------------------------------------------

@@ -210,10 +210,11 @@ _REDERIVABILITY_DOCS: Final[str] = (
     "sources under `{archive_dir}/`, the wellness series under `{wellness_dir}/`, "
     "the athlete profile, the configured timezone, and the tile source. "
     "The `morning` region is generated content too: fitdocs refills it from "
-    "the wellness series. Content inside a document's other region markers "
-    "is not re-derived by regeneration -- it is carried over from the "
-    "document itself, so regenerating a deleted document brings back only "
-    "the generated content, not what those regions held."
+    "the wellness series. The `published` region is generated content too: "
+    "fitdocs refills it from the publish ledger. Content inside a document's "
+    "other region markers is not re-derived by regeneration -- it is carried "
+    "over from the document itself, so regenerating a deleted document brings "
+    "back only the generated content, not what those regions held."
 )
 # CLAIM ANCHOR: `sync.regen(data_root, *, athlete, tz, tiles)` rebuilds the
 # page from its archived sources, athlete, timezone and tile source.
@@ -226,6 +227,9 @@ _REDERIVABILITY_DOCS: Final[str] = (
 # contents through `merge_regions`; without an existing document those
 # contents cannot be recovered by regeneration. The load pass may itself
 # recompute load, so the limitation is specifically regeneration's carry.
+# `publish.engine._refresh_published` refills only the published region, from
+# the publish ledgers under `.fitdocs/publish/`, when `fitdocs publish --yes`
+# runs; regeneration carries that region like the others.
 
 _RENAMES: Final[str] = (
     "A document may be renamed when the file it is rendered from changes "
