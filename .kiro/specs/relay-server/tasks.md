@@ -769,7 +769,7 @@ Rules for every task:
   - _Requirements: 11.6, 14.7, 15.1_
   - _Depends: 6.7_
 
-- [ ] 7.2 Exercise the relay end to end with planted secrets
+- [x] 7.2 Exercise the relay end to end with planted secrets
   - Run one full exercise against an app that serves while operator
     commands run against the same SQLite file:
     - mint by operator command, check, revoke by command, then the next
@@ -1011,3 +1011,4 @@ Rules for every task:
 - 8.2: steering now says the `fitdocs` CLI runs no server; the relay paragraph (tech.md) and `### Relay server` entry (structure.md) are pinned by tests/connectors/test_network_statements.py::test_steering_publishes_the_relay_server_and_its_network_calls; the shared-module set is worded openly via SHARED_MODULES (strava-publish's outcomes.py append needs no steering rewrite); versions are a pointer to relay/CHANGELOG.md, never literals; network statements are scoped to the `fitdocs` package.
 - 7.1: tests/connectors network guard (conftest `_forbid_network_sockets` + the in-test recorders) now refuses socket.socket, socket.getaddrinfo AND socket.create_connection — relay.example.com has no DNS record, so a guard on socket.socket alone never sees a urllib request to it (getaddrinfo raises first and the code swallows it as a TransportError). Pinned by test_isolation. Controller downgrade: the round-2 pin (test_isolation getaddrinfo/create_connection), conftest docstring and 0o750 mode fix were applied by the controller, verified by mutations MC (guard back to socket only → only that test reds) and G8 (save always chmods 0o700 → registration confinement reds).
 - 8.3: docs/relay.md is bound by relay/tests/test_docs_relay.py (versions, image constants, env table, probe paths, command names, derived-image steps, statement pins for Req 2.8/9.6/not-governed) and tests/connectors/test_relay_docs.py (code table); relay/tests/test_config.py now takes the env table from tests.test_contract.PINNED_ENVIRONMENT (one pin, 5.4 dedupe done). The page documents current limits honestly: wrapper HTTPException → not-offered, restart the relay after restarting its PostgreSQL.
+- 7.2: relay/tests/test_e2e.py runs serve as a subprocess with operator CLI commands against the same database on both backends; the leak scan covers every stream except token mint's stdout (bounded by a fullmatch to one token) and scans each token whole and by its 52-char secret part. Its postgres_url helper accepts the hostless form postgresql:///db (Homebrew) and moves a URL password into FITDOCS_RELAY_DATABASE_PASSWORD; a PG-only test keeps the password in the URL userinfo to exercise serve.database_secrets' URL branch.
