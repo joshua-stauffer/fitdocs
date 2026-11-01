@@ -443,6 +443,25 @@ def connector_ledger_path(data_root: Path, instance: str) -> Path:
     return data_root / CONNECTOR_STATE_DIR / f"{instance}.toml"
 
 
+PUBLISH_STATE_DIR: Final[str] = f"{TOOL_STATE_DIR}/publish"
+"""Per-target publish ledger directory: ``<data-root>/.fitdocs/publish/``
+(publish-core design.md PublishLedger, Req 11.1).
+
+Composed from :data:`TOOL_STATE_DIR`, like :data:`CONNECTOR_STATE_DIR`, and
+already covered by ``.fitdocs/`` in :data:`OWNED_PATHS`, which is therefore
+unchanged."""
+
+
+def publish_ledger_path(data_root: Path, target: str) -> Path:
+    """A publish target's ledger path (publish-core design.md PublishLedger,
+    Req 11.1): ``<data_root>/.fitdocs/publish/<target>.toml``.
+
+    Pure path composition only -- creating :data:`PUBLISH_STATE_DIR` on demand
+    belongs to the ledger store that writes into it.
+    """
+    return data_root / PUBLISH_STATE_DIR / f"{target}.toml"
+
+
 def source_ref(sha256: str) -> str:
     """The frontmatter source reference: the archive path *relative to the data root*.
 

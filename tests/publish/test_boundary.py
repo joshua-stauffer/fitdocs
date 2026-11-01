@@ -61,6 +61,14 @@ import fitdocs.publish
 #: APPEND a new entry here when you add a module under `fitdocs/publish/`.
 _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
     "fitdocs.publish": frozenset(),
+    "fitdocs.publish.ledger": frozenset(
+        {
+            "fitdocs.docio",
+            "fitdocs.layout",
+            "fitdocs.publish.request",
+            "tomli_w",
+        }
+    ),
     "fitdocs.publish.outcomes": frozenset(),
     "fitdocs.publish.request": frozenset({"fitdocs.publish.outcomes"}),
     "fitdocs.publish.template": frozenset(),
@@ -68,8 +76,10 @@ _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
 }
 
 #: Third-party top-level names admitted, and the modules each is admitted in.
-#: Append-only like the registry. No `fitdocs.publish` module has one yet.
-_THIRD_PARTY_ALLOWED_MODULES: Final[dict[str, frozenset[str]]] = {}
+#: Append-only like the registry.
+_THIRD_PARTY_ALLOWED_MODULES: Final[dict[str, frozenset[str]]] = {
+    "tomli_w": frozenset({"fitdocs.publish.ledger"}),
+}
 
 #: Forbidden `fitdocs` targets (the design's list: render, load, metrics,
 #: ingestion, sync, index, query, dashboards, identity), plus the CLI (which
@@ -636,15 +646,14 @@ class TestForbiddenNames:
     def test_positive_control_a_third_party_name_is_admitted_only_where_registered(
         self,
     ) -> None:
-        """`tomli_w` is flagged until a module is registered for it."""
-        assert _third_party_violation("tomli_w", "fitdocs.publish.ledger")
+        """`tomli_w` is admitted in the registered module and flagged elsewhere
+        and in the same module once its registration is removed."""
+        assert _third_party_violation("tomli_w", "fitdocs.publish.ledger") is None
+        assert _third_party_violation("tomli_w", "fitdocs.publish.request")
         original = dict(_THIRD_PARTY_ALLOWED_MODULES)
         try:
-            _THIRD_PARTY_ALLOWED_MODULES["tomli_w"] = frozenset(
-                {"fitdocs.publish.ledger"}
-            )
-            assert _third_party_violation("tomli_w", "fitdocs.publish.ledger") is None
-            assert _third_party_violation("tomli_w", "fitdocs.publish.request")
+            _THIRD_PARTY_ALLOWED_MODULES.clear()
+            assert _third_party_violation("tomli_w", "fitdocs.publish.ledger")
         finally:
             _THIRD_PARTY_ALLOWED_MODULES.clear()
             _THIRD_PARTY_ALLOWED_MODULES.update(original)
