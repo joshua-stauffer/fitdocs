@@ -389,7 +389,7 @@ live constant.
   - _Requirements: 1.6, 8.6, 8.7, 12.3, 14.1, 14.2, 14.5_
   - _Depends: 3.2_
 
-- [ ] 6.2 Run the decision and the dry run
+- [x] 6.2 Run the decision and the dry run
   - Over the selected pages and targets, in order: refuse unreadable named
     pages, invalid opt-ins, unknown target names, older, newer and damaged
     pages, pages without activity facts, conflicting ledger records, and
@@ -627,3 +627,5 @@ live constant.
 - Controller ruling 5.3: base_fit is the archive path of the LAST ref in sources (the base identity's file); None when that ref is foreign/unresolvable or the archive file is absent -- never an extra's file (design 'last digest' read as the base; Req 9.3). A named page that cannot be read (OS error, invalid UTF-8, unparseable frontmatter) is SELECTED and reported by the engine as PAGE_UNREADABLE (Req 7.8 literal); only a readable non-workout page or a non-document is refused at selection.
 - Controller ruling 5.3: a named page's rel/path is the typed name when that name is itself an entry in workouts/ naming the same file (lstat identity); only otherwise (case-variant spelling) the on-disk entry with that identity, first in sorted order. Hard-linked names thus keep the name typed; two names of one file collapse to the first named.
 - 5.2: replace_published matches adjacent begin/end markers (no line between) -- `^begin\n(?:.*?\n)?end$` MULTILINE|DOTALL; morning/load docedit share the old regex gap (queued).
+- Controller ruling 6.2: design 'unless --to excludes it' is read from PublishPlan as given (no new field): --to excludes unknown names exactly when it narrowed the targets (set(considered) != configured). A --to naming every configured target is equivalent to no --to, and unknown names are reported (more informative; Req 2.6).
+- 6.2: run_publish(posting=True) raises NotImplementedError until 6.3 replaces that branch. A ledger record 'landed' means digest is not None, never code is not None (an unknown-result/rate-limited attempt is would_post). Test helpers must not couple fields (_record digest/code/at; _snapshot includes the data root) -- the round-1 rejection species.

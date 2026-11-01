@@ -67,6 +67,7 @@ import fitdocs.performance.engine
 import fitdocs.plans.corpus
 import fitdocs.plans.engine
 import fitdocs.plans.page
+import fitdocs.publish.engine
 import fitdocs.publish.links
 import fitdocs.publish.pages
 import fitdocs.publish.values
@@ -159,6 +160,9 @@ CONVERTED_MODULES: Final[tuple[ModuleType, ...]] = (
     # publish-core (task 5.3): page selection, state and the publish subject,
     # read only through the contract's readers.
     fitdocs.publish.pages,
+    # publish-core (task 6.2): the decision step reads each page's `publish`
+    # key and `post` region id through the contract, never its own reading.
+    fitdocs.publish.engine,
 )
 
 #: The one converted module allowed to name ``yaml`` at all. The frontmatter
@@ -344,6 +348,11 @@ CONTRACT_BINDINGS: Final[dict[str, tuple[str, ...]]] = {
         "is_workout_document",
         "sha_of_ref",
         "source_refs",
+    ),
+    "fitdocs.publish.engine": (
+        "POST_REGION",
+        "InvalidPublishKey",
+        "document_publish_targets",
     ),
     "fitdocs.publish.links": ("PUBLISHED_REGION",),
     "fitdocs.publish.values": (

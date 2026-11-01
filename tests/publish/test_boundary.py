@@ -77,6 +77,19 @@ _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
             "tomli_w",
         }
     ),
+    "fitdocs.publish.engine": frozenset(
+        {
+            "fitdocs.contract",
+            "fitdocs.publish.compose",
+            "fitdocs.publish.ledger",
+            "fitdocs.publish.outcomes",
+            "fitdocs.publish.pages",
+            "fitdocs.publish.request",
+            "fitdocs.publish.settings",
+            "fitdocs.publish.targets",
+            "fitdocs.publish.values",
+        }
+    ),
     "fitdocs.publish.links": frozenset({"fitdocs.contract", "fitdocs.docmerge"}),
     "fitdocs.publish.outcomes": frozenset(),
     "fitdocs.publish.pages": frozenset(
