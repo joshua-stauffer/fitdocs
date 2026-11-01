@@ -801,7 +801,7 @@ Rules for every task:
   - _Requirements: 1.4_
   - _Boundary: ReleaseExclusion_
 
-- [ ] 8.2 Amend the technology and structure steering
+- [x] 8.2 Amend the technology and structure steering
   - Technology steering:
     - Architecture: "No server, no background jobs." becomes "The `fitdocs`
       CLI runs no server and no background jobs.", followed by the relay
@@ -1008,3 +1008,4 @@ Rules for every task:
   - For 6.6 (from 6.5 review): disconnect_command must catch CredentialStoreError from run_disconnect (corrupt/wrong-mode file on the revoke path, tokenless file) → configuration-error exit, pointing at `fitdocs disconnect NAME --local-only` (which never reads the file); and must print NothingToDisconnect.env_override as Req 14.4's statement (the variable is not revoked and remains set). Catch UnsupportedDisconnect → exit 2; print LOCAL_ONLY_NOTE / SERVICE_NOTE from disconnect.py.
   - 6.6: cli.connect relay path = _connect_relay (paste via getpass "Relay token: "; --register with --email or "Email address: " prompt); misuse checks (--register/--email on non-relay; --email without --register) run right after the instance lookup, before NONE/reserved branches (exit 2, zero requests); (KeyboardInterrupt, typer.Abort) → 130; started lines "Registering <email>." / "Your code: <CODE>" / confirm-only-if-same / "This registration expires in N minute(s)." (floor; "less than a minute"); format/email errors printed unredacted.
 - 6.7: `fitdocs disconnect NAME [--local-only]` lines: success `NAME: disconnected.` / `Credentials removed: <path>` / `Relay code: <code>` / `Note: <note>.`; nothing-to-disconnect + `Environment variable X is not revoked and remains set.` (plural form); failure `NAME: <code>: <explanation>` + next step, exit 1; unsupported → 2; CredentialStoreError → 2 on stderr with one --local-only hint. Bare pull selects by PULL_ACTIVITIES/PULL_WELLNESS capability; empty selection prints `No configured connector instance pulls activities or wellness; nothing to pull.` exit 0. CLI command count is 16 ("Sixteen") — publish-core landing second takes 17.
+- 8.2: steering now says the `fitdocs` CLI runs no server; the relay paragraph (tech.md) and `### Relay server` entry (structure.md) are pinned by tests/connectors/test_network_statements.py::test_steering_publishes_the_relay_server_and_its_network_calls; the shared-module set is worded openly via SHARED_MODULES (strava-publish's outcomes.py append needs no steering rewrite); versions are a pointer to relay/CHANGELOG.md, never literals; network statements are scoped to the `fitdocs` package.

@@ -13,8 +13,8 @@ wellness inbox file → wellness.intake → wellness-archive/
                    → wellness.read_series → consumers, including wellness_daily
 ```
 
-No server, no background jobs. One database: a derived, disposable analytics
-index outside the data root, rebuilt from the documents and archived `.fit`
+The `fitdocs` CLI runs no server and no background jobs. One database: a
+derived, disposable analytics index outside the data root, rebuilt from the documents and archived `.fit`
 files, never read back into a document, except the chart regions and chart
 assets of dashboard pages under `dashboards/`; workout, history and block
 documents never read it. Workout documents and their derived
@@ -26,6 +26,19 @@ archiving, parsing, merging, rebuilding, checking and indexing stay offline and
 add no runtime dependency; the store uses the standard library and existing
 `tomli_w`, with its package dependencies limited to `layout`, `settings` and
 `units`.
+
+A separately deployed relay server lives in `relay/` (package `fitdocs_relay`,
+Starlette served by uvicorn). It is its own distribution with its own
+dependencies and is never part of the `fitdocs` release. It keeps one
+database, SQLite by default and PostgreSQL through an extra; the `fitdocs` CLI
+never imports it. The two sides share only the standard-library-only modules
+listed in `SHARED_MODULES` in `scripts/sync_relay_shared.py` (today
+`relay_codes` and `relay_envelope`), which the relay carries as pinned copies
+under `relay/src/fitdocs_relay/shared/` that a cross-check test keeps
+identical to their originals in the `fitdocs` package. The relay's deploy
+contract, wire envelope (client-facing) and wrapper seam are versioned; the
+versions are recorded in `relay/CHANGELOG.md`, tied to the constants by
+`relay/tests/test_contract.py`.
 
 ## Core Technologies
 
@@ -52,17 +65,20 @@ add no runtime dependency; the store uses the standard library and existing
 
 ## Network and Credentials
 
-Network-capable code lives in exactly two places: the map-tile fetch
-(`fitdocs.tiles`) and the connector transport
-(`fitdocs.connectors.http`). Connector requests happen only during
-`fitdocs connect` (one authentication call per attempt) and `fitdocs pull`
+Network-capable code in the `fitdocs` package lives in exactly two places: the
+map-tile fetch (`fitdocs.tiles`) and the connector transport
+(`fitdocs.connectors.http`); the relay server (`relay/`) is outside this scope. Connector requests happen only during
+`fitdocs connect` (one authentication call per attempt; for a registering
+relay instance, a capabilities read, a registration start and one poll per
+stated interval), `fitdocs disconnect` (one revocation call for a relay
+instance, none otherwise) and `fitdocs pull`
 (a single-attempt token renewal when a login-style token is due, then
 bounded, retried data calls); every other command — `sync`, `regen`,
 `load`, `dashboard`, `recovery`, `check`, `query`, `history`, `plan`, `derive-benchmarks`, `index`, and
 rendering — makes no connector request, whether or not connectors are
 configured, and keeps its existing map-tile behavior (rendering a map may fetch missing
-basemap tiles unless tile requests are disabled). Both network paths go
-through the standard library's `urllib` only, sending the one composed
+basemap tiles unless tile requests are disabled). Both of the package's
+network paths go through the standard library's `urllib` only, sending the one composed
 fitdocs User-Agent; connectors add no runtime dependency (beyond the
 standard library they use only the already-required `tomli_w`). `fitdocs
 query` runs agent SQL read-only under a locked DuckDB configuration with
@@ -71,7 +87,8 @@ dashboard pass run chart SQL through the same sandbox. Every DuckDB connection f
 opens has extension auto-install, extension auto-load and external file
 access disabled; the allow-list binds fitdocs's own connections, not an
 outside client that opens the index file. Connector credentials and
-tokens are stored per user outside the data root — one TOML file per instance in a
+tokens, relay tokens included, are stored per user through the same credential
+store outside the data root — one TOML file per instance in a
 per-user directory, never inside the data root (a credentials directory
 that resolves there is refused) — and the connectors package makes no
 clock call of its own (`now` and `sleep`
