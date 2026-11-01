@@ -818,9 +818,10 @@ def test_changelog_added_names_connector_register_and_disconnect() -> None:
 
 
 def test_changelog_changed_names_bare_pull_and_credentials_style() -> None:
-    """Each Changed entry names the action, and they are the last two entries
-    of the section, the bare pull then the `auth_style` value. Mutation:
-    deleting either entry or action sentence, or moving either entry, reds."""
+    """Each Changed entry names the action, and the two are adjacent, the bare
+    pull then the `auth_style` value (later landers may append after them).
+    Mutation: deleting either entry or action sentence, or separating or
+    swapping the two entries, reds."""
     _, changed = _added_and_changed()
     bare = _bullet(changed, "A bare `fitdocs pull`")
     assert "Action: none; name the instance to see why it is not pulled." in bare
@@ -830,10 +831,9 @@ def test_changelog_changed_names_bare_pull_and_credentials_style() -> None:
         "Action: none for existing files; do not share one credentials "
         "directory with an older fitdocs." in style
     )
-    assert changed.rstrip().endswith("with an older fitdocs.")
-    assert changed.index(bare) < changed.index(style)
-    assert changed.rstrip().endswith(style.rstrip())
-    assert changed.rstrip()[: -len(style.rstrip())].rstrip().endswith(bare.rstrip())
+    bullets = [b.strip() for b in re.split(r"(?= - )", " " + changed) if b.strip()]
+    position = bullets.index(bare.strip())
+    assert bullets[position + 1] == style.strip()
 
 
 def test_relay_section_registration_order_and_token_rules() -> None:

@@ -358,6 +358,7 @@ that I can rely on the boundary instead of inferring it from behavior.
 20. _(added by Amendment 10)_ The ownership contract shall name the `morning` region, state that fitdocs fills it from the wellness series and replaces its content whenever it differs, that it is never user-owned and hand edits there are replaced, and describe the morning-of pass among the operations that overwrite existing content.
 21. _(added by Amendment 10)_ The ownership contract shall state that a workout document's generated content, its `morning` region included, is re-derivable from the wellness series (rebuilt from the archived wellness files and the `[wellness]` settings) as well as from the archived sources, the athlete profile, the configured timezone and the tile source.
 22. _(added by Amendment 13)_ The ownership contract shall state that regeneration leaves a workout chart asset untouched when its regenerated content is identical to the file on disk, and replaces a changed asset without ever exposing partial content, and shall advance its version by one with a statement of what changed.
+23. _(added by Amendment 14)_ The ownership contract shall state that `fitdocs disconnect` removes the named connector instance's own credentials file and nothing else, that `fitdocs connect`, a credential-renewing `fitdocs pull` and `fitdocs disconnect` are the only operations that write to or remove from the credentials store, one instance's file at a time and never under the data root, shall carry a `disconnect` entry in its overwrite semantics of every writing operation, and shall advance its version by one with a statement of what changed.
 
 
 ### Requirement 3: In-Tree Ownership Declaration
@@ -530,3 +531,31 @@ contract. `CONTRACT_VERSION` advances from `"16"` to `"17"` (one more than its
 value at landing), with append-only history and a new current-change
 paragraph, following the contract's convention; criterion 2.8 requires the
 version advance. compact-chart-assets task 6.1 makes that change. The write path remains workout-docs's own. No existing criterion or amendment is renumbered.
+
+## Amendment 14 (2026-11-01): `fitdocs disconnect` removes one credentials file, landed by relay-server
+
+`relay-server` adds `fitdocs disconnect NAME`, which until now would have
+contradicted the published contract's statement that fitdocs never deletes
+anything in a connector's credentials store. The command removes the named
+instance's own credentials file and nothing else: never another instance's
+file, never the store's directory, never anything under the data root.
+`fitdocs connect`, a credential-renewing `fitdocs pull` and `fitdocs
+disconnect` are the only operations that write to or remove from the store,
+one instance's file at a time and never under the data root. It makes no
+change to what is written under the data root.
+
+Requirement 2 gains criterion 2.23, stating that in the published contract,
+with a `disconnect` entry in the contract's "Overwrite Semantics of Every
+Writing Operation".
+`CONTRACT_VERSION` advances by one from its value at landing (`"17"` on main
+when this amendment was written), with append-only history and a new
+current-change paragraph, as criterion 2.8 requires; the literal numbers are
+recorded by relay-server task 8.8 when it raises the constant, and the
+paragraph reads true whichever of relay-server and publish-core lands first,
+since the peer also raises the constant. The in-tree ownership declarations
+restate the new version, so the action for a user is to run `fitdocs sync` or
+`fitdocs regen` once. Pinned by the (heading, phrase) pins for the rewritten
+credentials-store bullet and the `disconnect` entry that task 8.8 adds to
+`tests/test_ownership_contract.py`, and by
+`tests/test_ownership_contract.py::test_contract_version_matches_code`. No
+existing criterion or amendment is renumbered.

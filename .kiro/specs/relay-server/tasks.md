@@ -902,14 +902,14 @@ Rules for every task:
     reds its pin.
   - _Requirements: 15.1, 16.8, 16.9_
 
-- [ ] 8.6 Tell the packaged skill never to run `fitdocs disconnect`
+- [x] 8.6 Tell the packaged skill never to run `fitdocs disconnect`
   - Add the sentence beside the existing connect rule, and pin it next to
     the never-connect pins.
   - Done when the skill tests pass, and deleting the sentence reds the new
     pin.
   - _Requirements: 16.6_
 
-- [ ] 8.7 Record the amendments in the affected specifications
+- [x] 8.7 Record the amendments in the affected specifications
   - Each takes the next free number at landing, worded like the earlier
     landed amendments.
   - connectors:
@@ -933,7 +933,7 @@ Rules for every task:
     pin that enforces it.
   - _Requirements: 1.4, 11.3, 11.4, 11.5, 14.1, 15.1_
 
-- [ ] 8.8 Advance the ownership contract for `fitdocs disconnect`
+- [x] 8.8 Advance the ownership contract for `fitdocs disconnect`
   - In the published ownership contract:
     - rewrite the credentials-store bullet (`docs/ownership-contract.md:
       895-906`). `fitdocs disconnect` removes the named instance's own
@@ -1015,3 +1015,6 @@ Rules for every task:
 - 6.8: tests/connectors/test_relay_wire_examples.py decodes every exchange in relay/contract/envelope-v1.json through the fitdocs client; it also pins that answers with no route-defined data carry data == {} and that the only unsendable recorded requests are registration-start-malformed and registration-start-too-large.
 - 8.4: docs/connectors.md relay section ends the page (R9 append-only headings); its heading is "Pulling a relay instance" (unique slug); the bare-pull doc line is bound to what the CLI prints (CliRunner), and each changelog entry's "Action:" sentence is pinned. Controller downgrade: the round-2 token-paragraph pins and the Changed-entry order pin were applied by the controller, verified by mutations N1-N3 and N10 (each reds only its test).
 - 8.5: tests/connectors/test_network_statements.py pins nine places; each window must name `fitdocs disconnect` and a registration word inside the `fitdocs connect` clause (before the next `fitdocs <command>`). Controller downgrade: the round-3 connect-clause bound and the O12-O14 named mutations were applied by the controller, verified on disk (O14 reds the main pin; the old predicate reds the three new tests).
+- 8.6: the shipped skill sentence (and design SkillLine, amended) says disconnect deletes an instance's stored credentials, restorable only by connecting again, and for a relay instance first revokes the token, which cannot be undone; the design's earlier literal said every disconnect revokes a relay token (false for API-key/login and --local-only). Controller downgrade: the reviewer's wording was applied by the controller, verified by M1 (delete) and M2 (drop reason).
+- 8.7: amendments landed as connectors Amendment 6, distribution Amendment 6, wiki-contract Amendment 14 (criterion 2.23). If publish-core lands first with amendments in these specs, renumber at rebase. Controller added tests/connectors/test_registry.py::test_a_relay_connector_declaring_a_driven_capability_still_needs_its_operations (M2b reds only it) so the 2.3 "in addition to" clause is pinned; round-3 prose fixes verified by the controller (every cited id exists).
+- 8.8: CONTRACT_VERSION "18" (raised from 17 by relay-server). Second lander vs publish-core: change only the number literals, delete the other's head test (test_version_eighteen_head_states_the_disconnect_change is head-only; test_contract_history_records_the_disconnect_change is history-only). The disconnect entry is general for later relay-bound instances (strava-publish R13.1 relies on it). Controller downgrade: the round-3 pin extensions (generality clause, "credential stays valid") were applied by the controller, verified by R1 and P2. At the docs-stream merge the 8.4 changelog order pin was relaxed from "last two Changed entries" to "adjacent, bare pull then auth_style" so later landers can append; separating the two still reds it.

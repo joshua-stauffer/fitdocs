@@ -1722,9 +1722,13 @@ def create_app(config: RelayConfig, *, extensions: Sequence[RelayExtension] = ()
     "never deletes it or anything in it" reds the bullet pin.
   - The statement is general enough that strava-publish's `OAUTH_BROWSER`
     disconnect rows are covered without a further bump.
-- **SkillLine** (16.6): "Never run `fitdocs disconnect` either: it revokes
-  a relay token, which cannot be undone." beside the connect rule, pinned
-  next to the existing never-connect pins.
+- **SkillLine** (16.6): "Never run `fitdocs disconnect` either: it deletes
+  an instance's stored credentials, which only the athlete can restore by
+  connecting again, and for a relay instance it first revokes the token at
+  the relay, which cannot be undone." beside the connect rule, pinned next to
+  the existing never-connect pins. (Amended at 8.6: the earlier literal said
+  every disconnect revokes a relay token, false for API-key and login
+  instances and for `--local-only`.)
 - **Changelogs** (16.7):
   - Root `CHANGELOG.md` Unreleased, appended:
     - Added: the relay connector, `fitdocs connect --register`, and
