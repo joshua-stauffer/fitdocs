@@ -204,7 +204,12 @@ def test_the_format_check_is_the_envelope_modules_not_a_second_pattern() -> None
         and node.module == "fitdocs.connectors.relay_envelope"
         for alias in node.names
     }
-    assert imported == {"split_relay_token"}
+    assert imported == {
+        "MAX_POLL_INTERVAL_S",
+        "SLOW_DOWN_STEP_S",
+        "is_email",
+        "split_relay_token",
+    }
     scanned = [n for n in ast.walk(tree) if isinstance(n, ast.Call)]
     assert scanned, "the walk saw no calls"
     for call in scanned:
@@ -517,7 +522,7 @@ def test_the_result_dataclasses_are_frozen_with_their_designed_fields() -> None:
 
 
 # --------------------------------------------------------------------------
-# The 6.3 part of design.md's RelayConnectEngine block, whole
+# design.md's RelayConnectEngine block (6.3 and 6.4 parts), whole
 # --------------------------------------------------------------------------
 
 _DESIGN_RENDERINGS = {
@@ -537,12 +542,28 @@ _DESIGN_RENDERINGS = {
         "    next_step: str\n"
         "    retry_after_s: int | None"
     ),
+    "RegistrationShown": (
+        "@dataclass(frozen=True)\n"
+        "class RegistrationShown:\n"
+        "    email: str\n"
+        "    user_code: str\n"
+        "    expires_in_s: int"
+    ),
     "RelayTokenFormatError": "class RelayTokenFormatError(ValueError):\n    ...",
     "run_relay_connect": (
         "def run_relay_connect(instance: ConnectorInstance, token_text: str, *,"
         " store: CredentialStore, transport: Transport,"
         " environ: Mapping[str, str], now: Callable[[], datetime],"
         " sleep: Callable[[float], None], redactor: Redactor)"
+        " -> RelayConnected | RelayConnectFailed:\n"
+        "    ..."
+    ),
+    "run_relay_registration": (
+        "def run_relay_registration(instance: ConnectorInstance, email: str, *,"
+        " store: CredentialStore, transport: Transport,"
+        " environ: Mapping[str, str], now: Callable[[], datetime],"
+        " sleep: Callable[[float], None], redactor: Redactor,"
+        " on_started: Callable[[RegistrationShown], None])"
         " -> RelayConnected | RelayConnectFailed:\n"
         "    ..."
     ),
