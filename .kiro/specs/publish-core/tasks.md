@@ -59,7 +59,7 @@ live constant.
     module; adding an import to the package marker.
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_
 
-- [ ] 1.2 Add the publish request and result values
+- [x] 1.2 Add the publish request and result values
   - Add the post (title, description), the completed-activity subject, the
     publish request (publication id, post, subject, recorded link) and the
     publish result (one code, an optional link), as frozen plain values.
@@ -606,3 +606,4 @@ live constant.
 ## Implementation Notes
 
 - 1.1: a fresh-interpreter test must run `[sys.executable, "-I", "-B", ...]`: `-I` drops the root conftest's PYTHONDONTWRITEBYTECODE, so without `-B` the child writes `__pycache__` under `src/` and `tests/test_bytecode_hygiene.py` fails later in the full run.
+- 1.2: link/label rules live in `fitdocs.publish.request` (`valid_link`, `valid_label`); `valid_link` uses `urllib.parse.urlsplit`, so task 1.3's forbidden-name scan must admit `urllib.parse` explicitly while still forbidding network-capable `urllib.request`. Pin dataclass field defaults (only `PublishResult.link` has one) -- defaults survived review twice.
