@@ -16,6 +16,9 @@ metadata:
   another tool's script.
 - The wiki's workouts look stale: no recent workout documents exist even
   though the athlete has presumably been training.
+- The athlete asks to preview or publish a workout's post -- the title and
+  description fitdocs composes from a workout page for the athlete's
+  publish targets.
 
 ## Commands to run
 
@@ -169,6 +172,60 @@ athlete's recorded benchmark timeline:
 A changed benchmark timeline affects existing computed load only after an
 explicit recomputation. Never run `fitdocs load --recompute` unless the
 athlete asks.
+
+## Publishing posts
+
+fitdocs can publish workout posts to the publish targets the athlete has
+configured -- several at once, and this skill names none of them: which
+targets exist is the athlete's configuration, never something to assume.
+
+List them with `fitdocs publish --targets`. It prints each configured
+target with its state and the explanation of every state it printed, and it
+sends and writes nothing. If it reports that no publish target is
+configured, there is nothing to publish to; tell the athlete.
+
+A workout page opts in with the `publish` key in its frontmatter: one target
+name, or a list of distinct target names. A page without the key is sent
+nowhere. The key is the athlete's, so do not add or change it unless the
+athlete asks you to.
+
+A page carries a `post` region; pages written by an older fitdocs gain it
+with `fitdocs regen`. Left empty (or holding only its hidden comment), the
+configured template composes the post. To give one page its own
+post, write the title on one line, then a blank line, then the description.
+The text may use placeholders such as `{title}`, `{distance_km}` and
+`{moving_time}`, and optional clauses: `{?Distance: {distance_km} km}`
+renders only when every placeholder inside it has a value. Write `{{` and
+`}}` for literal braces. A placeholder outside a clause that has no value on
+that page refuses the page rather than posting a blank.
+
+Preview with `fitdocs publish`, optionally naming pages. Without `--yes` it
+changes nothing: it sends no request, writes no file, and shows what would be
+posted to each target.
+
+```bash
+fitdocs publish
+```
+
+Run `fitdocs publish --yes` only when the athlete has asked you to post.
+Posting is irreversible: show the athlete the preview first, and never add
+`--yes` on your own initiative, to a scheduled run, or to retry a failure.
+
+Each result line of the report carries a code; the report prints each code's
+explanation once, below the results. Relay the explanation rather than
+guessing from the code. `posted` and `uploaded` mean the post landed;
+`would_post` and `would_update` are previews; `unchanged` and `not_opted_in`
+need nothing; every other code is a failure (it counts toward exit status 1):
+tell the athlete which page and target it concerns and what the explanation
+says, and do not retry it on your own judgment. `not_connected`,
+`auth_rejected` and `permission_denied` mean the athlete must run
+`fitdocs connect` for that target; `credentials_unreadable` means the athlete
+must fix the credentials file or connect again. Never run `fitdocs connect`
+yourself.
+
+See
+[the publishing guide](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/publishing.md)
+for the full template grammar, every placeholder and every code.
 
 ## Ownership boundary
 

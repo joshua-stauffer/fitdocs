@@ -502,7 +502,7 @@ live constant.
   - _Requirements: 13.1, 13.3, 13.4_
   - _Depends: 2.2, 2.3, 7.1_
 
-- [ ] 8.2 (P) Write the skill's publishing section
+- [x] 8.2 (P) Write the skill's publishing section
   - Add the section and the "When this applies" bullet from the design to
     the workouts skill: several configured publish targets, named by none;
     `fitdocs publish --targets`; the `publish` key and the `post` region
