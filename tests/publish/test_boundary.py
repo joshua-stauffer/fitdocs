@@ -63,6 +63,7 @@ _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
     "fitdocs.publish": frozenset(),
     "fitdocs.publish.outcomes": frozenset(),
     "fitdocs.publish.request": frozenset({"fitdocs.publish.outcomes"}),
+    "fitdocs.publish.template": frozenset(),
 }
 
 #: Third-party top-level names admitted, and the modules each is admitted in.
