@@ -73,7 +73,7 @@ live constant.
     refused character), and die on loosening any one refused character.
   - _Requirements: 9.3, 9.4, 12.3_
 
-- [ ] 1.3 Guard the publish package's boundary
+- [x] 1.3 Guard the publish package's boundary
   - Add a boundary test modelled on the connectors guard:
     - each publish module's direct non-standard-library imports pinned by
       equality against a hand-written registry, with the registry checked
@@ -607,3 +607,4 @@ live constant.
 
 - 1.1: a fresh-interpreter test must run `[sys.executable, "-I", "-B", ...]`: `-I` drops the root conftest's PYTHONDONTWRITEBYTECODE, so without `-B` the child writes `__pycache__` under `src/` and `tests/test_bytecode_hygiene.py` fails later in the full run.
 - 1.2: link/label rules live in `fitdocs.publish.request` (`valid_link`, `valid_label`); `valid_link` uses `urllib.parse.urlsplit`, so task 1.3's forbidden-name scan must admit `urllib.parse` explicitly while still forbidding network-capable `urllib.request`. Pin dataclass field defaults (only `PublishResult.link` has one) -- defaults survived review twice.
+- 1.3: every new publish module appends one entry to `_ALLOWED_IMPORT_TARGETS` in tests/publish/test_boundary.py (and `_THIRD_PARTY_ALLOWED_MODULES` for tomli_w). The clock/random scan is raw text: docstrings/comments must not quote `datetime.now`, `time.time`, `secrets.token_hex`, `random.` etc. `xml.sax.saxutils` is forbidden (use `html.escape`); `import urllib.parse` bare is forbidden (use `from urllib.parse import ...`). Design Allowed Dependencies' 'no urllib' bullet needs amending to 'no urllib.request/urllib.error/bare import urllib' (task 8.5).
