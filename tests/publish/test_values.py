@@ -16,6 +16,7 @@ from fitdocs.publish.values import (
     page_values,
 )
 from fitdocs.render.format import fmt_duration
+from tests.publish.conftest import ride_page, run_page
 
 EXPECTED_NAMES = (
     "title",
@@ -39,37 +40,7 @@ EXPECTED_NAMES = (
 
 
 # ------------------------------------------------------------ page builders
-
-
-def run_page(**changes: object) -> dict[str, object]:
-    """A run page whose figures are pairwise distinct; ``changes`` override and
-    a ``None`` change removes the key."""
-    page: dict[str, object] = {
-        "title": "Morning Run",
-        "sport": "Run",
-        "modality": "run",
-        "date": "2026-03-04",
-        "start_time": "2026-03-04T07:05:00+01:00",
-        "distance_km": 12.5,
-        "moving_time": "58:20",
-        "source_elapsed_s": 3725.0,
-        "avg_hr_bpm": 148.6,
-        "avg_power_w": 231.4,
-        "elevation_gain_m": 87.6,
-        "calories_kcal": 811.4,
-        "load_value": 61.7,
-        "load_methodology": "TRIMP",
-    }
-    for key, value in changes.items():
-        if value is None:
-            del page[key]
-        else:
-            page[key] = value
-    return page
-
-
-def ride_page(**changes: object) -> dict[str, object]:
-    return run_page(modality="bike", sport="Ride", **changes)
+# (run_page and ride_page live in tests/publish/conftest.py)
 
 
 def value_of(name: str, page: Mapping[str, object]) -> str | None:
