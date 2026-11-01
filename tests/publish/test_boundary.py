@@ -80,8 +80,11 @@ _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
     "fitdocs.publish.engine": frozenset(
         {
             "fitdocs.contract",
+            "fitdocs.docio",
+            "fitdocs.docmerge",
             "fitdocs.publish.compose",
             "fitdocs.publish.ledger",
+            "fitdocs.publish.links",
             "fitdocs.publish.outcomes",
             "fitdocs.publish.pages",
             "fitdocs.publish.request",

@@ -140,16 +140,23 @@ class Spy:
     """Records everything a dry run must never do."""
 
     publisher: ScriptedPublisher = field(default_factory=ScriptedPublisher)
+    #: A target named here is served by its own publisher instead of ``publisher``.
+    publishers: dict[str, ScriptedPublisher] = field(default_factory=dict)
+    #: A target named here fails to open with this code.
+    refuse: dict[str, PublishCode] = field(default_factory=dict)
     opened: list[str] = field(default_factory=list)
     clock_calls: int = 0
     mints: int = 0
 
     def open_target(self, name: str) -> TargetChannel | PublishCode:
         self.opened.append(name)
+        if name in self.refuse:
+            return self.refuse[name]
+        publisher = self.publishers.get(name, self.publisher)
         return TargetChannel(
             name=name,
-            label=self.publisher.link_label,
-            publisher=self.publisher,
+            label=publisher.link_label,
+            publisher=publisher,
             session=cast(ConnectorSession, None),
         )
 
@@ -201,6 +208,7 @@ class Env:
         considered: Sequence[str] | None = None,
         settings: PublishSettings | None = None,
         records: Mapping[str, Sequence[PublicationRecord]] | None = None,
+        posting: bool = False,
     ) -> PublishPlan:
         chosen = sorted(configured if considered is None else considered)
         ledgers = {
@@ -214,7 +222,7 @@ class Env:
             configured=frozenset(configured),
             settings=settings or _settings(configured),
             ledgers=ledgers,
-            posting=False,
+            posting=posting,
         )
 
     def run(self, plan: PublishPlan) -> PublishReport:
