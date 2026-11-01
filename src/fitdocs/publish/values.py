@@ -76,13 +76,13 @@ def format_duration(seconds: float) -> str:
 _NOT_SINGLE_LINE: Final = frozenset({"Cc", "Zl", "Zp"})
 
 
-def _has_control_character(text: str) -> bool:
+def has_control_character(text: str) -> bool:
     return any(unicodedata.category(ch) in _NOT_SINGLE_LINE for ch in text)
 
 
 def _verbatim(text: str | None) -> str | None:
     """``text`` unchanged unless it is absent or is not single-line text."""
-    if text is None or _has_control_character(text):
+    if text is None or has_control_character(text):
         return None
     return text
 
