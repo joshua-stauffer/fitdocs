@@ -32,3 +32,9 @@ A reader concludes only two commands touch connector configuration; the site-cop
 1. Edit configuration.md at both places to include `fitdocs disconnect`.
 2. In the roadmap, add a one-line note that disconnect was added later (leave the historical constraint text).
 3. Run the docs tests.
+
+## Update 2026-11-02 (strava-publish 7.6 review, pinned 964cc419)
+The same omission now also leaves out the Strava consent path, which contacts the relay's connect page and revokes at Strava via the relay. Current text at HEAD still reads "(revoking a relay token)":
+- `README.md:71`: "`fitdocs disconnect` (revoking a relay token)"
+- `docs/configuration.md:78`: "`fitdocs disconnect` (revoking a relay token)"
+Reword both to cover browser-consent (Strava) revocation as well, in the same edit as the disconnect additions above. The `cli.py` module docstring and `tech.md` were already fixed on impl/strava-publish; the `disconnect` command's own docstring (`src/fitdocs/cli.py` ~1827-1836) was not re-read in this run.
