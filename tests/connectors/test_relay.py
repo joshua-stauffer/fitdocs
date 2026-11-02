@@ -836,9 +836,13 @@ def test_a_valid_envelope_is_not_confused_by_a_429_status() -> None:
 # The five operations (Req 11.1, 15.2, 15.3, 15.5)
 # --------------------------------------------------------------------------
 
-# Every relay-origin code that is not a success reading of some route and not
-# rate-limited (which carries a wait and has its own tests), built from the
-# whole vocabulary so a code a later spec appends is exercised automatically.
+# Every relay-origin code that is not a success reading of a relay-connector
+# route and not rate-limited (which carries a wait and has its own tests),
+# built from the whole vocabulary so a code a later spec appends is exercised
+# automatically. connect-started, connect-pending and connect-granted are
+# success readings of a Strava connector route, not a relay-connector route,
+# so the token operations refuse them as they refuse connect-refused and
+# connect-expired, each with its own code.
 _NOT_A_REFUSAL = frozenset(
     {
         RelayCode.OK,
@@ -856,10 +860,10 @@ _REFUSAL_CODES = [
 ]
 # A literal count: a code appended to the vocabulary (strava-publish appends
 # some) fails here until someone decides whether it belongs in this list.
-_TODAYS_REFUSAL_CODES = 14
+_TODAYS_REFUSAL_CODES = 19
 
 
-def test_the_refusal_collection_is_todays_fourteen() -> None:
+def test_the_refusal_collection_is_todays_nineteen() -> None:
     assert len(_REFUSAL_CODES) == _TODAYS_REFUSAL_CODES
 
 

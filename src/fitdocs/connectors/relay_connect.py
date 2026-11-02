@@ -170,6 +170,16 @@ _NEXT_STEPS: Final[Mapping[RelayCode, str]] = {
     "tell the relay's operator.",
     RelayCode.REGISTRATION_REFUSED: "Ask the relay's operator for a token.",
     RelayCode.REGISTRATION_EXPIRED: "Run {register} again.",
+    RelayCode.CONNECT_STARTED: "Run {connect} again; if this repeats, "
+    "tell the relay's operator.",
+    RelayCode.CONNECT_PENDING: "Run {connect} again; if this repeats, "
+    "tell the relay's operator.",
+    RelayCode.CONNECT_GRANTED: "Run {connect} again; if this repeats, "
+    "tell the relay's operator.",
+    RelayCode.CONNECT_REFUSED: "Run {connect} again; if this repeats, "
+    "tell the relay's operator.",
+    RelayCode.CONNECT_EXPIRED: "Run {connect} again; if this repeats, "
+    "tell the relay's operator.",
     RelayCode.RELAY_UNREACHABLE: (
         "Check your network connection and the relay's url in your fitdocs "
         "settings, then try again."

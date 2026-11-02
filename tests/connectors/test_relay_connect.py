@@ -452,6 +452,21 @@ _NEXT_STEP_LITERALS: dict[RelayCode, str] = {
     ),
     RelayCode.REGISTRATION_REFUSED: "Ask the relay's operator for a token.",
     RelayCode.REGISTRATION_EXPIRED: "Run `fitdocs connect r1 --register` again.",
+    RelayCode.CONNECT_STARTED: (
+        "Run `fitdocs connect r1` again; if this repeats, tell the relay's operator."
+    ),
+    RelayCode.CONNECT_PENDING: (
+        "Run `fitdocs connect r1` again; if this repeats, tell the relay's operator."
+    ),
+    RelayCode.CONNECT_GRANTED: (
+        "Run `fitdocs connect r1` again; if this repeats, tell the relay's operator."
+    ),
+    RelayCode.CONNECT_REFUSED: (
+        "Run `fitdocs connect r1` again; if this repeats, tell the relay's operator."
+    ),
+    RelayCode.CONNECT_EXPIRED: (
+        "Run `fitdocs connect r1` again; if this repeats, tell the relay's operator."
+    ),
     RelayCode.RELAY_UNREACHABLE: (
         "Check your network connection and the relay's url in your fitdocs "
         "settings, then try again."

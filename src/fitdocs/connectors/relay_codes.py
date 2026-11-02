@@ -41,6 +41,11 @@ class RelayCode(StrEnum):
     REGISTRATION_EXPIRED = "registration-expired"
     RELAY_UNREACHABLE = "relay-unreachable"
     ANSWER_MALFORMED = "answer-malformed"
+    CONNECT_STARTED = "connect-started"
+    CONNECT_PENDING = "connect-pending"
+    CONNECT_GRANTED = "connect-granted"
+    CONNECT_REFUSED = "connect-refused"
+    CONNECT_EXPIRED = "connect-expired"
 
 
 @dataclass(frozen=True)
@@ -110,6 +115,27 @@ _INFOS: Final[tuple[RelayCodeInfo, ...]] = (
     _client(
         _C.ANSWER_MALFORMED,
         "The relay's answer was not a valid fitdocs relay answer.",
+    ),
+    _relay(_C.CONNECT_STARTED, 200, "The relay started connecting this target."),
+    _relay(
+        _C.CONNECT_PENDING,
+        200,
+        "The connection is waiting for the step in the browser.",
+    ),
+    _relay(
+        _C.CONNECT_GRANTED,
+        200,
+        "The connection is made, and the relay issued this instance's token.",
+    ),
+    _relay(
+        _C.CONNECT_REFUSED,
+        403,
+        "The connection was declined, or was not given every permission it needs.",
+    ),
+    _relay(
+        _C.CONNECT_EXPIRED,
+        410,
+        "The connection attempt expired or is not known to the relay.",
     ),
 )
 

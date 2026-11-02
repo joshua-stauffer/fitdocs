@@ -70,8 +70,9 @@ URL_FRAGMENT_MESSAGE: Final = "url must not carry a fragment"
 URL_USERINFO_MESSAGE: Final = "url must not carry user information"
 URL_INVALID_MESSAGE: Final = "url is not a valid URL"
 
-# Codes that mean "success" for some route: arriving where the route does not
-# expect them, they are an answer of another route, not a refusal.
+# Codes that mean "success" for a relay-connector route: arriving where the
+# route does not expect them, they are an answer of another route, not a
+# refusal.
 _SUCCESS_SHAPED: Final = frozenset(
     {
         RelayCode.OK,

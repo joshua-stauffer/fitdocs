@@ -482,6 +482,11 @@ fitdocs and never sent. The vocabulary is closed and append-only.
 | `registration-expired` | 410 | relay | The registration expired before it was confirmed. |
 | `relay-unreachable` | — | client | fitdocs could not reach the relay. |
 | `answer-malformed` | — | client | The relay's answer was not a valid fitdocs relay answer. |
+| `connect-started` | 200 | relay | The relay started connecting this target. |
+| `connect-pending` | 200 | relay | The connection is waiting for the step in the browser. |
+| `connect-granted` | 200 | relay | The connection is made, and the relay issued this instance's token. |
+| `connect-refused` | 403 | relay | The connection was declined, or was not given every permission it needs. |
+| `connect-expired` | 410 | relay | The connection attempt expired or is not known to the relay. |
 
 ### Registration format
 

@@ -169,6 +169,78 @@ _PINNED: tuple[tuple[str, str, int | None, str, str], ...] = (
     ),
 )
 
+#: strava-publish task 1.3 (Req 15.4): the five connect answers appended after
+#: `answer-malformed`, copied from the RelayCodesAmendment table in that
+#: spec's design.md.
+_APPENDED: tuple[tuple[str, str, int | None, str, str], ...] = (
+    (
+        "CONNECT_STARTED",
+        "connect-started",
+        200,
+        "relay",
+        "The relay started connecting this target.",
+    ),
+    (
+        "CONNECT_PENDING",
+        "connect-pending",
+        200,
+        "relay",
+        "The connection is waiting for the step in the browser.",
+    ),
+    (
+        "CONNECT_GRANTED",
+        "connect-granted",
+        200,
+        "relay",
+        "The connection is made, and the relay issued this instance's token.",
+    ),
+    (
+        "CONNECT_REFUSED",
+        "connect-refused",
+        403,
+        "relay",
+        "The connection was declined, or was not given every permission it needs.",
+    ),
+    (
+        "CONNECT_EXPIRED",
+        "connect-expired",
+        410,
+        "relay",
+        "The connection attempt expired or is not known to the relay.",
+    ),
+)
+
+#: All 27 values in declaration order, written out as a literal.
+_ALL_27_VALUES: tuple[str, ...] = (
+    "ok",
+    "token-missing",
+    "token-unknown",
+    "token-revoked",
+    "envelope-unsupported",
+    "request-malformed",
+    "request-too-large",
+    "not-offered",
+    "rate-limited",
+    "unavailable",
+    "relay-failure",
+    "storage-unreachable",
+    "schema-behind",
+    "schema-ahead",
+    "registration-started",
+    "registration-pending",
+    "registration-slow-down",
+    "registration-issued",
+    "registration-refused",
+    "registration-expired",
+    "relay-unreachable",
+    "answer-malformed",
+    "connect-started",
+    "connect-pending",
+    "connect-granted",
+    "connect-refused",
+    "connect-expired",
+)
+
 
 def test_the_pin_itself_has_22_distinct_codes() -> None:
     assert len(_PINNED) == 22
@@ -204,7 +276,21 @@ def test_explain_returns_the_registry_explanation() -> None:
         assert explain(code) == RELAY_CODES[code].explanation
 
 
-@pytest.mark.parametrize(("name", "value", "status", "origin", "explanation"), _PINNED)
+def test_the_27_values_are_pinned_in_declaration_order() -> None:
+    assert len(_ALL_27_VALUES) == 27
+    assert len(set(_ALL_27_VALUES)) == 27
+    assert [m.value for m in RelayCode] == list(_ALL_27_VALUES)
+
+
+def test_the_appended_names_follow_the_22_in_order() -> None:
+    assert [(m.name, m.value) for m in RelayCode][22:] == [
+        (r[0], r[1]) for r in _APPENDED
+    ]
+
+
+@pytest.mark.parametrize(
+    ("name", "value", "status", "origin", "explanation"), _PINNED + _APPENDED
+)
 def test_status_origin_and_explanation_per_code(
     name: str, value: str, status: int | None, origin: str, explanation: str
 ) -> None:

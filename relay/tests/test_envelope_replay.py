@@ -242,11 +242,26 @@ def answer_code(exchange: dict[str, Any]) -> str:
     return code
 
 
+# strava-publish task 1.3 appends these; their routes arrive in the relay
+# tasks and strava-publish task 4.4 records their exchanges, so until then the
+# recording legitimately lacks them. Task 4.4 deletes this set.
+_CONNECT_CODES_RECORDED_BY_4_4 = frozenset(
+    {
+        "connect-started",
+        "connect-pending",
+        "connect-granted",
+        "connect-refused",
+        "connect-expired",
+    }
+)
+
+
 def test_every_relay_origin_code_is_recorded_with_its_status() -> None:
     relay_codes = {
         info.code.value: info.http_status
         for info in RELAY_CODES.values()
         if info.origin is CodeOrigin.RELAY
+        and info.code.value not in _CONNECT_CODES_RECORDED_BY_4_4
     }
     assert len(relay_codes) >= 20
     recorded: dict[str, set[int]] = {}
