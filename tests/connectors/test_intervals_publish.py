@@ -1,32 +1,43 @@
-"""intervals-publish tasks 2.1-2.2: intervals.icu's answers mapped into publish
+"""intervals-publish tasks 2.1-2.3: intervals.icu's answers mapped into publish
 codes, and the activity found through the pull record.
 
 Req 7.1-7.7 (the answer table, by request kind) and 8.2, 8.3 (the remote
 identifier rule and the direct link); 3.1-3.4 (the recorded link and the pull
-record). No transport is involved.
+record); 3.5, 7.4, 9.3, 9.5 (the listing around the page's start, through a
+scripted transport).
 """
 
 from __future__ import annotations
 
+import base64
+import json
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from types import MappingProxyType
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
+from fitdocs.connectors.http import HttpRequest, HttpResponse, TransportError
 from fitdocs.connectors.intervals import (
     ACTIVITY_ID_PATTERN,
     ACTIVITY_LINK_BASE,
     ANSWER_CODES,
     INTERVALS_CONNECTOR_ID,
+    RESOLVE_FIELDS,
     SUCCESS_STATUSES,
     AnswerClass,
     CallKind,
+    ListedActivity,
     _activity_link,
     _answer_class,
     _answer_code,
+    _auth_headers,
     _linked_activity,
+    _list,
+    _listed_activities,
+    _listing_window,
     _record_activity,
     _usable_activity_id,
 )
@@ -43,7 +54,7 @@ from fitdocs.connectors.protocol import (
     ConnectorSession,
     PublishCode,
 )
-from fitdocs.connectors.secrets import Redactor
+from fitdocs.connectors.secrets import Redactor, Secret
 
 C = PublishCode
 K = CallKind
@@ -456,3 +467,356 @@ def test_the_record_read_is_the_sessions_instance_not_the_connector_id(
     _write(tmp_path, _entry("i1", _BASE_SHA))
     assert INSTANCE != INTERVALS_CONNECTOR_ID
     assert _record_activity(_session(tmp_path), _subject(_BASE_SHA)) == "i1"
+
+
+# --- 2.3: the listing around the page's start ----------------------------------
+
+_API_KEY = "k-secret-123"
+
+
+class _Scripted:
+    """A transport that records requests and answers every one the same way."""
+
+    def __init__(self, response: HttpResponse | TransportError) -> None:
+        self.response = response
+        self.requests: list[HttpRequest] = []
+
+    def __call__(self, request: HttpRequest, timeout: float) -> HttpResponse:
+        self.requests.append(request)
+        if isinstance(self.response, TransportError):
+            raise self.response
+        return self.response
+
+
+def _listing_session(transport: _Scripted, data_root: Path) -> ConnectorSession:
+    from fitdocs.connectors.http import CallMode, HttpClient
+
+    redactor = Redactor()
+    return ConnectorSession(
+        instance=INSTANCE,
+        settings=object(),
+        http=HttpClient(
+            transport,
+            mode=CallMode.DATA,
+            redactor=redactor,
+            sleep=lambda seconds: None,
+        ),
+        credentials=None,  # type: ignore[arg-type]
+        data_root=data_root,
+        now=lambda: datetime(2026, 1, 1, tzinfo=UTC),
+        sleep=lambda seconds: None,
+        redactor=redactor,
+    )
+
+
+def _run(
+    tmp_path: Path, response: HttpResponse | TransportError, subject: CompletedActivity
+) -> tuple[object, _Scripted]:
+    transport = _Scripted(response)
+    session = _listing_session(transport, tmp_path)
+    headers = _auth_headers(session, Secret(_API_KEY))
+    return _list(session, headers, subject), transport
+
+
+def _ok(payload: object) -> HttpResponse:
+    return HttpResponse(status=200, headers={}, body=json.dumps(payload).encode())
+
+
+def _entries(*entries: dict[str, object]) -> HttpResponse:
+    return _ok(list(entries))
+
+
+def test_request_address_query_and_header_names(tmp_path: Path) -> None:
+    result, transport = _run(tmp_path, _ok([]), _subject())
+    assert result == ()
+    (request,) = transport.requests
+    parts = urlsplit(request.url)
+    assert request.method == "GET"
+    assert (parts.scheme, parts.netloc) == ("https", "intervals.icu")
+    assert parts.path == "/api/v1/athlete/0/activities"
+    # _subject() starts 2026-03-01T07:00Z
+    assert parse_qs(parts.query, keep_blank_values=True) == {
+        "oldest": ["2026-02-28T00:00:00"],
+        "newest": ["2026-03-03T00:00:00"],
+        "fields": [
+            "id,source,start_date,start_date_local,distance,elapsed_time,external_id"
+        ],
+    }
+    assert request.body is None
+    assert list(request.secret_headers) == ["Authorization"]
+    token = base64.b64encode(f"API_KEY:{_API_KEY}".encode()).decode()
+    assert request.secret_headers["Authorization"].reveal() == f"Basic {token}"
+    sent = {name.lower() for name in request.headers}
+    assert "authorization" not in sent
+    assert _API_KEY not in request.url
+
+
+def test_the_resolve_fields_are_the_designs_seven() -> None:
+    assert RESOLVE_FIELDS == (
+        "id",
+        "source",
+        "start_date",
+        "start_date_local",
+        "distance",
+        "elapsed_time",
+        "external_id",
+    )
+
+
+def test_window_exact_strings_and_calendar_rollover() -> None:
+    assert _listing_window(datetime(2026, 3, 1, 7, 0, tzinfo=UTC)) == (
+        "2026-02-28T00:00:00",
+        "2026-03-03T00:00:00",
+    )
+    assert _listing_window(datetime(2026, 12, 31, 12, 0, tzinfo=UTC)) == (
+        "2026-12-30T00:00:00",
+        "2027-01-02T00:00:00",
+    )
+
+
+def test_window_is_anchored_on_the_utc_date_not_the_starts_own_zone() -> None:
+    # 2026-03-01T23:30-05:00 is 2026-03-02T04:30Z: the UTC date is the 2nd.
+    start = datetime(2026, 3, 1, 23, 30, tzinfo=timezone(timedelta(hours=-5)))
+    assert _listing_window(start) == ("2026-03-01T00:00:00", "2026-03-04T00:00:00")
+
+
+@pytest.mark.parametrize("offset_hours", range(-12, 15))
+@pytest.mark.parametrize("utc_clock", [(0, 30), (23, 30)])
+def test_window_holds_the_local_wall_clock_start_at_every_offset(
+    offset_hours: int, utc_clock: tuple[int, int]
+) -> None:
+    start = datetime(2026, 3, 15, *utc_clock, tzinfo=UTC)
+    local = start.astimezone(timezone(timedelta(hours=offset_hours))).replace(
+        tzinfo=None
+    )
+    oldest, newest = (datetime.fromisoformat(v) for v in _listing_window(start))
+    assert oldest <= local <= newest
+
+
+_FULL: dict[str, object] = {
+    "id": "i9000001",
+    "source": "GARMIN_CONNECT",
+    "start_date": "2026-03-01T05:00:00+02:00",
+    "start_date_local": "2026-03-01T09:15:30",
+    "distance": 1234.5,
+    "elapsed_time": 987,
+    "external_id": "pub-xyz",
+}
+
+
+def _one(entry: dict[str, object]) -> ListedActivity:
+    listed = _listed_activities(json.dumps([entry]).encode())
+    assert listed is not None
+    (only,) = listed
+    return only
+
+
+def test_a_fully_present_entry_parses_every_field_distinctly() -> None:
+    assert _one(_FULL) == ListedActivity(
+        activity_id="i9000001",
+        strava=False,
+        start=datetime(2026, 3, 1, 3, 0, tzinfo=UTC),
+        local_start=datetime(2026, 3, 1, 9, 15, 30),
+        distance_m=1234.5,
+        elapsed_s=987.0,
+        external_id="pub-xyz",
+    )
+
+
+def test_an_entry_with_only_an_id_has_every_other_field_absent() -> None:
+    assert _one({"id": "i9000001"}) == ListedActivity(
+        activity_id="i9000001",
+        strava=False,
+        start=None,
+        local_start=None,
+        distance_m=None,
+        elapsed_s=None,
+        external_id=None,
+    )
+
+
+def test_source_strava_is_the_exact_source_name() -> None:
+    assert _one({**_FULL, "source": "STRAVA"}).strava is True
+    for other in ("strava", "GARMIN_CONNECT", "STRAVA2", "", None, 5):
+        assert _one({**_FULL, "source": other}).strava is False
+
+
+def test_start_date_without_an_offset_is_absent_not_utc_and_not_local() -> None:
+    assert _one({**_FULL, "start_date": "2026-03-01T05:00:00"}).start is None
+
+
+def test_start_date_with_z_or_an_offset_is_utc() -> None:
+    assert _one({**_FULL, "start_date": "2026-03-01T05:00:00Z"}).start == datetime(
+        2026, 3, 1, 5, 0, tzinfo=UTC
+    )
+    assert _one({**_FULL, "start_date": "2026-03-01T05:00:00-03:30"}).start == (
+        datetime(2026, 3, 1, 8, 30, tzinfo=UTC)
+    )
+
+
+@pytest.mark.parametrize("bad", ["garbage", "", 5, 20260301, 1.5, True, None, [], {}])
+def test_malformed_start_date_is_absent(bad: object) -> None:
+    assert _one({**_FULL, "start_date": bad}).start is None
+
+
+def test_start_date_local_keeps_the_wall_clock_and_drops_any_offset() -> None:
+    assert _one({**_FULL, "start_date_local": "2026-03-01T09:15:30+05:00"}) == (
+        _one({**_FULL, "start_date_local": "2026-03-01T09:15:30"})
+    )
+    assert _one(
+        {**_FULL, "start_date_local": "2026-03-01T09:15:30+05:00"}
+    ).local_start == datetime(2026, 3, 1, 9, 15, 30)
+
+
+@pytest.mark.parametrize("bad", ["garbage", "", 5, 20260301, True, None, [], {}])
+def test_malformed_start_date_local_is_absent(bad: object) -> None:
+    assert _one({**_FULL, "start_date_local": bad}).local_start is None
+
+
+def test_zero_is_a_present_distance_and_elapsed_time() -> None:
+    entry = _one({**_FULL, "distance": 0, "elapsed_time": 0})
+    assert entry.distance_m == 0.0
+    assert entry.elapsed_s == 0.0
+    assert _one({**_FULL, "distance": 0.0}).distance_m == 0.0
+
+
+@pytest.mark.parametrize(
+    "bad",
+    ["5000", "", -1, -0.5, True, False, None, [], {}, float("nan"), 10**400],
+)
+def test_malformed_distance_is_absent_never_zero(bad: object) -> None:
+    body = json.dumps([{**_FULL, "distance": bad}], allow_nan=True).encode()
+    listed = _listed_activities(body)
+    assert listed is not None
+    assert listed[0].distance_m is None
+
+
+def test_an_infinite_distance_is_absent() -> None:
+    body = b'[{"id": "i9000001", "distance": Infinity}]'
+    listed = _listed_activities(body)
+    assert listed is not None
+    assert listed[0].distance_m is None
+
+
+@pytest.mark.parametrize(
+    "bad", ["60", "", -1, 12.5, 60.0, True, False, None, [], {}, 10**400]
+)
+def test_malformed_elapsed_time_is_absent_never_zero(bad: object) -> None:
+    assert _one({**_FULL, "elapsed_time": bad}).elapsed_s is None
+
+
+@pytest.mark.parametrize("bad", ["", 5, 20260301, 1.5, True, None, [], {}])
+def test_malformed_external_id_is_absent(bad: object) -> None:
+    assert _one({**_FULL, "external_id": bad}).external_id is None
+
+
+def test_a_repeated_identifier_is_kept_once_first_wins_in_order() -> None:
+    body = json.dumps(
+        [
+            {**_FULL, "id": "iB", "distance": 1.0},
+            {**_FULL, "id": "iA", "distance": 2.0},
+            {**_FULL, "id": "iB", "distance": 3.0},
+        ]
+    ).encode()
+    listed = _listed_activities(body)
+    assert listed is not None
+    assert [(e.activity_id, e.distance_m) for e in listed] == [("iB", 1.0), ("iA", 2.0)]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        b"",
+        b"not json",
+        b"\xff\xfe",
+        json.dumps([{"id": "i9000001"}]).encode("utf-16"),
+        b'[{"id": "i9000001", "external_id": "caf\xe9"}]',
+        b"[" * 200000,
+        b"null",
+        b'"text"',
+        b"5",
+        b'{"id": "i9000001"}',
+        b'{"activities": []}',
+        b"[5]",
+        b'["i9000001"]',
+        b"[null]",
+        b"[[]]",
+        b"[{}]",
+        b'[{"id": null}]',
+        b'[{"id": 9000001}]',
+        b'[{"id": true}]',
+        b'[{"id": ""}]',
+        b'[{"id": "i9/1"}]',
+        b'[{"id": "i 1"}]',
+        b'[{"id": "' + b"a" * 65 + b'"}]',
+        b'[{"id": "i9000001"}, {"id": "i/2"}]',
+        b'[{"id": "i9000001"}, 7]',
+    ],
+)
+def test_a_body_not_an_array_of_objects_with_usable_ids_is_not_documented(
+    body: bytes,
+) -> None:
+    assert _listed_activities(body) is None
+
+
+def test_an_external_id_is_kept_exactly_as_given() -> None:
+    assert _one({**_FULL, "external_id": " pub-xyz "}).external_id == " pub-xyz "
+
+
+def test_an_empty_array_is_a_listing_of_nothing() -> None:
+    assert _listed_activities(b"[]") == ()
+
+
+def test_a_sixty_four_character_id_is_usable() -> None:
+    assert _one({"id": "a" * 64}).activity_id == "a" * 64
+
+
+def test_the_listing_returns_the_parsed_entries(tmp_path: Path) -> None:
+    result, _ = _run(tmp_path, _entries(_FULL), _subject())
+    assert result == (_one(_FULL),)
+
+
+@pytest.mark.parametrize(
+    ("status", "code"),
+    [
+        (401, C.AUTH_REJECTED),
+        (403, C.PERMISSION_DENIED),
+        (404, C.REJECTED),
+        (418, C.REJECTED),
+        (429, C.RATE_LIMITED),
+        (500, C.UNAVAILABLE),
+        (503, C.UNAVAILABLE),
+        (204, C.UNAVAILABLE),
+        (302, C.UNAVAILABLE),
+    ],
+)
+def test_each_failing_status_answers_the_read_codes(
+    tmp_path: Path, status: int, code: PublishCode
+) -> None:
+    response = HttpResponse(status=status, headers={}, body=b"[]")
+    result, transport = _run(tmp_path, response, _subject())
+    assert result == code
+    assert transport.requests
+
+
+def test_a_transport_failure_is_unavailable(tmp_path: Path) -> None:
+    result, transport = _run(tmp_path, TransportError("timed out"), _subject())
+    assert result == C.UNAVAILABLE
+    assert transport.requests
+
+
+@pytest.mark.parametrize("body", [b"not json", b"{}", b'[{"id": "i/1"}]'])
+def test_a_200_body_not_in_documented_form_is_unavailable(
+    tmp_path: Path, body: bytes
+) -> None:
+    response = HttpResponse(status=200, headers={}, body=body)
+    result, _ = _run(tmp_path, response, _subject())
+    assert result == C.UNAVAILABLE
+
+
+def test_an_error_status_is_judged_by_status_not_by_body(tmp_path: Path) -> None:
+    good_body = json.dumps([_FULL]).encode()
+    result, _ = _run(
+        tmp_path, HttpResponse(status=403, headers={}, body=good_body), _subject()
+    )
+    assert result == C.PERMISSION_DENIED

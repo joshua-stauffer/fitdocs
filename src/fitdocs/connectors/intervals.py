@@ -21,6 +21,7 @@ import gzip
 import hashlib
 import io
 import json
+import math
 import re
 import zlib
 from collections.abc import Mapping
@@ -40,6 +41,7 @@ from fitdocs.connectors.errors import (
 from fitdocs.connectors.http import (
     MAX_RESPONSE_BYTES,
     HttpResponse,
+    TransportError,
     auth_failure_from,
 )
 from fitdocs.connectors.ledger import LedgerError, load_ledger
@@ -869,3 +871,134 @@ def _record_activity(
         if ids:
             return next(iter(ids))
     return None
+
+
+# --- Publish: the activities listed around the page's start ------------------
+# (intervals-publish design.md "ActivityFinding"; Req 3.5, 7.4, 9.3, 9.5)
+
+RESOLVE_FIELDS: Final[tuple[str, ...]] = (
+    "id",
+    "source",
+    "start_date",
+    "start_date_local",
+    "distance",
+    "elapsed_time",
+    "external_id",
+)
+WINDOW_DAYS_BEFORE: Final[int] = 1
+WINDOW_DAYS_AFTER: Final[int] = 2
+
+
+@dataclass(frozen=True)
+class ListedActivity:
+    """One listing entry, each field ``None`` when absent or malformed."""
+
+    activity_id: str  # a usable identifier
+    strava: bool  # source == STRAVA_SOURCE
+    start: datetime | None  # start_date with an offset, in UTC
+    local_start: datetime | None  # start_date_local's wall clock, naive
+    distance_m: float | None  # finite, >= 0, not bool
+    elapsed_s: float | None  # int >= 0, not bool
+    external_id: str | None  # non-empty text
+
+
+def _listing_window(start: datetime) -> tuple[str, str]:
+    """The ``oldest`` and ``newest`` local date-times that hold the page's
+    start in any zone: from one day before the UTC date to two days after."""
+    day = start.astimezone(UTC).date()
+    oldest = day - timedelta(days=WINDOW_DAYS_BEFORE)
+    newest = day + timedelta(days=WINDOW_DAYS_AFTER)
+    return f"{oldest.isoformat()}T00:00:00", f"{newest.isoformat()}T00:00:00"
+
+
+def _local_wall_clock(value: object) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        return datetime.fromisoformat(value).replace(tzinfo=None)
+    except ValueError:
+        return None
+
+
+def _listed_activity(entry: object) -> ListedActivity | None:
+    if not isinstance(entry, dict):
+        return None
+    activity_id = entry.get("id")
+    if not isinstance(activity_id, str) or not _usable_activity_id(activity_id):
+        return None
+    distance = entry.get("distance")
+    distance_m: float | None = None
+    if isinstance(distance, int | float) and not isinstance(distance, bool):
+        try:
+            as_float = float(distance)
+        except OverflowError:
+            as_float = math.nan
+        if math.isfinite(as_float) and as_float >= 0:
+            distance_m = as_float
+    elapsed = entry.get("elapsed_time")
+    elapsed_s: float | None = None
+    if isinstance(elapsed, int) and not isinstance(elapsed, bool) and elapsed >= 0:
+        try:
+            elapsed_s = float(elapsed)
+        except OverflowError:
+            elapsed_s = None
+    external_id = entry.get("external_id")
+    return ListedActivity(
+        activity_id=activity_id,
+        strava=entry.get("source") == STRAVA_SOURCE,
+        start=_start(entry.get("start_date")),
+        local_start=_local_wall_clock(entry.get("start_date_local")),
+        distance_m=distance_m,
+        elapsed_s=elapsed_s,
+        external_id=external_id
+        if isinstance(external_id, str) and external_id
+        else None,
+    )
+
+
+def _listed_activities(body: bytes) -> tuple[ListedActivity, ...] | None:
+    """The entries of a listing body, a repeated identifier kept once (first
+    wins); ``None`` when the body is not a JSON array of objects each with a
+    usable identifier."""
+    try:
+        payload = json.loads(body.decode("utf-8"))
+    except (ValueError, RecursionError):
+        return None
+    if not isinstance(payload, list):
+        return None
+    listed: dict[str, ListedActivity] = {}
+    for entry in payload:
+        parsed = _listed_activity(entry)
+        if parsed is None:
+            return None
+        listed.setdefault(parsed.activity_id, parsed)
+    return tuple(listed.values())
+
+
+def _list(
+    session: ConnectorSession,
+    headers: Mapping[str, Secret],
+    subject: CompletedActivity,
+) -> tuple[ListedActivity, ...] | PublishCode:
+    """The key's own activities around the page's start, or the code the
+    answer maps to (Req 3.5, 7.4, 9.3, 9.5)."""
+    oldest, newest = _listing_window(subject.start)
+    query = urlencode(
+        {"oldest": oldest, "newest": newest, "fields": ",".join(RESOLVE_FIELDS)}
+    )
+    try:
+        response = session.http.get(
+            f"{API_BASE}/athlete/{SELF_ATHLETE}/activities?{query}",
+            secret_headers=headers,
+        )
+    except TransportError:
+        return _answer_code(CallKind.READ, AnswerClass.NETWORK_FAILURE) or (
+            PublishCode.UNAVAILABLE
+        )
+    answer = _answer_class(CallKind.READ, response.status)
+    if answer is not AnswerClass.SUCCESS:
+        return _answer_code(CallKind.READ, answer) or PublishCode.UNAVAILABLE
+    listed = _listed_activities(response.body)
+    if listed is None:
+        return PublishCode.UNAVAILABLE
+    return listed
