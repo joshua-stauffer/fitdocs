@@ -90,9 +90,15 @@ _PLUGIN_FENCE_LANGS = frozenset(
 
 # The only HTML comments a portable fitdocs document may contain: the region
 # markers ``<!-- fitdocs:begin:<id> -->`` / ``<!-- fitdocs:end:<id> -->`` and the
-# generated-document provenance banner (wiki-contract Req 4.2-4.4), and a
-# morning fingerprint comment matching the shared STAMP_PATTERN.
+# generated-document provenance banner (wiki-contract Req 4.2-4.4), a
+# morning fingerprint comment matching the shared STAMP_PATTERN, and the
+# ``post`` region's one hidden instruction (publish-core Req 3.1), pinned as
+# its landed text.
 _REGION_COMMENT = re.compile(r"<!-- fitdocs:(?:begin|end):[a-z]+ -->")
+_POST_INSTRUCTION = (
+    "<!-- post: to give this page its own post, write the title on one line, "
+    "then a blank line, then the description. Left empty, the template is used. -->"
+)
 
 _IMAGE_LINK = re.compile(r"!\[[^\]]*\]\(([^)]+)\)")
 _HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
@@ -152,6 +158,7 @@ def _assert_document_invariants(
             _REGION_COMMENT.fullmatch(comment)
             or comment.startswith(GENERATED_PREFIX)
             or STAMP_PATTERN.fullmatch(comment)
+            or comment == _POST_INSTRUCTION
         ), f"foreign HTML comment: {comment!r}"
     assert not _RAW_HTML_TAG.findall(body), "raw HTML tags are not portable"
     plugin_fences = [

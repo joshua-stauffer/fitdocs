@@ -53,8 +53,8 @@ Three classes of frontmatter key
 Every frontmatter key a fitdocs document may carry falls into exactly one of
 three classes. **Managed** (:data:`MANAGED_KEYS`) keys are written by the
 render layer or the training-load pass and rewritten in full on every
-regeneration. **User-owned** (:data:`USER_KEYS`) keys -- currently the effort
-tag's four keys -- are never written by fitdocs and are carried forward
+regeneration. **User-owned** (:data:`USER_KEYS`) keys -- the effort
+tag's four keys and ``publish`` -- are never written by fitdocs and are carried forward
 verbatim on every rewrite (the three :data:`LOAD_KEYS` lines are carried the
 same way, but only over a ``load`` region the training-load pass will not
 touch; see :func:`load_key_lines`), the same "yours to keep" guarantee
@@ -103,6 +103,7 @@ before the morning-of pass fills it.
 from __future__ import annotations
 
 import math
+import re
 import uuid
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass
@@ -134,6 +135,7 @@ __all__ = [
     "GENERATOR_KEY",
     "INDOOR_KEY",
     "InvalidEffortTag",
+    "InvalidPublishKey",
     "LOAD_KEYS",
     "LOAD_NOT_COMPUTED",
     "LOAD_REGION",
@@ -144,7 +146,12 @@ __all__ = [
     "MORNING_REGION",
     "NOTES_PLACEHOLDER",
     "NOTES_REGION",
+    "POST_PLACEHOLDER",
+    "POST_REGION",
     "PRESERVED_REGIONS",
+    "PUBLISHED_PLACEHOLDER",
+    "PUBLISHED_REGION",
+    "PUBLISH_KEY",
     "REFRESHED_REGIONS",
     "SESSION_UUID_FIELD",
     "SOURCES_KEY",
@@ -156,9 +163,11 @@ __all__ = [
     "SPORT_KEY",
     "START_TIME_KEY",
     "SourceIdentityReading",
+    "SummaryReading",
     "TOOL_REGIONS",
     "TYPE_KEY",
     "USER_KEYS",
+    "USER_KEY_ORDER",
     "USER_REGIONS",
     "UUID_KEY",
     "WORKOUT_PLACEHOLDER",
@@ -170,9 +179,11 @@ __all__ = [
     "document_load_basis",
     "document_load",
     "document_modality",
+    "document_publish_targets",
     "document_sport",
     "document_source_identity",
     "document_start_time",
+    "document_summary",
     "document_uuid",
     "document_version",
     "effort_tag",
@@ -193,7 +204,7 @@ __all__ = [
 
 # --- versions ----------------------------------------------------------------
 
-DOC_VERSION: Final[int] = 11
+DOC_VERSION: Final[int] = 12
 """The document-format version stamped on every generated workout document.
 
 Compared arithmetically against the version a document records (Req 5.1-5.3,
@@ -355,9 +366,18 @@ until ``fitdocs regen`` rewrites it. ``regen`` also renames each page whose
 filename fitdocs chose, with its charts, when its corrected local start gives a
 different name (activity-identity Amendment 2, A2.1); a filename the user chose
 is kept.
+
+Raised from ``11`` to ``12`` by publish-core (Req 13.2). Every page gains two
+regions, each rendered with no heading: an empty ``published`` region directly
+after the title and attribution line, which ``fitdocs publish --yes`` fills with
+links to the posted activities, and a ``post`` region directly before the
+``morning`` region, which holds a hidden-comment instruction the athlete
+replaces with the page's own post. A page stamped with a lower version has
+neither region, so ``fitdocs publish`` does not publish it until
+``fitdocs regen`` brings it current with both regions in their fresh form.
 """
 
-CONTRACT_VERSION: Final[str] = "18"
+CONTRACT_VERSION: Final[str] = "19"
 """The published ownership contract's version identifier (Req 2.8).
 
 A *string*, and deliberately not comparable with :data:`DOC_VERSION`: it
@@ -502,14 +522,33 @@ either the previous complete file or the new complete file, never a partial
 one. Which paths fitdocs owns, and its removal of assets that a rewritten page
 no longer links, are unchanged. Nothing is needed for existing documents.
 
-Raised from ``17`` to ``18`` by relay-server (Req 14.8, 14.9) because the stated
+Raised from ``17`` to ``18`` by publish-core (Req 13.1, 13.3) because the stated
+guarantees about a workout page's regions and keys, and about what a writing
+command writes, changed. A workout page reserves a user-owned ``post`` region,
+which fitdocs writes only as a hidden-comment placeholder in a new page and
+carries unchanged, and a fitdocs-owned ``published`` region that ``fitdocs
+publish --yes`` fills from the publish ledger and that a fresh render leaves
+empty. The ``publish`` frontmatter key is user-owned: fitdocs never writes it
+and carries it unchanged. The publish ledgers, one TOML file per publish target
+under ``.fitdocs/publish/``, sit in the tool-owned state, and the settings file
+gains a ``[publish]`` table that fitdocs only reads. ``fitdocs publish`` writes
+only those ledgers and the ``published`` region of pages in the data root:
+never the ``post`` region or any other content of a page. A publish target that
+renews its credentials through its session updates only that instance's
+credentials file, as a credential-renewing ``fitdocs pull`` does. Run
+``fitdocs regen`` once to bring existing pages current with both regions;
+``fitdocs publish`` does not publish a page stamped with an older
+document-format version.
+
+Raised from ``18`` to ``19`` by relay-server (Req 14.8, 14.9) because the stated
 guarantee about the connector credentials store changed. The store sits outside
 the data root and is not owned by fitdocs; it was never deleted from, and now
 ``fitdocs disconnect`` removes the named instance's own credentials file and
 nothing else, never the directory and never another instance's file.
-``fitdocs connect``, a credential-renewing ``fitdocs pull`` and ``fitdocs
-disconnect`` are the only operations that write to or remove from the store, one
-instance's file at a time and never under the data root. Which paths fitdocs owns
+``fitdocs connect``, a credential-renewing ``fitdocs pull``, a
+credential-renewing ``fitdocs publish --yes`` and ``fitdocs disconnect`` are the
+only operations that write to or remove from the store, one instance's file at a
+time and never under the data root. Which paths fitdocs owns
 under the data root are unchanged. Run ``fitdocs sync`` or ``fitdocs regen`` once
 to refresh the in-tree ownership declarations.
 """
@@ -650,7 +689,7 @@ over verbatim when the ``load`` region is hand-authored or prior-format
 (:func:`load_key_lines`), and otherwise leaves them to the training-load pass.
 """
 
-# --- user-owned frontmatter keys: the effort tag (Req 1.1, 2.1) -------------
+# --- user-owned frontmatter keys: the effort tag and ``publish`` (Req 1.1, 2.1, 2.2)
 
 EFFORT_KEY: Final[str] = "effort"
 """Frontmatter key carrying the effort tag's kind (Req 2.1, 2.2)."""
@@ -673,11 +712,20 @@ EFFORT_KEYS: Final[tuple[str, ...]] = (
 """The effort tag's keys in documentation order; also problem-report order
 (Req 2.1, 5.6)."""
 
-USER_KEYS: Final[frozenset[str]] = frozenset(EFFORT_KEYS)
+PUBLISH_KEY: Final[str] = "publish"
+"""Frontmatter key naming the targets a page is published to (Req 2.1). The
+fifth user-owned key (Req 2.2): fitdocs preserves it verbatim, never writes it."""
+
+USER_KEY_ORDER: Final[tuple[str, ...]] = (*EFFORT_KEYS, PUBLISH_KEY)
+"""The user-owned keys in documentation order: the four effort keys, then
+:data:`PUBLISH_KEY` (Req 2.2, 13.3). The workouts declaration lists them in this
+order; :data:`USER_KEYS` is the same keys as a set."""
+
+USER_KEYS: Final[frozenset[str]] = frozenset(USER_KEY_ORDER)
 """Every frontmatter key fitdocs preserves verbatim but never writes (Req 1.1,
-1.2) -- the user-owned class, parallel to :data:`USER_REGIONS` for a region.
+1.2, 2.2) -- the user-owned class, parallel to :data:`USER_REGIONS` for a region.
 Disjoint with :data:`MANAGED_KEYS` (Req 1.1, 1.5): one test pins this set to
-the exact frozenset of :data:`EFFORT_KEYS`, a second pins that it is disjoint
+the exact frozenset of :data:`USER_KEY_ORDER`, a second pins that it is disjoint
 with :data:`MANAGED_KEYS` directly, and a third, the render-layer anti-drift
 test, additionally pins that no key :func:`fitdocs.render.frontmatter.build_frontmatter`
 can emit is in this set.
@@ -953,7 +1001,13 @@ LOAD_REGION: Final[str] = "load"
 MORNING_REGION: Final[str] = "morning"
 """The fitdocs-owned region refreshed from wellness data outside the page's files."""
 
-USER_REGIONS: Final[tuple[str, ...]] = (NOTES_REGION, WORKOUT_REGION)
+POST_REGION: Final[str] = "post"
+"""The user-owned region holding the page's own post for publishing."""
+
+PUBLISHED_REGION: Final[str] = "published"
+"""The fitdocs-owned region listing links to the page's posted activities."""
+
+USER_REGIONS: Final[tuple[str, ...]] = (NOTES_REGION, WORKOUT_REGION, POST_REGION)
 """The regions a human authors; fitdocs writes only their initial placeholder."""
 
 TOOL_REGIONS: Final[tuple[str, ...]] = (LOAD_REGION,)
@@ -964,12 +1018,12 @@ PRESERVED_REGIONS: Final[tuple[str, ...]] = USER_REGIONS + TOOL_REGIONS
 
 The preserved policy is unchanged (1.4).
 
-``("notes", "workout", "load")`` -- the order is contractual: it is the order
+``("notes", "workout", "post", "load")`` -- the order is contractual: it is the order
 these regions appear in a rendered document and the order every enumeration of
 them, published or internal, uses.
 """
 
-REFRESHED_REGIONS: Final[tuple[str, ...]] = (MORNING_REGION,)
+REFRESHED_REGIONS: Final[tuple[str, ...]] = (MORNING_REGION, PUBLISHED_REGION)
 """Regions whose content fitdocs alone writes from data outside the page's files.
 
 The merge carries each region like every other region; its owning pass replaces
@@ -1002,6 +1056,15 @@ import it from here.
 
 MORNING_PLACEHOLDER: Final[str] = ""
 """The empty content of a fresh morning region, filled by the morning-of pass."""
+
+POST_PLACEHOLDER: Final[str] = (
+    "<!-- post: to give this page its own post, write the title on one line, "
+    "then a blank line, then the description. Left empty, the template is used. -->"
+)
+"""A fresh ``post`` region: a hidden instruction that renders as nothing."""
+
+PUBLISHED_PLACEHOLDER: Final[str] = ""
+"""The empty content of a fresh ``published`` region (filled by publishing)."""
 
 # --- pure readers ------------------------------------------------------------
 
@@ -1473,6 +1536,114 @@ def document_source_identity(
     )
 
 
+# --- publishing: the ``publish`` key and the summary a post reads (Req 2.1, 5.2)
+
+
+@dataclass(frozen=True)
+class InvalidPublishKey:
+    """A ``publish`` key that cannot be read as target names; ``detail`` says
+    why, in words fitdocs wrote (never a parser's message)."""
+
+    detail: str
+
+
+def document_publish_targets(
+    frontmatter: Mapping[str, object] | None,
+) -> tuple[str, ...] | InvalidPublishKey:
+    """The target names under :data:`PUBLISH_KEY`, or why the key is invalid (Req 2.1).
+
+    An absent key (or ``None`` frontmatter) and an empty list read as no targets,
+    ``()``. A non-empty ``str`` is a one-name tuple; a list of distinct
+    non-empty ``str`` is that tuple in order. Anything else -- a ``bool``, a
+    number, a mapping, a nested list, an empty or duplicate name, a ``null`` --
+    is an :class:`InvalidPublishKey`. Never raises.
+    """
+    if frontmatter is None or PUBLISH_KEY not in frontmatter:
+        return ()
+    value = frontmatter[PUBLISH_KEY]
+    if isinstance(value, str):
+        if value:
+            return (value,)
+        return InvalidPublishKey("the publish key is an empty name")
+    if isinstance(value, list):
+        names: list[str] = []
+        for item in value:
+            if not isinstance(item, str):
+                return InvalidPublishKey(
+                    "the publish list holds something that is not a name"
+                )
+            if not item:
+                return InvalidPublishKey("the publish list holds an empty name")
+            if item in names:
+                return InvalidPublishKey(
+                    f"the publish list names {item!r} more than once"
+                )
+            names.append(item)
+        return tuple(names)
+    return InvalidPublishKey("the publish key must be one name or a list of names")
+
+
+@dataclass(frozen=True)
+class SummaryReading:
+    """The page's own figures a post is written from; each ``None`` when unusable."""
+
+    title: str | None
+    distance_km: float | None
+    moving_time_s: float | None
+    avg_hr_bpm: int | None
+    avg_power_w: int | None
+    elevation_gain_m: float | None
+    calories_kcal: int | None
+
+
+_MOVING_TIME = re.compile(r"(?:(\d{1,6}):([0-5]\d)|([0-5]?\d)):([0-5]\d)", re.ASCII)
+
+
+def _moving_time_s(value: object) -> float | None:
+    """Seconds from ``h:mm:ss`` or ``m:ss`` (minutes 0-59 in both), else ``None``."""
+    if not isinstance(value, str):
+        return None
+    match = _MOVING_TIME.fullmatch(value)
+    if match is None:
+        return None
+    hours, minutes, only_minutes, seconds = match.groups()
+    if hours is not None:
+        return float(int(hours) * 3600 + int(minutes) * 60 + int(seconds))
+    return float(int(only_minutes) * 60 + int(seconds))
+
+
+def _whole_number(value: object) -> int | None:
+    """A non-negative finite number rounded to a whole ``int`` (the renderer's rule)."""
+    number = _non_negative_finite(value)
+    if number is None:
+        return None
+    return int(round(number))
+
+
+def document_summary(frontmatter: Mapping[str, object] | None) -> SummaryReading:
+    """The page's title and headline figures, each ``None`` when unusable (Req 5.2).
+
+    Reads the keys the workout renderer emits: ``title`` (a non-blank ``str``),
+    ``distance_km`` and ``elevation_gain_m`` (genuine finite non-negative
+    numbers, never ``bool``), ``moving_time`` (only ``h:mm:ss`` or ``m:ss``, read
+    as seconds), and ``avg_hr_bpm``, ``avg_power_w`` and ``calories_kcal`` (the
+    same numbers, rounded to whole). Anything else reads as ``None`` for that
+    field alone. Never raises; ``None`` frontmatter reads as all absent.
+    """
+    if frontmatter is None:
+        return SummaryReading(None, None, None, None, None, None, None)
+    title = frontmatter.get("title")
+    return SummaryReading(
+        title=title if isinstance(title, str) and title.strip() else None,
+        distance_km=_non_negative_finite(frontmatter.get("distance_km")),
+        moving_time_s=_moving_time_s(frontmatter.get("moving_time")),
+        avg_hr_bpm=_whole_number(frontmatter.get("avg_hr_bpm")),
+        avg_power_w=_whole_number(frontmatter.get("avg_power_w")),
+        elevation_gain_m=_non_negative_finite(frontmatter.get("elevation_gain_m")),
+        calories_kcal=_whole_number(frontmatter.get("calories_kcal")),
+    )
+
+
 def source_refs(frontmatter: Mapping[str, object]) -> tuple[str, ...]:
     """The document's ``sources`` history, in ascending rank (Req 1.3, 5.2).
 
@@ -1518,7 +1689,8 @@ def unmanaged_keys(frontmatter: Mapping[str, object]) -> tuple[str, ...]:
     full, so any key outside :data:`MANAGED_KEYS` and :data:`USER_KEYS` is
     dropped by the next regeneration. Naming them is what turns that from
     silent data loss into a warning the user can act on (Req 6.3) and into an
-    audit finding (Req 8.4). A user-owned key -- the effort tag's keys -- is
+    audit finding (Req 8.4). A user-owned key (:data:`USER_KEYS`: the effort
+    tag's keys and ``publish``) is
     never reported here (Req 1.4, 4.7): only a key in neither class is
     unmanaged. The verbatim carry that makes that exemption safe is
     :func:`user_owned_lines`, which the sync engine applies on every rewrite, so

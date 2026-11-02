@@ -12,15 +12,18 @@ is reported.
 
 A module inside this package may import only the standard library,
 ``fitdocs.layout``, ``fitdocs.settings``, ``fitdocs.inbox``,
-``fitdocs.version``, and -- in ``connectors/ledger.py`` and
+``fitdocs.version``, the publish request and vocabulary leaves
+(``fitdocs.publish.request`` and ``fitdocs.publish.outcomes``, imported only
+by ``connectors/protocol.py``, and ``fitdocs.publish.request`` also by
+``connectors/registry.py``), and -- in ``connectors/ledger.py`` and
 ``connectors/credentials.py`` only -- ``tomli_w``. Only
 ``connectors/http.py`` may import ``urllib.request``/``urllib.error``. No
 module here reads the system clock directly; ``now`` and ``sleep`` are always
 passed in by the caller.
 
-The published surface (``__all__``) is the 50 names design.md's "PackageInit"
-section lists plus wellness-pull's "PackageSurface" plus relay-server's five
-relay names (55 in all) (pinned by
+The published surface (``__all__``) is 63 names: the 50 that design.md's
+"PackageInit" section and wellness-pull's "PackageSurface" list together, plus
+publish-core's eight publish names, plus relay-server's five relay names (pinned by
 ``tests/connectors/test_surface.py``): the protocol layer's types and
 vocabularies, the transport layer, the typed failures, the secret and its
 redactor, and the registration operations. The built-in
@@ -55,11 +58,14 @@ from fitdocs.connectors.intervals import IntervalsConnector
 from fitdocs.connectors.protocol import (
     CAPABILITIES,
     DRIVEN_CAPABILITIES,
+    PUBLISH_CAPABILITIES,
     SUPPORTED_AUTH_STYLES,
+    TARGET_CODES,
     ActivityPuller,
     AuthStyle,
     Capability,
     CapabilityInfo,
+    CompletedActivity,
     Connector,
     ConnectorSession,
     CredentialAccess,
@@ -72,6 +78,11 @@ from fitdocs.connectors.protocol import (
     KeyVerifier,
     Listing,
     ListingDeferral,
+    Post,
+    PostPublisher,
+    PublishCode,
+    PublishRequest,
+    PublishResult,
     RegistrationPolled,
     RegistrationStarted,
     RelayCapabilities,
@@ -150,6 +161,14 @@ __all__ = [
     "WellnessDay",
     "WellnessListing",
     "WellnessPackage",
+    "PostPublisher",
+    "PUBLISH_CAPABILITIES",
+    "Post",
+    "CompletedActivity",
+    "PublishRequest",
+    "PublishResult",
+    "PublishCode",
+    "TARGET_CODES",
     "RelayTokenClient",
     "RelayRefused",
     "RelayCapabilities",

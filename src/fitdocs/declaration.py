@@ -47,9 +47,9 @@ from typing import Final
 
 from fitdocs.contract import (
     CONTRACT_VERSION,
-    EFFORT_KEYS,
     GENERATED_PREFIX,
     GENERATOR,
+    USER_KEY_ORDER,
     USER_REGIONS,
     is_generated,
 )
@@ -210,10 +210,11 @@ _REDERIVABILITY_DOCS: Final[str] = (
     "sources under `{archive_dir}/`, the wellness series under `{wellness_dir}/`, "
     "the athlete profile, the configured timezone, and the tile source. "
     "The `morning` region is generated content too: fitdocs refills it from "
-    "the wellness series. Content inside a document's other region markers "
-    "is not re-derived by regeneration -- it is carried over from the "
-    "document itself, so regenerating a deleted document brings back only "
-    "the generated content, not what those regions held."
+    "the wellness series. The `published` region is generated content too: "
+    "fitdocs refills it from the publish ledger. Content inside a document's "
+    "other region markers is not re-derived by regeneration -- it is carried "
+    "over from the document itself, so regenerating a deleted document brings "
+    "back only the generated content, not what those regions held."
 )
 # CLAIM ANCHOR: `sync.regen(data_root, *, athlete, tz, tiles)` rebuilds the
 # page from its archived sources, athlete, timezone and tile source.
@@ -226,6 +227,9 @@ _REDERIVABILITY_DOCS: Final[str] = (
 # contents through `merge_regions`; without an existing document those
 # contents cannot be recovered by regeneration. The load pass may itself
 # recompute load, so the limitation is specifically regeneration's carry.
+# `publish.engine._refresh_published` refills only the published region, from
+# the publish ledgers under `.fitdocs/publish/`, when `fitdocs publish --yes`
+# runs; regeneration carries that region like the others.
 
 _RENAMES: Final[str] = (
     "A document may be renamed when the file it is rendered from changes "
@@ -485,7 +489,8 @@ def declaration_text(directory: str) -> str:
 
     For the directory holding generated workout documents (``workouts/``):
     the written-and-tool-owned statement, the user-owned region names, the
-    user-owned effort-tag frontmatter keys (Req 6.4), the rename a changed
+    user-owned frontmatter keys, ``contract.USER_KEY_ORDER`` (the effort
+    keys and ``publish``) (Req 6.4), the rename a changed
     base may cause (activity-identity Req 9.3), and re-derivability by
     regeneration (Req 3.2), plus the never-add-a-marker rule. For the
     longitudinal history directory (``history/``): the written-and-tool-owned
@@ -530,7 +535,7 @@ def declaration_text(directory: str) -> str:
     never opens with.
     """
     user_regions_list = _english_list(f"`{region}`" for region in USER_REGIONS)
-    user_keys_list = _english_list(f"`{key}`" for key in EFFORT_KEYS)
+    user_keys_list = _english_list(f"`{key}`" for key in USER_KEY_ORDER)
 
     owner = _DASHBOARDS_OWNER if directory == DASHBOARDS_DIR + "/" else f"`{GENERATOR}`"
     owner_block = _OWNER_BLOCK.format(

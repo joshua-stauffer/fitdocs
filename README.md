@@ -241,8 +241,10 @@ plan source and one planned-workout page per row, written by `fitdocs plan`
 — of which the block page carries one user-owned region, `notes`, preserved
 the same way a workout document's `notes` region is; the planned-workout
 page carries no user-owned content. You own every workout document's
-`notes` and `workout` regions, and its effort-tag frontmatter keys (`effort`,
-`effort_distance_m`, `effort_time_s`, `effort_event`) — see the published
+`notes`, `workout` and `post` regions, and its user-owned frontmatter keys
+(the effort tags `effort`, `effort_distance_m`, `effort_time_s`,
+`effort_event`, and `publish`); fitdocs owns the `published` region, which
+`fitdocs publish --yes` fills with links to your posts — see the published
 contract for the full detail. And `athlete.toml`'s hand-added keys survive
 every fitdocs write. Every generated document carries a provenance stamp,
 and the five owned directories a human or agent browses — `workouts/`,

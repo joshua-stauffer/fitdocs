@@ -16,7 +16,8 @@ guard, registry snapshot/restore, credentials/environment isolation):
    never the pull's.
 2. With ``[connectors]`` configured, every command Req 14.1 names that is
    not ``connect``/``pull`` itself -- ``sync``, ``regen``, ``load``,
-   ``check``, ``history``, ``plan``, ``derive-benchmarks``, ``index``,
+   ``check``, ``history``, ``plan``, ``publish`` (a dry run and ``--targets``),
+   ``derive-benchmarks``, ``index``,
    ``query``, ``dashboard refresh`` and ``recovery`` -- completing exactly as
    it would with no ``[connectors]`` table at all: same exit code and output, the
    same number of socket attempts as the bare run (an in-test recorder that
@@ -373,6 +374,8 @@ def _page_bytes(root: Path) -> str:
         ("check", []),
         ("history", []),
         ("plan", []),
+        ("publish", []),
+        ("publish", ["--targets"]),
         ("derive-benchmarks", []),
         ("index", []),
         ("query", ["SELECT count(*) AS n FROM pages"]),
@@ -517,6 +520,9 @@ def test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded(
             assert recovery_doc_path(root).is_file()
         assert bare_attempts == 0
         assert len(attempts) == 0
+    if command == "publish":
+        assert bare_root_after == bare_root_before
+        assert wired_root_after == wired_root_before
     if command == "index":
         assert bare_root_after == bare_root_before
         assert wired_root_after == wired_root_before
@@ -528,7 +534,7 @@ def test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded(
     # `regen` re-renders maps, so its tile fetch reaches for a socket in both
     # roots (and falls back): the wired run may make exactly as many attempts
     # as the bare one -- a swallowed connector request adds one.
-    if command == "index":
+    if command in ("index", "publish"):
         assert bare_attempts == 0
         assert len(attempts) == 0
     else:

@@ -29,6 +29,7 @@ from __future__ import annotations
 import ast
 import dataclasses
 import inspect
+import re
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -195,10 +196,20 @@ def test_every_other_capability_is_not_remote_changing_and_reversible() -> None:
         assert info.irreversible is False
 
 
-def test_exactly_activity_and_wellness_pulls_are_driven() -> None:
+_DRIVEN_LITERAL = {
+    Capability.PULL_ACTIVITIES,
+    Capability.PULL_WELLNESS,
+    Capability.PUSH_ACTIVITY,
+    Capability.ANNOTATE_REMOTE_ACTIVITY,
+    Capability.RESOLVE_REMOTE_ACTIVITY,
+}
+
+
+def test_exactly_the_two_pulls_and_the_three_publish_capabilities_are_driven() -> None:
     driven = {c for c, info in CAPABILITIES.items() if info.driven}
-    assert driven == {Capability.PULL_ACTIVITIES, Capability.PULL_WELLNESS}
-    assert {Capability.PULL_ACTIVITIES, Capability.PULL_WELLNESS} == DRIVEN_CAPABILITIES
+    assert driven == _DRIVEN_LITERAL
+    assert _DRIVEN_LITERAL == DRIVEN_CAPABILITIES
+    assert isinstance(DRIVEN_CAPABILITIES, frozenset)
 
 
 def test_capability_summaries_are_non_empty_and_pairwise_distinct() -> None:
@@ -947,3 +958,100 @@ def test_the_five_relay_types_match_the_design_block_whole() -> None:
     }
     for name, expected in _RELAY_DESIGN_RENDERINGS.items():
         assert _render_class_without_docstrings(name) == expected, name
+
+
+# ---------------------------------------------------------------------------
+# The publish capabilities and the publish operation protocol (publish-core
+# 3.2, Req 9.1, 9.5, 9.6, 9.8, 9.9)
+# ---------------------------------------------------------------------------
+
+
+def test_publish_capabilities_are_exactly_push_annotate_and_resolve() -> None:
+    from fitdocs.connectors.protocol import PUBLISH_CAPABILITIES
+
+    assert isinstance(PUBLISH_CAPABILITIES, frozenset)
+    assert (
+        frozenset(
+            {
+                Capability.PUSH_ACTIVITY,
+                Capability.ANNOTATE_REMOTE_ACTIVITY,
+                Capability.RESOLVE_REMOTE_ACTIVITY,
+            }
+        )
+        == PUBLISH_CAPABILITIES
+    )
+
+
+def test_the_four_other_reserved_capabilities_stay_undriven() -> None:
+    reserved = {c for c, info in CAPABILITIES.items() if not info.driven}
+    assert reserved == {
+        Capability.PUSH_PLANNED_WORKOUT,
+        Capability.PULL_PLANNED_WORKOUTS,
+        Capability.PULL_PLANS,
+        Capability.PULL_THRESHOLDS,
+    }
+
+
+def test_publish_capability_flags_are_unchanged() -> None:
+    flags = {
+        c: (CAPABILITIES[c].changes_remote, CAPABILITIES[c].irreversible)
+        for c in (
+            Capability.PUSH_ACTIVITY,
+            Capability.ANNOTATE_REMOTE_ACTIVITY,
+            Capability.RESOLVE_REMOTE_ACTIVITY,
+        )
+    }
+    assert flags == {
+        Capability.PUSH_ACTIVITY: (True, True),
+        Capability.ANNOTATE_REMOTE_ACTIVITY: (True, True),
+        Capability.RESOLVE_REMOTE_ACTIVITY: (False, False),
+    }
+
+
+def test_post_publisher_shape_and_target_obligations() -> None:
+    from fitdocs.connectors.protocol import PostPublisher
+
+    assert str(inspect.signature(PostPublisher.publish)) == (
+        "(self, session: 'ConnectorSession', request: 'PublishRequest')"
+        " -> 'PublishResult'"
+    )
+    assert isinstance(PostPublisher.__dict__["link_label"], property)
+    assert str(inspect.signature(PostPublisher.link_label.fget)) == (  # type: ignore[attr-defined]
+        "(self) -> 'str'"
+    )
+    doc = PostPublisher.__doc__ or ""
+    # The framing is pinned too: nothing may sit between the header and the
+    # first bullet, and the header itself is the exact phrase.
+    head, _, rest = doc.partition("obligations:")
+    assert " ".join(head.split()).endswith(". A target's")
+    assert re.match(r"\s*\n\s*- ", rest)
+    bullets = tuple(
+        " ".join(chunk.split())
+        for chunk in re.split(r"\n\s*- ", doc.split("obligations:", 1)[1])[1:]
+    )
+    assert bullets == (
+        "It returns one code from ``TARGET_CODES`` per request.",
+        "It returns a link only with a landed code.",
+        "It never prints, logs or returns service text (text a service sent).",
+        "It resolves the remote activity before creating anything, with the "
+        "publication id as the idempotency key.",
+        "It returns ``AMBIGUOUS`` when several remote activities match, and "
+        "``ACTIVITY_FACTS_MISSING`` when the activity facts given cannot "
+        "identify the activity -- never a pick, and never an upload.",
+        "It returns ``LOCAL_RECORD_UNREADABLE``, never an upload, when its own "
+        "local record of the connection's activities cannot be read and "
+        "resolution fails.",
+        "It marks a request that is not idempotent ``single_attempt``.",
+    )
+
+
+def test_published_publish_names_are_the_leaf_objects() -> None:
+    from fitdocs.connectors import protocol
+    from fitdocs.publish import outcomes, request
+
+    assert protocol.PublishCode is outcomes.PublishCode
+    assert protocol.TARGET_CODES is outcomes.TARGET_CODES
+    assert protocol.Post is request.Post
+    assert protocol.CompletedActivity is request.CompletedActivity
+    assert protocol.PublishRequest is request.PublishRequest
+    assert protocol.PublishResult is request.PublishResult

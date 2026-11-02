@@ -117,12 +117,13 @@ decision; the bytes are always archived first).
 1. The connector framework shall define a connector as a declaration of a unique connector id, a display name, exactly one authentication style, the set of capabilities it offers, and the credential fields it needs the user to supply, each field named, labeled, and marked secret or not secret.
 2. The connector framework shall define a capability vocabulary of exactly nine members: pull activities, push activity, annotate remote activity, resolve remote activity, push planned workout, pull planned workouts, pull plans, pull thresholds, and pull wellness.
 3. The connector framework shall mark each capability as changing state at the remote service or not, and as reversible or irreversible, marking push activity, annotate remote activity, and push planned workout as changing remote state and irreversible, and every other capability as not changing remote state and reversible.
-4. The connector framework shall drive only the pull-activities capability in this version; where a connector declares any of the other eight, the connector framework shall accept the declaration without requiring any operation for it, and no command shall invoke it.
+4. The connector framework shall drive only the pull-activities capability in this version; where a connector declares any of the other eight, the connector framework shall accept the declaration without requiring any operation for it, and no command shall invoke it. *(amended by Amendment 6: push activity, annotate remote activity and resolve remote activity are driven too, so five capabilities are driven and four stay reserved)*
 5. The connector framework shall define pulling activities as two operations: a listing of remote activities for an optional earliest start time, each listed activity carrying a stable remote id, whether an original file is available, and — where the service states them — its start time, sport, duration, a revision token that changes when the remote file changes, and a suggested file name; and a fetch of one listed activity's original bytes.
 6. The connector framework shall let a fetch answer in exactly one of three ways: the file's bytes; a declination with a reason, meaning the activity has no usable original; or a deferral with a reason, meaning the original cannot be fetched yet.
 7. The connector framework shall define four authentication styles — none, personal key, login (credentials exchanged once for renewable tokens), and browser consent — and shall treat browser consent as reserved: a connector may declare it, and `fitdocs connect` shall refuse it as unsupported by this version.
 8. Where the service does not state a listed activity's start time, sport, duration, or revision, the connector framework shall carry that value as absent, never as zero, an empty string, or a default.
-9. The connector framework shall give a connector its configuration, its credentials, the transport, and the clock as its only inputs, and shall take listings, fetched bytes, and credential updates as its only outputs; it shall never read, render, score, or write a workout document on a connector's behalf.
+9. The connector framework shall give a connector its configuration, its credentials, the transport, and the clock as its only inputs, and shall take listings, fetched bytes, and credential updates as its only outputs; it shall never read, render, score, or write a workout document on a connector's behalf. *(amended by Amendment 6: the outputs also include a publish result, one outcome code with at most one link)*
+10. _(added by Amendment 6)_ The connector framework shall define publishing a post as one operation: given a publication id, a post (a title and a description), the completed activity the post is about and the link recorded by an earlier outcome, a connector answers with exactly one outcome code from the set a target may return and, only with a code meaning the post has landed, at most one link; a connector that declares annotate-remote-activity can publish, and it declares a link label, the fixed text a published link carries.
 
 ### Requirement 2: Registration and Validation (the Surface the Plugin Kind Validates Against)
 **Objective:** As the maintainer of the plugin platform, I want connectors registered through one validation gate shaped like the load-calculator registry's, so that the later connector plugin kind can discover, validate, register and list connectors without redesigning this protocol.
@@ -130,11 +131,11 @@ decision; the bytes are always archived first).
 #### Acceptance Criteria
 1. The connector framework shall keep a registry of connectors addressed by connector id, and shall register the built-in folder connector whenever the connector package is loaded.
 2. When a connector is offered for registration, the connector framework shall validate its declaration without calling any of its operations.
-3. If an offered connector's id is not a lowercase slug, its display name is empty, its authentication style or any capability is outside the vocabulary, it declares no capability, its credential fields are malformed or share a name, it declares credential fields under the none style or none under another style, or it lacks an operation its authentication style or a driven capability requires, the connector framework shall reject it with a reason naming the first violated member and register nothing.
+3. If an offered connector's id is not a lowercase slug, its display name is empty, its authentication style or any capability is outside the vocabulary, it declares no capability, its credential fields are malformed or share a name, it declares credential fields under the none style or none under another style, or it lacks an operation its authentication style or a driven capability requires, the connector framework shall reject it with a reason naming the first violated member and register nothing. *(amended by Amendment 6: it also rejects a connector that declares a publish capability but lacks the publish operation or a valid link label, or that declares resolve remote activity or push activity without annotate remote activity)*
 4. If a connector is offered under an id already registered, the connector framework shall reject it, keep the incumbent registration, and name the contested id.
 5. When a connector id that is not registered is looked up, the connector framework shall report the unknown id together with every registered id.
 6. The connector framework shall allow a registered connector to be unregistered by id.
-7. The connector framework shall publish the protocol's types, the capability and authentication-style vocabularies, and the registration operations as one enumerated surface, and an automated test shall pin that surface so that a change to it is always deliberate.
+7. The connector framework shall publish the protocol's types, the capability and authentication-style vocabularies, and the registration operations as one enumerated surface, and an automated test shall pin that surface so that a change to it is always deliberate. *(amended by Amendment 6: the surface gains the publish operation protocol, the set of publish capabilities, the publish value types and the outcome vocabulary, eight names in all, and the pinned count moves from 50 to 58)*
 8. The connector framework shall leave load-calculator plugin discovery, the `[plugins]` settings, and the `fitdocs plugins` listing unchanged.
 
 ### Requirement 3: Configuring Connectors
@@ -236,6 +237,7 @@ decision; the bytes are always archived first).
 6. The connector framework shall not send a credential header to a host a response redirects the request to.
 7. If a response body exceeds a bounded size, the connector framework shall abandon it and report that request as failed.
 8. The connector framework shall let the transport be substituted, so that every connector and command is exercised in tests with no network access.
+9. _(added by Amendment 6)_ The connector framework shall let a request be marked single-attempt, and shall send a request so marked exactly once in every client mode, whatever the response and whatever the network failure; unmarked data requests keep the bounded retries of criterion 3, and authentication requests keep the single attempt of criterion 4.
 
 ### Requirement 10: Secrets Are Never Exposed
 **Objective:** As an athlete, I want no key, token, password or signed download link ever to appear anywhere fitdocs writes or prints, so that sharing a log, a report or my wiki never shares my accounts.
@@ -369,12 +371,54 @@ newly written recovery page afterwards. The new recovery list pin and the
 adjacent dashboard phrase pin are in
 `tests/connectors/test_network_statements.py`.
 
-## Amendment 6 (2026-11-01): the relay-token authentication style, relay connect and `fitdocs disconnect`, landed by relay-server
+## Amendment 6 (2026-11-01): publishing is driven, landed by publish-core
+
+`publish-core` drives the three capabilities this spec reserved for pushing to
+a service: push activity, annotate remote activity and resolve remote
+activity. The capability vocabulary stays at exactly nine members and every
+capability keeps its remote-change and irreversible marks (criteria 1.2 and
+1.3 are unchanged). Driven capabilities are now pull activities, pull
+wellness and the three publish capabilities; four stay reserved (push planned
+workout, pull planned workouts, pull plans and pull thresholds). Criterion 1.4
+is amended in place, criterion 1.10 is added (the publish operation, beside
+criterion 1.5), criterion 1.9's outputs include a publish result, criterion
+2.3's validation covers the publish operation, the link label and the rule that
+resolve and push require annotate, criterion 2.7's surface gains eight names
+(`PostPublisher`, `PUBLISH_CAPABILITIES`, `Post`, `CompletedActivity`,
+`PublishRequest`, `PublishResult`, `PublishCode`, `TARGET_CODES`, the last
+six re-exported from `fitdocs.publish` leaves through `connectors.protocol`),
+which moves the pinned `connectors` surface count from 50 to 58 in
+`tests/connectors/test_surface.py`, and Requirement 9 gains criterion 9.9, the
+single-attempt mode (`HttpRequest.single_attempt` and `post(...,
+single_attempt=)`), which publish-core Requirement 10 needs so that a
+non-idempotent request cannot land twice. The vocabulary of outcome codes, the
+request and result types and the target contract belong to publish-core; this
+spec owns only the framework statements they extend.
+
+Dependency direction: `fitdocs.connectors.protocol` may import
+`fitdocs.publish.request` and `fitdocs.publish.outcomes` (it re-exports
+`PublishCode` and `TARGET_CODES`), and `fitdocs.connectors.registry` may
+import `fitdocs.publish.request`; both are stdlib-only leaves, and no other
+connectors module imports `fitdocs.publish`. The connector package still
+depends on no rendering, training-load, metrics, ingestion or sync module
+(criterion 14.3), adds no runtime dependency (14.5), and the network-capable
+modules stay the map-tile fetch and the connector transport (14.2). A
+connector that publishes names its value types, `PublishCode` and
+`TARGET_CODES` through `connectors.protocol`, never `fitdocs.publish`. Of the
+allowed importers, `fitdocs.cli` and `fitdocs.publish.targets` import the
+connector package.
+
+Count pins: the relay-server spec also moves the `connectors` surface count (+5
+on its branch); whichever lands second recounts the pin. Existing criteria and
+approvals are preserved word-for-word; nothing is renumbered.
+
+## Amendment 7 (2026-11-01): the relay-token authentication style, relay connect and `fitdocs disconnect`, landed by relay-server
 
 relay-server adds a fifth authentication style, a relay connector built on
 it, and a third connector-request command, `fitdocs disconnect`. The changes
 below are recorded here; no criterion is renumbered, and the criteria keep
-their wording except as stated.
+their wording except as stated. Written as Amendment 6 on the relay-server
+branch; renumbered to 7 because publish-core landed its Amendment 6 first.
 
 - Requirement 1 criterion 7: "four authentication styles -- none, personal
   key, login (credentials exchanged once for renewable tokens), and browser
@@ -396,12 +440,12 @@ their wording except as stated.
   `::test_relay_operations_follow_the_protocols_declared_method_order`.
 - Requirement 2 criterion 7: the published surface gains the five relay
   protocol names (`RelayRefused`, `RelayCapabilities`, `RegistrationStarted`,
-  `RegistrationPolled`, `RelayTokenClient`) and rises by five (from 50 to 55
-  when relay-server lands before publish-core).
+  `RegistrationPolled`, `RelayTokenClient`) and rises by five (from 58,
+  after publish-core's Amendment 6, to 63).
   Pinned by
   `tests/connectors/test_surface.py::test_published_surface_equals_the_design_literal_list_exactly`,
-  `::test_expected_all_has_exactly_55_names_with_no_duplicates` and
-  `::test_import_fitdocs_connectors_exposes_exactly_55_names`. A later spec that
+  `::test_expected_all_has_exactly_63_names_with_no_duplicates` and
+  `::test_import_fitdocs_connectors_exposes_exactly_63_names`. A later spec that
   adds names re-counts these literals.
 - Requirement 4 criterion 5: the environment variable named for the instance
   and a credential field also overrides the stored relay token, and satisfies
@@ -467,6 +511,6 @@ their wording except as stated.
   `tests/connectors/test_cli_relay_disconnect.py::test_local_only_removes_the_file_with_no_request`,
   `::test_an_environment_override_is_stated_as_not_revoked_and_still_set` and
   `::test_the_command_is_registered_with_a_local_only_option`. The fitdocs
-  command count rises by one (sixteen when relay-server lands before
-  publish-core), as the cli.py module docstring's count word pinned by
+  command count rises by one (from sixteen, after publish-core's `fitdocs
+  publish`, to seventeen), as the cli.py module docstring's count word pinned by
   `tests/test_cli_skill.py::test_registered_command_count_matches_docstring_opening`.

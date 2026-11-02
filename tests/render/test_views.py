@@ -32,6 +32,7 @@ from fitdocs.contract import (
     GENERATED_PREFIX,
     LOAD_NOT_COMPUTED,
     MORNING_REGION,
+    PRESERVED_REGIONS,
 )
 from fitdocs.docmerge import extract_regions, merge_regions
 from fitdocs.metrics.types import AthleteInputs, ZoneSpec
@@ -465,8 +466,8 @@ def test_portability_only_frontmatter_and_markers(
 ) -> None:
     """Portable, plugin-free output: exactly one H1, no wikilinks, image links
     relative to ``assets/``, and the only HTML comments are fitdocs region
-    markers plus the one generated-document provenance banner (2.7, 4.2, 5.3,
-    5.4, 5.5)."""
+    markers, the one generated-document provenance banner and the ``post``
+    region's one hidden instruction (2.7, 4.2, 5.3, 5.4, 5.5)."""
     for fit_bytes in (run_fit_bytes, strength_fit_bytes):
         md = render_document(_ctx(fit_bytes)).markdown
         assert _h1_count(md) == 1
@@ -475,7 +476,7 @@ def test_portability_only_frontmatter_and_markers(
         for target in _image_targets(md):
             assert target.startswith("assets/")
         for comment in _html_comments(md):
-            assert comment.startswith(
+            assert comment == _POST_LITERAL or comment.startswith(
                 ("<!-- fitdocs:begin:", "<!-- fitdocs:end:", GENERATED_PREFIX)
             )
 
@@ -750,19 +751,21 @@ def _morning_ctx(case: str) -> DocContext:
 # capture equaled the old bytes with only the literal doc_version line changed.
 # Re-pinned 10 -> 11 (the local-time fix) the same way: every new capture with
 # its doc_version line set back to 10 reproduced the old digest.
+# Re-pinned 11 -> 12 (publish-core) the same way: every new capture with its
+# doc_version line set back to 11 reproduced the old digest.
 _PRE_MORNING_FRONTMATTER_SHA256 = {
-    "run_splits": "9c69d880d57934b1418501e79d1a4e227c4634ab4fabf5880b74c786651a5599",
-    "run_no_splits": "9c69d880d57934b1418501e79d1a4e227c4634ab4fabf5880b74c786651a5599",
-    "ride": "f2d269d640a92ac47ceaea08e9f83265ecb0b2a882f6ca1e24c1564e91801e52",
-    "strength_sets": "372f078c13781b50e14c5c593f7e269bb1ed3f89f58fd29e6746e856142241ab",
+    "run_splits": "42b81edbb2e7060c7856964a5f77013c7e1b8890bb0188d59c68218dbe4d7a77",
+    "run_no_splits": "42b81edbb2e7060c7856964a5f77013c7e1b8890bb0188d59c68218dbe4d7a77",
+    "ride": "49d08862e1ddaf36dc50c8e113e6879cce1791ebd37107a07fe9fbf5ba01519a",
+    "strength_sets": "483813098e866eda1d9fc94017a6d7630862d2ee4fca37fb45ede764326c3ce9",
     "strength_no_sets": (
-        "3d8ce18d0c6474fb7ecb34f17f924e5768917a31fb56e8a8afb452b2b269be70"
+        "cbf44c250c82e95996278f6c0c1dffc0832e0eb2cf7af4d9a2c56dbccd90ebfe"
     ),
     "generic_telemetry": (
-        "4958ba13c621fc9633e1464781eb11a81918a45f1e7719459118f15c5949d58d"
+        "983c53e133e83e9ccb2b526abb3885d5d590a96ecfb5a79bf9134d05bcc73984"
     ),
     "generic_no_telemetry": (
-        "4bc63317256949822c6bd9f026c714085a01ef5ba07a1a9c77e7ca7c97cad16e"
+        "f99cb918f7a3b10e6e4d0038611077647213769c95cf505231c9b6348ec031da"
     ),
 }
 
@@ -803,3 +806,71 @@ def test_morning_region_keeps_preexisting_frontmatter_bytes(case: str) -> None:
         hashlib.sha256(md[:end].encode()).hexdigest()
         == (_PRE_MORNING_FRONTMATTER_SHA256[case])
     )
+
+
+# --- publish-core 2.3: the post and published regions ------------------------
+
+_POST_LITERAL = (
+    "<!-- post: to give this page its own post, write the title on one line, "
+    "then a blank line, then the description. Left empty, the template is used. -->"
+)
+
+
+@pytest.mark.parametrize("case", [case for case, _ in _MORNING_CASES])
+def test_post_region_directly_precedes_the_morning_region(case: str) -> None:
+    md = render_document(_morning_ctx(case)).markdown
+    post_end = "<!-- fitdocs:end:post -->"
+    assert md.count(post_end) == 1
+    assert f"{post_end}\n\n<!-- fitdocs:begin:morning -->" in md
+
+
+@pytest.mark.parametrize("case", [case for case, _ in _MORNING_CASES])
+def test_published_region_directly_follows_the_title_and_attribution(
+    case: str,
+) -> None:
+    md = render_document(_morning_ctx(case)).markdown
+    begin = "<!-- fitdocs:begin:published -->"
+    assert md.count(begin) == 1
+    before = md.split(begin)[0]
+    body = before.split(GENERATED_PREFIX, 1)[1].split("\n\n", 1)[1]
+    assert re.fullmatch(r"# [^\n]+\n\n(Data sources?: [^\n]+\n\n)?", body)
+    assert "<!-- fitdocs:end:published -->\n\n<!-- fitdocs:begin:notes -->" in md
+
+
+def test_published_follows_the_attribution_line_when_there_is_one() -> None:
+    md = render_document(_morning_ctx("strength_no_sets")).markdown
+    assert "\nData source: Garmin " in md
+    assert md.index("\nData source: Garmin ") < md.index(
+        "<!-- fitdocs:begin:published -->"
+    )
+
+
+@pytest.mark.parametrize("case", [case for case, _ in _MORNING_CASES])
+def test_fresh_post_and_published_content_and_no_headings(case: str) -> None:
+    md = render_document(_morning_ctx(case)).markdown
+    regions = extract_regions(md)
+    assert regions["published"] == ""
+    assert regions["post"] == _POST_LITERAL
+    assert "## Post" not in md
+    assert "## Published" not in md
+
+
+@pytest.mark.parametrize(
+    ("case", "expected"),
+    [
+        ("run_splits", ["published", "notes", "post", "morning", "load"]),
+        ("ride", ["published", "notes", "post", "morning", "load"]),
+        (
+            "strength_sets",
+            ["published", "notes", "workout", "post", "morning", "load"],
+        ),
+        ("generic_telemetry", ["published", "notes", "post", "morning", "load"]),
+    ],
+)
+def test_regions_appear_in_document_order(case: str, expected: list[str]) -> None:
+    md = render_document(_morning_ctx(case)).markdown
+    assert re.findall(r"<!-- fitdocs:begin:(\w+) -->", md) == expected
+    in_preserved_order = [r for r in expected if r in PRESERVED_REGIONS]
+    assert in_preserved_order == [
+        r for r in ("notes", "workout", "post", "load") if r in expected
+    ]

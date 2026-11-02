@@ -48,7 +48,7 @@ def test_workouts_declaration_states_the_local_start_rename() -> None:
 
 def test_contract_version_history_records_the_rename() -> None:
     history = _flat(inspect.getsource(contract))
-    assert CONTRACT_VERSION == "18"
+    assert CONTRACT_VERSION == "19"
     assert "Raised from ``15`` to ``16`` by the local-time fix" in history
     assert (
         "A page whose filename fitdocs chose from its local start time is "

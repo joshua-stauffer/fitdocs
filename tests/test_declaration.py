@@ -101,11 +101,12 @@ def test_declaration_text_states_the_contract_version_and_owner() -> None:
 
 
 def test_workouts_declaration_names_every_user_owned_key() -> None:
-    # `contract.EFFORT_KEYS` is the ordered tuple the fragment is built from
-    # (task 4.1) -- every key must appear backticked in the workouts text, so
-    # adding an effort key cannot silently go unmentioned here either.
+    # `contract.USER_KEY_ORDER` is the ordered tuple the fragment is built from
+    # (task 4.1; `publish` joined it in publish-core 2.2) -- every key must
+    # appear backticked in the workouts text, so adding a user-owned key
+    # cannot silently go unmentioned here either.
     text = declaration_text(_WORKOUTS)
-    for key in contract.EFFORT_KEYS:
+    for key in contract.USER_KEY_ORDER:
         assert f"`{key}`" in text
 
 
@@ -128,7 +129,7 @@ def test_archive_declaration_names_no_user_owned_key() -> None:
     # Req 6.4: the source-archive declaration is unchanged apart from the
     # restated version -- it must gain none of the user-owned keys.
     text = declaration_text(_ARCHIVE)
-    for key in contract.EFFORT_KEYS:
+    for key in contract.USER_KEY_ORDER:
         assert f"`{key}`" not in text
 
 
@@ -159,7 +160,7 @@ def test_history_declaration_names_no_user_owned_key() -> None:
     # text (design: HistoryDeclaration, "the dispatch ... selects it for
     # `workouts/` and not for `history/`").
     text = declaration_text(_HISTORY)
-    for key in contract.EFFORT_KEYS:
+    for key in contract.USER_KEY_ORDER:
         assert f"`{key}`" not in text
 
 
@@ -167,10 +168,11 @@ def test_blocks_declaration_names_the_notes_region_and_no_other_region_id() -> N
     # design: BlockDeclaration -- a block page carries exactly one user-owned
     # region, `notes`; a planned-workout page carries none. The text must
     # name `notes` (backticked, like every other region reference) but must
-    # not name any other region id the contract publishes -- today `workout`
-    # (`contract.USER_REGIONS`) and `load` (`contract.TOOL_REGIONS`) --
-    # distinguishing this from `workouts/`'s text, which names `notes` and
-    # `workout` both. Iterates `contract.PRESERVED_REGIONS` (the union of
+    # not name any other preserved region id -- today `workout`, `post`
+    # (`contract.USER_REGIONS`) and `load` (`contract.TOOL_REGIONS`); the
+    # refreshed `published` region is held out by test_publish_contract_docs.py
+    # -- distinguishing this from `workouts/`'s text, which names `notes`,
+    # `workout` and `post`. Iterates `contract.PRESERVED_REGIONS` (the union of
     # user-owned and tool-filled region ids), not only `USER_REGIONS`: a
     # fragment that leaked `load` into the blocks text would be false of
     # this directory (no `load` region exists on a block or planned-workout
@@ -184,10 +186,10 @@ def test_blocks_declaration_names_the_notes_region_and_no_other_region_id() -> N
 
 
 def test_blocks_declaration_names_no_user_owned_key() -> None:
-    # `_USER_KEYS` (the effort-tag frontmatter keys) is a `workouts/`-only
+    # `_USER_KEYS` (the user-owned frontmatter keys) is a `workouts/`-only
     # fragment -- it must not leak into `blocks/`'s text either.
     text = declaration_text(_BLOCKS)
-    for key in contract.EFFORT_KEYS:
+    for key in contract.USER_KEY_ORDER:
         assert f"`{key}`" not in text
 
 

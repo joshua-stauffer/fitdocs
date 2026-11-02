@@ -1026,6 +1026,20 @@ def test_runtime_counter_family(
     assert actual == expected
 
 
+def _round2_bit(capability: Capability) -> int:
+    return 1 << tuple(Capability).index(capability)
+
+
+def _round2_registers(mask: int) -> bool:
+    """Registration rejects resolve or push declared without annotate."""
+    needs_annotate = _round2_bit(Capability.PUSH_ACTIVITY) | _round2_bit(
+        Capability.RESOLVE_REMOTE_ACTIVITY
+    )
+    return not mask & needs_annotate or bool(
+        mask & _round2_bit(Capability.ANNOTATE_REMOTE_ACTIVITY)
+    )
+
+
 _ROUND2_CAPABILITY_ROLES = tuple(
     (
         frozenset(
@@ -1035,7 +1049,8 @@ _ROUND2_CAPABILITY_ROLES = tuple(
     )
     for mask in range(1, 1 << len(Capability))
     for enabled in (False, True)
-    if not enabled or mask & (1 << tuple(Capability).index(Capability.PULL_WELLNESS))
+    if not enabled or mask & _round2_bit(Capability.PULL_WELLNESS)
+    if _round2_registers(mask)
 )
 
 

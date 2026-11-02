@@ -212,7 +212,9 @@ def test_render_fingerprint_ignores_frontmatter_owned_outside_rendering(
 
 
 @pytest.mark.parametrize(
-    "region_id", ("notes", "workout", "morning", "load"), ids=lambda value: value
+    "region_id",
+    ("notes", "workout", "post", "morning", "published", "load"),
+    ids=lambda value: value,
 )
 def test_render_fingerprint_ignores_each_region(
     rendered_page: str, region_id: str

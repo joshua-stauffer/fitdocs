@@ -132,9 +132,15 @@
     },
     {
       "date": "2026-11-01",
-      "requirement": "2.23 added (appended; no criterion renumbered or reworded) -- Amendment 14, landed by relay-server task 8.7; relay-server task 8.8 makes the change",
+      "requirement": "1.8, 2.23, 2.24, 6.11 added (appended); 6.7 narrowed by an appended tag (text unchanged); no criterion renumbered or reworded -- Amendment 14, landed by publish-core task 8.5",
+      "reason": "publish-core adds the user-owned `post` region, the fitdocs-owned refreshed `published` region and the user-owned `publish` frontmatter key to every workout page, a publish ledger directory `.fitdocs/publish/`, the `[publish]` settings table, and `fitdocs publish`, which writes only the ledgers and `published` regions (and may update a target's own credentials file when the target renews its credentials). The published ownership contract's statements of region ownership, user-owned keys and overwrite semantics now say so.",
+      "also": "requirements.md gains Amendment 14. CONTRACT_VERSION advances from \"17\" to \"18\" on this branch (publish-core task 8.1; relay-server advances it too and the second lander renumbers to the next free value). The workouts declaration names the new region, key and refreshed region. Amendment 14 is the next free number on this branch; a peer landing an amendment here first makes the second lander renumber."
+    },
+    {
+      "date": "2026-11-01",
+      "requirement": "2.25 added (appended; no criterion renumbered or reworded) -- Amendment 15, landed by relay-server task 8.7 (written as Amendment 14 / criterion 2.23 and renumbered when publish-core landed first); relay-server task 8.8 makes the change",
       "reason": "relay-server adds `fitdocs disconnect`, which removes one instance's credentials file; the published contract's statement that fitdocs never deletes anything in the credentials store no longer holds.",
-      "also": "requirements.md gains Amendment 14 and criterion 2.23. CONTRACT_VERSION advances by one from its value at landing (relay-server task 8.8 records the literals); pinned by the (heading, phrase) pins task 8.8 adds to tests/test_ownership_contract.py."
+      "also": "requirements.md gains Amendment 15 and criterion 2.25. CONTRACT_VERSION advances from \"18\" to \"19\" (relay-server task 8.8); pinned by the (heading, phrase) pins task 8.8 adds to tests/test_ownership_contract.py."
     }
   ]
 }

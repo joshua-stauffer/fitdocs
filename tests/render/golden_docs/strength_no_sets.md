@@ -2,7 +2,7 @@
 title: Workout 2021-09-07 19:46
 type: workout
 generator: fitdocs
-doc_version: 11
+doc_version: 12
 date: '2021-09-07'
 start_time: '2021-09-07T19:46:40-06:00'
 sport: Workout
@@ -22,6 +22,10 @@ sources:
 # Workout 2021-09-07 19:46
 
 Data source: Garmin SyntheticGymHrWatch
+
+<!-- fitdocs:begin:published -->
+
+<!-- fitdocs:end:published -->
 
 <!-- fitdocs:begin:notes -->
 _Your notes go here. This section is preserved when the document is regenerated._
@@ -47,6 +51,10 @@ _Your notes go here. This section is preserved when the document is regenerated.
 <!-- fitdocs:begin:workout -->
 _Record the workout you performed here -- exercises, sets, reps, and load. This section is preserved when the document is regenerated._
 <!-- fitdocs:end:workout -->
+
+<!-- fitdocs:begin:post -->
+<!-- post: to give this page its own post, write the title on one line, then a blank line, then the description. Left empty, the template is used. -->
+<!-- fitdocs:end:post -->
 
 <!-- fitdocs:begin:morning -->
 

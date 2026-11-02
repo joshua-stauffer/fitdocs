@@ -28,10 +28,24 @@ def _section(text: str, heading: str) -> str:
     return _flat(body.split("\n## ", 1)[0])
 
 
-def test_contract_version_is_eighteen() -> None:
-    assert CONTRACT_VERSION == "18"
+def test_contract_version_is_nineteen() -> None:
+    assert CONTRACT_VERSION == "19"
     head = _flat(DOC.read_text(encoding="utf-8")).split(" ## ", 1)[0]
     assert f"**Contract version:** `{CONTRACT_VERSION}`" in head
+
+
+def test_version_history_retains_the_asset_write_guarantee() -> None:
+    """Version 17's head paragraph was replaced at version 18 (publish-core), so
+    its statements are pinned where they persist: the version history in
+    ``fitdocs.contract`` (the guarantee itself stays pinned in the section below)."""
+    history = _flat(inspect.getsource(contract))
+    for phrase in (
+        "left untouched, content and modification time",
+        "so its path holds either the previous complete file or the new complete "
+        "file, never a partial one",
+        "no longer links, are unchanged. Nothing is needed for existing documents.",
+    ):
+        assert phrase in history, phrase
 
 
 def test_replaces_and_preserves_states_the_asset_write_guarantee() -> None:

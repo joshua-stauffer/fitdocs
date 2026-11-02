@@ -270,8 +270,8 @@ new workouts and respect the ownership boundary without me writing the
 instructions myself.
 
 #### Acceptance Criteria
-1. The fitdocs project shall publish an agent skill that gives an LLM-managed markdown wiki a turnkey workflow for processing the fitdocs inbox and for pulling new files from the athlete's configured connectors. *(amended by Amendment 3: "and for pulling new files from the athlete's configured connectors" added)*
-2. The agent skill shall state when it applies, the commands to run, how to interpret every reported outcome channel — the drain's written, skipped, failed, deferred, quarantined, moved, files whose move failed, and warnings, and the pull's delivered, would_fetch, held, skipped, deferred, failed, removed, and error — and what to do about files or connector instances the tool deferred, quarantined, held, failed on, could not move, or errored on. *(amended by Amendment 3: the pull's eight channels, and "held" and "errored on" in the what-to-do list, added)*
+1. The fitdocs project shall publish an agent skill that gives an LLM-managed markdown wiki a turnkey workflow for processing the fitdocs inbox and for pulling new files from the athlete's configured connectors. *(amended by Amendment 3: "and for pulling new files from the athlete's configured connectors" added)* *(amended by Amendment 6: and for previewing and, when the athlete asks, publishing workout posts to the athlete's configured publish targets)*
+2. The agent skill shall state when it applies, the commands to run, how to interpret every reported outcome channel — the drain's written, skipped, failed, deferred, quarantined, moved, files whose move failed, and warnings, and the pull's delivered, would_fetch, held, skipped, deferred, failed, removed, and error — and what to do about files or connector instances the tool deferred, quarantined, held, failed on, could not move, or errored on. *(amended by Amendment 3: the pull's eight channels, and "held" and "errored on" in the what-to-do list, added)* *(amended by Amendment 6: the publish outcome codes, and what to tell the athlete about a failure code, added)*
 3. The agent skill shall state the ownership boundary — that the fitdocs-owned tree is tool-owned, which document regions the wiki's author owns, and that generated content is never hand-edited — and shall point at the ownership declaration fitdocs emits inside the owned tree as the authority for it.
 4. The agent skill shall not restate the ownership contract's enumerated content; where detail is needed it shall refer to the emitted declaration and the published contract.
 5. The agent skill shall be readable and usable as plain markdown instructions by a human, and by an agent environment that does not support the packaged skill format.
@@ -301,7 +301,7 @@ private, or less predictable.
 1. The fitdocs tool shall add no new runtime dependency in order to become publishable, installable, or self-reporting.
 2. The installed tool shall behave identically to the revision that passed the release gates; no build step shall alter behavior between the tested revision and the published artifact.
 3. No published artifact shall contain personal fitness data, generated workout documents, or the contents of any data root.
-4. Running the installed tool shall require no network access beyond the map-tile requests and the explicit connector commands (`fitdocs connect`, `fitdocs pull`) the project already documents, and the release process shall not introduce any new runtime network access beyond those two paths. *(amended by Amendment 3: formerly "beyond the map-tile requests the project already documents" and "any new runtime network access")* *(amended by Amendment 6: `fitdocs disconnect` joins the explicit connector commands)*
+4. Running the installed tool shall require no network access beyond the map-tile requests and the explicit connector commands (`fitdocs connect`, `fitdocs pull`) the project already documents, and the release process shall not introduce any new runtime network access beyond those two paths. *(amended by Amendment 3: formerly "beyond the map-tile requests the project already documents" and "any new runtime network access")* *(amended by Amendment 7: `fitdocs disconnect` joins the explicit connector commands)*
 5. Building the same tagged revision twice shall produce artifacts with identical contents.
 6. Reorganizing the project's documentation shall preserve every behavior statement the project publishes at the time of the reorganization — its own and its sibling features' — including data-root resolution order, the persistent tile opt-out, tile-provider attribution, the inbox never-delete guarantee, the statement that fitdocs performs no watching and no scheduling, and a pointer to the published ownership contract.
 7. Rewriting the readme shall preserve rather than replace the sections other features publish there — the ownership section, the inbox section, and the plugins section — either keeping each in place or relocating each into the documentation set with the readme linking to it.
@@ -436,13 +436,37 @@ package declaration are pinned by
 the published baseline is also pinned by
 `tests/sitebuild/test_repo_wiring.py::test_runtime_dependencies_are_the_pre_spec_literals`.
 
-## Amendment 6 (2026-11-01): the relay is outside the release, the skill never disconnects, and no image is published, landed by relay-server
+## Amendment 6 (2026-11-01): the packaged skill also publishes, landed by publish-core
+
+`publish-core` adds `fitdocs publish`, which previews (a dry run, the default)
+and, with `--yes`, posts workout posts to the publish targets the athlete
+configured, and `fitdocs publish --targets`, which lists them. The packaged
+`fitdocs-workouts` skill gains a publishing section: it states how to list the
+targets, how a page opts in with the `publish` key and how to write the `post`
+region, that a run without `--yes` changes nothing, that `--yes` posts
+irreversibly and is run only when the athlete has asked for it, how to read the
+publish outcome codes and what to tell the athlete about a failure code, and
+never to run `fitdocs connect`; it names no service. Requirement 8 criteria
+8.1 and 8.2 read as if the skill only processed the inbox and pulled; they are
+amended in place (tagged as Amendment 3 did, with no rewording) so that the skill-publication guarantee
+(8.1) covers previewing and publishing posts, and the reported-outcome-channel
+guarantee (8.2) covers the publish codes alongside the drain's and the pull's
+channels. Criterion 8.8 applies unchanged: every command, option and code the
+section names exists in the release, under the existing skill guards
+(`tests/test_agent_skill.py`). The skill's text and its pins belong to
+publish-core; the compatibility policy, the network statements and criterion
+10.4 are not changed by this amendment, because publish-core ships no target
+that makes a request. Existing criteria and approvals are preserved
+word-for-word; nothing is renumbered.
+
+## Amendment 7 (2026-11-01): the relay is outside the release, the skill never disconnects, and no image is published, landed by relay-server
 
 `relay-server` adds a separately deployed relay package (`relay/`,
 `fitdocs_relay`) to this repository and a `fitdocs disconnect` command.
 Four guarantees here lean on statements that are now incomplete, recorded as
 amended by reading (and 10.4 also tagged in place), with no criterion
-renumbered.
+renumbered. Written as Amendment 6 on the relay-server branch; renumbered to 7
+because publish-core landed its Amendment 6 first.
 
 - Requirements 1.6 and 5.4: the development-only material the artifacts must
   not contain, and the files the artifact check forbids, include every file
@@ -474,5 +498,5 @@ renumbered.
 - Requirement 10.4: the explicit connector commands the installed tool may
   reach the network through are `fitdocs connect`, `fitdocs disconnect` and
   `fitdocs pull`; nothing else is added, and the relay is a separate package
-  that the installed tool never runs. Pinned with connectors Amendment 6 by
+  that the installed tool never runs. Pinned with connectors Amendment 7 by
   `tests/connectors/test_network_statements.py::test_steering_publishes_the_relay_server_and_its_network_calls`.

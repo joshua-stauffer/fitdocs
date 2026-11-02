@@ -1,7 +1,7 @@
 {
   "feature_name": "effort-tags",
   "created_at": "2026-09-09T22:17:04Z",
-  "updated_at": "2026-09-10T00:07:02Z",
+  "updated_at": "2026-11-01T00:00:00Z",
   "language": "en",
   "phase": "tasks-generated",
   "approvals": {
@@ -19,5 +19,13 @@
     }
   },
   "ready_for_implementation": true,
-  "phase_note": "Generated 2026-09-10 by the Phase 6 spec batch (wave 1) in auto-approve mode. 6 requirements / 40 acceptance criteria; 10 design components; 5 major tasks / 14 executable tasks (13 leaves plus major 3, a single promoted task). Step 3.5 task-graph sanity review ran as an independent reviewer subagent: round 1 NEEDS_FIXES (2 blocking, 6 should-fix, 3 notes -- all applied), round 2 PASS with three notes (N1 major-3 collapse and N2 CliApp docstring boundary applied; N3 accepted: task 4.2 is long but splitting the ownership document across two tasks would recreate the ownership defect F3 raised). Lands the roadmap Phase 6 Existing Spec Update for wiki-contract via task 4.3. Deferred, for the queue: DOC_BANNER's 'everything outside the regions is replaced' sentence is now a simplification and should be reworded at the next DOC_VERSION bump taken for another reason."
+  "phase_note": "Generated 2026-09-10 by the Phase 6 spec batch (wave 1) in auto-approve mode. 6 requirements / 40 acceptance criteria; 10 design components; 5 major tasks / 14 executable tasks (13 leaves plus major 3, a single promoted task). Step 3.5 task-graph sanity review ran as an independent reviewer subagent: round 1 NEEDS_FIXES (2 blocking, 6 should-fix, 3 notes -- all applied), round 2 PASS with three notes (N1 major-3 collapse and N2 CliApp docstring boundary applied; N3 accepted: task 4.2 is long but splitting the ownership document across two tasks would recreate the ownership defect F3 raised). Lands the roadmap Phase 6 Existing Spec Update for wiki-contract via task 4.3. Deferred, for the queue: DOC_BANNER's 'everything outside the regions is replaced' sentence is now a simplification and should be reworded at the next DOC_VERSION bump taken for another reason.",
+  "amendments": [
+    {
+      "date": "2026-11-01",
+      "requirement": "2.1 amended in place (appended tag only) -- Amendment 1, landed by publish-core task 8.5",
+      "reason": "publish-core adds the user-owned frontmatter key `publish`, so the published set of user-owned keys holds five keys. Criterion 2.1's 'exactly four user-owned keys' stays true of the effort tag but is no longer a statement about the whole set, and now reads as the effort tag's four keys.",
+      "also": "requirements.md gains Amendment 1. The effort tag, its reader and its validation are unchanged; the `publish` reader is publish-core's (contract.document_publish_targets). wiki-contract Amendment 14 criterion 6.11 records the key as user-owned."
+    }
+  ]
 }

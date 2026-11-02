@@ -2,7 +2,7 @@
 title: Workout 2021-09-07 19:46
 type: workout
 generator: fitdocs
-doc_version: 11
+doc_version: 12
 date: '2021-09-07'
 start_time: '2021-09-07T19:46:40-06:00'
 sport: Workout
@@ -19,6 +19,10 @@ sources:
 <!-- fitdocs:generated: everything outside the notes/workout/load regions is replaced on regeneration -- see this directory's AGENTS.md -->
 
 # Workout 2021-09-07 19:46
+
+<!-- fitdocs:begin:published -->
+
+<!-- fitdocs:end:published -->
 
 <!-- fitdocs:begin:notes -->
 _Your notes go here. This section is preserved when the document is regenerated._
@@ -39,6 +43,10 @@ _Your notes go here. This section is preserved when the document is regenerated.
 ![Telemetry hero chart](assets/2021-09-07-workout-1946-hero.svg)
 
 ![Heart-rate time-in-zone](assets/2021-09-07-workout-1946-zones.svg)
+
+<!-- fitdocs:begin:post -->
+<!-- post: to give this page its own post, write the title on one line, then a blank line, then the description. Left empty, the template is used. -->
+<!-- fitdocs:end:post -->
 
 <!-- fitdocs:begin:morning -->
 

@@ -1,17 +1,17 @@
 # fitdocs Ownership Contract
 
-**Contract version:** `18`
+**Contract version:** `19`
 
 **What changed at this version:** The connector credentials store, which sits
 outside the data root and is not owned by fitdocs, is no longer something
 fitdocs never deletes from. The new `fitdocs disconnect` command removes the
 named connector instance's own credentials file, and nothing else. `connect`,
-a credential-renewing `fitdocs pull` and `disconnect` are now the only
-operations that write to or remove from the store, one instance's file at a
-time and never under the data root. Which paths fitdocs owns under the data
-root, and every other operation's writes, are unchanged. Run `fitdocs sync` or
-`fitdocs regen` once to refresh the in-tree ownership declarations to the new
-version.
+a credential-renewing `fitdocs pull`, a credential-renewing
+`fitdocs publish --yes` and `disconnect` are now the only operations that write
+to or remove from the store, one instance's file at a time and never under the
+data root. Which paths fitdocs owns under the data root, and every other
+operation's writes, are unchanged. Run `fitdocs sync` or `fitdocs regen` once to
+refresh the in-tree ownership declarations to the new version.
 
 This document is the authoritative, published statement of what fitdocs owns
 in your data root, what you own, and the exact limits of every operation that
@@ -78,7 +78,9 @@ named in the next section.
   inbox's quarantine record `quarantine.toml`, and each configured
   connector's own ledger, one TOML file per instance under
   `.fitdocs/connectors/`, recording what `fitdocs pull` has already
-  delivered). A connector's ledger that holds wellness records is ledger
+  delivered, and each publish target's ledger, one TOML file per target
+  under `.fitdocs/publish/`, recording what `fitdocs publish` has posted).
+  A connector's ledger that holds wellness records is ledger
   format 2. Dot-prefixed because nobody browses it; it carries no
   ownership declaration of its own.
 
@@ -165,8 +167,8 @@ in its own module instead.
 
 The training-history page carries **no user-owned region and no user-owned
 frontmatter key** — nothing under `history/` is a place to hand-author
-content, unlike the `notes`/`workout` regions and the effort-tag keys a
-workout document reserves. It is **rewritten in full on every `fitdocs
+content, unlike the `notes`, `workout` and `post` regions and the effort-tag and
+`publish` keys a workout document reserves. It is **rewritten in full on every `fitdocs
 history` run**: there is no partial merge, no carried-over content, and
 no `--force` or `--recompute` option, because there is nothing on the page
 a re-run could discard. Deleting it loses nothing that cannot be
@@ -380,12 +382,16 @@ verbatim rather than replacing:
   strength documents to record exercises, sets, reps, and load). Like
   `notes`, fitdocs writes only the initial placeholder and never overwrites
   hand-authored content.
+- `post` — user-owned. The page's own post for publishing. fitdocs writes a
+  hidden-comment instruction into a brand-new document, which renders as
+  nothing, and never touches this region again.
 - `load` — tool-filled. The training-load pass writes into this region, but
   regeneration still carries its existing content over rather than
   overwriting it, on the same footing as the user-owned regions.
 
 The `morning` region is refreshed rather than preserved; see
-[The Morning-Of Region](#the-morning-of-region).
+[The Morning-Of Region](#the-morning-of-region). The `published` region is
+refreshed too; see [The Published Region](#the-published-region).
 
 A chart region in a dashboard page is the inverse case: it is tool-owned inside
 a page that is yours. fitdocs rewrites the bytes between a chart region's
@@ -418,6 +424,16 @@ Refreshed regions are disjoint from the preserved regions listed above:
 The region sits immediately before Training Load. A fresh render leaves it
 empty; the morning-of pass fills it after the page writes.
 
+## The Published Region
+
+- `published` — fitdocs-owned. A fresh render leaves it empty, so it renders
+  as nothing. `fitdocs publish --yes` fills it from the publish ledger and
+  replaces its content whenever it differs; hand edits there are replaced.
+  It is never user-owned and carries no user content.
+
+The region sits directly after the page's title and attribution line, before
+`notes`. Regeneration carries its content into the rewritten page.
+
 ## What Regeneration Replaces and Preserves
 
 Regeneration (`fitdocs regen`, and the rewrite path inside `fitdocs sync`)
@@ -425,7 +441,7 @@ replaces **everything outside the preserved regions and the user-owned
 frontmatter keys**: the rest of the frontmatter block, the document body,
 the provenance banner, and every chart asset (see below for how an asset is
 written). It carries **every preserved
-region's content over verbatim** — `notes`, `workout`, and `load` — and
+region's content over verbatim** — `notes`, `workout`, `post`, and `load` — and
 every [user-owned frontmatter key](#user-owned-frontmatter-keys)'s line
 over verbatim alongside them, including while forced re-processing
 (`--force`) is in effect. There is no operation that discards user-owned
@@ -434,7 +450,9 @@ region or frontmatter-key content; see
 for the one honest exception to this guarantee (a *deleted* document has no
 content to preserve). The `morning` region is generated content: the merge
 carries it into the rewritten page, then the morning-of pass replaces it
-from the wellness series.
+from the wellness series. The `published` region is generated content: the
+merge carries it into the rewritten page, and `fitdocs publish --yes` is what
+refills it from the publish ledger.
 
 Chart assets are replaced only when their content changes. A chart asset under
 `workouts/assets/` whose regenerated bytes are identical to the file already
@@ -526,8 +544,8 @@ warning before proceeding — the run still succeeds, but you get a chance to
 notice.
 
 The supported places for hand-authored content in a generated document are
-the `notes` region (or, for a strength document, the `workout` region) and
-the user-owned frontmatter keys below — not the rest of the frontmatter
+the `notes` region (or, for a strength document, the `workout` region), the
+`post` region and the user-owned frontmatter keys below — not the rest of the frontmatter
 block. Anything else you add to frontmatter directly should be treated as
 temporary: it survives only until the document is next regenerated.
 
@@ -536,26 +554,32 @@ temporary: it survives only until the document is next regenerated.
 In addition to the [user-owned regions](#user-owned-and-tool-filled-regions)
 above, fitdocs recognizes one class of user-owned *frontmatter keys*: the
 four keys of the [effort tag](#the-effort-tag), a hand-added mark of a race,
-test, or otherwise maximal effort.
+test, or otherwise maximal effort, and the `publish` key, the target or list of
+targets you choose to publish a workout to.
 
 - `effort`
 - `effort_distance_m`
 - `effort_time_s`
 - `effort_event`
+- `publish`
 
 fitdocs **never writes** any of these keys — not from the activity, not
 from the athlete profile, not from a computed value, and not as a default.
-A document that carries none of them is simply untagged: there is no
-placeholder, no empty value, and no default written for any of them. Once
-you add one by hand, its frontmatter line — including any continuation
+A document that carries none of them simply has none: there is no
+placeholder, no empty value, and no default written for any of them (with no
+effort key it is untagged; with no `publish` key it is published nowhere).
+Once you add one by hand, its frontmatter line — including any continuation
 lines its value spans, for example a multi-line `effort_event` block
 scalar — is carried forward byte-for-byte through every operation that
 rewrites the document:
 `sync`, `sync --force`, `regen`, and the training-load pass (`load`,
-including `load --recompute`). This holds regardless of whether the tag is
-well-formed: a malformed tag (see [The Effort Tag](#the-effort-tag) below)
+including `load --recompute`). This holds regardless of whether the value is
+valid: a malformed effort tag (see [The Effort Tag](#the-effort-tag) below)
 is preserved exactly as written, never dropped, corrected, or replaced —
-only reported.
+only reported; a `publish` value is carried exactly as written too,
+whether or not it is valid. fitdocs never
+drops, corrects or replaces it, and it never names `publish` in the
+unmanaged-key warning or the `check` finding.
 
 When a document's frontmatter block is *rebuilt in full* (`regen`, and the
 rewrite path inside `sync`), the carried user-owned lines are placed after
@@ -579,14 +603,16 @@ along with it, exactly like a continuation line.
 **Known limitation:** if a document's frontmatter carries the same
 user-owned key more than once — a state only a hand edit can produce, since
 fitdocs never writes these keys itself — every occurrence's lines are
-carried forward on regeneration, but the reader that interprets the effort
-tag reads only the last occurrence's value; the duplicate is not reported
+carried forward on regeneration, but the readers that interpret the key
+(the effort-tag reader, and the reader of `publish`) read only the last
+occurrence's value, as a YAML parser does; the duplicate is not reported
 as an error.
 
 **Deleted-document exception:** like the user-owned regions, a user-owned
 key's content is *copied forward from the existing document*, not derived
 from the archive. If a document is deleted from `workouts/` and later
-regenerated, the regenerated document is untagged, with no warning — the
+regenerated, the regenerated document is untagged and has no `publish` key,
+with no warning — the
 same exception [stated for regions](#overwrite-semantics-of-every-writing-operation)
 applies here.
 
@@ -887,8 +913,8 @@ and each has a distinct contract:
   entry's table — no different from any other key here — so a hand edit
   can change either one.
 - **`fitdocs.toml`** — your settings file (`[tiles]`, `[inbox]`, `[plugins]`,
-  `[load]`, `[history]`, `[plans]`, `[identity]`, `[wellness]`, and
-  `[connectors]` today;
+  `[load]`, `[history]`, `[plans]`, `[identity]`, `[wellness]`,
+  `[connectors]`, and `[publish]` today;
   more tables as more features
   land). This file is **read-only to fitdocs**: nothing in fitdocs ever
   creates, writes, or modifies it. An absent file, or an absent table within
@@ -903,10 +929,11 @@ and each has a distinct contract:
   in this contract's sense — `fitdocs disconnect` removes the named
   instance's own credentials file and nothing else, never the directory and
   never another instance's file — but fitdocs creates it, owner-only, when
-  missing, and `fitdocs connect`, a credential-renewing `fitdocs pull` and
-  `fitdocs disconnect` are the only operations that write to or remove from
-  it, each one instance's file at a time, never touching another instance's
-  file or anything under the data root. See
+  missing, and `fitdocs connect`, a credential-renewing `fitdocs pull`, a
+  credential-renewing `fitdocs publish --yes` and `fitdocs disconnect` are the
+  only operations that write to or remove from it, each one instance's file at
+  a time, never touching another instance's file or anything under the data
+  root. See
   [Connectors](connectors.md) for where each field comes from and how to
   override it per connector.
 - **The plan-source directory** — your plan sources: the athlete's own
@@ -957,7 +984,7 @@ and each has a distinct contract:
   `dashboard` entry below.
 - **`sync --force`** — re-processes every discovered file even when its
   source is already archived, but forced re-processing does **not** bypass
-  the preserved-region or user-owned-key guarantee: `notes`, `workout`, and
+  the preserved-region or user-owned-key guarantee: `notes`, `workout`, `post`, and
   `load`, and every user-owned frontmatter key, are still carried over
   verbatim. Forcing widens which sources get *rendered again*, never which
   content is discarded. Forced re-processing runs the same sequence: page
@@ -1176,6 +1203,19 @@ and each has a distinct contract:
   A connector that renews an expired token updates only that instance's
   credentials file (see
   [Shared and User-Owned Files](#shared-and-user-owned-files) below).
+- **`publish`** — `fitdocs publish` without `--yes` writes nothing. With
+  `--yes` its only writes are the publish ledgers, one file per target under
+  `.fitdocs/publish/`, and the inner content of the `published` region of
+  workout pages at the current document-format version, which it rebuilds from
+  the ledgers and rewrites only when the bytes differ. It never writes the
+  `post` region, the frontmatter or any other byte of a page, a workout page of
+  an older or newer format, an asset, an archived file, the athlete profile or
+  the settings file, and never creates, renames or deletes a workout page. A target
+  that renews its credentials through its session updates only that instance's
+  credentials file (see
+  [Shared and User-Owned Files](#shared-and-user-owned-files) below). A page
+  whose ledger records are ambiguous is left as it is and reported. `fitdocs publish` reads the publish targets from the `[publish]` and
+  `[connectors]` tables of `fitdocs.toml`.
 - **`connect`** — authenticates one connector instance interactively and
   writes nothing at all under the data root; the only file it creates or
   updates is that instance's own credentials file (and the credentials
@@ -1258,7 +1298,8 @@ archived sources in `fit-archive/`, the wellness series in `wellness/`
 (itself rebuilt from `wellness-archive/` and the `[wellness]` settings), the
 athlete profile (`athlete.toml`), the configured timezone, and the configured
 tile source. The `morning` region is generated content too and is refilled
-from that series after the page writes. This is what makes
+from that series after the page writes. The `published` region is generated
+content too and is refilled from the publish ledger by `fitdocs publish --yes`. This is what makes
 `regen` possible without the original `.fit` source directory. Content
 *inside* a document's preserved regions is not re-derived by regeneration —
 it is carried over from the document itself, so regenerating a document you
@@ -1320,6 +1361,10 @@ same reason, so the newer-version refusal holds for the whole document, not
 only the part `sync`/`regen` rewrite directly. The morning-of pass also
 leaves a newer-version document completely untouched, including its
 `morning` region.
+
+A page stamped with a `doc_version` below 12 has neither the `post` nor the
+`published` region: `fitdocs publish` does not publish it, and `fitdocs regen`
+brings it current with both regions.
 
 A page written before the four `source_*` keys existed records an older
 `doc_version` and lacks them, so it is recognized only by exact content or

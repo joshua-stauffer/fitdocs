@@ -57,7 +57,7 @@ from fitdocs.cli import (
 )
 from fitdocs.cli import app as cli_app
 from fitdocs.connectors.pull import InstancePullReport, WellnessPullReport
-from fitdocs.contract import MANAGED_KEYS, PRESERVED_REGIONS
+from fitdocs.contract import MANAGED_KEYS, POST_REGION, PRESERVED_REGIONS, PUBLISH_KEY
 from fitdocs.declaration import CONTRACT_DOCUMENTATION_URL
 from fitdocs.layout import OWNED_PATHS
 from fitdocs.model import Modality, Sport
@@ -65,6 +65,13 @@ from fitdocs.plans.engine import BlockStatus
 from fitdocs.plans.matching import Confidence, RowState
 from fitdocs.plans.model import RowAdded, RowChanged, RowRemoved, TargetChanged
 from fitdocs.plans.source import parse_block
+from fitdocs.publish.outcomes import (
+    FAILURE_CODES,
+    LANDED_CODES,
+    STATE_CODES,
+    PublishCode,
+)
+from fitdocs.publish.values import PLACEHOLDERS
 from fitdocs.sync import DrainReport, SyncReport
 from tests._changelog_view import V0_1_0, read_unreleased_since
 
@@ -87,6 +94,7 @@ _INBOX_HEADINGS: tuple[str, ...] = (
     "When this applies",
     "Commands to run",
     "Reading the report",
+    "Publishing posts",
     "Ownership boundary",
     "Further reading",
 )
@@ -2097,3 +2105,246 @@ def test_recovery_release_entries_are_in_unreleased_sections(
     section = unreleased.split(f"### {heading}\n", 1)[1].split("\n### ", 1)[0]
     entries = [_flat(part) for part in section.split("\n- ")[1:]]
     assert entry in entries
+
+
+# --- publishing section (publish-core Req 15.1-15.6) -------------------------
+
+_PUBLISHING_URL = (
+    "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/publishing.md"
+)
+
+#: The services and brands the publishing section must not name (Req 15.1):
+#: both Phase 14 services, the relay's host and the device maker. The
+#: list is these names only, not all brands. Matched
+#: case-insensitively as substrings, so "intervals" also covers
+#: "intervals.icu" and "fitdocs.ai" covers "api.fitdocs.ai".
+_PUBLISHING_FORBIDDEN_NAMES: tuple[str, ...] = (
+    "intervals.icu",
+    "intervals",
+    "strava",
+    "fitdocs.ai",
+    "api.fitdocs.ai",
+    "garmin",
+)
+
+
+def _publishing_section() -> str:
+    _frontmatter, body = _split_frontmatter(_skill_text(INBOX_SKILL_NAME))
+    return _sections(body)["Publishing posts"]
+
+
+def _forbidden_names_in(text: str) -> list[str]:
+    lowered = text.lower()
+    return [name for name in _PUBLISHING_FORBIDDEN_NAMES if name in lowered]
+
+
+def _applies_section() -> str:
+    _frontmatter, body = _split_frontmatter(_skill_text(INBOX_SKILL_NAME))
+    return _sections(body)["When this applies"]
+
+
+def test_publishing_section_names_no_service_platform_or_brand() -> None:
+    assert _forbidden_names_in(_publishing_section()) == []
+    # The publishing bullet in "When this applies" is part of the same text
+    # (Req 15.1), so that whole section is scanned too.
+    assert _forbidden_names_in(_applies_section()) == []
+
+
+@pytest.mark.parametrize("name", _PUBLISHING_FORBIDDEN_NAMES)
+def test_publishing_name_scan_fires_on_each_forbidden_name(name: str) -> None:
+    """Positive control: the scan reports the name in either case, so a
+    clean result on the real section is not a scan that cannot fire."""
+    section = _publishing_section()
+    assert name in _forbidden_names_in(section + f"\nSend it to {name}.\n")
+    assert name in _forbidden_names_in(section + f"\nSend it to {name.upper()}.\n")
+
+
+def test_publishing_section_is_between_reading_the_report_and_ownership() -> None:
+    _frontmatter, body = _split_frontmatter(_skill_text(INBOX_SKILL_NAME))
+    order = _heading_order(body)
+    index = order.index("Publishing posts")
+    assert order[index - 1] == "Reading the report"
+    assert order[index + 1] == "Ownership boundary"
+
+
+def test_publishing_when_this_applies_bullet_is_present() -> None:
+    _frontmatter, body = _split_frontmatter(_skill_text(INBOX_SKILL_NAME))
+    applies = _flat(_sections(body)["When this applies"])
+    assert "The athlete asks to preview or publish a workout's post" in applies
+
+
+_CODE_LIKE_RE = re.compile(r"\b[a-z]+(?:_[a-z]+)+\b")
+_BRACE_RE = re.compile(r"\{[^{}]*\}")
+_IDENT_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
+_PLACEHOLDER_NAME_RE = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
+
+#: Single-word spans that are not outcome codes, each pinned to the contract
+#: constant it spells.
+_PUBLISHING_ALLOWED_WORDS: dict[str, str] = {
+    "publish": PUBLISH_KEY,
+    "post": POST_REGION,
+}
+
+#: The placeholder names the section teaches (a subset of PLACEHOLDERS).
+_TAUGHT_PLACEHOLDERS: frozenset[str] = frozenset(
+    {"title", "distance_km", "moving_time"}
+)
+
+
+def _code_like_tokens(section: str) -> set[str]:
+    """Snake_case tokens outside placeholders and clauses (innermost braces
+    peeled until none remain), fences included."""
+    text = section
+    while True:
+        peeled = _BRACE_RE.sub("", text)
+        if peeled == text:
+            break
+        text = peeled
+    return set(_CODE_LIKE_RE.findall(text))
+
+
+def _span_words(section: str) -> set[str]:
+    """Every inline code span of the section that is a bare word (matches
+    ``_IDENT_RE``), fences stripped first."""
+    prose, _fences = _strip_fences(section)
+    return {
+        span.strip()
+        for span in _code_spans_in(prose)
+        if _IDENT_RE.fullmatch(span.strip())
+    }
+
+
+def _unexplained_words(section: str) -> set[str]:
+    """Bare-word spans and snake_case prose tokens that are neither a
+    vocabulary code nor an allowlisted contract constant."""
+    found = _span_words(section) | _code_like_tokens(section)
+    known = {code.value for code in PublishCode} | set(_PUBLISHING_ALLOWED_WORDS)
+    return found - known
+
+
+def _placeholder_names(section: str) -> set[str]:
+    """Every ``{name}`` in the section's code spans, top level or inside a
+    ``{?...}`` clause, fences stripped first."""
+    prose, _fences = _strip_fences(section)
+    names: set[str] = set()
+    for span in _code_spans_in(prose):
+        stripped = span.strip()
+        if stripped.startswith("{"):
+            names.update(_PLACEHOLDER_NAME_RE.findall(stripped))
+    return names
+
+
+def test_every_code_the_publishing_section_names_is_a_vocabulary_value() -> None:
+    section = _publishing_section()
+    assert _unexplained_words(section) == set()
+    named = _span_words(section) | _code_like_tokens(section)
+    # Non-vacuity: the scan sees the codes the section teaches.
+    assert {"unchanged", "not_connected", "auth_rejected", "would_post"} <= named
+
+
+@pytest.mark.parametrize(
+    "stray", ["unchanging", "NOT_CONNECTED", "post-failed", "rejected_x"]
+)
+def test_code_scan_flags_a_stray_word_in_a_span_or_prose(stray: str) -> None:
+    """Positive control: a misspelled, upper-cased, hyphenated or invented
+    code is reported whether it sits in a span or (snake_case) in prose."""
+    section = _publishing_section()
+    assert stray in _unexplained_words(section + f"\nThen `{stray}` follows.\n")
+
+
+def test_code_scan_allows_only_the_pinned_constants_and_ignores_placeholders() -> None:
+    assert _PUBLISHING_ALLOWED_WORDS == {"publish": "publish", "post": "post"}
+    text = "`{distance_km}` {?A: {moving_time} s} `{{` `}}` `publish` `post` `x_y`"
+    assert _unexplained_words(text) == {"x_y"}
+
+
+def test_publishing_section_placeholders_are_real_and_cover_those_taught() -> None:
+    names = _placeholder_names(_publishing_section())
+    assert names <= set(PLACEHOLDERS)
+    assert names >= _TAUGHT_PLACEHOLDERS
+
+
+def test_placeholder_scan_finds_top_level_and_clause_names_and_flags_a_stray() -> None:
+    assert _placeholder_names("`{a}` `{?X: {b} {c}}` `{{`") == {"a", "b", "c"}
+    stray = _placeholder_names(_publishing_section() + "\nUse `{duration}`.\n")
+    assert "duration" in stray
+    assert not stray <= set(PLACEHOLDERS)
+
+
+def test_failure_sentence_code_lists_match_the_vocabulary_flags() -> None:
+    """The sentence naming the landed, preview and no-action codes must agree
+    with the vocabulary's own flags, so that the claim "every other code is a
+    failure" cannot drift from FAILURE_CODES."""
+    flat = _flat(_publishing_section())
+    sentence = (
+        "`posted` and `uploaded` mean the post landed; `would_post` and "
+        "`would_update` are previews; `unchanged` and `not_opted_in` need "
+        "nothing; every other code is a failure (it counts toward exit status 1): "
+        "tell the athlete"
+    )
+    assert sentence in flat
+    landed = {PublishCode.POSTED, PublishCode.UPLOADED}
+    previews = {PublishCode.WOULD_POST, PublishCode.WOULD_UPDATE}
+    nothing = {PublishCode.UNCHANGED, PublishCode.NOT_OPTED_IN}
+    assert landed == set(LANDED_CODES)
+    # READY is the one non-failure code that only a target listing shows.
+    not_failures = set(PublishCode) - set(FAILURE_CODES)
+    assert not_failures == landed | previews | nothing | {PublishCode.READY}
+    assert PublishCode.READY in STATE_CODES
+    assert not (landed | previews | nothing) & set(FAILURE_CODES)
+
+
+def test_publishing_section_names_the_commands_and_the_link() -> None:
+    section = _publishing_section()
+    spans = {span.strip() for span in _code_spans_in(_strip_fences(section)[0])}
+    assert "fitdocs publish --targets" in spans
+    assert "fitdocs publish --yes" in spans
+    assert "fitdocs publish" in spans
+    _prose, fences = _strip_fences(section)
+    assert [c for lang, c in fences if lang in ("bash", "sh")] == ["fitdocs publish\n"]
+    assert f"]({_PUBLISHING_URL})" in section
+
+
+def test_publishing_section_pins_the_yes_and_connect_rules() -> None:
+    flat = _flat(_publishing_section())
+    assert (
+        "Run `fitdocs publish --yes` only when the athlete has asked you to post."
+        in flat
+    )
+    assert "Posting is irreversible: show the athlete the preview first" in flat
+    assert (
+        "Without `--yes` it changes nothing: it sends no request, writes no file"
+        in flat
+    )
+    assert "Never run `fitdocs connect` yourself." in flat
+    assert (
+        "`not_connected`, `auth_rejected` and `permission_denied` mean the "
+        "athlete must run `fitdocs connect` for that target; "
+        "`credentials_unreadable` means the athlete must fix the credentials "
+        "file or connect again." in flat
+    )
+    assert (
+        "tell the athlete which page and target it concerns and what the "
+        "explanation says" in flat
+    )
+    assert (
+        "Each result line of the report carries a code; the report prints each "
+        "code's explanation once, below the results." in flat
+    )
+    assert "Write `{{` and `}}` for literal braces." in flat
+    assert "shows what would be posted to each target." in flat
+    assert "several at once" in flat
+    assert "publish targets the athlete has configured" in flat
+
+
+def test_publishing_section_teaches_the_post_region_and_publish_key() -> None:
+    flat = _flat(_publishing_section())
+    assert "`publish` key" in flat
+    assert "`post` region" in flat
+    assert "pages written by an older fitdocs gain it with `fitdocs regen`" in flat
+    assert (
+        "write the title on one line, then a blank line, then the description" in flat
+    )
+    assert "`{?Distance: {distance_km} km}`" in flat
+    for placeholder in ("title", "distance_km", "moving_time"):
+        assert placeholder in PLACEHOLDERS

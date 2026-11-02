@@ -224,6 +224,7 @@ workout's story and details are one scroll away.
 11. _(added by Amendment 2)_ The devices table shall show each device's product name as the fit-ingest library resolves it.
 12. _(added by Amendment 3)_ When a document is rendered from a composition of several archived source files, the splits section's device laps (criterion 3) and the devices/data-quality section's recording devices and decode errors (criterion 6) shall be the base file's alone.
 13. _(added by Amendment 5)_ When an activity's modality is run or bike, the fitdocs CLI shall include a `morning` region immediately before its Training Load section.
+14. _(added by Amendment 8)_ The fitdocs CLI shall include, in a run or bike document, a `published` region immediately after the document head and a `post` region immediately before the `morning` region.
 
 ### Requirement 7: Hero Chart Generation
 **Objective:** As an athlete, I want the power-vs-heart-rate hero chart
@@ -266,6 +267,7 @@ once I fill it in.
 5. The fitdocs CLI shall include in every weight-training document a clearly marked user-editable section for the actual workout performed as free-form markdown, pre-filled with brief instructive placeholder text when newly generated.
 6. When an activity contains no set data at all, the fitdocs CLI shall still render the weight-training document with its summary, telemetry (when available), and user-editable sections, and shall omit the sets table entirely rather than scaffolding empty or fabricated set rows.
 7. _(added by Amendment 5)_ When an activity's modality is strength, the fitdocs CLI shall include a `morning` region immediately before its Training Load section.
+8. _(added by Amendment 8)_ The fitdocs CLI shall include, in a strength document, a `published` region immediately after the document head and a `post` region immediately before the `morning` region.
 
 ### Requirement 10: User-Content Preservation on Regeneration
 **Objective:** As a user who writes into my workout documents, I want
@@ -279,6 +281,8 @@ artifacts without my notes being at risk.
 4. When regenerating a document, the fitdocs CLI shall fully replace generated (non-editable) regions with freshly rendered content.
 5. The fitdocs CLI shall include a user-notes editable region in every workout document, and additionally the workout-details editable region in weight-training documents per Requirement 9.
 6. _(added by Amendment 5)_ The fitdocs CLI shall delimit the `morning` region with the same machine-recognizable markers as other regions, leave it empty in a freshly rendered document, and fill it only with fitdocs-written morning-of block content; the region shall not be user-editable.
+7. _(added by Amendment 8)_ The fitdocs CLI shall delimit the `post` region with the same machine-recognizable markers as other regions, fill it in a freshly rendered document with a hidden comment that renders as nothing, carry its content over verbatim on regeneration as it does the notes region, and leave it to the athlete.
+8. _(added by Amendment 8)_ The fitdocs CLI shall delimit the `published` region with the same machine-recognizable markers, leave it empty in a freshly rendered document, and fill it only with the links `fitdocs publish --yes` writes from the publish ledger; the region shall not be user-editable.
 
 ### Requirement 11: Training-Load Placeholder Section
 **Objective:** As the training-load feature (downstream), I want every workout
@@ -300,6 +304,7 @@ being the "wrong" sport.
 1. When an activity's modality is neither run, bike, nor strength, the fitdocs CLI shall render a generic document containing frontmatter, a summary of the available metrics, the telemetry chart when plottable series exist, the devices/data-quality section, the user-notes region, and the training-load placeholder section.
 2. The fitdocs CLI shall render a document for every successfully parsed activity regardless of sport, and shall never fail solely because a sport is unrecognized.
 3. _(added by Amendment 5)_ When rendering a generic document, the fitdocs CLI shall include a `morning` region immediately before its Training Load section.
+4. _(added by Amendment 8)_ The fitdocs CLI shall include, in a generic document, a `published` region immediately after the document head and a `post` region immediately before the `morning` region.
 
 ### Requirement 13: Missing-Data Honesty in Rendering
 **Objective:** As a fitdocs user, I want absent data represented honestly in
@@ -411,3 +416,25 @@ workout page does not change, except that a page omits its Map section when a
 tile cannot be decoded (route-maps Amendment 2). The criterion-to-test
 mapping for these changes is the compact-chart-assets feature's own.
 No existing criterion is renumbered, reworded or withdrawn.
+
+## Amendment 8 (2026-11-01): the post and published regions, landed by publish-core
+
+Every workout page gains two machine-delimited regions. `published` is
+fitdocs-owned: empty in a fresh render, it holds the links to the activities a
+page was published to once `fitdocs publish --yes` has filled it from the
+publish ledger. `post` is athlete-owned: its fresh content is a hidden HTML
+comment, an authoring instruction that renders as nothing and degrades to
+nothing in any markdown renderer (Requirement 5.4), and the athlete may write
+the page's own post there. Placement is the same in the run and ride, strength
+and generic views: `published` immediately after the document head, `post`
+immediately before the `morning` region (and so before Training Load).
+Requirements 6, 9 and 12 gain criteria 6.14, 9.8 and 12.4 (placement) and
+Requirement 10 gains criteria 10.7 and 10.8 (the regions' ownership and
+content), each tagged `_(added by Amendment 8)_`. The command that writes the
+`published` region, the post's composition and the ledger are publish-core's
+own. `DOC_VERSION` advances from 11 to 12 on this branch (publish-core task
+2.3), so every generated page and golden document moves by the two regions
+and the version stamp; a page stamped 11 or lower is brought current by
+`fitdocs regen`, which adds both regions and preserves everything else. No
+existing criterion is renumbered, reworded or withdrawn, and every approval is
+preserved.

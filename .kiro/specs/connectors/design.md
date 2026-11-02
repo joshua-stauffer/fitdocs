@@ -2110,3 +2110,18 @@ activity-identity bullet above. Also shared with it: `contract.py`'s
   added `inbox` and `route-maps` and widened `distribution` at the spec
   batch); task 9.1 ticks them at landing (no SHA in the merged commit;
   cross-spec ruling 2026-09-29).
+
+## Amendment note (2026-11-01): publish-core dependencies and capabilities
+
+Recorded by publish-core (connectors Amendment 6). Allowed Dependencies gains
+two sentences: `fitdocs.connectors.protocol` may import
+`fitdocs.publish.request` and `fitdocs.publish.outcomes`;
+`fitdocs.connectors.registry` may import `fitdocs.publish.request`; no other
+connectors module imports `fitdocs.publish`. `fitdocs.cli` and
+`fitdocs.publish.targets` import the package. The `Connector` family of
+optional-operation protocols gains `PostPublisher` (`link_label`,
+`publish(session, request) -> PublishResult`), required when any of
+`PUBLISH_CAPABILITIES` is declared; `HttpRequest` gains `single_attempt`.
+The `tests/connectors/test_boundary.py` entries for the two modules carry the
+publish leaves.
+

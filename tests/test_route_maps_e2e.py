@@ -560,6 +560,7 @@ def test_the_settings_tables_and_tile_keys_are_the_pre_change_set() -> None:
         "PLANS_TABLE": "plans",
         "PLUGINS_TABLE": "plugins",
         "PRIORITY_TABLE": "priority",
+        "PUBLISH_TABLE": "publish",
         "SUFFICIENCY_TABLE": "sufficiency",
         "TILES_TABLE": "tiles",
         "WELLNESS_TABLE": "wellness",

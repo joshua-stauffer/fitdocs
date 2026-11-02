@@ -31,8 +31,39 @@ recorded as one.
   keeps the file if the relay cannot confirm; `--local-only` removes the file
   without contacting the relay. Action: run `fitdocs disconnect NAME` to
   retire a token you no longer want on this machine.
+- `fitdocs publish` turns workout pages into posts and sends them to the
+  publish targets you configured as connectors; the `[publish]` settings
+  table sets the title and description templates a post is composed from. A page
+  is posted only to the targets its `publish` frontmatter key names, and a
+  run without `--yes` is a dry run: it sends nothing and prints the exact
+  title and description each post would carry. `fitdocs publish --yes` sends
+  them, `--to` narrows a run to named targets, and `fitdocs publish
+  --targets` lists the configured targets and whether each is ready. Each
+  post is composed from the page's own `post` region when it holds text,
+  otherwise from those templates; one ledger per target under
+  `.fitdocs/publish/` records what landed, so a repeat run posts only what
+  changed. See the
+  [publishing guide](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/publishing.md).
+- Every workout page gains two regions. The `post` region is yours: write the
+  page's own post there, and fitdocs never edits it. The `published` region is
+  fitdocs-owned: `fitdocs publish --yes` fills it with links to the posted
+  activities, and hand edits to it are replaced by the next `fitdocs publish
+  --yes`. The `publish` frontmatter key, the target or list of targets you
+  choose for the page, is a user-owned key like the effort-tag keys and is
+  carried across every regeneration exactly as written.
 
 ### Changed
+
+- The generated document and ownership contract advances from version 17 to
+  18 (contract version 18) and the document format version from 11 to 12:
+  workout pages carry the `post` and `published` regions and the `publish`
+  key, and the published contract names them as user-owned (`post`, `publish`)
+  and fitdocs-owned (`published`). Action: run `fitdocs regen` once to bring
+  an existing archive's pages to the new format; the regeneration carries
+  every region and key you wrote and adds the two empty regions. A page
+  written by an older fitdocs is reported as out of date by `fitdocs publish`
+  until you do.
+
 
 - Chart files are much smaller. Each map now carries one WebP basemap image
   cropped to the area it shows, at the tiles' pixel density, in place of one
@@ -57,12 +88,13 @@ recorded as one.
   documents; page text is unchanged. Action: run `fitdocs regen` once to
   rewrite the chart files of an existing archive in the compact form. Later
   regens leave every chart file whose bytes are unchanged untouched.
-- The generated document and ownership contract advances from version 17 to
-  18 (contract version 18): the new `fitdocs disconnect` command removes the
+- The generated document and ownership contract advances from version 18 to
+  19 (contract version 19): the new `fitdocs disconnect` command removes the
   named connector instance's own credentials file, and nothing else, from the
   credentials store outside the data root; `connect`, a credential-renewing
-  `pull` and `disconnect` are the only operations that write to or remove from
-  the store. Contract version 18 needs nothing for existing documents. Action:
+  `pull`, a credential-renewing `publish --yes` and `disconnect` are the only
+  operations that write to or remove from the store. Contract version 19 needs
+  nothing for existing documents. Action:
   run `fitdocs sync` or `fitdocs regen` once to refresh the in-tree ownership
   declarations to the new version.
 - A bare `fitdocs pull` (no instance names) now pulls only instances whose

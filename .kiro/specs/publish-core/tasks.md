@@ -32,9 +32,9 @@ written with this spec, holds its copy. Every version-history pin is written as 
 literals ("Raised from `11` to `12`"), appended, and never derived from the
 live constant.
 
-- [ ] 1. Foundation: the shared leaves and the package guard
+- [x] 1. Foundation: the shared leaves and the package guard
 
-- [ ] 1.1 Add the publish package and its outcome vocabulary
+- [x] 1.1 Add the publish package and its outcome vocabulary
   - Create the publish package as a marker that imports nothing, and the
     `tests/publish` test package; add `tests/publish` to the type checker's
     file list so later test stubs are checked against the protocols they
@@ -59,7 +59,7 @@ live constant.
     module; adding an import to the package marker.
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_
 
-- [ ] 1.2 Add the publish request and result values
+- [x] 1.2 Add the publish request and result values
   - Add the post (title, description), the completed-activity subject, the
     publish request (publication id, post, subject, recorded link) and the
     publish result (one code, an optional link), as frozen plain values.
@@ -73,7 +73,7 @@ live constant.
     refused character), and die on loosening any one refused character.
   - _Requirements: 9.3, 9.4, 12.3_
 
-- [ ] 1.3 Guard the publish package's boundary
+- [x] 1.3 Guard the publish package's boundary
   - Add a boundary test modelled on the connectors guard:
     - each publish module's direct non-standard-library imports pinned by
       equality against a hand-written registry, with the registry checked
@@ -90,9 +90,9 @@ live constant.
     call and a random-token call.
   - _Requirements: 6.1, 7.5_
 
-- [ ] 2. Page contract: the `publish` key and the two regions
+- [x] 2. Page contract: the `publish` key and the two regions
 
-- [ ] 2.1 Add the contract readers publishing needs
+- [x] 2.1 Add the contract readers publishing needs
   - Add the `publish` key constant and its reader: an absent key or an
     empty list reads as no targets; one non-empty name or a list of distinct
     non-empty names reads as those names; anything else reads as an invalid
@@ -110,7 +110,7 @@ live constant.
     with minutes over 59.
   - _Requirements: 2.1, 5.2_
 
-- [ ] 2.2 Make the `publish` key user-owned
+- [x] 2.2 Make the `publish` key user-owned
   - Add the key to the user-owned set through a documentation-order tuple
     (the four effort keys, then `publish`); the workouts declaration lists
     user-owned keys from that tuple.
@@ -130,7 +130,7 @@ live constant.
     `publish` from the set.
   - _Requirements: 2.1, 2.2, 2.8, 13.3, 13.7_
 
-- [ ] 2.3 Render the `post` and `published` regions on every workout page
+- [x] 2.3 Render the `post` and `published` regions on every workout page
   - Add the two region ids, the `post` region's hidden-comment placeholder
     and the empty `published` placeholder; `post` joins the user-owned
     regions and `published` the refreshed regions; the preserved regions
@@ -171,9 +171,9 @@ live constant.
       `published` out of the refreshed regions.
   - _Requirements: 3.1, 12.1, 13.2, 13.3, 13.5, 13.6, 13.7_
 
-- [ ] 3. Connector framework: the target contract and single-attempt writes
+- [x] 3. Connector framework: the target contract and single-attempt writes
 
-- [ ] 3.1 (P) Add the single-attempt request mode
+- [x] 3.1 (P) Add the single-attempt request mode
   - A request marked single-attempt is sent to the transport exactly once,
     whatever the status or network failure, in data and authentication
     modes; the post helper takes the marker as an optional keyword.
@@ -187,7 +187,7 @@ live constant.
   - _Requirements: 10.1, 10.2_
   - _Boundary: ConnectorChanges (transport only)_
 
-- [ ] 3.2 (P) Drive the publish capabilities through the publish operation
+- [x] 3.2 (P) Drive the publish capabilities through the publish operation
   - Mark push-activity, annotate-remote-activity and resolve-remote-activity
     driven, keep their remote-change and irreversible marks, keep the four
     other reserved capabilities undriven, and name the three as the publish
@@ -225,9 +225,9 @@ live constant.
   - _Boundary: ConnectorChanges (protocol, registry, surface)_
   - _Depends: 1.2_
 
-- [ ] 4. Composition: templates, values and posts
+- [x] 4. Composition: templates, values and posts
 
-- [ ] 4.1 (P) Build the template grammar
+- [x] 4.1 (P) Build the template grammar
   - Parse templates left to right into text, placeholders and optional
     clauses: `{{` and `}}` escapes, `{name}` placeholders checked against a
     given name set, `{?...}` clauses holding at least one placeholder and no
@@ -245,7 +245,7 @@ live constant.
   - _Requirements: 4.4, 4.5, 5.7_
   - _Boundary: TemplateGrammar_
 
-- [ ] 4.2 (P) Produce placeholder values from a page
+- [x] 4.2 (P) Produce placeholder values from a page
   - Publish the 17 placeholder names in the design's order and produce each
     as fixed-format text from the contract readers only, or `None`.
   - Derive miles, pace (run modality only) and speed (bike modality only)
@@ -262,7 +262,7 @@ live constant.
   - _Boundary: PlaceholderValues_
   - _Depends: 2.1_
 
-- [ ] 4.3 Compose posts and read the post region
+- [x] 4.3 Compose posts and read the post region
   - Read the `post` region: normalize line endings, remove hidden comments
     (an unclosed one is invalid), drop leading and trailing blank lines;
     nothing left means no override; otherwise the first line is the title,
@@ -282,7 +282,7 @@ live constant.
   - _Requirements: 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 4.7, 5.6, 6.1, 6.2, 6.3, 6.4, 6.5_
   - _Boundary: Composer_
 
-- [ ] 4.4 (P) Read the `[publish]` settings and ship the built-in default
+- [x] 4.4 (P) Read the `[publish]` settings and ship the built-in default
   - Ship the built-in default title and description templates from the
     design, parsed against the placeholder names.
   - Read `[publish]` and `[publish.targets.<name>]`: per target and per
@@ -301,9 +301,9 @@ live constant.
   - _Boundary: PublishSettings_
   - _Depends: 4.1, 4.2_
 
-- [ ] 5. State and input: the ledger, the published region and pages
+- [x] 5. State and input: the ledger, the published region and pages
 
-- [ ] 5.1 (P) Keep the publish ledger
+- [x] 5.1 (P) Keep the publish ledger
   - Add the ledger location under the tool-owned state directory, one file
     per target, and the page key for a workout page (`workout:` and the
     file digest).
@@ -324,7 +324,7 @@ live constant.
   - _Boundary: PublishLedger_
   - _Depends: 1.2_
 
-- [ ] 5.2 (P) Render and splice the published region
+- [x] 5.2 (P) Render and splice the published region
   - Build the region's content from a page's recorded links: empty with no
     link, otherwise `Published:` and each `[label](link)` joined by the
     separator, in target-name order.
@@ -340,7 +340,7 @@ live constant.
   - _Boundary: PublishedRegion_
   - _Depends: 1.2, 2.3_
 
-- [ ] 5.3 (P) Select and read pages
+- [x] 5.3 (P) Select and read pages
   - Select every top-level workout page in file-name order, or the named
     ones: a bare name in `workouts/` with or without `.md`, or a path from
     the working directory to a file directly in `workouts/`; refuse a name
@@ -363,9 +363,9 @@ live constant.
   - _Boundary: PageReader_
   - _Depends: 1.2, 2.1, 2.3_
 
-- [ ] 6. Delivery and orchestration
+- [x] 6. Delivery and orchestration
 
-- [ ] 6.1 Prepare targets and send to them safely
+- [x] 6.1 Prepare targets and send to them safely
   - Treat a connector instance as a publish target when its connector
     declares annotate-remote-activity.
   - List targets with their state (ready, not connected, unreadable
@@ -389,7 +389,7 @@ live constant.
   - _Requirements: 1.6, 8.6, 8.7, 12.3, 14.1, 14.2, 14.5_
   - _Depends: 3.2_
 
-- [ ] 6.2 Run the decision and the dry run
+- [x] 6.2 Run the decision and the dry run
   - Over the selected pages and targets, in order: refuse unreadable named
     pages, invalid opt-ins, unknown target names, older, newer and damaged
     pages, pages without activity facts, conflicting ledger records, and
@@ -405,7 +405,7 @@ live constant.
     the ledger directory.
   - _Requirements: 2.3, 2.4, 2.5, 2.6, 7.5, 7.6, 7.7, 7.8, 11.7, 12.6, 13.5_
 
-- [ ] 6.3 Post, record and refresh the published region
+- [x] 6.3 Post, record and refresh the published region
   - For each would-post or would-update pair: open the target on first use
     (a preparation code applies to that pair and stops the target); mint and
     save a publication id before the first request; send; record the code,
@@ -431,7 +431,7 @@ live constant.
       its link.
   - _Requirements: 1.6, 2.7, 3.8, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 10.3, 10.4, 10.5, 12.2, 12.5, 12.7, 12.8_
 
-- [ ] 6.4 (P) Render run reports and target listings
+- [x] 6.4 (P) Render run reports and target listings
   - Text: the run's mode line, one line per page and target with its code
     (and fitdocs detail), the post indented for would-post and would-update,
     the link for a posted pair, the counts by code, the not-opted-in count,
@@ -444,9 +444,9 @@ live constant.
   - _Boundary: Report_
   - _Depends: 6.2_
 
-- [ ] 7. The `fitdocs publish` command
+- [x] 7. The `fitdocs publish` command
 
-- [ ] 7.1 Add `fitdocs publish` with its preflight and exit codes
+- [x] 7.1 Add `fitdocs publish` with its preflight and exit codes
   - Arguments and options: PAGES, repeatable `--to`, `--yes`, `--targets`,
     `--format text|json`, `--out`; the publish package is imported lazily,
     pinned by a test that importing the CLI loads no publish module other
@@ -470,7 +470,7 @@ live constant.
     scripted target in text and JSON.
   - _Requirements: 4.6, 4.8, 7.1, 7.3, 7.4, 7.10, 7.11, 8.9_
 
-- [ ] 7.2 Add the target listing
+- [x] 7.2 Add the target listing
   - `--targets` lists every configured publish target in text or JSON,
     reading the credentials store only for state; it refuses PAGES, `--to`
     and `--yes`; with no target it says so and exits 0.
@@ -479,9 +479,9 @@ live constant.
     records no call).
   - _Requirements: 4.8, 14.1, 14.2, 14.3, 14.4, 14.5, 14.6_
 
-- [ ] 8. Contract, skill, documentation and amendments
+- [x] 8. Contract, skill, documentation and amendments
 
-- [ ] 8.1 Advance the ownership contract
+- [x] 8.1 Advance the ownership contract
   - Raise `CONTRACT_VERSION` to one more than its value at landing, with an
     appended history paragraph naming the two regions, the `publish` key,
     the ledger location, `[publish]` and `fitdocs publish`'s writes.
@@ -502,7 +502,7 @@ live constant.
   - _Requirements: 13.1, 13.3, 13.4_
   - _Depends: 2.2, 2.3, 7.1_
 
-- [ ] 8.2 (P) Write the skill's publishing section
+- [x] 8.2 (P) Write the skill's publishing section
   - Add the section and the "When this applies" bullet from the design to
     the workouts skill: several configured publish targets, named by none;
     `fitdocs publish --targets`; the `publish` key and the `post` region
@@ -520,7 +520,7 @@ live constant.
   - _Boundary: SkillSection_
   - _Depends: 7.2_
 
-- [ ] 8.3 (P) Write the publishing reference
+- [x] 8.3 (P) Write the publishing reference
   - A contract-grade publishing page: command, options, preflight and exit
     codes; `[publish]` and its resolution; the template grammar; the
     placeholder table; the `post` region syntax; the `publish` key; the code
@@ -543,7 +543,7 @@ live constant.
   - _Boundary: PublishingDocs_
   - _Depends: 7.1_
 
-- [ ] 8.4 Write the changelog entry and refresh the site-copy record
+- [x] 8.4 Write the changelog entry and refresh the site-copy record
   - The changelog's Unreleased section describes publishing, the two
     regions, the `publish` key, both version changes and the `fitdocs regen`
     action, pinned through `unreleased_since(text, V0_2_0)` from the
@@ -557,7 +557,7 @@ live constant.
   - _Requirements: 16.2, 16.4_
   - _Depends: 8.1, 8.3_
 
-- [ ] 8.5 Record the amendments
+- [x] 8.5 Record the amendments
   - Take the next free amendment number in each spec at landing and record,
     preserving every existing criterion and approval:
     - **wiki-contract**: criteria for the `post` region, the `published`
@@ -583,9 +583,9 @@ live constant.
     spec status check is clean.
   - _Requirements: 16.5, 16.6_
 
-- [ ] 9. Validation
+- [x] 9. Validation
 
-- [ ] 9.1 Prove the end-to-end guarantees
+- [x] 9.1 Prove the end-to-end guarantees
   - Add `fitdocs publish` (a dry run) and `fitdocs publish --targets` to
     the socket-guarded offline-command cases, both with connectors
     configured.
@@ -602,3 +602,44 @@ live constant.
     confinement-checked like every other writing command.
   - Done when these tests pass in the full suite on macOS and on CI.
   - _Requirements: 1.6, 2.2, 7.5, 8.3, 11.2, 13.5, 13.6, 14.2_
+
+## Implementation Notes
+
+- 1.1: a fresh-interpreter test must run `[sys.executable, "-I", "-B", ...]`: `-I` drops the root conftest's PYTHONDONTWRITEBYTECODE, so without `-B` the child writes `__pycache__` under `src/` and `tests/test_bytecode_hygiene.py` fails later in the full run.
+- 1.2: link/label rules live in `fitdocs.publish.request` (`valid_link`, `valid_label`); `valid_link` uses `urllib.parse.urlsplit`, so task 1.3's forbidden-name scan must admit `urllib.parse` explicitly while still forbidding network-capable `urllib.request`. Pin dataclass field defaults (only `PublishResult.link` has one) -- defaults survived review twice.
+- 1.3: every new publish module appends one entry to `_ALLOWED_IMPORT_TARGETS` in tests/publish/test_boundary.py (and `_THIRD_PARTY_ALLOWED_MODULES` for tomli_w). The clock/random scan is raw text: docstrings/comments must not quote `datetime.now`, `time.time`, `secrets.token_hex`, `random.` etc. `xml.sax.saxutils` is forbidden (use `html.escape`); `import urllib.parse` bare is forbidden (use `from urllib.parse import ...`). Design Allowed Dependencies' 'no urllib' bullet needs amending to 'no urllib.request/urllib.error/bare import urllib' (task 8.5).
+- Controller ruling 2.1: whitespace-only publish target name is a non-empty str -> accepted by the reader; later unknown-target check handles it (design literal).
+- Controller ruling 1.3: guard admits `urllib.parse` (from-forms only) for the link rule; design 'no urllib' bullet to be amended (8.5).
+- Controller ruling 4.2 (A): empty/whitespace-only load_methodology = no usable methodology -> both load placeholders None.
+- Controller ruling 4.2 (B): load_methodology gets the same single-line text check as title/sport (resolves design PlaceholderValues 'verbatim' vs Composer 'control char never reaches title'); failing it -> both load placeholders None; otherwise verbatim.
+- Controller ruling 4.2 (C): single-line text check rejects Unicode Cc plus U+2028/U+2029 (Req 6.2 single-line title).
+- Controller ruling 4.2: distance_mi derived only from positive distance_km (Req 5.4); recorded zero km renders "0.00" km, miles None.
+- Controller ruling 5.1: load refuses a publication id shared across two targets' ledgers (Req 10.4; design invariant 'unique' read ledger-wide). Consequence: renaming a target by copying its ledger file is refused (names both files); delete one to recover. docs/publishing.md (8.3) must state it.
+- Controller ruling 5.1: ledger target-name rule `_TARGET_RE` duplicates connectors INSTANCE_NAME_PATTERN (ledger may not import connectors); pinned equal by test. Follow-up: move to a shared leaf.
+- Controller ruling 5.1: save_ledger wraps OSError in PublishLedgerError naming the file.
+- Controller ruling 4.3: "normalized single-line title" = any whitespace run around a line terminator (LF, CR, VT, FF, U+0085, U+2028, U+2029) folds to one space, then strip; never a refusal (design gives no code).
+- Controller ruling 4.3: refusal precedence in compose: title render (VALUE_MISSING) -> description render (VALUE_MISSING) -> empty title (TITLE_EMPTY). Template-error positions in a description count within the description text, not page lines.
+- Controller ruling 4.4: a title template ([publish] / [publish.targets.<name>] title) must be single-line text per ruling 4.2(C): any Unicode Cc (tab included), Zl or Zp is refused naming file/table/key; predicate shared with values.
+- Controller ruling 4.4: PUBLISH_TABLE forces a pin move in tests/test_route_maps_e2e.py::test_the_settings_tables_and_tile_keys_are_the_pre_change_set (compact-chart-assets Req 7.5 snapshot of *_TABLE constants); design Modified Files omitted it; no amendment needed (that Req limits only compact-chart-assets).
+- Controller ruling 6.1: link_refused is True exactly when a link was offered and not kept, including when the answer's code is outside TARGET_CODES or not a PublishCode (design literal).
+- 2.3: forced pin moves outside design Modified Files: tests/load/test_render.py ((LOAD_PAYLOAD_VERSION, DOC_VERSION) literal) and tests/test_portability.py (HTML-comment allowlist admits POST_PLACEHOLDER by exact equality). 8.5 records them.
+- For 8.1 (from 2.2/2.3 review): docs/ownership-contract.md narrative paragraphs still omit `post`/`publish` -- hand-authored places (~:543), sync --force carry list (~:980), training-history reserved keys (~:165-168); "The Published Region" must name `fitdocs publish --yes` as what replaces hand edits (Req 12.5/13.3) and drop its duplicated lead-in; tests/test_declaration.py:170-178 comment ("today `workout` ... and `load`") is stale. README.md:243 ownership summary omits `post` and `publish` (8.3/8.4).
+- Controller ruling 5.3: base_fit is the archive path of the LAST ref in sources (the base identity's file); None when that ref is foreign/unresolvable or the archive file is absent -- never an extra's file (design 'last digest' read as the base; Req 9.3). A named page that cannot be read (OS error, invalid UTF-8, unparseable frontmatter) is SELECTED and reported by the engine as PAGE_UNREADABLE (Req 7.8 literal); only a readable non-workout page or a non-document is refused at selection.
+- Controller ruling 5.3: a named page's rel/path is the typed name when that name is itself an entry in workouts/ naming the same file (lstat identity); only otherwise (case-variant spelling) the on-disk entry with that identity, first in sorted order. Hard-linked names thus keep the name typed; two names of one file collapse to the first named.
+- 5.2: replace_published matches adjacent begin/end markers (no line between) -- `^begin\n(?:.*?\n)?end$` MULTILINE|DOTALL; morning/load docedit share the old regex gap (queued).
+- Controller ruling 6.2: design 'unless --to excludes it' is read from PublishPlan as given (no new field): --to excludes unknown names exactly when it narrowed the targets (set(considered) != configured). A --to naming every configured target is equivalent to no --to, and unknown names are reported (more informative; Req 2.6).
+- 6.2: run_publish(posting=True) raises NotImplementedError until 6.3 replaces that branch. A ledger record 'landed' means digest is not None, never code is not None (an unknown-result/rate-limited attempt is would_post). Test helpers must not couple fields (_record digest/code/at; _snapshot includes the data root) -- the round-1 rejection species.
+- Controller ruling 6.4: JSON row `title`/`description` render the post the row carries (any code), null when the row has none; the report renders what the row holds and decides nothing.
+- Controller ruling 6.4: Req 12.3 "say so in the report": a row with link_refused=True gets an indented `  link: refused` line in the text report (after any post/link lines), any code. The design's text shape omits it -- 8.5 records the amendment.
+- Controller ruling 6.4: the target listing's text format (`name: connector (display_name); capabilities: a, b; state: s`, then each used state's explanation once in vocabulary order; empty listing "No publish target is configured.") is accepted as the implementer's; 8.3 documents it. report imports fitdocs.publish.targets for TargetRow (design line 210 omits it; 8.5 records).
+- Controller ruling 6.3: a page whose sources yield no archived-file digest is ACTIVITY_FACTS_MISSING in both dry run and posting (the ledger cannot key it; Req 7.6 dry run = posting).
+- Controller ruling 6.3: Req 8.6 governs over design step 4: when a target fails to open, EVERY one of its pairs in the run gets the open code (not_connected / credentials_unreadable); NOT_ATTEMPTED is only for pairs after a stopping ANSWER. 8.5 records the design amendment.
+- Controller ruling 6.3: the published-region refresh matches a considered current page to records by its source digests only (no sport/start needed). When it skips a page because records are ambiguous (more than one record in a ledger, or a record matching several pages), it reports a page-level PUBLISHED_NOT_WRITTEN row with a fitdocs-written detail (Req 12.2/12.7); never a silent skip.
+- Controller ruling 6.3: each outcome is saved to the ledger file immediately after it is received, before any other work (Req 8.8/8.9); `at` is the clock read after the answer arrives.
+- For 8.5 (design amendments from 6.3/6.4 rulings): engine step 4 Req 8.6 reading (every pair of an unopened target gets the open code); refresh ambiguity rows (PUBLISHED_NOT_WRITTEN); Report text shape gains `  link: refused`; Report imports publish.targets (design line 210); the target-listing text format (8.3 documents it).
+- Controller ruling 7.1: Req 7.11's "no publish target is configured" sentence is printed in text format only; with --format json the run document is printed unchanged (empty results), so the JSON shape stays stable.
+- Controller ruling 7.1: `--targets` is parsed and exits 2 "not available yet" until 7.2 replaces that branch (7.2 owns the step-2 refusals and the step-5 listing).
+- 7.1: CLI refusal tests must arm the refused action (a scripted POSTED, a reachable credential) so 'nothing sent/written' is not pre-satisfied; the scripted transport's raise is swallowed by TargetChannel.send as target_error, so 'no request' needs an explicit transport_calls == [] / world.calls() == 0.
+- 7.2: `--targets` refusal sits at preflight step 2 (one message naming every refused flag); the listing at step 5 after [publish] validation; a credentials directory inside the data root refuses even the read-only listing when a configured target authenticates (design step 5; same as `fitdocs pull`). Listing exits 0 even with failure states.
+- Controller ruling 8.1: `fitdocs publish --yes` may write the credentials store: a target that renews its credentials through its session updates only that instance's credentials file (same as a credential-renewing `fitdocs pull`). The contract states this honestly; no production change to refuse rotation.
+- Controller ruling (validation): a page whose would-be ledger key digest (`subject.source_shas[-1]`, the digest a new record is minted with) is shared with another workout page is refused with LEDGER_CONFLICT when no record exists yet, in dry run and posting alike (Req 7.6, 11.7). Link labels also refuse U+2028/U+2029. 'No publish target is configured.' is defined once, in report.NO_PUBLISH_TARGET.

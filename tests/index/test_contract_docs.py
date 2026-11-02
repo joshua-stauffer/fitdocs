@@ -141,7 +141,7 @@ def test_index_is_counted_as_an_external_location_not_an_owned_data_root_path() 
 
 
 def test_contract_bump_and_release_notes_are_current() -> None:
-    assert contract.CONTRACT_VERSION == "18"
+    assert contract.CONTRACT_VERSION == "19"
     added = _unreleased_subsection("Added")
     changed = _unreleased_subsection("Changed")
     for phrase in (
@@ -179,4 +179,4 @@ def test_install_note_covers_duckdb_footprint_without_changing_format_version() 
         "build toolchain."
     ) in section
     assert "Installing or upgrading never creates a directory" in section
-    assert contract.DOC_VERSION == 11
+    assert contract.DOC_VERSION == 12

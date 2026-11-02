@@ -40,9 +40,15 @@
     },
     {
       "date": "2026-11-01",
+      "requirement": "8.1 and 8.2 amended in place (appended tags only) -- Amendment 6, landed by publish-core task 8.5",
+      "reason": "publish-core adds `fitdocs publish` and `fitdocs publish --targets`, and the packaged `fitdocs-workouts` skill gains a publishing section that previews and, when the athlete asks, publishes posts, and explains the publish outcome codes. The skill-publication guarantee (8.1) and the reported-outcome-channel guarantee (8.2) read as if the skill only processed the inbox and pulled.",
+      "also": "requirements.md gains Amendment 6; Requirement 8 criteria 8.1 and 8.2 gain appended tags. Nothing renumbered. Requirement 10.4 is not amended: publish-core ships no target that makes a request. The skill text and tests/test_agent_skill.py pins are publish-core task 8.2."
+    },
+    {
+      "date": "2026-11-01",
       "requirement": "1.6, 5.4, 8.2 and 10.4 amended by reading, and 10.4 also tagged in place; no image published",
       "reason": "relay-server adds a separately deployed relay package that must never enter the wheel or sdist, a packaged-skill line telling the agent never to run `fitdocs disconnect`, and a CI-built relay image that this repository does not publish.",
-      "also": "requirements.md gains Amendment 6 (2026-11-01); nothing renumbered. Pinned by tests/test_release_artifacts.py, tests/test_agent_skill.py::test_inbox_commands_section_states_never_run_disconnect_beside_connect and tests/test_relay_workflow.py, each named in the amendment."
+      "also": "requirements.md gains Amendment 7 (2026-11-01; written as Amendment 6 and renumbered because publish-core landed first); nothing renumbered. Pinned by tests/test_release_artifacts.py, tests/test_agent_skill.py::test_inbox_commands_section_states_never_run_disconnect_beside_connect and tests/test_relay_workflow.py, each named in the amendment."
     }
   ]
 }

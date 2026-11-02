@@ -1081,12 +1081,12 @@ Text (dry run shown; a posting run prints `fitdocs publish: posting.`, and a
 row's link as `  link: <url>`):
 ```
 fitdocs publish: dry run; nothing is sent (add --yes to post).
+workouts/2026-10-28-run.md -> example-target: value_missing (avg_power_w)
+workouts/2026-10-29-ride.md -> example-target: unchanged
 workouts/2026-10-30-run-1.md -> example-target: would_post
   title: Run 2026-10-30 07:12
   description:
     Distance: 10.02 km
-workouts/2026-10-29-ride.md -> example-target: unchanged
-workouts/2026-10-28-run.md -> example-target: value_missing (avg_power_w)
 1 would_post, 1 unchanged, 1 value_missing; 12 pages opted in to no selected target.
 
 would_post: <explanation>
@@ -1457,6 +1457,133 @@ Every assertion names the mutation it dies on (`tech.md` Testing).
   line-disjoint from relay-server's and other specs' clauses).
 - No `docs-site` amendment: the site is not edited (R9); its copy is a
   queue item.
+
+## Implementation amendments (2026-11-01)
+
+Recorded by task 8.5 from the controller rulings made while the spec was
+implemented (rulings are in `tasks.md` Implementation Notes under the task
+named). Approved text above is unchanged except where a line below says it is
+corrected in place. Each item states what is now true of the landed code.
+
+- **Allowed Dependencies, the 'no urllib' bullet** (ruling 1.3). The
+  forbidden set is `urllib.request`, `urllib.error` and a bare `import
+  urllib`; `from urllib.parse import ...` (the from-form only) is admitted,
+  because `fitdocs.publish.request.valid_link` uses `urlsplit` to hold a link
+  to `https`. The guard in `tests/publish/test_boundary.py` admits exactly that
+  form. `xml.sax.saxutils` stays forbidden (use `html.escape`).
+- **Modified Files, pins outside the list** (rulings 4.4 and 2.3).
+  `tests/test_route_maps_e2e.py::test_the_settings_tables_and_tile_keys_are_the_pre_change_set`
+  moves because `PUBLISH_TABLE` joins the `*_TABLE` constants (compact-chart-assets
+  Req 7.5 limits only that spec; no amendment needed there);
+  `tests/load/test_render.py` moves its `(LOAD_PAYLOAD_VERSION, DOC_VERSION)`
+  literal; `tests/test_portability.py`'s HTML-comment allowlist admits
+  `POST_PLACEHOLDER` by exact equality.
+- **Engine, step 4 (posting)** (ruling 6.3, Req 8.6 governs). When a target
+  fails to open, every one of its pairs in the run gets the code `open_target`
+  returned (`not_connected` or `credentials_unreadable`); `NOT_ATTEMPTED` is
+  given only to pairs that follow a stopping answer, never to a pair of a
+  target that did not open. Each outcome is saved to the ledger immediately
+  after it is received and before other work (Req 8.8, 8.9); `at` is the clock
+  read after the answer arrives. A page whose sources yield no archived-file
+  digest is `ACTIVITY_FACTS_MISSING` in a dry run and a posting run alike, since
+  the ledger cannot key it (Req 7.6).
+- **Engine, step 5 (refresh) ambiguity** (ruling 6.3). The refresh matches a
+  considered current page to ledger records by its source digests only. When
+  it skips a page because the records are ambiguous (more than one record in a
+  ledger, or one record matching several pages) it reports a page-level
+  `PUBLISHED_NOT_WRITTEN` row carrying a fitdocs-written detail (Req 12.2,
+  12.7); it never skips silently.
+- **Engine, selection and `--to`** (rulings 5.3, 6.1, 6.2). A named page that
+  cannot be read is selected and reported as `PAGE_UNREADABLE` (Req 7.8); only
+  a readable non-workout page or a non-document is refused at selection. A
+  page's name is the typed name when it is itself an entry in `workouts/`
+  naming the same file. `link_refused` is true exactly when a link was offered
+  and not kept, including when the answer's code is outside `TARGET_CODES`.
+  'Unless `--to` excludes it' (step 2) is read from the plan as given: `--to`
+  excludes unknown names exactly when it narrowed the targets, so a `--to`
+  naming every configured target equals no `--to`.
+- **Report text and imports** (ruling 6.4). A row with `link_refused` gets an
+  indented `  link: refused` line after any `post` and `link` lines, whatever
+  its code (Req 12.3 'say so in the report'); the text shape above gains that
+  line. A JSON row's `title` and `description` render the post the row carries,
+  `null` when it has none. `report` imports `fitdocs.publish.targets` for
+  `TargetRow`; the Dependency direction line `report (engine types,
+  outcomes)` reads `report (engine types, outcomes, targets)`. The Report text
+  example above lists pages in ascending order, as the engine emits them (it
+  was descending in the approved text; corrected in place).
+- **Target listing text format** (ruling 6.4, accepted as the implementer's;
+  documented in `docs/publishing.md`). One line per target in name order:
+  `name: connector (display_name); capabilities: a, b; state: s`; then each
+  state in use explained once, in vocabulary order; with no target the single
+  line `No publish target is configured.`
+- **CLI** (rulings 7.1 and 7.2). The sentence of Req 7.11 ('no publish target is
+  configured') is printed in text format only; with `--format json` the run
+  document is printed unchanged, with empty `results`. `--targets` refuses at
+  preflight step 2 (one message naming every refused flag) and lists at step 5
+  after `[publish]` validation; a credentials directory inside the data root
+  refuses even the read-only listing when a configured target authenticates,
+  as `fitdocs pull` does. The listing exits 0 whatever states it shows.
+- **Credentials written by a posting run** (ruling 8.1). `fitdocs publish
+  --yes` may write the credentials store: a target that renews its credentials
+  through its session updates only that instance's credentials file, as a
+  credential-renewing `fitdocs pull` does. This is stated in the published
+  ownership contract (wiki-contract Amendment 14, criterion 2.24); nothing in
+  the production code refuses the rotation.
+- **Ledger** (ruling 5.1). A publication id shared by two
+  targets' ledgers is refused at load (Req 10.4; the 'unique' invariant is read
+  ledger-wide), so copying a ledger file to rename a target is refused naming
+  both files. `save_ledger` wraps `OSError` in `PublishLedgerError` naming the
+  file.
+- **Values and selection** (rulings 4.2 and 5.3). The single-line text check
+  (Unicode `Cc`, `Zl`, `Zp`) applies to a title, a sport and
+  `load_methodology`; a failing `load_methodology` or an empty one leaves both
+  load placeholders absent; miles come only from a positive kilometre value.
+  `base_fit` is the archive path of the last entry of `sources`, `None` when
+  that reference is foreign or unresolvable or the archive file is absent.
+- **Composition** (ruling 4.3). A composed title folds any whitespace around a
+  line terminator (LF, CR, VT, FF, U+0085, U+2028, U+2029) to one space and is
+  then stripped; this is never a refusal. Refusals are checked in the order:
+  title `VALUE_MISSING`, then description `VALUE_MISSING`, then `TITLE_EMPTY`.
+  A template-error position in a description counts within the description
+  text, not page lines.
+- **Settings** (ruling 4.4). A title template (`[publish]` or
+  `[publish.targets.<name>]` `title`) holding any Unicode `Cc` (tab included),
+  `Zl` or `Zp` is a `PublishSettingsError` naming the file, the table and the
+  key; this widens the PublishSettings error 'a title template with a newline'.
+- **Engine, step 3 shared key** (validation remediation, Req 7.6, 11.7). When
+  a pair has no ledger record, the digest a new record would be keyed by (the
+  expression the engine mints with: the page's last `source_shas` entry) is
+  looked up in `sha_index`; if another workout page records it, the pair is
+  `LEDGER_CONFLICT` with a fitdocs-written detail naming the other page(s), in
+  a dry run and a posting run alike, so the dry run decides exactly what `--yes`
+  acts on. The index is still read lazily and at most once per run (now also for
+  a no-record pair, not only a record). The code's explanation gains "or a new
+  record's key would match several pages" (outcomes table, row 16).
+- **Link label separators** (validation remediation). `valid_label` also
+  refuses U+2028 and U+2029 (a local predicate in `request.py`, which may not
+  import values); the label rule is now: 1 to 64 characters, no control
+  character, square bracket or Unicode line separator. The sentence "No
+  publish target is configured." is defined once, in `report`; the CLI uses
+  it from there, imported where it prints, so `fitdocs.cli` still imports
+  nothing of `fitdocs.publish.report` at module load.
+- **Tests outside the File Structure Plan.** The isolation subprocess checks
+  live in `tests/publish/test_outcomes.py` and `tests/publish/test_request.py`
+  instead of `tests/publish/test_isolation.py`; render goldens live in
+  `tests/render/golden_docs/`. Added: `tests/publish/test_engine_posting.py`,
+  `test_changelog_entry.py`, `test_credentials_rotation.py`,
+  `tests/test_contract_publish.py`, `tests/test_publish_contract_docs.py`,
+  `tests/test_publish_e2e.py`, `tests/test_publish_key_carry_e2e.py`,
+  `tests/test_post_published_regions_e2e.py`. Pin moves (a changed literal or
+  allowlist, no new behaviour): `tests/connectors/conftest.py`,
+  `tests/connectors/test_wellness_pull.py`, `tests/index/*`,
+  `tests/render/test_views.py`, `tests/test_asset_write_contract_docs.py`,
+  `tests/test_retimed_rename_docs.py`, `tests/test_user_owned_lines.py`.
+  Comment-only: `src/fitdocs/sync.py`; the `README.md` ownership summary.
+- **Amendment records.** The five specs record their amendments as
+  wiki-contract 14, workout-docs 8, connectors 6, effort-tags 1 and
+  distribution 6 (the next free numbers on this branch; the relay-server
+  branch may take numbers in `connectors` first, and the second lander
+  renumbers).
 
 ## Future Extension: planned-workout push
 

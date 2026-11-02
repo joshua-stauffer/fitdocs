@@ -433,6 +433,9 @@ class ScriptedWellnessPuller(_ScriptedActivityPullerMixin):
     display_name = "Scripted Wellness Puller"
     auth_style = AuthStyle.NONE
     credential_fields: tuple[CredentialField, ...] = ()
+    # Declared so a capability set naming a publish capability still
+    # registers; the publish operation is never scripted here.
+    link_label = "Scripted label"
 
     def __init__(
         self,
@@ -472,6 +475,9 @@ class ScriptedWellnessPuller(_ScriptedActivityPullerMixin):
     ) -> FetchResult:
         self.calls.append("fetch_activity")
         return super().fetch_activity(session, activity)
+
+    def publish(self, session: ConnectorSession, request: object) -> NoReturn:
+        raise UnscriptedCall("ScriptedWellnessPuller.publish is never scripted")
 
     def list_wellness(
         self, session: ConnectorSession, oldest: date | None

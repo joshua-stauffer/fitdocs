@@ -135,8 +135,13 @@ def test_preserved_regions_equal_contract_exactly() -> None:
 
 
 def test_refreshed_regions_equal_contract_exactly() -> None:
-    section = _section(_read_doc(), "The Morning-Of Region")
-    assert _backticked_list_items(section) == set(contract.REFRESHED_REGIONS)
+    """The two sections' lists are disjoint and their union is the contract set."""
+    doc = _read_doc()
+    morning = _backticked_list_items(_section(doc, "The Morning-Of Region"))
+    published = _backticked_list_items(_section(doc, "The Published Region"))
+    assert morning == {"morning"}
+    assert published == {"published"}
+    assert morning | published == set(contract.REFRESHED_REGIONS)
 
 
 @pytest.mark.parametrize(
@@ -660,10 +665,11 @@ def test_credentials_store_bullet_states_what_disconnect_removes() -> None:
     for phrase in (
         "`fitdocs disconnect` removes the named instance's own credentials file "
         "and nothing else, never the directory and never another instance's file",
-        "`fitdocs connect`, a credential-renewing `fitdocs pull` and "
-        "`fitdocs disconnect` are the only operations that write to or remove "
-        "from it, each one instance's file at a time, never touching another "
-        "instance's file or anything under the data root",
+        "`fitdocs connect`, a credential-renewing `fitdocs pull`, a "
+        "credential-renewing `fitdocs publish --yes` and `fitdocs disconnect` "
+        "are the only operations that write to or remove from it, each one "
+        "instance's file at a time, never touching another instance's file or "
+        "anything under the data root",
     ):
         assert phrase in bullet, phrase
 
@@ -694,14 +700,15 @@ def test_overwrite_semantics_has_a_disconnect_entry_beside_connect() -> None:
     assert "An instance of any other style has its file removed" not in entry
 
 
-def test_version_eighteen_head_states_the_disconnect_change() -> None:
+def test_version_nineteen_head_states_the_disconnect_change() -> None:
     head = _flat(_read_doc()).split(" ## ", 1)[0]
-    assert "**Contract version:** `18`" in head
+    assert "**Contract version:** `19`" in head
     for phrase in (
         "`fitdocs disconnect` command removes the named connector instance's "
         "own credentials file, and nothing else",
-        "`connect`, a credential-renewing `fitdocs pull` and `disconnect` are "
-        "now the only operations that write to or remove from the store",
+        "`connect`, a credential-renewing `fitdocs pull`, a credential-renewing "
+        "`fitdocs publish --yes` and `disconnect` are now the only operations "
+        "that write to or remove from the store",
         "Run `fitdocs sync` or `fitdocs regen` once",
     ):
         assert phrase in head, phrase
@@ -709,20 +716,30 @@ def test_version_eighteen_head_states_the_disconnect_change() -> None:
 
 def test_contract_history_records_the_disconnect_change() -> None:
     history = _flat(inspect.getsource(contract))
-    assert "Raised from ``17`` to ``18`` by relay-server" in history
+    assert "Raised from ``18`` to ``19`` by relay-server" in history
+    # publish-core's paragraph, which landed first, stays in the history.
+    assert "Raised from ``17`` to ``18`` by publish-core" in history
+    assert history.index("Raised from ``17`` to ``18`` by publish-core") < (
+        history.index("Raised from ``18`` to ``19`` by relay-server")
+    )
+    assert (
+        "``fitdocs connect``, a credential-renewing ``fitdocs pull``, a "
+        "credential-renewing ``fitdocs publish --yes`` and ``fitdocs disconnect`` "
+        "are the only operations that write to or remove from the store"
+    ) in history
     assert (
         "``fitdocs disconnect`` removes the named instance's own credentials "
         "file and nothing else"
     ) in history
-    assert contract.CONTRACT_VERSION == "18"
+    assert contract.CONTRACT_VERSION == "19"
 
 
-def test_changelog_names_contract_version_eighteen_and_its_action() -> None:
+def test_changelog_names_contract_version_nineteen_and_its_action() -> None:
     changelog = Path(__file__).resolve().parent.parent / "CHANGELOG.md"
     text = _flat(changelog.read_text(encoding="utf-8"))
     unreleased = text.split("## [Unreleased]", 1)[1].split(" ## [", 1)[0]
     for phrase in (
-        "advances from version 17 to 18 (contract version 18)",
+        "advances from version 18 to 19 (contract version 19)",
         "the new `fitdocs disconnect` command removes the named connector "
         "instance's own credentials file, and nothing else",
         "Action: run `fitdocs sync` or `fitdocs regen` once to refresh the "

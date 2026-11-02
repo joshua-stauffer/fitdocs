@@ -244,7 +244,7 @@ def test_document_contract_and_runtime_dependencies_match_main_baseline() -> Non
         (Path(__file__).resolve().parents[3] / "pyproject.toml").read_text()
     )
 
-    assert contract.DOC_VERSION == 11
-    assert contract.CONTRACT_VERSION == "18"
+    assert contract.DOC_VERSION == 12
+    assert contract.CONTRACT_VERSION == "19"
     assert sorted(contract.MANAGED_KEYS) == expected_managed_keys
     assert manifest["project"]["dependencies"] == expected_dependencies
