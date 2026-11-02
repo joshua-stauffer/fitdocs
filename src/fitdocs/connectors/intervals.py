@@ -1119,3 +1119,107 @@ def _update(
     if answer is AnswerClass.NOT_FOUND:
         return UpdateResult.ABSENT
     return _answer_code(CallKind.UPDATE, answer) or PublishCode.UNAVAILABLE
+
+
+UPLOAD_FIELD: Final[str] = "file"
+UPLOAD_FILENAME: Final[str] = "activity.fit"
+MULTIPART_BOUNDARY_PREFIX: Final[str] = "fitdocs-"
+
+
+@dataclass(frozen=True)
+class UploadAnswer:
+    created: bool  # 201 (True) or 200 (False)
+    activity_id: str | None  # the one usable id the answer names, or None
+
+
+def _base_file(subject: CompletedActivity) -> bytes | None:
+    """The page's base file, only when it is present, readable and hashes to
+    the base digest (the last of the page's source digests); otherwise
+    ``None`` (Req 6.3)."""
+    if subject.base_fit is None or not subject.source_shas:
+        return None
+    try:
+        data = subject.base_fit.read_bytes()
+    except OSError:
+        return None
+    if hashlib.sha256(data).hexdigest() != subject.source_shas[-1]:
+        return None
+    return data
+
+
+def _multipart_body(data: bytes, publication_id: str) -> tuple[bytes, str]:
+    """The one-part ``multipart/form-data`` body holding ``data`` unmodified,
+    and its content type (Req 6.2). The boundary is the first of
+    ``fitdocs-<id>``, ``fitdocs-<id>-1``, ``-2``, ... whose delimiter does not
+    occur in the file; the same file and id give the same bytes."""
+    base = f"{MULTIPART_BOUNDARY_PREFIX}{publication_id}"
+    boundary = base
+    suffix = 0
+    while b"--" + boundary.encode("ascii") in data:
+        suffix += 1
+        boundary = f"{base}-{suffix}"
+    delimiter = b"--" + boundary.encode("ascii")
+    head = (
+        f'Content-Disposition: form-data; name="{UPLOAD_FIELD}"; '
+        f'filename="{UPLOAD_FILENAME}"\r\n'
+        "Content-Type: application/octet-stream\r\n\r\n"
+    ).encode("ascii")
+    body = delimiter + b"\r\n" + head + data + b"\r\n" + delimiter + b"--\r\n"
+    return body, f"multipart/form-data; boundary={boundary}"
+
+
+def _uploaded_activity(body: bytes) -> str | None:
+    """The one usable identifier an upload answer names, else ``None``: the
+    body is a JSON object whose ``activities`` is a non-empty list of objects
+    each holding a usable string ``id``, all naming one identifier (Req
+    6.5-6.7)."""
+    try:
+        payload = json.loads(body.decode("utf-8"))
+    except (ValueError, RecursionError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    activities = payload.get("activities")
+    if not isinstance(activities, list) or not activities:
+        return None
+    ids: set[str] = set()
+    for entry in activities:
+        if not isinstance(entry, dict):
+            return None
+        activity_id = entry.get("id")
+        if not isinstance(activity_id, str) or not _usable_activity_id(activity_id):
+            return None
+        ids.add(activity_id)
+    return next(iter(ids)) if len(ids) == 1 else None
+
+
+def _upload(
+    session: ConnectorSession,
+    headers: Mapping[str, Secret],
+    data: bytes,
+    publication_id: str,
+) -> UploadAnswer | PublishCode:
+    """Upload the base file once to the key's own athlete, the publication id
+    the only query value (Req 6.2, 6.4, 9.5). The request creates something,
+    so it is marked single-attempt; a transport failure is unconfirmed."""
+    body, content_type = _multipart_body(data, publication_id)
+    query = urlencode({"external_id": publication_id})
+    try:
+        response = session.http.post(
+            f"{API_BASE}/athlete/{SELF_ATHLETE}/activities?{query}",
+            body=body,
+            headers={"Content-Type": content_type},
+            secret_headers=headers,
+            single_attempt=True,
+        )
+    except TransportError:
+        return _answer_code(CallKind.CREATE, AnswerClass.NETWORK_FAILURE) or (
+            PublishCode.UNCONFIRMED
+        )
+    answer = _answer_class(CallKind.CREATE, response.status)
+    if answer is AnswerClass.SUCCESS:
+        return UploadAnswer(
+            created=response.status == 201,
+            activity_id=_uploaded_activity(response.body),
+        )
+    return _answer_code(CallKind.CREATE, answer) or PublishCode.UNCONFIRMED

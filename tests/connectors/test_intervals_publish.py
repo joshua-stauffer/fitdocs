@@ -10,6 +10,7 @@ scripted transport).
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import re
 import subprocess
@@ -33,17 +34,22 @@ from fitdocs.connectors.intervals import (
     CallKind,
     ListedActivity,
     UpdateResult,
+    UploadAnswer,
     _activity_link,
     _answer_class,
     _answer_code,
     _auth_headers,
+    _base_file,
     _linked_activity,
     _list,
     _listed_activities,
     _listing_window,
     _match_listing,
+    _multipart_body,
     _record_activity,
     _update,
+    _upload,
+    _uploaded_activity,
     _usable_activity_id,
 )
 from fitdocs.connectors.ledger import (
@@ -1336,37 +1342,40 @@ def test_a_transport_failure_is_unavailable_after_retries(tmp_path: Path) -> Non
     assert len(transport.requests) == 3
 
 
+def _refuse(what: str) -> object:
+    def raiser(self: object, *args: object, **kwargs: object) -> object:
+        raise AssertionError(f"body touched via {what}")
+
+    return raiser
+
+
+class _Tripwire(bytes):
+    def __getattribute__(self, name: str) -> object:
+        if not name.startswith("__"):
+            raise AssertionError(f"body touched via {name}")
+        return super().__getattribute__(name)
+
+
+for _dunder in (
+    "bool",
+    "len",
+    "getitem",
+    "iter",
+    "eq",
+    "ne",
+    "contains",
+    "hash",
+    "bytes",
+    "str",
+    "repr",
+    "format",
+):
+    setattr(_Tripwire, f"__{_dunder}__", _refuse(_dunder))
+
+
 def test_the_answer_body_is_never_read(tmp_path: Path) -> None:
     # Buffer-protocol reads (memoryview, hashlib, zlib, bytearray) cannot be
     # intercepted on 3.11, so the per-status result check below is the backstop.
-    def refuse(what: str) -> object:
-        def raiser(self: object, *args: object, **kwargs: object) -> object:
-            raise AssertionError(f"body touched via {what}")
-
-        return raiser
-
-    class _Tripwire(bytes):
-        def __getattribute__(self, name: str) -> object:
-            if not name.startswith("__"):
-                raise AssertionError(f"body touched via {name}")
-            return super().__getattribute__(name)
-
-    for dunder in (
-        "bool",
-        "len",
-        "getitem",
-        "iter",
-        "eq",
-        "ne",
-        "contains",
-        "hash",
-        "bytes",
-        "str",
-        "repr",
-        "format",
-    ):
-        setattr(_Tripwire, f"__{dunder}__", refuse(dunder))
-
     expected: dict[int, object] = {
         200: UpdateResult.CONFIRMED,
         404: UpdateResult.ABSENT,
@@ -1381,3 +1390,337 @@ def test_the_answer_body_is_never_read(tmp_path: Path) -> None:
         response = HttpResponse(status=status, headers={}, body=_Tripwire(_SENTINEL))
         result, _ = _push(tmp_path, response)
         assert result == want, status
+
+
+# --- 2.6: the base file and the one upload ---------------------------------
+
+PUBLICATION_ID = "0123456789abcdef0123456789abcdef"
+FILE_BYTES = b".FIT\x0e\x10\r\n\x00\xff line\nbreak\rcr \x80 end"
+
+
+def _archive(root: Path, data: bytes = FILE_BYTES) -> tuple[Path, str]:
+    sha = hashlib.sha256(data).hexdigest()
+    path = root / "fit-archive" / f"{sha}.fit"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+    return path, sha
+
+
+def _with_file(path: Path | None, *shas: str) -> CompletedActivity:
+    return CompletedActivity(
+        sport="Run",
+        start=datetime(2026, 3, 1, 7, 0, tzinfo=UTC),
+        elapsed_s=1800.0,
+        distance_m=5000.0,
+        source_shas=shas,
+        base_fit=path,
+    )
+
+
+def test_the_base_file_is_read_when_present_readable_and_the_base_digest(
+    tmp_path: Path,
+) -> None:
+    path, sha = _archive(tmp_path)
+    assert _base_file(_with_file(path, "e" * 64, sha)) == FILE_BYTES
+
+
+def test_a_tampered_but_readable_archive_file_is_not_uploaded(tmp_path: Path) -> None:
+    path, sha = _archive(tmp_path)
+    path.write_bytes(FILE_BYTES + b"tampered")
+    assert path.read_bytes() != FILE_BYTES
+    assert hashlib.sha256(path.read_bytes()).hexdigest() != sha
+    assert _base_file(_with_file(path, sha)) is None
+
+
+def test_a_file_hashing_to_an_earlier_digest_only_is_not_the_base(
+    tmp_path: Path,
+) -> None:
+    path, sha = _archive(tmp_path)
+    assert _base_file(_with_file(path, sha, "e" * 64)) is None
+
+
+def test_no_file_when_the_path_or_the_digests_are_missing(tmp_path: Path) -> None:
+    path, sha = _archive(tmp_path)
+    assert _base_file(_with_file(None, sha)) is None
+    assert _base_file(_with_file(path)) is None
+    assert _base_file(_with_file(tmp_path / "fit-archive" / "gone.fit", sha)) is None
+    assert _base_file(_with_file(tmp_path / "fit-archive", sha)) is None
+
+
+def _split(body: bytes, content_type: str) -> tuple[str, bytes, bytes]:
+    """(boundary, the part's header block, the part's data) read independently
+    of the code under test."""
+    prefix = "multipart/form-data; boundary="
+    assert content_type.startswith(prefix)
+    boundary = content_type[len(prefix) :]
+    opening = f"--{boundary}\r\n".encode()
+    closing = f"\r\n--{boundary}--\r\n".encode()
+    assert body.startswith(opening) and body.endswith(closing)
+    inner = body[len(opening) : -len(closing)]
+    head, separator, data = inner.partition(b"\r\n\r\n")
+    assert separator
+    return boundary, head, data
+
+
+def test_the_multipart_body_is_one_part_holding_the_file_bytes_unmodified() -> None:
+    body, content_type = _multipart_body(FILE_BYTES, PUBLICATION_ID)
+    boundary, head, data = _split(body, content_type)
+    assert boundary == f"fitdocs-{PUBLICATION_ID}"
+    assert head == (
+        b'Content-Disposition: form-data; name="file"; filename="activity.fit"'
+        b"\r\nContent-Type: application/octet-stream"
+    )
+    assert data == FILE_BYTES
+    assert b"\r\n" in FILE_BYTES and b"\r" in FILE_BYTES.replace(b"\r\n", b"")
+    assert body.count(f"--{boundary}".encode()) == 2
+
+
+def test_the_multipart_body_is_deterministic() -> None:
+    assert _multipart_body(FILE_BYTES, PUBLICATION_ID) == _multipart_body(
+        FILE_BYTES, PUBLICATION_ID
+    )
+    other = _multipart_body(FILE_BYTES, "f" * 32)
+    assert other != _multipart_body(FILE_BYTES, PUBLICATION_ID)
+
+
+def test_the_boundary_is_rechosen_when_the_file_holds_the_first_delimiter() -> None:
+    first = f"--fitdocs-{PUBLICATION_ID}".encode()
+    data = b"head\r\n" + first + b"\r\ntail"
+    assert first in data
+    body, content_type = _multipart_body(data, PUBLICATION_ID)
+    boundary, _, part = _split(body, content_type)
+    assert boundary == f"fitdocs-{PUBLICATION_ID}-1"
+    assert part == data
+    assert f"--{boundary}".encode() not in data
+
+
+def test_the_boundary_walks_on_until_one_is_absent_from_the_file() -> None:
+    delimiters = [
+        f"--fitdocs-{PUBLICATION_ID}".encode(),
+        f"--fitdocs-{PUBLICATION_ID}-1".encode(),
+    ]
+    data = b"\r\n".join(delimiters)
+    body, content_type = _multipart_body(data, PUBLICATION_ID)
+    boundary, _, part = _split(body, content_type)
+    assert boundary == f"fitdocs-{PUBLICATION_ID}-2"
+    assert part == data
+
+
+def test_the_first_boundary_is_kept_when_the_file_holds_another_ids_delimiter() -> None:
+    other = f"--fitdocs-{'a' * 32}".encode()
+    assert f"--fitdocs-{PUBLICATION_ID}".encode() not in other
+    body, content_type = _multipart_body(other, PUBLICATION_ID)
+    boundary, _, part = _split(body, content_type)
+    assert boundary == f"fitdocs-{PUBLICATION_ID}"
+    assert part == other
+
+
+def _send(
+    tmp_path: Path,
+    *script: HttpResponse | TransportError,
+    data: bytes = FILE_BYTES,
+) -> tuple[object, _Sequence]:
+    transport = _Sequence(*script)
+    session = _listing_session(transport, tmp_path)  # type: ignore[arg-type]
+    headers = _auth_headers(session, Secret(_API_KEY))
+    return _upload(session, headers, data, PUBLICATION_ID), transport
+
+
+_ONE = json.dumps({"activities": [{"id": "i777"}]}).encode()
+
+
+def test_the_upload_request_address_decoded_query_body_and_headers(
+    tmp_path: Path,
+) -> None:
+    result, transport = _send(tmp_path, _answer(201, _ONE))
+    assert result == UploadAnswer(created=True, activity_id="i777")
+    (request,) = transport.requests
+    assert request.method == "POST"
+    parts = urlsplit(request.url)
+    assert (parts.scheme, parts.netloc) == ("https", "intervals.icu")
+    assert parts.path == "/api/v1/athlete/0/activities"
+    assert parse_qs(parts.query, keep_blank_values=True) == {
+        "external_id": [PUBLICATION_ID]
+    }
+    assert parts.fragment == ""
+    assert request.single_attempt is True
+    assert request.body is not None
+    expected_body, content_type = _multipart_body(FILE_BYTES, PUBLICATION_ID)
+    assert request.body == expected_body
+    assert request.headers["Content-Type"] == content_type
+    _, _, part = _split(request.body, request.headers["Content-Type"])
+    assert part == FILE_BYTES
+    token = base64.b64encode(f"API_KEY:{_API_KEY}".encode()).decode()
+    assert list(request.secret_headers) == ["Authorization"]
+    assert request.secret_headers["Authorization"].reveal() == f"Basic {token}"
+    assert _API_KEY not in request.url and token not in request.url
+
+
+def test_no_title_or_description_is_in_the_upload_address(tmp_path: Path) -> None:
+    # The title, description and publication id are three different strings.
+    assert len({TITLE, DESCRIPTION, PUBLICATION_ID}) == 3
+    _, transport = _send(tmp_path, _answer(200, _ONE))
+    url = transport.requests[0].url
+    for needle in (TITLE, "Line one", "Morning", "name=", "description="):
+        assert needle not in url
+    assert list(parse_qs(urlsplit(url).query)) == ["external_id"]
+
+
+def test_the_boundary_collision_reaches_the_wire(tmp_path: Path) -> None:
+    data = f"x--fitdocs-{PUBLICATION_ID}y".encode()
+    _, transport = _send(tmp_path, _answer(200, _ONE), data=data)
+    (request,) = transport.requests
+    content_type = request.headers["Content-Type"]
+    assert content_type.endswith(f"boundary=fitdocs-{PUBLICATION_ID}-1")
+    assert request.body is not None
+    assert _split(request.body, content_type)[2] == data
+
+
+def test_200_is_not_created_and_201_is_created(tmp_path: Path) -> None:
+    updated, _ = _send(tmp_path, _answer(200, _ONE))
+    created, _ = _send(tmp_path, _answer(201, _ONE))
+    assert updated == UploadAnswer(created=False, activity_id="i777")
+    assert created == UploadAnswer(created=True, activity_id="i777")
+
+
+@pytest.mark.parametrize(
+    ("script", "expected"),
+    [
+        (_answer(503), C.UNCONFIRMED),
+        (_answer(429), C.RATE_LIMITED),
+        (TransportError("down"), C.UNCONFIRMED),
+    ],
+)
+def test_a_retryable_failure_makes_exactly_one_transport_call(
+    tmp_path: Path, script: HttpResponse | TransportError, expected: PublishCode
+) -> None:
+    result, transport = _send(tmp_path, script)
+    assert result == expected
+    assert type(result) is PublishCode
+    assert len(transport.requests) == 1
+
+
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [
+        (401, C.AUTH_REJECTED),
+        (403, C.PERMISSION_DENIED),
+        (404, C.REJECTED),
+        (400, C.REJECTED),
+        (422, C.REJECTED),
+        (429, C.RATE_LIMITED),
+        (500, C.UNCONFIRMED),
+        (502, C.UNCONFIRMED),
+        (204, C.UNCONFIRMED),
+        (302, C.UNCONFIRMED),
+    ],
+)
+def test_each_failing_status_answers_the_creation_column(
+    tmp_path: Path, status: int, expected: PublishCode
+) -> None:
+    result, transport = _send(tmp_path, _answer(status, _ONE))
+    assert result == expected
+    assert len(transport.requests) == 1
+
+
+def _activities(*ids: object) -> bytes:
+    return json.dumps({"activities": [{"id": i} for i in ids]}).encode()
+
+
+def test_one_usable_id_is_named() -> None:
+    assert _uploaded_activity(_activities("i123")) == "i123"
+
+
+def test_the_same_id_repeated_is_one_id() -> None:
+    assert _uploaded_activity(_activities("i123", "i123")) == "i123"
+
+
+def test_two_distinct_ids_name_none() -> None:
+    assert _uploaded_activity(_activities("i123", "i124")) is None
+    assert _uploaded_activity(_activities("i124", "i123")) is None
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        _activities(),
+        _activities("i/1"),
+        _activities(""),
+        _activities("a" * 65),
+        _activities("i 1"),
+        _activities(5),
+        _activities(None),
+        _activities("i123", "i/1"),
+        _activities("i/1", "i123"),
+        _activities("i123", 5),
+        json.dumps({"activities": [{}]}).encode(),
+        json.dumps({"activities": ["i123"]}).encode(),
+        json.dumps({"activities": [{"id": "i123"}, 5]}).encode(),
+        json.dumps({"activities": [5, {"id": "i123"}]}).encode(),
+        json.dumps({"activities": {"id": "i123"}}).encode(),
+        json.dumps({"activities": None}).encode(),
+        json.dumps({"id": "i123"}).encode(),
+        json.dumps({"activity": [{"id": "i123"}]}).encode(),
+        json.dumps({}).encode(),
+        b"[]",
+        b'[{"id": "i123"}]',
+        b"null",
+        b'"i123"',
+        b"5",
+        b"",
+        b"not json",
+        b"\xff\xfe",
+        json.dumps({"activities": [{"id": "i123"}]}).encode("utf-16"),
+        b'{"activities": [{"id": "i123", "x": "caf\xe9"}]}',
+        b"[" * 200000,
+        b'{"activities":' * 100000,
+    ],
+)
+def test_an_answer_without_one_usable_id_names_none(body: bytes) -> None:
+    assert _uploaded_activity(body) is None
+
+
+def test_the_answer_parser_runs_on_a_201_body_and_none_is_still_created(
+    tmp_path: Path,
+) -> None:
+    result, _ = _send(tmp_path, _answer(201, b"[]"))
+    assert result == UploadAnswer(created=True, activity_id=None)
+    result, _ = _send(tmp_path, _answer(200, _activities("i1", "i2")))
+    assert result == UploadAnswer(created=False, activity_id=None)
+
+
+def test_an_error_status_is_judged_by_status_not_by_its_body(tmp_path: Path) -> None:
+    result, _ = _send(tmp_path, _answer(500, _ONE))
+    assert result == C.UNCONFIRMED
+
+
+def test_the_boundary_check_is_on_the_delimiter_not_the_bare_boundary() -> None:
+    data = f"x-fitdocs-{PUBLICATION_ID}y fitdocs-{PUBLICATION_ID}".encode()
+    assert f"fitdocs-{PUBLICATION_ID}".encode() in data
+    assert f"--fitdocs-{PUBLICATION_ID}".encode() not in data
+    body, content_type = _multipart_body(data, PUBLICATION_ID)
+    boundary, _, part = _split(body, content_type)
+    assert boundary == f"fitdocs-{PUBLICATION_ID}"
+    assert part == data
+
+
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [
+        (401, C.AUTH_REJECTED),
+        (403, C.PERMISSION_DENIED),
+        (404, C.REJECTED),
+        (400, C.REJECTED),
+        (429, C.RATE_LIMITED),
+        (500, C.UNCONFIRMED),
+        (204, C.UNCONFIRMED),
+        (302, C.UNCONFIRMED),
+    ],
+)
+def test_the_body_of_a_failing_upload_answer_is_never_read(
+    tmp_path: Path, status: int, expected: PublishCode
+) -> None:
+    response = HttpResponse(status=status, headers={}, body=_Tripwire(_SENTINEL))
+    result, transport = _send(tmp_path, response)
+    assert result == expected
+    assert len(transport.requests) == 1

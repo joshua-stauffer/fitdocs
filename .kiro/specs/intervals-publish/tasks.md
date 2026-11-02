@@ -184,7 +184,7 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
   - _Boundary: ActivityWrites_
   - _Depends: 1.1_
 
-- [ ] 2.6 Upload the base file once
+- [x] 2.6 Upload the base file once
   - Read the page's base file from the archive only when it is present,
     readable and hashes to the base digest; otherwise no file.
   - Build the one-part multipart body (field, file name, content type and the
@@ -409,3 +409,4 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
 - 2.3: response parsing must survive hostile 200 bodies — catch RecursionError with ValueError around json.loads, treat float() OverflowError as absent, decode strictly as UTF-8 (fixtures: utf-16 JSON and a latin-1 byte). 2.6 (upload answer parser) should reuse the same shape.
 - 2.4: time-comparison tests need a non-UTC page start (+02:00), or instant-vs-wall-clock mutations survive. `_match_listing` imports `fitdocs.identity.matching` lazily; tests patch `matching.pair_evidence` by module attribute, so keep the call-time `matching.pair_evidence` lookup.
 - 2.5: "body never read" needs a per-status result assertion plus a wide tripwire bytes subclass; buffer-protocol reads cannot be intercepted on 3.11. Scripted 200s should carry a realistic non-empty body. 2.6 and 3.2 (sentinel) should reuse this.
+- 2.6 RULING (controller): the multipart boundary is re-chosen whenever `--<boundary>` occurs anywhere in the file (substring), a strict superset of the design's "delimiter line" condition. Kept as safer, still deterministic, and consistent with RFC 2046; pinned by test_the_boundary_collision_reaches_the_wire. `_Tripwire` is module-level in test_intervals_publish.py; reuse it for 3.2.
