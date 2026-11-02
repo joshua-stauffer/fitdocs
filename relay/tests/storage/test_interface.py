@@ -61,6 +61,7 @@ EXPECTED_MEMBERS: dict[str, set[str]] = {
         "put_connection",
         "get_connection",
         "list_connections",
+        "issue_connection_token",
         "delete_connection",
         "delete_connection_by_account",
     },
@@ -297,6 +298,8 @@ DESIGNED: dict[str, dict[str, list[str]]] = {
             "StoredConnection | None",
             "def list_connections(self, target: str | None) -> "
             "tuple[StoredConnection, ...]",
+            "def issue_connection_token(self, principal_id: str, target: str, "
+            "token: NewToken, *, now: int) -> TokenRecord | None",
             "def delete_connection(self, principal_id: str, target: str, *, "
             "generation: int | None, now: int) -> bool",
             "def delete_connection_by_account(self, target: str, account_key: str, "
@@ -361,6 +364,7 @@ TAKES_NOW = {
     SchemaStore: {"apply_schema_change"},
     TargetConnectionStore: {
         "put_connection",
+        "issue_connection_token",
         "delete_connection",
         "delete_connection_by_account",
     },

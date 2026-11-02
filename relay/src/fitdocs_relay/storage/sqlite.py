@@ -411,6 +411,48 @@ class SqliteBackend:
             rows = _run(db, sql + " ORDER BY target, principal_id", params)
         return tuple(_connection_from_row(row) for row in rows)
 
+    def issue_connection_token(
+        self, principal_id: str, target: str, token: NewToken, *, now: int
+    ) -> TokenRecord | None:
+        with self._write() as db:
+            rows = _run(
+                db,
+                "SELECT token_id FROM target_connections "
+                "WHERE principal_id = ? AND target = ?",
+                (principal_id, target),
+            )
+            if not rows:
+                return None
+            if _run(db, "SELECT 1 FROM tokens WHERE token_id = ?", (token.token_id,)):
+                raise DuplicateIdentifier("the token identifier already exists")
+            _run(
+                db,
+                "INSERT INTO tokens (token_id, principal_id, verifier, label, "
+                "created_at, revoked_at) VALUES (?, ?, ?, ?, ?, NULL)",
+                (token.token_id, principal_id, token.verifier, token.label, now),
+            )
+            if rows[0][0] is not None:
+                _run(
+                    db,
+                    "UPDATE tokens SET revoked_at = ? "
+                    "WHERE token_id = ? AND revoked_at IS NULL",
+                    (now, rows[0][0]),
+                )
+            _run(
+                db,
+                "UPDATE target_connections SET token_id = ? "
+                "WHERE principal_id = ? AND target = ?",
+                (token.token_id, principal_id, target),
+            )
+        return TokenRecord(
+            token_id=token.token_id,
+            principal_id=principal_id,
+            verifier=token.verifier,
+            label=token.label,
+            created_at=now,
+            revoked_at=None,
+        )
+
     def delete_connection(
         self, principal_id: str, target: str, *, generation: int | None, now: int
     ) -> bool:

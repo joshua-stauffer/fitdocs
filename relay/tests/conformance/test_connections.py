@@ -9,17 +9,20 @@ from tests.conformance.state_support import Target, raw
 from tests.conftest import BYTE_ORDER, TIED_IDS
 
 from fitdocs_relay.storage.interface import (
+    DuplicateIdentifier,
     NewConnection,
     NewPrincipal,
     NewToken,
+    RevokeResult,
     SealedTokens,
     Storage,
     StorageUnreachable,
     StoredConnection,
+    TokenRecord,
     UnknownPrincipal,
 )
 
-T1, T2, T3, T4 = 1_700_000_001, 1_700_000_002, 1_700_000_003, 1_700_000_004
+T1, T2, T3, T4, T5, T6 = (1_700_000_000 + i for i in range(1, 7))
 STRAVA = "strava"
 OTHER = "othertarget"
 UPPER = "Strava"
@@ -465,6 +468,7 @@ def test_deleting_a_principal_removes_its_connections_and_only_its_own(
     "TargetConnectionStore.put_connection",
     "TargetConnectionStore.get_connection",
     "TargetConnectionStore.list_connections",
+    "TargetConnectionStore.issue_connection_token",
     "TargetConnectionStore.delete_connection",
     "TargetConnectionStore.delete_connection_by_account",
 )
@@ -479,9 +483,204 @@ def test_every_connection_operation_on_a_closed_store_is_unreachable(
     with pytest.raises(StorageUnreachable):
         store.list_connections(None)
     with pytest.raises(StorageUnreachable):
+        store.issue_connection_token("ann", STRAVA, NewToken("t", "v", None), now=T2)
+    with pytest.raises(StorageUnreachable):
         store.delete_connection("ann", STRAVA, generation=None, now=T2)
     with pytest.raises(StorageUnreachable):
         store.delete_connection_by_account(STRAVA, "acct-X", now=T2)
+
+
+def issue(
+    store: Storage, principal_id: str, token_id: str, *, now: int, target: str = STRAVA
+) -> TokenRecord | None:
+    return store.issue_connection_token(
+        principal_id,
+        target,
+        NewToken(token_id, f"verifier-{token_id}", "conn"),
+        now=now,
+    )
+
+
+def token_count(target: Target) -> int:
+    return int(raw(target, "SELECT count(*) FROM tokens")[0][0])
+
+
+@pytest.mark.covers("TargetConnectionStore.issue_connection_token")
+def test_issuing_without_a_connection_is_none_and_inserts_nothing(
+    database_target: Target, store: Storage
+) -> None:
+    principals(store, "ann", "bea")
+    store.put_connection(connection("bea", "acct-B"), now=T2)
+    store.put_connection(connection("ann", "acct-A", target=OTHER), now=T2)
+    assert token_count(database_target) == 0
+
+    assert issue(store, "ann", "tok-1", now=T3) is None  # none on this target
+    assert issue(store, "cat", "tok-2", now=T3) is None  # no such principal
+    assert issue(store, "ann", "tok-3", now=T3, target=UPPER) is None  # case differs
+
+    assert token_count(database_target) == 0
+    assert must_get(store, "bea").token_id is None
+    assert must_get(store, "ann", OTHER).token_id is None
+
+
+@pytest.mark.covers(
+    "TargetConnectionStore.issue_connection_token",
+    "TargetConnectionStore.get_connection",
+)
+def test_the_first_issuance_inserts_the_token_for_the_principal_and_records_it(
+    database_target: Target, store: Storage
+) -> None:
+    principals(store, "ann", "bea")
+    store.put_connection(connection("ann", "acct-A"), now=T2)
+    store.put_connection(connection("bea", "acct-B"), now=T2)
+    assert token_count(database_target) == 0
+    before = must_get(store, "ann")
+
+    record = issue(store, "ann", "tok-1", now=T3)
+
+    assert record is not None
+    assert (record.token_id, record.principal_id) == ("tok-1", "ann")
+    assert (record.verifier, record.label) == ("verifier-tok-1", "conn")
+    assert (record.created_at, record.revoked_at) == (T3, None)
+    assert store.find_token("tok-1") == record
+    after = must_get(store, "ann")
+    assert after.token_id == "tok-1"
+    assert after == StoredConnection(
+        before.principal_id,
+        before.target,
+        before.account_key,
+        before.tokens,
+        before.generation,
+        before.lease_id,
+        before.lease_until,
+        "tok-1",
+        before.created_at,
+        before.updated_at,
+    )
+    assert must_get(store, "bea").token_id is None
+    assert token_count(database_target) == 1
+
+
+@pytest.mark.covers(
+    "TargetConnectionStore.issue_connection_token",
+    "TargetConnectionStore.get_connection",
+)
+def test_each_issuance_revokes_the_previous_connection_token_once_and_only_that(
+    store: Storage,
+) -> None:
+    principals(store, "ann", "bea")
+    mint(store, "tok-ann-free", "ann")  # the principal's own, not a connection token
+    mint(store, "tok-bea", "bea")
+    store.put_connection(connection("ann", "acct-A"), now=T2)
+    store.put_connection(connection("ann", "acct-A", target=OTHER), now=T2)
+    store.put_connection(connection("bea", "acct-B"), now=T2)
+    assert issue(store, "ann", "other-1", now=T2, target=OTHER) is not None
+    assert issue(store, "bea", "bea-1", now=T2) is not None
+    assert issue(store, "ann", "tok-1", now=T3) is not None
+    assert revoked_at(store, "tok-1") is None
+
+    second = issue(store, "ann", "tok-2", now=T4)
+
+    assert second is not None
+    assert revoked_at(store, "tok-1") == T4
+    assert revoked_at(store, "tok-2") is None
+    assert must_get(store, "ann").token_id == "tok-2"
+
+    assert issue(store, "ann", "tok-3", now=T5) is not None
+    assert revoked_at(store, "tok-1") == T4  # not stamped again
+    assert revoked_at(store, "tok-2") == T5
+    assert revoked_at(store, "tok-3") is None
+    assert must_get(store, "ann").token_id == "tok-3"
+    # nothing else of the principal's or anyone else's was touched
+    assert revoked_at(store, "tok-ann-free") is None
+    assert revoked_at(store, "other-1") is None
+    assert must_get(store, "ann", OTHER).token_id == "other-1"
+    assert revoked_at(store, "bea-1") is None
+    assert revoked_at(store, "tok-bea") is None
+
+
+@pytest.mark.covers(
+    "TargetConnectionStore.issue_connection_token",
+    "TargetConnectionStore.put_connection",
+)
+def test_a_same_principal_put_keeps_the_token_so_the_next_issuance_revokes_it(
+    store: Storage,
+) -> None:
+    principals(store, "ann")
+    store.put_connection(connection("ann", "acct-A"), now=T2)
+    assert issue(store, "ann", "tok-1", now=T3) is not None
+
+    store.put_connection(connection("ann", "acct-A", access="re-put"), now=T4)
+    assert must_get(store, "ann").token_id == "tok-1"
+    assert revoked_at(store, "tok-1") is None
+
+    assert issue(store, "ann", "tok-2", now=T5) is not None
+    assert revoked_at(store, "tok-1") == T5
+    assert revoked_at(store, "tok-2") is None
+    assert must_get(store, "ann").token_id == "tok-2"
+
+
+@pytest.mark.covers("TargetConnectionStore.issue_connection_token")
+def test_a_token_id_already_in_use_is_refused_and_changes_nothing(
+    database_target: Target, store: Storage
+) -> None:
+    principals(store, "ann", "bea")
+    mint(store, "tok-bea", "bea")
+    store.put_connection(connection("ann", "acct-A"), now=T2)
+    assert issue(store, "ann", "tok-1", now=T3) is not None
+    count = token_count(database_target)
+
+    with pytest.raises(DuplicateIdentifier):
+        issue(store, "ann", "tok-bea", now=T4)  # another principal's id
+    with pytest.raises(DuplicateIdentifier):
+        issue(store, "ann", "tok-1", now=T4)  # the connection's own current token
+
+    assert token_count(database_target) == count
+    assert revoked_at(store, "tok-1") is None
+    assert revoked_at(store, "tok-bea") is None
+    assert must_get(store, "ann").token_id == "tok-1"
+
+
+@pytest.mark.covers("TargetConnectionStore.issue_connection_token")
+def test_issuing_after_the_recorded_token_was_revoked_keeps_its_revocation_time(
+    store: Storage,
+) -> None:
+    principals(store, "ann")
+    store.put_connection(connection("ann", "acct-A"), now=T2)
+    assert issue(store, "ann", "tok-1", now=T3) is not None
+    assert store.revoke_token("tok-1", now=T4) is RevokeResult.REVOKED
+    assert revoked_at(store, "tok-1") == T4
+
+    assert issue(store, "ann", "tok-2", now=T6) is not None
+
+    assert revoked_at(store, "tok-1") == T4
+    assert revoked_at(store, "tok-2") is None
+    assert must_get(store, "ann").token_id == "tok-2"
+
+
+@pytest.mark.covers(
+    "TargetConnectionStore.issue_connection_token",
+    "TargetConnectionStore.delete_connection",
+    "TargetConnectionStore.delete_connection_by_account",
+)
+def test_deleting_a_connection_revokes_the_token_issuance_recorded(
+    store: Storage,
+) -> None:
+    principals(store, "ann", "bea")
+    store.put_connection(connection("ann", "acct-A"), now=T2)
+    store.put_connection(connection("bea", "acct-B"), now=T2)
+    assert issue(store, "ann", "ann-1", now=T3) is not None
+    assert issue(store, "ann", "ann-2", now=T4) is not None
+    assert issue(store, "bea", "bea-1", now=T3) is not None
+
+    assert store.delete_connection("ann", STRAVA, generation=None, now=T5)
+    assert revoked_at(store, "ann-1") == T4  # not stamped again
+    assert revoked_at(store, "ann-2") == T5
+    assert revoked_at(store, "bea-1") is None
+
+    assert store.delete_connection_by_account(STRAVA, "acct-B", now=T6)
+    assert revoked_at(store, "bea-1") == T6
+    assert issue(store, "ann", "ann-3", now=T6) is None  # the connection is gone
 
 
 def test_a_sealed_token_never_appears_in_a_repr() -> None:

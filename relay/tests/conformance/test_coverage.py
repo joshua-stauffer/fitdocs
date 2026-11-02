@@ -37,12 +37,13 @@ EXPECTED = {
     "TargetConnectionStore.get_connection",
     "TargetConnectionStore.list_connections",
     "TargetConnectionStore.delete_connection",
+    "TargetConnectionStore.issue_connection_token",
     "TargetConnectionStore.delete_connection_by_account",
 }
 
 
 def test_the_member_enumeration_is_the_designed_set(storage_members: set[str]) -> None:
-    assert len(EXPECTED) == 24
+    assert len(EXPECTED) == 25
     assert storage_members == EXPECTED
 
 

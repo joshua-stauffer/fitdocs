@@ -271,3 +271,44 @@ def test_principals_putting_one_account_at_once_leave_one_connection(
             (account,),
         ) == [(1,)]
         assert storages[0].delete_connection_by_account("strava", account, now=T3)
+
+
+@pytest.mark.covers(
+    "TargetConnectionStore.issue_connection_token",
+    "TargetConnectionStore.get_connection",
+)
+@pytest.mark.parametrize("contenders", [2, THREADS])
+def test_concurrent_issuance_leaves_exactly_one_unrevoked_connection_token(
+    contenders: int, storages: list[Storage]
+) -> None:
+    storages[0].create_principal(NewPrincipal("ann", None), now=T1)
+    storages[0].put_connection(
+        NewConnection("ann", "strava", "acct", SealedTokens("sealed", None, None)),
+        now=T1,
+    )
+    for round_number in range(5):
+        ids = [f"tok-{round_number}-{i:02d}" for i in range(contenders)]
+        before = storages[0].get_connection("ann", "strava")
+        assert before is not None
+        if round_number:
+            previous = storages[0].find_token(str(before.token_id))
+            assert previous is not None and previous.revoked_at is None
+
+        def issue(i: int, ids: list[str] = ids) -> object:
+            return storages[i].issue_connection_token(
+                "ann", "strava", NewToken(ids[i], "verifier", None), now=T2
+            )
+
+        results = race(contenders, issue)
+        assert [getattr(r, "token_id", r) for r in results] == ids, results
+        records = [storages[0].find_token(token_id) for token_id in ids]
+        live = [r.token_id for r in records if r is not None and r.revoked_at is None]
+        connection = storages[0].get_connection("ann", "strava")
+        assert connection is not None
+        assert live == [connection.token_id]
+        assert [r.revoked_at for r in records if r and r.token_id != live[0]] == [
+            T2
+        ] * (contenders - 1)
+        if before.token_id is not None:
+            old = storages[0].find_token(before.token_id)
+            assert old is not None and old.revoked_at == T2

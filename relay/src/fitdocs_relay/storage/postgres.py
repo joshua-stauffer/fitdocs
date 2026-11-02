@@ -529,6 +529,54 @@ class PostgresBackend:
 
         return tuple(_connection_from_row(row) for row in _guarded(work))
 
+    def issue_connection_token(
+        self, principal_id: str, target: str, token: NewToken, *, now: int
+    ) -> TokenRecord | None:
+        self._check_open()
+
+        def work() -> bool:
+            with self._pool.connection() as db:
+                # FOR UPDATE: concurrent issuances for one connection take turns,
+                # so each revokes the token the one before it recorded.
+                row = db.execute(
+                    "SELECT token_id FROM target_connections "
+                    "WHERE principal_id = %s AND target = %s FOR UPDATE",
+                    (principal_id, target),
+                ).fetchone()
+                if row is None:
+                    return False
+                inserted = db.execute(
+                    "INSERT INTO tokens (token_id, principal_id, verifier, label, "
+                    "created_at, revoked_at) VALUES (%s, %s, %s, %s, %s, NULL) "
+                    "ON CONFLICT (token_id) DO NOTHING RETURNING token_id",
+                    (token.token_id, principal_id, token.verifier, token.label, now),
+                ).fetchone()
+                if inserted is None:
+                    raise DuplicateIdentifier("the token identifier already exists")
+                if row[0] is not None:
+                    db.execute(
+                        "UPDATE tokens SET revoked_at = %s "
+                        "WHERE token_id = %s AND revoked_at IS NULL",
+                        (now, row[0]),
+                    )
+                db.execute(
+                    "UPDATE target_connections SET token_id = %s "
+                    "WHERE principal_id = %s AND target = %s",
+                    (token.token_id, principal_id, target),
+                )
+                return True
+
+        if not _guarded(work):
+            return None
+        return TokenRecord(
+            token_id=token.token_id,
+            principal_id=principal_id,
+            verifier=token.verifier,
+            label=token.label,
+            created_at=now,
+            revoked_at=None,
+        )
+
     def delete_connection(
         self, principal_id: str, target: str, *, generation: int | None, now: int
     ) -> bool:

@@ -233,6 +233,17 @@ class TargetConnectionStore(StorageBase, Protocol):
         """By target, then principal id; every target when `target` is None."""
         ...
 
+    def issue_connection_token(
+        self, principal_id: str, target: str, token: NewToken, *, now: int
+    ) -> TokenRecord | None:
+        """Insert `token` for the principal, revoke the connection's previous
+        token and record the new one, in one transaction.
+
+        `None`, with nothing inserted, when the principal has no connection to
+        `target`. Raises `DuplicateIdentifier` for a token id already in use.
+        """
+        ...
+
     def delete_connection(
         self, principal_id: str, target: str, *, generation: int | None, now: int
     ) -> bool:
