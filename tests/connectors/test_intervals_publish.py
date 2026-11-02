@@ -22,16 +22,29 @@ from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
-from fitdocs.connectors.http import HttpRequest, HttpResponse, TransportError
+from fitdocs.connectors import intervals
+from fitdocs.connectors.errors import ConnectorError
+from fitdocs.connectors.http import (
+    MAX_DATA_ATTEMPTS,
+    RETRYABLE_STATUSES,
+    CallMode,
+    HttpClient,
+    HttpRequest,
+    HttpResponse,
+    TransportError,
+)
 from fitdocs.connectors.intervals import (
     ACTIVITY_ID_PATTERN,
     ACTIVITY_LINK_BASE,
     ANSWER_CODES,
     INTERVALS_CONNECTOR_ID,
+    LINK_LABEL,
     RESOLVE_FIELDS,
     SUCCESS_STATUSES,
     AnswerClass,
     CallKind,
+    IntervalsConnector,
+    IntervalsSettings,
     ListedActivity,
     UpdateResult,
     UploadAnswer,
@@ -60,13 +73,21 @@ from fitdocs.connectors.ledger import (
     save_ledger,
 )
 from fitdocs.connectors.protocol import (
+    PUBLISH_CAPABILITIES,
     TARGET_CODES,
+    Capability,
     CompletedActivity,
     ConnectorSession,
     Post,
     PublishCode,
+    PublishRequest,
+    PublishResult,
 )
+from fitdocs.connectors.registry import validate_connector
 from fitdocs.connectors.secrets import Redactor, Secret
+from fitdocs.connectors.settings import ConnectorInstance
+from fitdocs.publish.request import valid_label, valid_link
+from fitdocs.publish.targets import list_targets
 
 C = PublishCode
 K = CallKind
@@ -1724,3 +1745,848 @@ def test_the_body_of_a_failing_upload_answer_is_never_read(
     result, transport = _send(tmp_path, response)
     assert result == expected
     assert len(transport.requests) == 1
+
+
+# --- 3.1: the publish operation, branch by branch ---------------------------
+
+_LANDED = (C.POSTED, C.UPLOADED)
+_OK_UPDATE_BODY = b'{"id":"i1","name":"Morning tempo"}'
+_PLUS_TWO = timezone(timedelta(hours=2))
+# 09:00+02:00 is 07:00Z: a non-UTC page start, so instant and wall clock differ.
+_FLOW_START = datetime(2026, 3, 1, 9, 0, tzinfo=_PLUS_TWO)
+_LINK = ACTIVITY_LINK_BASE
+_LISTED = "i9000001"
+_OTHER = "i9000002"
+_STALE = "i8000001"
+_RECORDED = "i5001"
+_UPLOADED_ID = "i7000001"
+
+
+class _Flow:
+    """A transport routing by method: GET is the listing, PUT an update (by
+    activity id), POST the upload. Each route answers from its own script, the
+    last entry repeating; an unscripted route fails the test."""
+
+    def __init__(
+        self,
+        *,
+        listing: tuple[HttpResponse | TransportError, ...] = (),
+        updates: dict[str, tuple[HttpResponse | TransportError, ...]] | None = None,
+        upload: tuple[HttpResponse | TransportError, ...] = (),
+    ) -> None:
+        self.listing = listing
+        self.updates = updates or {}
+        self.upload = upload
+        self.requests: list[HttpRequest] = []
+
+    def __call__(self, request: HttpRequest, timeout: float) -> HttpResponse:
+        self.requests.append(request)
+        path = urlsplit(request.url).path
+        if request.method == "GET":
+            script = self.listing
+        elif request.method == "PUT":
+            script = self.updates.get(path.rsplit("/", 1)[1], ())
+        elif request.method == "POST":
+            script = self.upload
+        else:
+            raise AssertionError(f"unexpected method {request.method}")
+        if not script:
+            raise AssertionError(f"unscripted request {request.method} {path}")
+        calls = sum(
+            1
+            for r in self.requests
+            if r.method == request.method and urlsplit(r.url).path == path
+        )
+        step = script[min(calls, len(script)) - 1]
+        if isinstance(step, TransportError):
+            raise step
+        return step
+
+    @property
+    def gets(self) -> list[HttpRequest]:
+        return [r for r in self.requests if r.method == "GET"]
+
+    @property
+    def puts(self) -> list[str]:
+        """The activities updated, each once, in first-request order (the
+        per-address raw counts are checked by ``assert_attempts``)."""
+        ids: list[str] = []
+        for r in self.requests:
+            if r.method == "PUT":
+                activity = urlsplit(r.url).path.rsplit("/", 1)[1]
+                if activity not in ids:
+                    ids.append(activity)
+        return ids
+
+    @property
+    def posts(self) -> list[HttpRequest]:
+        return [r for r in self.requests if r.method == "POST"]
+
+    def _attempts(
+        self, script: tuple[HttpResponse | TransportError, ...], once: bool
+    ) -> int:
+        """The raw requests one logical request makes against this script:
+        the client repeats on a retryable answer, up to MAX_DATA_ATTEMPTS."""
+        limit = 1 if once else MAX_DATA_ATTEMPTS
+        for attempt in range(1, limit + 1):
+            step = script[min(attempt, len(script)) - 1]
+            retryable = isinstance(step, TransportError) or (
+                step.status in RETRYABLE_STATUSES
+            )
+            if not retryable:
+                return attempt
+        return limit
+
+    def assert_attempts(self) -> None:
+        """Every address was requested exactly as often as ONE logical
+        request makes raw requests: a second listing, update or upload
+        doubles the count; an upload (single attempt) is never repeated."""
+        seen: dict[tuple[str, str], int] = {}
+        for r in self.requests:
+            key = (r.method, urlsplit(r.url).path)
+            seen[key] = seen.get(key, 0) + 1
+        for (method, path), count in seen.items():
+            if method == "GET":
+                script, once = self.listing, False
+            elif method == "PUT":
+                script, once = self.updates[path.rsplit("/", 1)[1]], False
+            else:
+                script, once = self.upload, True
+            assert count == self._attempts(script, once), (method, path, count)
+
+
+class _Creds:
+    scopes: tuple[str, ...] | None = None
+    expires_at: datetime | None = None
+
+    def value(self, field: str) -> Secret:
+        assert field == "api_key"
+        return Secret(_API_KEY)
+
+    def replace(self, tokens: object) -> None:
+        raise AssertionError("a publish never rotates credentials")
+
+
+def _flow_session(
+    transport: _Flow, root: Path, *, upload: bool = False, settings: object = None
+) -> ConnectorSession:
+    redactor = Redactor()
+    return ConnectorSession(
+        instance=INSTANCE,
+        settings=IntervalsSettings(sources=frozenset({"X"}), publish_upload=upload)
+        if settings is None
+        else settings,
+        http=HttpClient(
+            transport,
+            mode=CallMode.DATA,
+            redactor=redactor,
+            sleep=lambda seconds: None,
+        ),
+        credentials=_Creds(),
+        data_root=root,
+        now=lambda: datetime(2026, 1, 1, tzinfo=UTC),
+        sleep=lambda seconds: None,
+        redactor=redactor,
+    )
+
+
+def _flow_subject(
+    *shas: str,
+    distance_m: float | None = 5000.0,
+    elapsed_s: float | None = 1800.0,
+    start: datetime = _FLOW_START,
+    base_fit: Path | None = None,
+) -> CompletedActivity:
+    return CompletedActivity(
+        sport="Run",
+        start=start,
+        elapsed_s=elapsed_s,
+        distance_m=distance_m,
+        source_shas=shas,
+        base_fit=base_fit,
+    )
+
+
+def _publish(
+    root: Path,
+    flow: _Flow,
+    subject: CompletedActivity | None = None,
+    *,
+    link: str | None = None,
+    upload: bool = False,
+) -> PublishResult:
+    request = PublishRequest(
+        publication_id=PUBLICATION_ID,
+        post=Post(title=TITLE, description=DESCRIPTION),
+        subject=subject or _flow_subject(),
+        recorded_link=link,
+    )
+    result = IntervalsConnector().publish(
+        _flow_session(flow, root, upload=upload), request
+    )
+    # What every answer must satisfy, whatever branch gave it.
+    assert result.code in TARGET_CODES
+    assert (result.link is not None) == (result.code in _LANDED), result
+    if result.link is not None:
+        assert valid_link(result.link)
+    flow.assert_attempts()
+    _assert_credentials_only_in_secret_headers(flow)
+    return result
+
+
+def _assert_credentials_only_in_secret_headers(flow: _Flow) -> None:
+    token = base64.b64encode(f"API_KEY:{_API_KEY}".encode()).decode()
+    for request in flow.requests:
+        assert list(request.secret_headers) == ["Authorization"]
+        assert request.secret_headers["Authorization"].reveal() == f"Basic {token}"
+        assert _API_KEY not in request.url and token not in request.url
+        for name, value in request.headers.items():
+            assert name.lower() != "authorization"
+            assert _API_KEY not in value and token not in value
+
+
+def _ok_update() -> tuple[HttpResponse, ...]:
+    return (_answer(200, _OK_UPDATE_BODY),)
+
+
+def _gone() -> tuple[HttpResponse, ...]:
+    return (_answer(404, b'{"error":"Not found"}'),)
+
+
+def _strict_entry(activity_id: str = _LISTED) -> dict[str, object]:
+    return {
+        "id": activity_id,
+        "source": "GARMIN_CONNECT",
+        "start_date": "2026-03-01T07:00:00Z",
+        "start_date_local": "2026-03-01T09:00:00",
+        "distance": 5000.0,
+        "elapsed_time": 1800,
+        "external_id": None,
+    }
+
+
+def _listing_of(*entries: dict[str, object]) -> tuple[HttpResponse, ...]:
+    return (_ok(list(entries)),)
+
+
+def _created(activity_id: str = _UPLOADED_ID, status: int = 201) -> HttpResponse:
+    return _answer(status, json.dumps({"activities": [{"id": activity_id}]}).encode())
+
+
+def _unreadable_record(root: Path) -> None:
+    path = _path(root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"this = is [not a ledger\n")
+    assert _record_activity(_session(root), _flow_subject(_BASE_SHA)) == (
+        C.LOCAL_RECORD_UNREADABLE
+    )
+
+
+def _fail_if_called(*args: object, **kwargs: object) -> object:
+    raise AssertionError("the base file was read")
+
+
+# The link, the pull record and the facts check
+
+
+def test_a_recorded_link_updates_that_activity_and_returns_the_link(
+    tmp_path: Path,
+) -> None:
+    flow = _Flow(updates={_STALE: _ok_update()})
+    result = _publish(tmp_path, flow, link=_LINK + _STALE)
+    assert result == PublishResult(C.POSTED, _LINK + _STALE)
+    assert flow.puts == [_STALE]
+    assert flow.gets == [] and flow.posts == []
+    sent = json.loads(flow.requests[0].body or b"")
+    assert sent == {"name": TITLE, "description": DESCRIPTION}
+
+
+def test_a_recorded_link_of_another_form_names_nothing(tmp_path: Path) -> None:
+    for link in (
+        "https://example.org/activities/i1",
+        _LINK + "a/b",
+        _LINK + "i1?x=1",
+        _LINK,
+    ):
+        flow = _Flow(listing=_listing_of())
+        result = _publish(tmp_path, flow, link=link)
+        assert result.code is C.NOT_FOUND
+        assert flow.puts == [] and len(flow.gets) == 1
+
+
+def test_any_other_answer_to_the_linked_update_is_its_code_and_stops(
+    tmp_path: Path,
+) -> None:
+    _write(tmp_path, _entry(_RECORDED, _BASE_SHA))
+    flow = _Flow(updates={_STALE: (_answer(403),), _RECORDED: _ok_update()})
+    result = _publish(tmp_path, flow, _flow_subject(_BASE_SHA), link=_LINK + _STALE)
+    assert result == PublishResult(C.PERMISSION_DENIED)
+    assert flow.puts == [_STALE]
+    assert flow.gets == [] and flow.posts == []
+
+
+def test_a_linked_activity_gone_falls_through_to_the_record(tmp_path: Path) -> None:
+    _write(tmp_path, _entry(_RECORDED, _BASE_SHA))
+    flow = _Flow(updates={_STALE: _gone(), _RECORDED: _ok_update()})
+    result = _publish(tmp_path, flow, _flow_subject(_BASE_SHA), link=_LINK + _STALE)
+    assert result == PublishResult(C.POSTED, _LINK + _RECORDED)
+    assert flow.puts == [_STALE, _RECORDED]
+    assert flow.gets == []
+
+
+def test_a_stale_identifier_the_record_names_is_not_updated_twice(
+    tmp_path: Path,
+) -> None:
+    _write(tmp_path, _entry(_STALE, _BASE_SHA))
+    flow = _Flow(updates={_STALE: _gone()}, listing=_listing_of())
+    result = _publish(tmp_path, flow, _flow_subject(_BASE_SHA), link=_LINK + _STALE)
+    assert result.code is C.NOT_FOUND
+    assert flow.puts == [_STALE]
+
+
+def test_a_stale_identifier_the_listing_matches_is_not_updated_twice(
+    tmp_path: Path,
+) -> None:
+    flow = _Flow(updates={_STALE: _gone()}, listing=_listing_of(_strict_entry(_STALE)))
+    result = _publish(tmp_path, flow, link=_LINK + _STALE)
+    assert result.code is C.NOT_FOUND
+    assert flow.puts == [_STALE]
+    assert len(flow.gets) == 1
+
+
+def test_a_stale_record_identifier_the_listing_matches_is_not_updated_twice(
+    tmp_path: Path,
+) -> None:
+    _write(tmp_path, _entry(_STALE, _BASE_SHA))
+    flow = _Flow(updates={_STALE: _gone()}, listing=_listing_of(_strict_entry(_STALE)))
+    result = _publish(tmp_path, flow, _flow_subject(_BASE_SHA))
+    assert result.code is C.NOT_FOUND
+    assert flow.puts == [_STALE]
+
+
+def test_an_ambiguous_record_stops_before_any_request(tmp_path: Path) -> None:
+    _write(tmp_path, _entry("i5001", _BASE_SHA), _entry("i5002", _BASE_SHA))
+    flow = _Flow(updates={"i5001": _ok_update(), "i5002": _ok_update()})
+    result = _publish(tmp_path, flow, _flow_subject(_BASE_SHA))
+    assert result == PublishResult(C.AMBIGUOUS)
+    assert flow.requests == []
+
+
+def test_the_record_updates_with_no_listing_and_the_ledger_is_untouched(
+    tmp_path: Path,
+) -> None:
+    before = _write(tmp_path, _entry(_RECORDED, _BASE_SHA))
+    snapshot = _snapshot(_path(tmp_path))
+    flow = _Flow(updates={_RECORDED: _ok_update()})
+    result = _publish(tmp_path, flow, _flow_subject(_BASE_SHA))
+    assert result == PublishResult(C.POSTED, _LINK + _RECORDED)
+    assert flow.gets == []
+    assert _snapshot(_path(tmp_path)) == snapshot
+    assert _path(tmp_path).read_bytes() == before
+
+
+def test_the_pull_record_comes_before_the_facts_check(tmp_path: Path) -> None:
+    _write(tmp_path, _entry(_RECORDED, _BASE_SHA))
+    flow = _Flow(updates={_RECORDED: _ok_update()})
+    page = _flow_subject(_BASE_SHA, distance_m=None, elapsed_s=None)
+    result = _publish(tmp_path, flow, page)
+    assert result == PublishResult(C.POSTED, _LINK + _RECORDED)
+    assert flow.gets == []
+
+
+def test_the_recorded_link_comes_before_the_facts_check(tmp_path: Path) -> None:
+    flow = _Flow(updates={_STALE: _ok_update()})
+    page = _flow_subject(distance_m=None, elapsed_s=None)
+    result = _publish(tmp_path, flow, page, link=_LINK + _STALE)
+    assert result == PublishResult(C.POSTED, _LINK + _STALE)
+
+
+def test_a_page_without_facts_that_nothing_resolves_is_facts_missing(
+    tmp_path: Path,
+) -> None:
+    _write(tmp_path, _entry(_RECORDED, _BASE_SHA))
+    flow = _Flow(updates={_RECORDED: _gone()})
+    page = _flow_subject(_BASE_SHA, distance_m=None, elapsed_s=None)
+    result = _publish(tmp_path, flow, page, upload=True)
+    assert result == PublishResult(C.ACTIVITY_FACTS_MISSING)
+    assert flow.puts == [_RECORDED]
+    assert flow.gets == [] and flow.posts == []
+
+
+def test_one_fact_is_enough_to_list_and_none_is_not(tmp_path: Path) -> None:
+    for distance_m, elapsed_s, listed in (
+        (None, 1800.0, True),
+        (5000.0, None, True),
+        (None, None, False),
+    ):
+        flow = _Flow(listing=_listing_of())
+        page = _flow_subject(distance_m=distance_m, elapsed_s=elapsed_s)
+        result = _publish(tmp_path, flow, page)
+        assert (len(flow.gets) == 1) is listed, (distance_m, elapsed_s)
+        assert result.code is (C.NOT_FOUND if listed else C.ACTIVITY_FACTS_MISSING)
+
+
+def test_a_start_without_an_offset_is_facts_missing(tmp_path: Path) -> None:
+    flow = _Flow()
+    page = _flow_subject(start=datetime(2026, 3, 1, 9, 0))
+    assert _publish(tmp_path, flow, page).code is C.ACTIVITY_FACTS_MISSING
+    assert flow.requests == []
+
+
+# The listing match
+
+
+def test_a_failed_listing_is_its_code(tmp_path: Path) -> None:
+    for status, code, raw in (
+        (403, C.PERMISSION_DENIED, 1),
+        (429, C.RATE_LIMITED, MAX_DATA_ATTEMPTS),
+    ):
+        flow = _Flow(listing=(_answer(status),))
+        assert _publish(tmp_path, flow, upload=True).code is code
+        assert len(flow.gets) == raw and flow.posts == [] and flow.puts == []
+
+
+def test_a_listing_not_in_documented_form_is_unavailable(tmp_path: Path) -> None:
+    flow = _Flow(listing=(_answer(200, b'{"not":"a list"}'),))
+    assert _publish(tmp_path, flow, upload=True).code is C.UNAVAILABLE
+    assert flow.posts == []
+
+
+def test_a_strict_listing_match_is_updated_through_the_listing(tmp_path: Path) -> None:
+    flow = _Flow(listing=_listing_of(_strict_entry()), updates={_LISTED: _ok_update()})
+    result = _publish(tmp_path, flow)
+    assert result == PublishResult(C.POSTED, _LINK + _LISTED)
+    assert flow.puts == [_LISTED] and len(flow.gets) == 1
+
+
+def test_the_publication_id_matches_where_the_facts_do_not(tmp_path: Path) -> None:
+    far = {**_strict_entry(_OTHER), "start_date": "2026-03-01T12:00:00Z"}
+    far["start_date_local"] = "2026-03-01T14:00:00"
+    far["external_id"] = PUBLICATION_ID
+    flow = _Flow(listing=_listing_of(far), updates={_OTHER: _ok_update()})
+    assert _publish(tmp_path, flow).link == _LINK + _OTHER
+
+
+def test_two_listing_matches_are_ambiguous_and_nothing_is_written(
+    tmp_path: Path,
+) -> None:
+    flow = _Flow(
+        listing=_listing_of(_strict_entry(_LISTED), _strict_entry(_OTHER)),
+        updates={_LISTED: _ok_update(), _OTHER: _ok_update()},
+    )
+    result = _publish(tmp_path, flow, upload=True)
+    assert result == PublishResult(C.AMBIGUOUS)
+    assert flow.puts == [] and flow.posts == []
+
+
+def test_a_strava_import_at_the_start_is_not_updatable_even_with_uploads(
+    tmp_path: Path,
+) -> None:
+    strava = {**_strict_entry(_OTHER), "source": "STRAVA"}
+    flow = _Flow(listing=_listing_of(strava))
+    assert _publish(tmp_path, flow, upload=True).code is C.NOT_UPDATABLE
+    assert flow.puts == [] and flow.posts == []
+
+
+def test_a_listing_match_that_answers_other_than_ok_is_its_code(
+    tmp_path: Path,
+) -> None:
+    flow = _Flow(
+        listing=_listing_of(_strict_entry()), updates={_LISTED: (_answer(401),)}
+    )
+    assert _publish(tmp_path, flow, upload=True).code is C.AUTH_REJECTED
+    assert flow.posts == []
+
+
+# The absent branch
+
+
+def test_nothing_found_with_uploads_off_is_not_found(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(intervals, "_base_file", _fail_if_called)
+    flow = _Flow(listing=_listing_of())
+    assert _publish(tmp_path, flow).code is C.NOT_FOUND
+    assert flow.posts == [] and flow.puts == []
+
+
+def test_a_listing_match_gone_with_uploads_off_is_not_found(tmp_path: Path) -> None:
+    flow = _Flow(listing=_listing_of(_strict_entry()), updates={_LISTED: _gone()})
+    assert _publish(tmp_path, flow).code is C.NOT_FOUND
+    assert flow.puts == [_LISTED] and flow.posts == []
+
+
+def test_a_missing_base_file_is_activity_file_missing(tmp_path: Path) -> None:
+    flow = _Flow(listing=_listing_of())
+    result = _publish(tmp_path, flow, _flow_subject(base_fit=None), upload=True)
+    assert result.code is C.ACTIVITY_FILE_MISSING
+    assert flow.posts == []
+
+
+def test_a_tampered_base_file_is_activity_file_missing(tmp_path: Path) -> None:
+    path, _ = _archive(tmp_path)
+    flow = _Flow(listing=_listing_of())
+    page = _flow_subject("e" * 64, base_fit=path)
+    assert _publish(tmp_path, flow, page, upload=True).code is C.ACTIVITY_FILE_MISSING
+    assert flow.posts == []
+
+
+def _uploadable(root: Path) -> CompletedActivity:
+    path, sha = _archive(root)
+    return _flow_subject(sha, base_fit=path)
+
+
+def test_a_created_upload_confirmed_is_uploaded_with_the_link(tmp_path: Path) -> None:
+    flow = _Flow(
+        listing=_listing_of(),
+        upload=(_created(),),
+        updates={_UPLOADED_ID: _ok_update()},
+    )
+    result = _publish(tmp_path, flow, _uploadable(tmp_path), upload=True)
+    assert result == PublishResult(C.UPLOADED, _LINK + _UPLOADED_ID)
+    assert flow.puts == [_UPLOADED_ID] and len(flow.gets) == 1 and len(flow.posts) == 1
+    (post,) = flow.posts
+    assert parse_qs(urlsplit(post.url).query) == {"external_id": [PUBLICATION_ID]}
+    assert flow.requests.index(post) > flow.requests.index(flow.gets[0])
+
+
+def test_a_duplicate_upload_confirmed_is_posted_with_the_link(tmp_path: Path) -> None:
+    flow = _Flow(
+        listing=_listing_of(),
+        upload=(_created(status=200),),
+        updates={_UPLOADED_ID: _ok_update()},
+    )
+    result = _publish(tmp_path, flow, _uploadable(tmp_path), upload=True)
+    assert result == PublishResult(C.POSTED, _LINK + _UPLOADED_ID)
+
+
+@pytest.mark.parametrize(
+    "confirm",
+    [
+        _gone(),
+        (_answer(403),),
+        (_answer(401),),
+        (_answer(429),),
+        (_answer(400),),
+        (_answer(500),),
+        (TransportError("down"),),
+        (_answer(204),),
+    ],
+    ids=["404", "403", "401", "429", "400", "500", "transport", "204"],
+)
+def test_any_failed_confirmation_after_a_creation_is_unconfirmed(
+    tmp_path: Path, confirm: tuple[HttpResponse | TransportError, ...]
+) -> None:
+    flow = _Flow(
+        listing=_listing_of(), upload=(_created(),), updates={_UPLOADED_ID: confirm}
+    )
+    result = _publish(tmp_path, flow, _uploadable(tmp_path), upload=True)
+    assert result == PublishResult(C.UNCONFIRMED)
+    assert len(flow.posts) == 1
+
+
+@pytest.mark.parametrize(
+    ("confirm", "code"),
+    [
+        (_gone(), C.UNCONFIRMED),
+        ((_answer(403),), C.PERMISSION_DENIED),
+        ((_answer(500),), C.UNAVAILABLE),
+        ((_answer(429),), C.RATE_LIMITED),
+    ],
+    ids=["404", "403", "500", "429"],
+)
+def test_a_failed_confirmation_after_a_duplicate_maps_as_any_update(
+    tmp_path: Path, confirm: tuple[HttpResponse, ...], code: PublishCode
+) -> None:
+    flow = _Flow(
+        listing=_listing_of(),
+        upload=(_created(status=200),),
+        updates={_UPLOADED_ID: confirm},
+    )
+    result = _publish(tmp_path, flow, _uploadable(tmp_path), upload=True)
+    assert result == PublishResult(code)
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        _answer(201, b'{"activities":[]}'),
+        _answer(201, b"not json"),
+        _answer(201, json.dumps({"activities": [{"id": "i1"}, {"id": "i2"}]}).encode()),
+        _answer(200, b'{"activities":[{"id":"bad id"}]}'),
+    ],
+    ids=["empty", "not-json", "two-ids", "bad-id"],
+)
+def test_an_upload_answer_naming_no_usable_activity_is_unconfirmed(
+    tmp_path: Path, answer: HttpResponse
+) -> None:
+    flow = _Flow(listing=_listing_of(), upload=(answer,))
+    result = _publish(tmp_path, flow, _uploadable(tmp_path), upload=True)
+    assert result == PublishResult(C.UNCONFIRMED)
+    assert flow.puts == []
+
+
+def test_an_upload_naming_an_activity_already_answered_absent_is_unconfirmed(
+    tmp_path: Path,
+) -> None:
+    flow = _Flow(
+        listing=_listing_of(),
+        upload=(_created(_STALE),),
+        updates={_STALE: _gone()},
+    )
+    page = _uploadable(tmp_path)
+    result = _publish(tmp_path, flow, page, link=_LINK + _STALE, upload=True)
+    assert result == PublishResult(C.UNCONFIRMED)
+    assert flow.puts == [_STALE]
+    assert len(flow.posts) == 1
+
+
+@pytest.mark.parametrize(
+    ("answer", "code"),
+    [
+        (_answer(403), C.PERMISSION_DENIED),
+        (_answer(401), C.AUTH_REJECTED),
+        (_answer(400), C.REJECTED),
+        (_answer(500), C.UNCONFIRMED),
+        (TransportError("down"), C.UNCONFIRMED),
+    ],
+    ids=["403", "401", "400", "500", "transport"],
+)
+def test_a_failed_upload_is_its_code_and_is_sent_in_one_request(
+    tmp_path: Path, answer: HttpResponse | TransportError, code: PublishCode
+) -> None:
+    flow = _Flow(listing=_listing_of(), upload=(answer,))
+    result = _publish(tmp_path, flow, _uploadable(tmp_path), upload=True)
+    assert result == PublishResult(code)
+    assert len(flow.requests) == 2  # one listing, one upload: no repeat
+    assert len(flow.posts) == 1 and flow.puts == []
+
+
+def test_an_activity_listed_and_gone_may_still_be_created(tmp_path: Path) -> None:
+    flow = _Flow(
+        listing=_listing_of(_strict_entry()),
+        updates={_LISTED: _gone(), _UPLOADED_ID: _ok_update()},
+        upload=(_created(),),
+    )
+    result = _publish(tmp_path, flow, _uploadable(tmp_path), upload=True)
+    assert result == PublishResult(C.UPLOADED, _LINK + _UPLOADED_ID)
+    assert flow.puts == [_LISTED, _UPLOADED_ID]
+
+
+# An unreadable pull record
+
+
+@pytest.mark.parametrize("uploads", [True, False])
+def test_an_unreadable_record_with_nothing_else_resolving_never_uploads_or_reads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, uploads: bool
+) -> None:
+    page = _uploadable(tmp_path)
+    _unreadable_record(tmp_path)
+    monkeypatch.setattr(intervals, "_base_file", _fail_if_called)
+    flow = _Flow(listing=_listing_of(), upload=(_created(),))
+    result = _publish(tmp_path, flow, page, upload=uploads)
+    assert result == PublishResult(C.LOCAL_RECORD_UNREADABLE)
+    assert len(flow.gets) == 1
+    assert flow.posts == [] and flow.puts == []
+
+
+def test_an_unreadable_record_does_not_stop_the_recorded_link(tmp_path: Path) -> None:
+    _unreadable_record(tmp_path)
+    flow = _Flow(updates={_STALE: _ok_update()})
+    result = _publish(tmp_path, flow, _flow_subject(_BASE_SHA), link=_LINK + _STALE)
+    assert result == PublishResult(C.POSTED, _LINK + _STALE)
+    assert flow.gets == []
+
+
+def test_an_unreadable_record_does_not_stop_a_listing_match(tmp_path: Path) -> None:
+    _unreadable_record(tmp_path)
+    flow = _Flow(listing=_listing_of(_strict_entry()), updates={_LISTED: _ok_update()})
+    result = _publish(tmp_path, flow, _flow_subject(_BASE_SHA), upload=True)
+    assert result == PublishResult(C.POSTED, _LINK + _LISTED)
+
+
+def test_an_unreadable_record_and_a_vanished_listing_match_is_unreadable(
+    tmp_path: Path,
+) -> None:
+    _unreadable_record(tmp_path)
+    flow = _Flow(listing=_listing_of(_strict_entry()), updates={_LISTED: _gone()})
+    result = _publish(tmp_path, flow, _flow_subject(_BASE_SHA), upload=True)
+    assert result == PublishResult(C.LOCAL_RECORD_UNREADABLE)
+    assert flow.posts == []
+
+
+def test_an_unreadable_record_and_a_vanished_link_is_unreadable(tmp_path: Path) -> None:
+    _unreadable_record(tmp_path)
+    flow = _Flow(updates={_STALE: _gone()}, listing=_listing_of())
+    result = _publish(
+        tmp_path, flow, _flow_subject(_BASE_SHA), link=_LINK + _STALE, upload=True
+    )
+    assert result == PublishResult(C.LOCAL_RECORD_UNREADABLE)
+    assert flow.puts == [_STALE] and flow.posts == []
+
+
+def test_an_unreadable_record_does_not_hide_ambiguity_or_listing_failure(
+    tmp_path: Path,
+) -> None:
+    _unreadable_record(tmp_path)
+    flow = _Flow(listing=(_answer(403),))
+    assert _publish(tmp_path, flow, _flow_subject(_BASE_SHA)).code is (
+        C.PERMISSION_DENIED
+    )
+
+
+def test_an_unreadable_record_with_a_page_lacking_facts_is_facts_missing(
+    tmp_path: Path,
+) -> None:
+    _unreadable_record(tmp_path)
+    flow = _Flow()
+    page = _flow_subject(_BASE_SHA, distance_m=None, elapsed_s=None)
+    assert _publish(tmp_path, flow, page).code is C.ACTIVITY_FACTS_MISSING
+    assert flow.requests == []
+
+
+# Identifiers, links and the declaration
+
+
+def test_an_identifier_that_is_not_usable_is_neither_updated_nor_linked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(intervals, "_match_listing", lambda *a, **k: "bad id/x")
+    flow = _Flow(listing=_listing_of())
+    result = _publish(tmp_path, flow)
+    assert result.code is C.NOT_FOUND
+    assert flow.puts == []
+
+
+def test_every_link_built_passes_the_engines_link_rule() -> None:
+    for activity_id in ("i1", "A" * 64, "0", "i9000001", "abcXYZ019"):
+        assert _usable_activity_id(activity_id)
+        link = _activity_link(activity_id)
+        assert valid_link(link)
+        assert _linked_activity(link) == activity_id
+
+
+def test_a_page_with_another_connectors_settings_is_a_defect(tmp_path: Path) -> None:
+    request = PublishRequest(
+        publication_id=PUBLICATION_ID,
+        post=Post(title=TITLE, description=DESCRIPTION),
+        subject=_flow_subject(),
+        recorded_link=None,
+    )
+    flow = _Flow()
+    session = _flow_session(flow, tmp_path, settings=object())
+    with pytest.raises(ConnectorError):
+        IntervalsConnector().publish(session, request)
+    assert flow.requests == []
+
+
+def test_the_declaration_has_five_capabilities_and_the_fixed_label() -> None:
+    connector = IntervalsConnector()
+    assert connector.capabilities == frozenset(
+        {
+            Capability.PULL_ACTIVITIES,
+            Capability.PULL_WELLNESS,
+            Capability.PUSH_ACTIVITY,
+            Capability.ANNOTATE_REMOTE_ACTIVITY,
+            Capability.RESOLVE_REMOTE_ACTIVITY,
+        }
+    )
+    assert connector.capabilities & PUBLISH_CAPABILITIES == PUBLISH_CAPABILITIES
+    assert connector.link_label == LINK_LABEL == "intervals.icu"
+    assert valid_label(connector.link_label)
+
+
+def test_the_connector_passes_registration_and_is_listed_as_a_target() -> None:
+    connector = IntervalsConnector()
+    assert validate_connector(connector) is None
+    instance = ConnectorInstance(
+        name="icu-main",
+        connector=connector,
+        lookback_days=30,
+        settings=IntervalsSettings(sources=frozenset({"X"})),
+    )
+    (row,) = list_targets([instance], store=None, environ={})
+    assert row.name == "icu-main" and row.connector == "intervals"
+    assert row.capabilities == (
+        "push-activity",
+        "annotate-remote-activity",
+        "resolve-remote-activity",
+    )
+
+
+def test_the_module_docstring_says_it_publishes_posts() -> None:
+    opening = " ".join((intervals.__doc__ or "").split("\n\n")[1].split())
+    assert opening.startswith("Lists, filters and fetches")
+    assert "publishes posts" in opening
+
+
+# Retryable answers: the client's own repeats are the only repeats
+
+
+@pytest.mark.parametrize(
+    ("answer", "code"),
+    [
+        (_answer(500), C.UNAVAILABLE),
+        (_answer(429), C.RATE_LIMITED),
+        (TransportError("down"), C.UNAVAILABLE),
+    ],
+    ids=["500", "429", "transport"],
+)
+def test_a_retryable_answer_to_the_linked_update_is_repeated_only_by_the_client(
+    tmp_path: Path, answer: HttpResponse | TransportError, code: PublishCode
+) -> None:
+    flow = _Flow(updates={_STALE: (answer,)})
+    result = _publish(tmp_path, flow, link=_LINK + _STALE)
+    assert result == PublishResult(code)
+    assert len(flow.requests) == MAX_DATA_ATTEMPTS
+    assert flow.puts == [_STALE] and flow.gets == []
+
+
+@pytest.mark.parametrize(
+    ("answer", "code"),
+    [(_answer(429), C.RATE_LIMITED), (_answer(503), C.UNAVAILABLE)],
+    ids=["429", "503"],
+)
+def test_a_retryable_answer_to_the_record_update_is_repeated_only_by_the_client(
+    tmp_path: Path, answer: HttpResponse, code: PublishCode
+) -> None:
+    _write(tmp_path, _entry(_RECORDED, _BASE_SHA))
+    flow = _Flow(updates={_RECORDED: (answer,)})
+    result = _publish(tmp_path, flow, _flow_subject(_BASE_SHA))
+    assert result == PublishResult(code)
+    assert len(flow.requests) == MAX_DATA_ATTEMPTS
+    assert flow.gets == []
+
+
+def test_a_retryable_answer_to_the_listing_update_is_repeated_only_by_the_client(
+    tmp_path: Path,
+) -> None:
+    flow = _Flow(
+        listing=_listing_of(_strict_entry()), updates={_LISTED: (_answer(502),)}
+    )
+    result = _publish(tmp_path, flow, upload=True)
+    assert result == PublishResult(C.UNAVAILABLE)
+    assert len(flow.requests) == 1 + MAX_DATA_ATTEMPTS
+    assert flow.posts == []
+
+
+def test_a_retryable_confirmation_after_a_creation_is_repeated_only_by_the_client(
+    tmp_path: Path,
+) -> None:
+    flow = _Flow(
+        listing=_listing_of(),
+        upload=(_created(),),
+        updates={_UPLOADED_ID: (_answer(503),)},
+    )
+    result = _publish(tmp_path, flow, _uploadable(tmp_path), upload=True)
+    assert result == PublishResult(C.UNCONFIRMED)
+    assert len(flow.posts) == 1
+    assert len(flow.requests) == 2 + MAX_DATA_ATTEMPTS
+
+
+def test_an_ambiguous_record_does_not_stop_the_recorded_link(tmp_path: Path) -> None:
+    _write(tmp_path, _entry("i5001", _BASE_SHA), _entry("i5002", _BASE_SHA))
+    flow = _Flow(updates={_STALE: _ok_update()})
+    result = _publish(tmp_path, flow, _flow_subject(_BASE_SHA), link=_LINK + _STALE)
+    assert result == PublishResult(C.POSTED, _LINK + _STALE)
+    assert flow.puts == [_STALE]

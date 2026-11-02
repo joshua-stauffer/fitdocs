@@ -1,7 +1,9 @@
 """The intervals.icu connector (design.md "IntervalsConnector").
 
 Lists, filters and fetches intervals.icu originals for the key's own athlete
-with a personal API key. This module is the one module in the connectors
+with a personal API key, and publishes posts: it sets an activity's name and
+description, and, for an instance that turns uploads on, uploads the page's
+base file once. This module is the one module in the connectors
 package that names the service's address (the service-neutral scan admits it
 here, in its own tests and in its own documentation section only). It imports only the
 standard library and ``fitdocs.connectors.{errors,http,ledger,protocol,secrets}``,
@@ -60,6 +62,8 @@ from fitdocs.connectors.protocol import (
     Listing,
     Post,
     PublishCode,
+    PublishRequest,
+    PublishResult,
     RemoteActivity,
     SettingsContext,
     WellnessDay,
@@ -128,6 +132,7 @@ SERVICE_MESSAGE_BODY_BYTES: Final[int] = 4096
 SERVICE_MESSAGE_CHARS: Final[int] = 300
 
 PUBLISH_UPLOAD_KEY: Final[str] = "publish_upload"
+LINK_LABEL: Final[str] = "intervals.icu"
 
 _SOURCE_NAME_RE = re.compile(SOURCE_NAME_PATTERN)
 
@@ -184,7 +189,16 @@ class IntervalsConnector:
     connector_id = INTERVALS_CONNECTOR_ID
     display_name = "intervals.icu"
     auth_style = AuthStyle.API_KEY
-    capabilities = frozenset({Capability.PULL_ACTIVITIES, Capability.PULL_WELLNESS})
+    capabilities = frozenset(
+        {
+            Capability.PULL_ACTIVITIES,
+            Capability.PULL_WELLNESS,
+            Capability.PUSH_ACTIVITY,
+            Capability.ANNOTATE_REMOTE_ACTIVITY,
+            Capability.RESOLVE_REMOTE_ACTIVITY,
+        }
+    )
+    link_label = LINK_LABEL
     credential_fields = (
         CredentialField(
             "api_key", "intervals.icu API key (Settings, Developer Settings)", True
@@ -388,6 +402,77 @@ class IntervalsConnector:
         return WellnessPackage(
             data, WELLNESS_SUFFIX, WELLNESS_FORMAT, frozenset(origins.values())
         )
+
+    def publish(
+        self, session: ConnectorSession, request: PublishRequest
+    ) -> PublishResult:
+        """Answer one publish request with one code (design.md
+        "IntervalsPublisher"): the recorded link, the pull record, the facts
+        check, the listing match, then the absent branch. Each activity is
+        updated at most once; one answered absent is excluded from every
+        later step. A link rides only with a landed code, always built from
+        a usable identifier. Never raises for an intervals.icu answer."""
+        settings = session.settings
+        if not isinstance(settings, IntervalsSettings):
+            raise ConnectorError(
+                "the intervals connector was given another connector's settings"
+            )
+        headers = _auth_headers(session, session.credentials.value("api_key"))
+        subject = request.subject
+        absent: set[str] = set()
+
+        def update(activity_id: str) -> PublishResult | None:
+            return _publish_update(session, headers, activity_id, request.post, absent)
+
+        linked = _linked_activity(request.recorded_link)
+        if linked is not None:
+            answered = update(linked)
+            if answered is not None:
+                return answered
+        recorded = _record_activity(session, subject)
+        record_unreadable = recorded is PublishCode.LOCAL_RECORD_UNREADABLE
+        if recorded is PublishCode.AMBIGUOUS:
+            return PublishResult(PublishCode.AMBIGUOUS)
+        if isinstance(recorded, str) and recorded not in absent:
+            answered = update(recorded)
+            if answered is not None:
+                return answered
+        if subject.start.utcoffset() is None or (
+            subject.distance_m is None and subject.elapsed_s is None
+        ):
+            return PublishResult(PublishCode.ACTIVITY_FACTS_MISSING)
+        listed = _list(session, headers, subject)
+        if isinstance(listed, PublishCode):
+            return PublishResult(listed)
+        matched = _match_listing(listed, subject, request.publication_id, absent=absent)
+        if isinstance(matched, PublishCode):
+            return PublishResult(matched)
+        if matched is not None:
+            answered = update(matched)
+            if answered is not None:
+                return answered
+        if record_unreadable:
+            return PublishResult(PublishCode.LOCAL_RECORD_UNREADABLE)
+        if not settings.publish_upload:
+            return PublishResult(PublishCode.NOT_FOUND)
+        data = _base_file(subject)
+        if data is None:
+            return PublishResult(PublishCode.ACTIVITY_FILE_MISSING)
+        uploaded = _upload(session, headers, data, request.publication_id)
+        if isinstance(uploaded, PublishCode):
+            return PublishResult(uploaded)
+        named = uploaded.activity_id
+        if named is None or named in absent:
+            return PublishResult(PublishCode.UNCONFIRMED)
+        confirmed = _update(session, headers, named, request.post)
+        if confirmed is UpdateResult.CONFIRMED:
+            return PublishResult(
+                PublishCode.UPLOADED if uploaded.created else PublishCode.POSTED,
+                _activity_link(named),
+            )
+        if uploaded.created or confirmed is UpdateResult.ABSENT:
+            return PublishResult(PublishCode.UNCONFIRMED)
+        return PublishResult(confirmed)
 
     def fetch_activity(
         self, session: ConnectorSession, activity: RemoteActivity
@@ -1223,3 +1308,25 @@ def _upload(
             activity_id=_uploaded_activity(response.body),
         )
     return _answer_code(CallKind.CREATE, answer) or PublishCode.UNCONFIRMED
+
+
+def _publish_update(
+    session: ConnectorSession,
+    headers: Mapping[str, Secret],
+    activity_id: str,
+    post: Post,
+    absent: set[str],
+) -> PublishResult | None:
+    """Update one activity of a publish request: ``POSTED`` with its link, the
+    code of any other answer, or ``None`` after noting the activity absent (or
+    when the identifier is not a usable one, which names nothing and so
+    receives neither a request nor a link, Req 8.2)."""
+    if not _usable_activity_id(activity_id):
+        return None
+    result = _update(session, headers, activity_id, post)
+    if result is UpdateResult.CONFIRMED:
+        return PublishResult(PublishCode.POSTED, _activity_link(activity_id))
+    if result is UpdateResult.ABSENT:
+        absent.add(activity_id)
+        return None
+    return PublishResult(result)

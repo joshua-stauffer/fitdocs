@@ -206,7 +206,7 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
 
 - [ ] 3. Integration: the publish operation and the target
 
-- [ ] 3.1 Answer publish requests and declare the publish target
+- [x] 3.1 Answer publish requests and declare the publish target
   - Implement the publish operation in the design's order: the recorded
     link, the pull record, the facts check, the listing match, then the
     absent branch (local record unreadable when the pull record could not be
@@ -410,3 +410,4 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
 - 2.4: time-comparison tests need a non-UTC page start (+02:00), or instant-vs-wall-clock mutations survive. `_match_listing` imports `fitdocs.identity.matching` lazily; tests patch `matching.pair_evidence` by module attribute, so keep the call-time `matching.pair_evidence` lookup.
 - 2.5: "body never read" needs a per-status result assertion plus a wide tripwire bytes subclass; buffer-protocol reads cannot be intercepted on 3.11. Scripted 200s should carry a realistic non-empty body. 2.6 and 3.2 (sentinel) should reuse this.
 - 2.6 RULING (controller): the multipart boundary is re-chosen whenever `--<boundary>` occurs anywhere in the file (substring), a strict superset of the design's "delimiter line" condition. Kept as safer, still deterministic, and consistent with RFC 2046; pinned by test_the_boundary_collision_reaches_the_wire. `_Tripwire` is module-level in test_intervals_publish.py; reuse it for 3.2.
+- 3.1: the `_Flow` harness in test_intervals_publish.py never merges requests. `_publish` asserts per-(method, path) raw counts equal one logical request (simulated from http.MAX_DATA_ATTEMPTS / RETRYABLE_STATUSES, which test_http.py pins with literals), and asserts the exact credential header on every request. Reuse `_Flow`/`_publish` for 3.2. Becoming a publish target changed tests/connectors/test_e2e.py offline publish output (bare root: "No publish target is configured."). 3.3/5.1 may need the same.

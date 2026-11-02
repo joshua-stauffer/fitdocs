@@ -821,7 +821,13 @@ def test_package_signature_annotations(name: str, expected: str) -> None:
 
 def test_packaging_capabilities_are_exact() -> None:
     assert intervals.IntervalsConnector.capabilities == frozenset(
-        {Capability.PULL_ACTIVITIES, Capability.PULL_WELLNESS}
+        {
+            Capability.PULL_ACTIVITIES,
+            Capability.PULL_WELLNESS,
+            Capability.PUSH_ACTIVITY,
+            Capability.ANNOTATE_REMOTE_ACTIVITY,
+            Capability.RESOLVE_REMOTE_ACTIVITY,
+        }
     )
 
 

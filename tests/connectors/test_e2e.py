@@ -16,7 +16,9 @@ guard, registry snapshot/restore, credentials/environment isolation):
    never the pull's.
 2. With ``[connectors]`` configured, every command Req 14.1 names that is
    not ``connect``/``pull`` itself -- ``sync``, ``regen``, ``load``,
-   ``check``, ``history``, ``plan``, ``publish`` (a dry run and ``--targets``),
+   ``check``, ``history``, ``plan``, ``publish`` (a dry run and ``--targets``;
+   the wired root's intervals instance is a publish target, so its output names
+   it where the bare root's reports none, with no socket attempt either way),
    ``derive-benchmarks``, ``index``,
    ``query``, ``dashboard refresh`` and ``recovery`` -- completing exactly as
    it would with no ``[connectors]`` table at all: same exit code and output, the
@@ -472,7 +474,22 @@ def test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded(
     wired_output = wired_output.replace(str(wired_root), "<data-root>").replace(
         str(wired_location.database), "<resolved-index-database>"
     )
-    assert wired_output == bare_output
+    if command == "publish":
+        # The wired root has an intervals instance, a publish target: the
+        # listing and the dry run name it where the bare root has none.
+        assert bare_output == "No publish target is configured.\n"
+        if args == ["--targets"]:
+            assert wired_output.startswith(
+                "wellness-src: intervals (intervals.icu); capabilities: "
+                "push-activity, annotate-remote-activity, resolve-remote-activity; "
+                "state: ready\n"
+            )
+        else:
+            assert wired_output.startswith(
+                "fitdocs publish: dry run; nothing is sent (add --yes to post).\n"
+            )
+    else:
+        assert wired_output == bare_output
     if is_query:
         assert bare.stdout == "n\n1\n"
         assert bare_attempts == 0

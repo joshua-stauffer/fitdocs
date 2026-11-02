@@ -110,13 +110,19 @@ def test_a_fresh_import_registers_folder_then_intervals() -> None:
     assert done.stdout.strip() == "folder,intervals"
 
 
-def test_the_declaration_is_a_personal_key_pull_only_connector() -> None:
+def test_the_declaration_is_a_personal_key_pull_and_publish_connector() -> None:
     connector = IntervalsConnector()
     assert connector.connector_id == "intervals"
     assert connector.display_name == "intervals.icu"
     assert connector.auth_style is AuthStyle.API_KEY
     assert connector.capabilities == frozenset(
-        {Capability.PULL_ACTIVITIES, Capability.PULL_WELLNESS}
+        {
+            Capability.PULL_ACTIVITIES,
+            Capability.PULL_WELLNESS,
+            Capability.PUSH_ACTIVITY,
+            Capability.ANNOTATE_REMOTE_ACTIVITY,
+            Capability.RESOLVE_REMOTE_ACTIVITY,
+        }
     )
     assert connector.credential_fields == (
         CredentialField(
