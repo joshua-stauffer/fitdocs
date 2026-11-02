@@ -29,7 +29,7 @@ import zlib
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
-from enum import StrEnum
+from enum import Enum, StrEnum
 from types import MappingProxyType
 from typing import Final, NoReturn
 from urllib.parse import quote, urlencode
@@ -58,6 +58,7 @@ from fitdocs.connectors.protocol import (
     FetchResult,
     Granted,
     Listing,
+    Post,
     PublishCode,
     RemoteActivity,
     SettingsContext,
@@ -1079,3 +1080,42 @@ def _match_listing(
         if gap <= START_TOLERANCE_S:
             return PublishCode.NOT_UPDATABLE
     return None
+
+
+class UpdateResult(Enum):
+    CONFIRMED = "confirmed"
+    ABSENT = "absent"
+
+
+def _update(
+    session: ConnectorSession,
+    headers: Mapping[str, Secret],
+    activity_id: str,
+    post: Post,
+) -> UpdateResult | PublishCode:
+    """Set the activity's name and description to the post's, or the code the
+    answer maps to (Req 5.1, 5.2, 5.4-5.6, 9.2, 9.5). The request is safe to
+    repeat, so it is unmarked and the data-mode client retries it. The answer
+    body is never read."""
+    body = json.dumps(
+        {"name": post.title, "description": post.description},
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    try:
+        response = session.http.put(
+            f"{API_BASE}/activity/{quote(activity_id, safe='')}",
+            body=body,
+            headers={"Content-Type": "application/json"},
+            secret_headers=headers,
+        )
+    except TransportError:
+        return _answer_code(CallKind.UPDATE, AnswerClass.NETWORK_FAILURE) or (
+            PublishCode.UNAVAILABLE
+        )
+    answer = _answer_class(CallKind.UPDATE, response.status)
+    if answer is AnswerClass.SUCCESS:
+        return UpdateResult.CONFIRMED
+    if answer is AnswerClass.NOT_FOUND:
+        return UpdateResult.ABSENT
+    return _answer_code(CallKind.UPDATE, answer) or PublishCode.UNAVAILABLE

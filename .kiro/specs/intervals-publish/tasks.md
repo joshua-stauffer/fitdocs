@@ -167,7 +167,7 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
   - _Requirements: 3.6, 3.7, 3.8, 4.1, 4.2_
   - _Boundary: ActivityFinding_
 
-- [ ] 2.5 Update an activity's name and description
+- [x] 2.5 Update an activity's name and description
   - Send one update to the activity's address with a JSON body holding
     exactly the post's title as the name and its description, an empty
     description sent empty, through the unmarked data-mode client with the
@@ -408,3 +408,4 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
 - 2.2: test fixtures use instance `icu-main` (not the connector id) and `_write` appends a hand line so a canonical re-save is visible; keep both when adding ledger tests. Malformed ids must be tested in each tier separately (review found an unfiltered tier-2 survivor).
 - 2.3: response parsing must survive hostile 200 bodies — catch RecursionError with ValueError around json.loads, treat float() OverflowError as absent, decode strictly as UTF-8 (fixtures: utf-16 JSON and a latin-1 byte). 2.6 (upload answer parser) should reuse the same shape.
 - 2.4: time-comparison tests need a non-UTC page start (+02:00), or instant-vs-wall-clock mutations survive. `_match_listing` imports `fitdocs.identity.matching` lazily; tests patch `matching.pair_evidence` by module attribute, so keep the call-time `matching.pair_evidence` lookup.
+- 2.5: "body never read" needs a per-status result assertion plus a wide tripwire bytes subclass; buffer-protocol reads cannot be intercepted on 3.11. Scripted 200s should carry a realistic non-empty body. 2.6 and 3.2 (sentinel) should reuse this.

@@ -32,6 +32,7 @@ from fitdocs.connectors.intervals import (
     AnswerClass,
     CallKind,
     ListedActivity,
+    UpdateResult,
     _activity_link,
     _answer_class,
     _answer_code,
@@ -42,6 +43,7 @@ from fitdocs.connectors.intervals import (
     _listing_window,
     _match_listing,
     _record_activity,
+    _update,
     _usable_activity_id,
 )
 from fitdocs.connectors.ledger import (
@@ -55,6 +57,7 @@ from fitdocs.connectors.protocol import (
     TARGET_CODES,
     CompletedActivity,
     ConnectorSession,
+    Post,
     PublishCode,
 )
 from fitdocs.connectors.secrets import Redactor, Secret
@@ -1168,3 +1171,213 @@ def test_a_strava_instant_start_is_compared_as_instants_against_an_offset_page()
     )
     assert _match([same_instant], page) == C.NOT_UPDATABLE
     assert _match([same_clock], page) is None
+
+
+# --- Updating an activity's name and description (Req 5.1, 5.2, 5.4-5.6, 9.2, 9.5)
+
+
+ACTIVITY = "i4242"
+TITLE = "Morning tempo, Ünïcode"
+DESCRIPTION = "Line one\nLine two"
+_SENTINEL = b"SENTINEL-ANSWER-BODY"
+
+
+class _Sequence:
+    """A transport answering from a script, one entry per request, recording each."""
+
+    def __init__(self, *script: HttpResponse | TransportError) -> None:
+        self.script = list(script)
+        self.requests: list[HttpRequest] = []
+
+    def __call__(self, request: HttpRequest, timeout: float) -> HttpResponse:
+        self.requests.append(request)
+        step = self.script[min(len(self.requests), len(self.script)) - 1]
+        if isinstance(step, TransportError):
+            raise step
+        return step
+
+
+def _answer(status: int, body: bytes = b"") -> HttpResponse:
+    return HttpResponse(status=status, headers={}, body=body)
+
+
+def _push(
+    tmp_path: Path,
+    *script: HttpResponse | TransportError,
+    post: Post | None = None,
+    activity_id: str = ACTIVITY,
+) -> tuple[object, _Sequence]:
+    transport = _Sequence(*script)
+    session = _listing_session(transport, tmp_path)  # type: ignore[arg-type]
+    headers = _auth_headers(session, Secret(_API_KEY))
+    result = _update(
+        session,
+        headers,
+        activity_id,
+        post or Post(title=TITLE, description=DESCRIPTION),
+    )
+    return result, transport
+
+
+def test_the_update_request_method_address_body_and_headers(tmp_path: Path) -> None:
+    result, transport = _push(tmp_path, _answer(200))
+    assert result is UpdateResult.CONFIRMED
+    (request,) = transport.requests
+    assert request.method == "PUT"
+    parts = urlsplit(request.url)
+    assert (parts.scheme, parts.netloc) == ("https", "intervals.icu")
+    assert parts.path == f"/api/v1/activity/{ACTIVITY}"
+    assert (parts.query, parts.fragment) == ("", "")
+    assert request.single_attempt is False
+    assert request.body is not None
+    assert json.loads(request.body.decode("utf-8")) == {
+        "name": TITLE,
+        "description": DESCRIPTION,
+    }
+    assert set(json.loads(request.body)) == {"name", "description"}
+    assert request.headers["Content-Type"] == "application/json"
+    assert "authorization" not in {name.lower() for name in request.headers}
+
+
+def test_title_and_description_are_distinct_and_not_swapped(tmp_path: Path) -> None:
+    assert TITLE != DESCRIPTION
+    _, transport = _push(tmp_path, _answer(200))
+    body = json.loads(transport.requests[0].body or b"")
+    assert body["name"] == TITLE
+    assert body["description"] != TITLE
+
+
+def test_an_empty_description_is_sent_empty_not_omitted_or_null(tmp_path: Path) -> None:
+    _, transport = _push(tmp_path, _answer(200), post=Post(title=TITLE, description=""))
+    body = json.loads(transport.requests[0].body or b"")
+    assert body == {"name": TITLE, "description": ""}
+    assert body["description"] == ""
+
+
+def test_the_body_is_utf_8_compact_json(tmp_path: Path) -> None:
+    _, transport = _push(tmp_path, _answer(200))
+    raw = transport.requests[0].body
+    assert raw == (
+        json.dumps(
+            {"name": TITLE, "description": DESCRIPTION},
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    )
+    assert "Ünïcode".encode() in raw
+
+
+def test_the_text_is_in_no_address_and_the_key_only_in_secret_headers(
+    tmp_path: Path,
+) -> None:
+    _, transport = _push(tmp_path, _answer(200))
+    (request,) = transport.requests
+    token = base64.b64encode(f"API_KEY:{_API_KEY}".encode()).decode()
+    for needle in (TITLE, "Line one", "Line two", "Morning", _API_KEY, token):
+        assert needle not in request.url
+    assert list(request.secret_headers) == ["Authorization"]
+    assert request.secret_headers["Authorization"].reveal() == f"Basic {token}"
+    visible = " ".join(f"{k}:{v}" for k, v in request.headers.items())
+    assert _API_KEY not in visible and token not in visible
+    assert request.body is not None
+    assert _API_KEY.encode() not in request.body
+    assert token.encode() not in request.body
+
+
+def test_the_activity_id_is_percent_quoted_in_the_address(tmp_path: Path) -> None:
+    _, transport = _push(tmp_path, _answer(200), activity_id="a/b?c")
+    assert urlsplit(transport.requests[0].url).path == "/api/v1/activity/a%2Fb%3Fc"
+
+
+def test_503_503_200_is_confirmed_after_three_requests(tmp_path: Path) -> None:
+    result, transport = _push(tmp_path, _answer(503), _answer(503), _answer(200))
+    assert result is UpdateResult.CONFIRMED
+    assert len(transport.requests) == 3
+    assert {r.method for r in transport.requests} == {"PUT"}
+    assert len({r.body for r in transport.requests}) == 1
+
+
+def test_a_persistent_503_is_unavailable_after_the_retries(tmp_path: Path) -> None:
+    result, transport = _push(tmp_path, _answer(503))
+    assert result == C.UNAVAILABLE
+    assert len(transport.requests) == 3
+
+
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [
+        (200, UpdateResult.CONFIRMED),
+        (404, UpdateResult.ABSENT),
+        (401, C.AUTH_REJECTED),
+        (403, C.PERMISSION_DENIED),
+        (400, C.REJECTED),
+        (410, C.REJECTED),
+        (422, C.REJECTED),
+        (429, C.RATE_LIMITED),
+        (500, C.UNAVAILABLE),
+        (201, C.UNCONFIRMED),
+        (204, C.UNCONFIRMED),
+        (302, C.UNCONFIRMED),
+    ],
+)
+def test_each_answer_maps_to_its_update_result(
+    tmp_path: Path, status: int, expected: object
+) -> None:
+    body = b'{"id":"i4242","error":"x"}'
+    result, transport = _push(tmp_path, _answer(status, body))
+    assert result == expected
+    assert type(result) is type(expected)
+    assert transport.requests
+
+
+def test_a_transport_failure_is_unavailable_after_retries(tmp_path: Path) -> None:
+    result, transport = _push(tmp_path, TransportError("down"))
+    assert result == C.UNAVAILABLE
+    assert len(transport.requests) == 3
+
+
+def test_the_answer_body_is_never_read(tmp_path: Path) -> None:
+    # Buffer-protocol reads (memoryview, hashlib, zlib, bytearray) cannot be
+    # intercepted on 3.11, so the per-status result check below is the backstop.
+    def refuse(what: str) -> object:
+        def raiser(self: object, *args: object, **kwargs: object) -> object:
+            raise AssertionError(f"body touched via {what}")
+
+        return raiser
+
+    class _Tripwire(bytes):
+        def __getattribute__(self, name: str) -> object:
+            if not name.startswith("__"):
+                raise AssertionError(f"body touched via {name}")
+            return super().__getattribute__(name)
+
+    for dunder in (
+        "bool",
+        "len",
+        "getitem",
+        "iter",
+        "eq",
+        "ne",
+        "contains",
+        "hash",
+        "bytes",
+        "str",
+        "repr",
+        "format",
+    ):
+        setattr(_Tripwire, f"__{dunder}__", refuse(dunder))
+
+    expected: dict[int, object] = {
+        200: UpdateResult.CONFIRMED,
+        404: UpdateResult.ABSENT,
+        401: C.AUTH_REJECTED,
+        403: C.PERMISSION_DENIED,
+        400: C.REJECTED,
+        429: C.RATE_LIMITED,
+        500: C.UNAVAILABLE,
+        204: C.UNCONFIRMED,
+    }
+    for status, want in expected.items():
+        response = HttpResponse(status=status, headers={}, body=_Tripwire(_SENTINEL))
+        result, _ = _push(tmp_path, response)
+        assert result == want, status
