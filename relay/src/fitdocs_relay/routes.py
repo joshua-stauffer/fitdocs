@@ -111,12 +111,12 @@ def readiness(storage: Storage) -> Response:
     )
 
 
-def _limited(decision: RateDecision) -> Response:
+def limited_answer(decision: RateDecision) -> Response:
     # A refused decision always carries its wait; an allowed one never reaches here.
     return answer(RelayCode.RATE_LIMITED, retry_after_s=decision.retry_after_s)
 
 
-def _authorize(services: RelayServices, request: Request) -> Authenticated | Response:
+def authorize(services: RelayServices, request: Request) -> Authenticated | Response:
     """Authenticate the presenting token, then count it against its own limit.
 
     A failed authentication counts against the client first and only then
@@ -126,10 +126,10 @@ def _authorize(services: RelayServices, request: Request) -> Authenticated | Res
     outcome = services.tokens.authenticate(bearer_token(request))
     if not isinstance(outcome, Authenticated):
         decision = services.limiter.check_client(client_address(request))
-        return answer(outcome) if decision.allowed else _limited(decision)
+        return answer(outcome) if decision.allowed else limited_answer(decision)
     note_token_id(request, outcome.token_id)
     decision = services.limiter.check_token(outcome.token_id)
-    return outcome if decision.allowed else _limited(decision)
+    return outcome if decision.allowed else limited_answer(decision)
 
 
 class ProviderAnswerError(Exception):
@@ -225,7 +225,7 @@ def core_routes(services: RelayServices) -> list[BaseRoute]:
     def capabilities(request: Request) -> Response:
         decision = services.limiter.check_client(client_address(request))
         if not decision.allowed:
-            return _limited(decision)
+            return limited_answer(decision)
         return answer(
             RelayCode.OK,
             {
@@ -236,11 +236,11 @@ def core_routes(services: RelayServices) -> list[BaseRoute]:
         )
 
     def token_check(request: Request) -> Response:
-        checked = _authorize(services, request)
+        checked = authorize(services, request)
         return checked if isinstance(checked, Response) else answer(RelayCode.OK)
 
     async def token_revoke(request: Request) -> Response:
-        checked = await run_in_threadpool(_authorize, services, request)
+        checked = await run_in_threadpool(authorize, services, request)
         if isinstance(checked, Response):
             return checked
         fields = await read_request(request, required=frozenset(), allowed=frozenset())
@@ -253,7 +253,7 @@ def core_routes(services: RelayServices) -> list[BaseRoute]:
 
     def _client_limit(request: Request) -> Response | None:
         decision = services.limiter.check_client(client_address(request))
-        return None if decision.allowed else _limited(decision)
+        return None if decision.allowed else limited_answer(decision)
 
     async def registration_start(request: Request) -> Response:
         provider = services.registration
@@ -293,6 +293,8 @@ def core_routes(services: RelayServices) -> list[BaseRoute]:
         given = await run_in_threadpool(provider.poll, secret)
         return await run_in_threadpool(_poll_response, services, given)
 
+    from fitdocs_relay.strava.routes import strava_routes  # imports this module
+
     return [
         Route(ROUTE_LIVEZ, livez),
         Route(ROUTE_READYZ, readyz),
@@ -301,4 +303,5 @@ def core_routes(services: RelayServices) -> list[BaseRoute]:
         Route(ROUTE_TOKEN_REVOKE, token_revoke, methods=["POST"]),
         Route(ROUTE_REGISTRATIONS, registration_start, methods=["POST"]),
         Route(ROUTE_REGISTRATION_POLL, registration_poll, methods=["POST"]),
+        *strava_routes(services),
     ]
