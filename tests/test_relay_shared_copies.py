@@ -19,9 +19,9 @@ from scripts.sync_relay_shared import (
 SHARED_DIR = "relay/src/fitdocs_relay/shared"
 SCRIPT = REPO_ROOT / "scripts" / "sync_relay_shared.py"
 
-# relay-server's own pairs, by literal. Later specs append to SHARED_MODULES
-# (strava-publish adds outcomes.py), so these are checked as a subset.
-RELAY_SERVER_PAIRS = (
+# The pinned pairs, by literal: relay-server's two, then strava-publish's three.
+# Later specs append to SHARED_MODULES, so these are checked as a subset.
+PINNED_PAIRS = (
     (
         "src/fitdocs/connectors/relay_codes.py",
         f"{SHARED_DIR}/relay_codes.py",
@@ -29,6 +29,18 @@ RELAY_SERVER_PAIRS = (
     (
         "src/fitdocs/connectors/relay_envelope.py",
         f"{SHARED_DIR}/relay_envelope.py",
+    ),
+    (
+        "src/fitdocs/publish/outcomes.py",
+        f"{SHARED_DIR}/outcomes.py",
+    ),
+    (
+        "src/fitdocs/connectors/relay_targets.py",
+        f"{SHARED_DIR}/relay_targets.py",
+    ),
+    (
+        "src/fitdocs/identity/strict.py",
+        f"{SHARED_DIR}/strict.py",
     ),
 )
 
@@ -50,7 +62,7 @@ def orphans(root: Path, pairs: Pairs) -> list[str]:
 
 
 def missing_literals(pairs: Pairs) -> list[tuple[str, str]]:
-    return [pair for pair in RELAY_SERVER_PAIRS if pair not in pairs]
+    return [pair for pair in PINNED_PAIRS if pair not in pairs]
 
 
 def foreign_imports(root: Path, pairs: Pairs) -> list[str]:
@@ -92,7 +104,7 @@ def _hint(problems: list[str]) -> str:
 
 
 def test_the_table_is_non_trivial_and_every_source_exists() -> None:
-    assert len(SHARED_MODULES) >= 2
+    assert len(SHARED_MODULES) >= 5
     for source, _ in SHARED_MODULES:
         assert (REPO_ROOT / source).is_file(), source
 
@@ -113,7 +125,7 @@ def test_sources_import_only_stdlib_and_listed_siblings() -> None:
     assert not problems, _hint(problems)
 
 
-def test_relay_servers_two_pairs_are_present_by_literal() -> None:
+def test_the_five_pinned_pairs_are_present_by_literal() -> None:
     absent = missing_literals(SHARED_MODULES)
     assert not absent, _hint([f"missing pair {p}" for p in absent])
 
@@ -200,7 +212,7 @@ def test_a_hand_written_module_in_shared_is_an_orphan(tmp_path: Path) -> None:
 
 def test_dropping_a_pair_from_the_table_fails_the_literal_check() -> None:
     for index, dropped in enumerate(SHARED_MODULES):
-        if dropped not in RELAY_SERVER_PAIRS:
+        if dropped not in PINNED_PAIRS:
             continue
         shrunk = SHARED_MODULES[:index] + SHARED_MODULES[index + 1 :]
         assert missing_literals(shrunk) == [dropped]
@@ -211,7 +223,7 @@ def test_dropping_a_pair_from_the_table_fails_the_literal_check() -> None:
 
 def test_dropping_a_pair_leaves_its_copy_an_orphan() -> None:
     shrunk = SHARED_MODULES[:1]
-    assert orphans(REPO_ROOT, shrunk) == [SHARED_MODULES[1][1]]
+    assert orphans(REPO_ROOT, shrunk) == sorted(copy for _, copy in SHARED_MODULES[1:])
 
 
 @pytest.mark.parametrize(

@@ -53,7 +53,7 @@ Rules for every task:
   or in the Strava section of `docs/connectors.md` names a Strava host; no
   text says who runs a command.
 
-- [ ] 1. Foundation: the shared modules and their pinned copies
+- [x] 1. Foundation: the shared modules and their pinned copies
 
 - [x] 1.1 Extract the strict tier of the match rule into a standard-library-only module
   - Move the four strict tolerances and the inclusive comparison into the
@@ -113,7 +113,7 @@ Rules for every task:
     the new pin.
   - _Requirements: 15.4_
 
-- [ ] 1.4 Pin the three new shared modules into the relay
+- [x] 1.4 Pin the three new shared modules into the relay
   - Append the outcome vocabulary, the Strava wire module and the strict
     module to the sync script's pairs, write the copies with the sync
     command, and extend the cross-check test to assert the three new pairs
@@ -724,3 +724,4 @@ Rules for every task:
 - Local relay runs need `uv sync --directory relay --extra postgres` (without it, relay mypy shows 26 psycopg errors and the PostgreSQL cases cannot import).
 - 1.2: `relay_targets` imports only `relay_envelope` (design.md's allowed-dependency line also names `relay_codes`; the exact-equality boundary table pins `{relay_envelope}`). `target_route`, `connect_page_path` and `link_path` refuse malformed parts with `EnvelopeError` (design is silent; every design-described caller passes valid parts). Control characters are Unicode category Cc only (Cf such as ZWJ in emoji, and U+2028, are accepted). Numbers parse to float; a too-large int is refused, not an OverflowError. No test yet shows the largest valid upload body fits `MAX_UPLOAD_REQUEST_BYTES` (literal pin only): the consumer of that bound (4.1 route limits / 5.5 client bound) should pin it. Controller downgrade: round 3 (test-only, from the round-2 reviewer's exhaustive 55-mutation list) was verified by the controller re-running that harness: every non-equivalent mutation reds; survivors R, AR, BF are equivalent.
 - Mutation harness trap: a copied tree's `.venv` editable install still imports the ORIGINAL tree's `src`; force `PYTHONPATH=<copy>/src` or every mutation reads green.
+- 1.4: `SHARED_MODULES` has five pairs (relay_codes, relay_envelope, publish/outcomes, relay_targets, identity/strict). **7.4 must also reword** the steering phrases "today `relay_codes` and `relay_envelope`" (tech.md ~35, structure.md ~93-96, incl. what each shared module may import) and move their literal pins in tests/connectors/test_network_statements.py (~914, ~962).

@@ -101,15 +101,18 @@ def test_placement_rules_hold_over_the_package() -> None:
 def test_shared_copies_import_only_stdlib_and_siblings() -> None:
     problems, scanned = check_shared(PACKAGE_ROOT)
     assert problems == []
-    # The literal count of the files in shared/: __init__.py plus the two
-    # copies relay-server pins. Each later spec that appends a pair to
-    # scripts/sync_relay_shared.py (strava-publish adds outcomes.py) adds one
-    # file here, so that change must raise this number in the same commit.
-    assert scanned == 3
+    # The literal count of the files in shared/: __init__.py plus the five
+    # copies relay-server and strava-publish pin. Each later spec that appends
+    # a pair to scripts/sync_relay_shared.py adds one file here, so that change
+    # must raise this number in the same commit.
+    assert scanned == 6
     assert sorted(p.name for p in (PACKAGE_ROOT / SHARED_PACKAGE).glob("*.py")) == [
         "__init__.py",
+        "outcomes.py",
         "relay_codes.py",
         "relay_envelope.py",
+        "relay_targets.py",
+        "strict.py",
     ]
 
 

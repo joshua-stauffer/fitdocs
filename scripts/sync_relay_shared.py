@@ -30,6 +30,18 @@ SHARED_MODULES: Final[tuple[tuple[str, str], ...]] = (
         "src/fitdocs/connectors/relay_envelope.py",
         "relay/src/fitdocs_relay/shared/relay_envelope.py",
     ),
+    (
+        "src/fitdocs/publish/outcomes.py",
+        "relay/src/fitdocs_relay/shared/outcomes.py",
+    ),
+    (
+        "src/fitdocs/connectors/relay_targets.py",
+        "relay/src/fitdocs_relay/shared/relay_targets.py",
+    ),
+    (
+        "src/fitdocs/identity/strict.py",
+        "relay/src/fitdocs_relay/shared/strict.py",
+    ),
 )
 
 REPO_ROOT: Final[Path] = Path(__file__).resolve().parents[1]
