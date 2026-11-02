@@ -25,7 +25,12 @@ from fitdocs.connectors.intervals import (
     DEFAULT_SOURCES,
     FIRST_PULL_DAYS,
     INTERVALS_CONNECTOR_ID,
+    LINK_LABEL,
     RESOLVE_FIELDS,
+    SUCCESS_STATUSES,
+    UPLOAD_FILENAME,
+    WINDOW_DAYS_AFTER,
+    WINDOW_DAYS_BEFORE,
     AnswerClass,
     CallKind,
     IntervalsConnector,
@@ -301,7 +306,12 @@ def test_the_documented_publish_upload_default_equals_the_settings_default() -> 
     assert shown is default
     parsed = IntervalsConnector().parse_settings(tables[0], _SETTINGS)
     assert parsed.publish_upload is default
-    assert "optional; this is the default" in _subsection("Configuring")
+    line = next(
+        line
+        for line in _subsection("Configuring").splitlines()
+        if line.startswith("publish_upload")
+    )
+    assert line == "publish_upload = false         # optional; this is the default"
 
 
 def test_a_malformed_publish_upload_is_documented_as_a_configuration_error() -> None:
@@ -338,26 +348,76 @@ def test_the_request_bullets_state_what_each_request_carries() -> None:
     assert query, "the upload bullet no longer names its query value"
     assert query.group(1) == "the page's publication id, as `external_id`"
     assert "Its query carries only the date window and the field names above." in text
+    assert UPLOAD_FILENAME == "activity.fit"
     assert (
         "a `multipart/form-data` form holding the base file, unmodified, "
-        "under the file name `activity.fit`" in text
+        f"under the file name `{UPLOAD_FILENAME}`" in text
     )
+    days = {1: "one day", 2: "two days"}
+    assert (
+        f"from {days[WINDOW_DAYS_BEFORE]} before the page's start date (in UTC) "
+        f"to {days[WINDOW_DAYS_AFTER]} after it" in text
+    )
+    assert f"labelled `{LINK_LABEL}`" in text
     assert "Its body is the name and the description, and nothing else." in text
 
 
 def test_the_update_after_an_upload_is_documented_apart_from_the_table() -> None:
     text = _publishing_text()
+    assert "which uses the Update column with two exceptions" in text
     assert (
-        "The table applies to every request except the update that follows an "
-        "upload" in text
+        "After a `201` (intervals.icu created the activity), a success is "
+        "`uploaded`, with the link, and any other reply, including a `404` or a "
+        "`429`, is `unconfirmed`." in text
     )
     assert (
-        "After an upload that created the activity, any reply other than a "
-        "success is `unconfirmed`, including a `429`." in text
+        "After a `200` (intervals.icu answered with an activity it already held), "
+        "a success is `posted`, with the link, and a `404` is `unconfirmed`, so "
+        "the search does not go on; any other reply follows the table." in text
     )
-    assert "a `404` is `unconfirmed` and the search does not go on" in text
-    assert "the pull record or the listing means that activity does not exist" in text
-    assert "no upload is sent" in text and "no upload was sent" in text
+
+
+def test_the_codes_notes_cover_every_answer_publish_returns() -> None:
+    text = _publishing_text()
+    for sentence in (
+        "A success is `posted`, with the link. A `404` sets the activity aside "
+        "and the search goes on. Any other reply follows the table's Update column.",
+        "A pull record that names several activities** for the page's base file, "
+        "or, when it names none for it, for the page's other files, is `ambiguous`",
+        "A page without the facts for a listing** is `activity_facts_missing`",
+        "A reply that is not a `200` follows the table's Listing column. A `200` "
+        "whose body is not a list of activities, each with a usable id, is "
+        "`unavailable`.",
+        "When none matches but a Strava import starts within a second of the "
+        "page's start, the answer is `not_updatable`.",
+        "**Nothing found.** If the instance's ledger could not be read, the answer "
+        "is `local_record_unreadable` (see below). Otherwise, with `publish_upload` "
+        "off, it is `not_found`.",
+        "`publish_upload` decides what happens when none of these steps finds an "
+        "activity and the instance's ledger could be read (an unreadable one is "
+        "described below).",
+        "With it on and no usable base file, it is `activity_file_missing`, and "
+        "no upload is sent.",
+        "A reply that is not a success follows the table's Upload column. A "
+        "success reply that does not name exactly one activity, or names one "
+        "that was set aside after a `404`, is `unconfirmed`.",
+    ):
+        assert sentence in text, sentence
+
+
+def _statuses(codes: frozenset[int]) -> str:
+    return " or ".join(f"a `{code}`" for code in sorted(codes))
+
+
+def test_the_table_defines_success_per_request_kind_as_the_code_does() -> None:
+    read = SUCCESS_STATUSES[CallKind.READ]
+    assert SUCCESS_STATUSES[CallKind.UPDATE] == read
+    sentence = (
+        f"A success is {_statuses(read)} for the listing and the update, and "
+        f"{_statuses(SUCCESS_STATUSES[CallKind.CREATE])} for the upload; any other "
+        'status outside the rows above is an "other status".'
+    )
+    assert sentence in _publishing_text(), sentence
 
 
 def test_publishing_documents_the_unreadable_record_answer() -> None:
@@ -365,7 +425,9 @@ def test_publishing_documents_the_unreadable_record_answer() -> None:
     assert "never `not_found` and never an upload" in publishing
     assert "whether or not uploads are on" in publishing
     assert "is updated just as it is with a readable record" in publishing
-    assert "a page without the facts for a listing is `activity_facts_missing`" in (
+    assert "a Strava import at the start is `not_updatable`" in publishing
+    assert "or whose `200` body is unreadable, answers as above" in publishing
+    assert "and a page without the facts for a listing is `activity_facts_missing`" in (
         publishing
     )
     assert "fitdocs pull" in publishing
@@ -376,8 +438,8 @@ def test_the_ledger_section_says_publishing_reads_it_and_never_writes_it() -> No
     match = re.search(r"## The ledger (.*?) ## What leaves your machine", text)
     assert match
     assert (
-        "Publishing to an intervals.icu instance reads that instance's ledger "
-        "and never writes it." in match.group(1)
+        "Publishing to an [intervals.icu](#intervalsicu) instance reads that "
+        "instance's ledger and never writes it." in match.group(1)
     )
 
 
