@@ -65,9 +65,12 @@ renames, or deletes anything there.
 ## intervals.icu
 
 `intervals` is the connector for an [intervals.icu](https://intervals.icu)
-account. It pulls only: it lists the activities of the account the key
-belongs to and fetches each one's original `.fit` file, with wellness available
-when enabled below. It never writes to the account.
+account. It pulls: it lists the activities of the account the key belongs to
+and fetches each one's original `.fit` file, with wellness available when
+enabled below. It also publishes: for a page that opts in, `fitdocs publish
+--yes` sets an activity's name and description (see
+[Publishing](#publishing)). It writes only an activity's name and description,
+plus the page's base file while `publish_upload` is on.
 
 ### Connecting
 
@@ -111,6 +114,7 @@ again.
 ```toml
 [connectors.intervals]
 sources = ["GARMIN_CONNECT"]   # optional; this is the default
+publish_upload = false         # optional; this is the default
 ```
 
 `sources` is a non-empty list of upper-case source names. intervals.icu
@@ -125,8 +129,14 @@ list, so a source the service adds later needs no fitdocs release. A
 malformed `sources` value (not a list, an empty list, or a name that is not
 upper case) is a configuration error, reported before any request is made.
 The framework's `lookback_days` key applies as described under
-[Configuring an instance](#configuring-an-instance), as does `wellness`; no
-other key is read.
+[Configuring an instance](#configuring-an-instance), as does `wellness`.
+
+`publish_upload` is `true` or `false`, and is `false` when absent. It matters
+only to `fitdocs publish`: see [Publishing](#publishing). A `publish_upload`
+that is not `true` or `false` is a configuration error for every command that
+reads the connectors table, `fitdocs pull` included, because they share one
+settings loader. No key other than `sources` and `publish_upload` is read by
+this connector, besides the framework's keys above.
 
 ### What a pull fetches
 
@@ -227,6 +237,145 @@ Computed fields (`ctl`, `atl`, `rampRate`, `ctlLoad`, `atlLoad` and `sportInfo`)
 are delivered but never imported into the wellness series. The delivered file
 holds every field intervals.icu sent, including wellness comments and null
 values. A day deleted on intervals.icu is not removed from fitdocs.
+
+### Publishing
+
+This is the intervals.icu side of `fitdocs publish`, whose command, outcome
+codes and ledger are described in
+[Publishing](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/publishing.md).
+A page opts in with `publish: <name>` in its frontmatter, where `<name>` is the name of the
+intervals instance (`intervals` unless you named the instance otherwise).
+Nothing is sent unless you run `fitdocs publish --yes`.
+
+A publish makes the activity on intervals.icu carry the page's post: its name
+is the post's title and its description is the post's description. It finds
+the activity in this order, and stops at the first step that finds one:
+
+1. **The recorded link.** The link an earlier publish recorded for this page
+   and this instance, when it is exactly in the form fitdocs writes.
+2. **The pull record.** The instance's [ledger](#the-ledger) names the
+   activities a pull delivered, with the digest of what was delivered. fitdocs
+   looks up the digest of the page's base file, and only when that names no
+   activity, the digests of the page's other files. One activity answers;
+   several are `ambiguous`.
+3. **A listing around the start.** One request lists the account's activities
+   from one day before the page's start date (in UTC) to two days after it,
+   asking for the fields `id`, `source`, `start_date`, `start_date_local`,
+   `distance`, `elapsed_time` and `external_id`. The page must have a recorded
+   clock offset and a distance or an elapsed time; without them the answer is
+   `activity_facts_missing`, and no listing is sent. An activity matches
+   when it carries the page's publication id as its `external_id`, or else
+   when it has the same start (to within a second) and a matching distance
+   or, if either has no distance, a matching elapsed time, by the same rule
+   fitdocs uses to recognise one activity recorded twice. The sport is not
+   compared.
+
+If a step finds an activity but intervals.icu answers its update with a `404`
+(it does not exist), the activity is set aside and the search goes on. If
+several activities match in one step, the answer is `ambiguous` and nothing is changed: fitdocs
+never chooses one.
+
+An activity that intervals.icu imported from Strava is never updated. It is
+never matched, but when no other activity matches and a Strava activity starts
+within a second of the page's start, the answer is `not_updatable`. A Strava
+activity that lists no start time is compared by its local wall-clock start
+against the page's recorded wall-clock start, so it is recognised only when
+both were recorded in the same time zone; otherwise it goes unrecognised, and
+with `publish_upload` on a publish can create a second copy.
+
+`publish_upload` decides what happens when none of these steps finds an
+activity and the instance's ledger could be read (an unreadable one is
+described below). While it is `false` (the default) nothing is created and the answer is
+`not_found`. While it is `true`, fitdocs uploads the page's base file, and
+then sets the name and description of the activity that results. The file must be in the
+archive and hash to the digest the page records for its base file; otherwise
+the answer is `activity_file_missing` and no upload is sent.
+
+What each request sends:
+
+- **The update** is a `PUT` to the activity. Its body is the name and the
+  description, and nothing else. intervals.icu's answer text is never read.
+- **The upload** is a `POST` to the account's activities, a
+  `multipart/form-data` form holding the base file, unmodified, under the file
+  name `activity.fit`. The one value in its query is the page's publication
+  id, as `external_id`. The upload is sent once and never retried.
+- **The listing** is a `GET` of the account's activities. Its query carries
+  only the date window and the field names above.
+
+Every request carries your key as described under
+[What a pull fetches](#what-a-pull-fetches). When a publish lands
+(`posted` or `uploaded`), the answer carries a direct link to the activity,
+labelled `intervals.icu`, which fitdocs records for the page and shows in its
+published region.
+
+The answer to each reply, by the kind of request. A dash means that the reply
+fixes no code by itself: a success, or for an update a `404`, is decided by the
+step, as in the notes below. The table applies to every request except the
+update that follows an upload, which uses the Update column with two
+exceptions, given below.
+
+| Answer | Listing | Update | Upload |
+|---|---|---|---|
+| success | — | — | — |
+| 401 | `auth_rejected` | `auth_rejected` | `auth_rejected` |
+| 403 | `permission_denied` | `permission_denied` | `permission_denied` |
+| 404 | `rejected` | — | `rejected` |
+| 429 | `rate_limited` | `rate_limited` | `rate_limited` |
+| other 4xx | `rejected` | `rejected` | `rejected` |
+| 5xx | `unavailable` | `unavailable` | `unconfirmed` |
+| other status | `unavailable` | `unconfirmed` | `unconfirmed` |
+| network failure | `unavailable` | `unavailable` | `unconfirmed` |
+
+A success is a `200` for the listing and the update, and a `200` or a `201`
+for the upload; any other status outside the rows above is an "other status".
+
+The codes are the ones in the
+[outcome codes](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/publishing.md#outcome-codes).
+For intervals.icu, in the order a publish meets them:
+
+- **An update through the link, the pull record or the listing.** A success is
+  `posted`, with the link. A `404` sets the activity aside and the search goes
+  on. Any other reply follows the table's Update column.
+- **A pull record that names several activities** for the page's base file,
+  or, when it names none for it, for the page's other files, is `ambiguous`,
+  and nothing is changed.
+- **A page without the facts for a listing** is `activity_facts_missing`.
+- **The listing.** A reply that is not a `200` follows the table's Listing
+  column. A `200` whose body is not a list of activities, each with a usable
+  id, is `unavailable`. That is why the Listing column has a dash for a
+  success: a readable body is decided by the matching below.
+- **The listing's match.** Several matching activities are `ambiguous`, and
+  nothing is changed. When none matches but a Strava import starts within a
+  second of the page's start, the answer is `not_updatable`.
+- **Nothing found.** If the instance's ledger could not be read, the answer is
+  `local_record_unreadable` (see below). Otherwise, with `publish_upload` off,
+  it is `not_found`. With it on and no usable base file, it is
+  `activity_file_missing`, and no upload is sent.
+- **The upload.** A reply that is not a success follows the table's Upload
+  column. A success reply that does not name exactly one activity, or names one
+  that was set aside after a `404`, is `unconfirmed`.
+- **The update after an upload** follows the table's Update column, with two
+  exceptions. After a `201` (intervals.icu created the activity), a success is
+  `uploaded`, with the link, and any other reply, including a `404` or a `429`,
+  is `unconfirmed`. After a `200` (intervals.icu answered with an activity it
+  already held), a success is `posted`, with the link, and a `404` is
+  `unconfirmed`, so the search does not go on; any other reply follows the
+  table.
+
+`unconfirmed` means a request was sent but its result is not known. The next
+publish searches again before it sends an upload.
+
+If the instance's ledger cannot be read, an unreadable record never stops an
+update through the recorded link or the listing: an activity found either way
+is updated just as it is with a readable record. When neither finds the
+activity, the answer is `local_record_unreadable` whether or not uploads are
+on, never `not_found` and never an upload, because fitdocs cannot rule out that
+the activity is already in the pull record. The earlier answers keep their own
+codes: a listing that fails, or whose `200` body is unreadable, answers as
+above; a listing that matches several activities is `ambiguous`; a Strava
+import at the start is `not_updatable`; and a page without the facts for a
+listing is `activity_facts_missing`. `fitdocs pull` on the same instance
+reports the ledger file it cannot read and names it; fix or restore that file.
 
 ## Connecting
 
@@ -445,6 +594,9 @@ The `[wellness]` records hold the wellness mark, per-day revisions,
 attribution and pending wellness deliveries. A ledger holding wellness
 records uses format 2; an older fitdocs refuses it. Activity-only ledgers
 keep their existing format until wellness records are first written.
+
+Publishing to an [intervals.icu](#intervalsicu) instance reads that instance's
+ledger and never writes it.
 
 ## What leaves your machine
 

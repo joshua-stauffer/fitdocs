@@ -12,17 +12,29 @@ fails every section pin (the two rule-table tests exercise the rule alone).
 
 from __future__ import annotations
 
+import dataclasses
 import re
 import tomllib
 from pathlib import Path
 from urllib.parse import urlparse
 
 from fitdocs.connectors.credentials import env_var_name
+from fitdocs.connectors.errors import ConnectorSettingsError
 from fitdocs.connectors.intervals import (
+    ANSWER_CODES,
     DEFAULT_SOURCES,
     FIRST_PULL_DAYS,
     INTERVALS_CONNECTOR_ID,
+    LINK_LABEL,
+    RESOLVE_FIELDS,
+    SUCCESS_STATUSES,
+    UPLOAD_FILENAME,
+    WINDOW_DAYS_AFTER,
+    WINDOW_DAYS_BEFORE,
+    AnswerClass,
+    CallKind,
     IntervalsConnector,
+    IntervalsSettings,
 )
 from fitdocs.connectors.protocol import SettingsContext
 
@@ -54,7 +66,7 @@ def _toml_blocks(section: str) -> list[dict[str, object]]:
     return [tomllib.loads(block) for block in blocks]
 
 
-def test_the_section_is_not_empty_and_has_its_four_subsections() -> None:
+def test_the_section_is_not_empty_and_has_its_five_subsections() -> None:
     section = _section()
     assert len(section.split()) > 200
     found = re.findall(r"^(### .+)$", section, re.M)
@@ -63,6 +75,7 @@ def test_the_section_is_not_empty_and_has_its_four_subsections() -> None:
         "### Configuring",
         "### What a pull fetches",
         "### Wellness",
+        "### Publishing",
     ]
 
 
@@ -113,9 +126,10 @@ _ADDRESS = re.compile(
     r"|(?<![\w.-])(?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d+)?(?:[/?#][^\s\"'`)>\]]*)?",
     re.IGNORECASE,
 )
-# Dotted tokens that are not addresses: the settings table's own name and the
-# settings file's name. Only these exact strings are skipped.
-_NOT_ADDRESSES = frozenset({"connectors.intervals", "fitdocs.toml"})
+# Dotted tokens that are not addresses: the settings table's own name, the
+# settings file's name and the upload's file name. Only these exact strings are
+# skipped.
+_NOT_ADDRESSES = frozenset({"connectors.intervals", "fitdocs.toml", "activity.fit"})
 
 
 def address_violations(text: str, own_urls: frozenset[str]) -> list[str]:
@@ -203,3 +217,234 @@ def test_it_tells_the_athlete_to_regenerate_before_the_first_pull() -> None:
     section = " ".join(_section().split()).lower()
     assert "run `fitdocs regen`" in section
     assert "before the first pull" in section
+
+
+# --------------------------------------------------------------------------
+# Publishing (intervals-publish Req 11.1-11.3)
+# --------------------------------------------------------------------------
+
+_RETIRED = "It never writes to the account."
+_DASH = "\u2014"
+_SETTINGS = SettingsContext(data_root=_REPO_ROOT, inbox=_REPO_ROOT)
+
+
+def _subsection(name: str) -> str:
+    match = re.search(
+        rf"^### {re.escape(name)}\n(.*?)(?=\n### |\Z)", _section(), re.S | re.M
+    )
+    assert match, f"the intervals.icu section has no '### {name}' subsection"
+    return match.group(1)
+
+
+def _documented_answer_table() -> dict[str, tuple[str, str, str]]:
+    """The ``### Publishing`` table: row label -> (listing, update, upload)."""
+    lines = _subsection("Publishing").splitlines()
+    header = "| Answer | Listing | Update | Upload |"
+    assert header in lines, "the Publishing subsection has no answer table"
+    start = lines.index(header) + 2  # past the delimiter row
+    rows: dict[str, tuple[str, str, str]] = {}
+    for line in lines[start:]:
+        if not line.startswith("|"):
+            break
+        cells = [cell.strip().strip("`") for cell in line.strip("|").split("|")]
+        assert len(cells) == 4, line
+        assert cells[0] not in rows, f"row {cells[0]!r} appears twice"
+        rows[cells[0]] = (cells[1], cells[2], cells[3])
+    return rows
+
+
+def _code_table() -> dict[str, tuple[str, str, str]]:
+    return {
+        answer.value: tuple(  # type: ignore[misc]
+            _DASH if code is None else code.value
+            for code in (
+                row[CallKind.READ],
+                row[CallKind.UPDATE],
+                row[CallKind.CREATE],
+            )
+        )
+        for answer, row in ANSWER_CODES.items()
+    }
+
+
+def test_the_answer_table_equals_the_codes_table_cell_for_cell() -> None:
+    expected = _code_table()
+    assert len(expected) == len(ANSWER_CODES) > 5
+    assert set(expected) == {answer.value for answer in AnswerClass}
+    # A table with no dash cell and none with a code would pin nothing.
+    assert any(_DASH in cells for cells in expected.values())
+    documented = _documented_answer_table()
+    assert documented == expected
+    assert list(documented) == list(expected), "rows are in the code table's order"
+
+
+def test_the_retired_never_writes_sentence_is_gone_from_the_page() -> None:
+    text = " ".join(_DOC.read_text(encoding="utf-8").split())
+    assert _RETIRED not in text
+    assert "never writes to the account" not in text.lower()
+
+
+def test_the_opening_says_what_the_connector_writes() -> None:
+    opening = " ".join(_section().split("### Connecting")[0].split())
+    assert "It pulls" in opening
+    assert "publishes" in opening
+    assert (
+        "writes only an activity's name and description" in opening
+        and "while `publish_upload` is on" in opening
+    )
+
+
+def test_the_documented_publish_upload_default_equals_the_settings_default() -> None:
+    default = {f.name: f.default for f in dataclasses.fields(IntervalsSettings)}[
+        "publish_upload"
+    ]
+    assert default is False
+    tables = _intervals_tables(_section())
+    assert len(tables) == 1
+    shown = tables[0]["publish_upload"]
+    assert isinstance(shown, bool)
+    assert shown is default
+    parsed = IntervalsConnector().parse_settings(tables[0], _SETTINGS)
+    assert parsed.publish_upload is default
+    line = next(
+        line
+        for line in _subsection("Configuring").splitlines()
+        if line.startswith("publish_upload")
+    )
+    assert line == "publish_upload = false         # optional; this is the default"
+
+
+def test_a_malformed_publish_upload_is_documented_as_a_configuration_error() -> None:
+    try:
+        IntervalsConnector().parse_settings({"publish_upload": "yes"}, _SETTINGS)
+    except ConnectorSettingsError:
+        pass
+    else:  # pragma: no cover - the premise of the sentence below
+        raise AssertionError("a string publish_upload was accepted")
+    configuring = " ".join(_subsection("Configuring").split())
+    assert (
+        "A `publish_upload` that is not `true` or `false` is a configuration error"
+        in configuring
+    )
+    assert "`fitdocs pull` included" in configuring
+    assert "No key other than `sources` and `publish_upload` is read" in configuring
+
+
+def _publishing_text() -> str:
+    return " ".join(_subsection("Publishing").split())
+
+
+def test_the_listing_field_sentence_names_exactly_the_requested_fields() -> None:
+    sentence = re.search(r"asking for the fields (.*?)\. ", _publishing_text())
+    assert sentence, "the Publishing subsection no longer lists the fields"
+    named = re.findall(r"`([a-z_]+)`", sentence.group(1))
+    assert len(RESOLVE_FIELDS) > 3
+    assert tuple(named) == RESOLVE_FIELDS
+
+
+def test_the_request_bullets_state_what_each_request_carries() -> None:
+    text = _publishing_text()
+    query = re.search(r"The one value in its query is (.*?)\. ", text)
+    assert query, "the upload bullet no longer names its query value"
+    assert query.group(1) == "the page's publication id, as `external_id`"
+    assert "Its query carries only the date window and the field names above." in text
+    assert UPLOAD_FILENAME == "activity.fit"
+    assert (
+        "a `multipart/form-data` form holding the base file, unmodified, "
+        f"under the file name `{UPLOAD_FILENAME}`" in text
+    )
+    days = {1: "one day", 2: "two days"}
+    assert (
+        f"from {days[WINDOW_DAYS_BEFORE]} before the page's start date (in UTC) "
+        f"to {days[WINDOW_DAYS_AFTER]} after it" in text
+    )
+    assert f"labelled `{LINK_LABEL}`" in text
+    assert "Its body is the name and the description, and nothing else." in text
+
+
+def test_the_update_after_an_upload_is_documented_apart_from_the_table() -> None:
+    text = _publishing_text()
+    assert "which uses the Update column with two exceptions" in text
+    assert (
+        "After a `201` (intervals.icu created the activity), a success is "
+        "`uploaded`, with the link, and any other reply, including a `404` or a "
+        "`429`, is `unconfirmed`." in text
+    )
+    assert (
+        "After a `200` (intervals.icu answered with an activity it already held), "
+        "a success is `posted`, with the link, and a `404` is `unconfirmed`, so "
+        "the search does not go on; any other reply follows the table." in text
+    )
+
+
+def test_the_codes_notes_cover_every_answer_publish_returns() -> None:
+    text = _publishing_text()
+    for sentence in (
+        "A success is `posted`, with the link. A `404` sets the activity aside "
+        "and the search goes on. Any other reply follows the table's Update column.",
+        "A pull record that names several activities** for the page's base file, "
+        "or, when it names none for it, for the page's other files, is `ambiguous`",
+        "A page without the facts for a listing** is `activity_facts_missing`",
+        "A reply that is not a `200` follows the table's Listing column. A `200` "
+        "whose body is not a list of activities, each with a usable id, is "
+        "`unavailable`.",
+        "When none matches but a Strava import starts within a second of the "
+        "page's start, the answer is `not_updatable`.",
+        "**Nothing found.** If the instance's ledger could not be read, the answer "
+        "is `local_record_unreadable` (see below). Otherwise, with `publish_upload` "
+        "off, it is `not_found`.",
+        "`publish_upload` decides what happens when none of these steps finds an "
+        "activity and the instance's ledger could be read (an unreadable one is "
+        "described below).",
+        "With it on and no usable base file, it is `activity_file_missing`, and "
+        "no upload is sent.",
+        "A reply that is not a success follows the table's Upload column. A "
+        "success reply that does not name exactly one activity, or names one "
+        "that was set aside after a `404`, is `unconfirmed`.",
+    ):
+        assert sentence in text, sentence
+
+
+def _statuses(codes: frozenset[int]) -> str:
+    return " or ".join(f"a `{code}`" for code in sorted(codes))
+
+
+def test_the_table_defines_success_per_request_kind_as_the_code_does() -> None:
+    read = SUCCESS_STATUSES[CallKind.READ]
+    assert SUCCESS_STATUSES[CallKind.UPDATE] == read
+    sentence = (
+        f"A success is {_statuses(read)} for the listing and the update, and "
+        f"{_statuses(SUCCESS_STATUSES[CallKind.CREATE])} for the upload; any other "
+        'status outside the rows above is an "other status".'
+    )
+    assert sentence in _publishing_text(), sentence
+
+
+def test_publishing_documents_the_unreadable_record_answer() -> None:
+    publishing = " ".join(_subsection("Publishing").split())
+    assert "never `not_found` and never an upload" in publishing
+    assert "whether or not uploads are on" in publishing
+    assert "is updated just as it is with a readable record" in publishing
+    assert "a Strava import at the start is `not_updatable`" in publishing
+    assert "or whose `200` body is unreadable, answers as above" in publishing
+    assert "and a page without the facts for a listing is `activity_facts_missing`" in (
+        publishing
+    )
+    assert "fitdocs pull" in publishing
+
+
+def test_the_ledger_section_says_publishing_reads_it_and_never_writes_it() -> None:
+    text = " ".join(_DOC.read_text(encoding="utf-8").split())
+    match = re.search(r"## The ledger (.*?) ## What leaves your machine", text)
+    assert match
+    assert (
+        "Publishing to an [intervals.icu](#intervalsicu) instance reads that "
+        "instance's ledger and never writes it." in match.group(1)
+    )
+
+
+def test_the_readme_connectors_paragraph_says_intervals_also_publishes() -> None:
+    text = " ".join((_REPO_ROOT / "README.md").read_text(encoding="utf-8").split())
+    match = re.search(r"## Connectors (.*?) ## Training blocks", text)
+    assert match, "README.md has no Connectors section"
+    assert "and also publishes posts to it" in match.group(1)
