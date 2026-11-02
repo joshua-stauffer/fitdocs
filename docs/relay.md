@@ -441,18 +441,266 @@ Every command except `migrate`, `new-pepper`, `new-encryption-key`, `serve` and
 clean stop, 1 when another instance holds the database or it cannot start, and
 2 on a configuration or wrapper error.
 
+## The Strava target
+
+The relay can publish workouts to Strava on a person's behalf. The person
+connects once, through a page the relay serves, and fitdocs then posts to the
+relay with the relay token the connection issued; the relay holds the Strava
+application, keeps the person's Strava tokens encrypted, and is the only
+program that talks to Strava. This section is for the operator of a relay that
+offers the target. To connect fitdocs to such a relay, see
+[Connectors](connectors.md).
+
+### Configuring Strava
+
+The Strava target is offered exactly when `FITDOCS_RELAY_STRAVA_CLIENT_ID` is
+set. Set it together with the other rows of the [environment
+table](#environment) that name it in their "Required" column:
+`FITDOCS_RELAY_STRAVA_CLIENT_SECRET`, `FITDOCS_RELAY_STRAVA_WEBHOOK_TOKEN`,
+`FITDOCS_RELAY_PUBLIC_URL`, `FITDOCS_RELAY_ENCRYPTION_KEYS`,
+`FITDOCS_RELAY_OPERATOR_NAME` and `FITDOCS_RELAY_SUPPORT_CONTACT`. A missing or
+invalid one stops the relay and every command that reads the configuration,
+naming the variable and never its value. Setting any of the shared rows (the public address, the encryption
+keys, the operator name, the support contact or the policy address) without the
+client id is refused too.
+
+1. Create the Strava application (see [Running your own Strava
+   application](#running-your-own-strava-application)). Copy its client id and
+   client secret into `FITDOCS_RELAY_STRAVA_CLIENT_ID` and
+   `FITDOCS_RELAY_STRAVA_CLIENT_SECRET`.
+2. Set the application's authorization callback domain to the host of
+   `FITDOCS_RELAY_PUBLIC_URL`. The relay sends athletes back to
+   `<public address>/strava/callback`.
+3. Generate an encryption key and set it (see [Encryption keys and
+   rotation](#encryption-keys-and-rotation)).
+4. Choose a webhook token of 32 to 128 characters from `A-Z`, `a-z`, `0-9`, `_`
+   and `-`, and set it in `FITDOCS_RELAY_STRAVA_WEBHOOK_TOKEN`. Anything long and
+   random will do; it is both the secret in the webhook's address and the
+   verify token Strava presents when the subscription is created.
+5. Set the operator name and the support contact. The privacy page names the
+   operator, and every HTML page the relay serves for the target shows the
+   support contact and a link to the privacy policy in its footer.
+6. Run `migrate`, start the relay, then create the [webhook
+   subscription](#the-webhook-subscription).
+
+Value bounds the table cannot show: the client id is 1 to 20 digits; the client
+secret is at most 256 printable ASCII characters without spaces; the two rate
+limits take whole numbers from 1 to 1000000; the support contact is at most
+254 characters; the public address, the policy address and the three Strava
+addresses carry no user, query or fragment, and a trailing slash is dropped.
+Only the three Strava addresses and the public address may be `http`, and then
+only to a loopback host.
+
+The three Strava address variables exist so the relay can move to a new address
+Strava announces without a code change; leave them at their defaults otherwise.
+Requests to Strava honour the standard `HTTPS_PROXY` and `NO_PROXY` variables,
+and a redirect on a request that carries a body is never followed.
+
+While the target is not configured, capabilities list no target and every
+Strava route, page and webhook address answers `not-offered` like any unknown
+path; the relay otherwise behaves as it does without this section.
+
+### Encryption keys and rotation
+
+The relay stores each connection's Strava access and refresh tokens only under
+authenticated encryption, each ciphertext bound to its principal, target and
+field. `FITDOCS_RELAY_ENCRYPTION_KEYS` holds one to eight `<id>:<key>` entries
+with distinct ids; the first encrypts, and any of them decrypts.
+
+- **Generate a key.** `fitdocs-relay new-encryption-key` prints a fresh
+  `<id>:<key>` and needs no configuration (exit 0).
+- **Rotate without downtime.** Put the new key first, keep the old keys after
+  it, restart, run `fitdocs-relay reencrypt`, and, only when it reports no
+  unreadable connection, remove the old key and restart. Connections stay
+  readable throughout, because the old keys are still configured until the
+  last step.
+- **What `reencrypt` prints.** `re-encrypted <n>, unreadable <m>`. It exits 0
+  when `m` is zero and 1 otherwise, and 2 when the Strava target is not
+  configured. A connection held by a token refresh in flight is retried for up
+  to a minute; one still busy after that is left as it is and counted in
+  neither number, so run the command again to pick it up.
+- **An unreadable connection.** A connection that no configured key opens is
+  treated as not connected, and `reencrypt` leaves it unchanged. Restoring the
+  key that sealed it makes it readable again.
+- **The token-hashing secret.** The relay keeps no athlete identifier, only a
+  keyed hash of it made with the token-hashing secret. Changing
+  `FITDOCS_RELAY_TOKEN_PEPPER` also breaks the match between deauthorization
+  events and stored connections, on top of invalidating every relay token (see
+  [Pepper rotation](#pepper-rotation)).
+
+### The webhook subscription
+
+Strava tells an application that an athlete revoked its access through one
+webhook subscription per application. Without the subscription the relay never
+learns that an athlete revoked its access in their Strava settings, so the
+relay keeps the connection until Strava refuses to renew its tokens, the
+principal is deleted, the same Strava account is connected from another
+principal or `fitdocs disconnect` runs. Create the subscription once the relay is running and reachable at its
+public address, because Strava checks the address when the subscription is
+created:
+
+| Command | Prints |
+| --- | --- |
+| `fitdocs-relay strava webhook show` | `subscribed`, `subscribed elsewhere` or `not subscribed`. |
+| `fitdocs-relay strava webhook create` | `subscribed` or `already subscribed`. |
+| `fitdocs-relay strava webhook delete` | `deleted` or `not subscribed`. |
+
+The subscription's callback is `<public address>/strava/webhook/<webhook
+token>`. The commands never print it. When the application already has a
+subscription with another callback, `create` creates nothing and prints
+`subscribed elsewhere` on standard error, exiting 1: delete that subscription
+first. The commands print nothing Strava answered; their failures and exit
+codes are under [Operator commands](#operator-commands). Changing the webhook
+token or the public address changes the callback, so delete the subscription and
+create it again.
+
+### Routes and pages
+
+The routes are served only while the target is configured. `FITDOCS_RELAY_PUBLIC_URL`
+must be the address fitdocs instances configure as their relay's `url`: the
+connect page, its callback and the link are all served there, and the callback
+address Strava is given is built from it.
+
+| Path | Method | Answers |
+| --- | --- | --- |
+| `/v1/targets/strava/connect` | POST | Starts a connection (`connect-started`); bearer token. |
+| `/v1/targets/strava/connect/poll` | POST | `connect-pending`, `connect-granted`, `connect-refused` or `connect-expired`; bearer token. |
+| `/v1/targets/strava/publish` | POST | Finds the activity and sets its name and description; bearer token. |
+| `/v1/targets/strava/upload` | POST | Finds the activity and updates it as `publish` does; uploads the workout's file only when none matches; bearer token. |
+| `/v1/targets/strava/disconnect` | POST | Revokes at Strava when it can, then deletes the connection; bearer token. |
+| `/connect/strava` | GET | The connect page, with the consent text and the "Connect with Strava" control. |
+| `/strava/callback` | GET | Where Strava sends the athlete back to; a page telling them to return to the terminal. |
+| `/privacy` | GET | The privacy policy page. |
+| `/robots.txt` | GET | Plain text. |
+| `/go/<publication id>` | GET | A redirect to the activity's page on Strava, or a page. |
+| `/strava/webhook/<webhook token>` | GET, POST | Subscription validation and events. |
+
+- **Envelope routes.** The five `/v1/targets/strava/` routes speak the
+  [envelope](#envelope-v1), and capabilities list `strava` among their
+  `targets`. Only while the Strava target is configured does the upload route
+  accept a request of up to 22 MiB (a workout file of at most 16 MiB, in
+  base64); every other route keeps the 64 KiB limit.
+- **Pages.** The connect page, its callback, `/privacy`, `/go/` and
+  `/robots.txt` are served outside the envelope. Each HTML page carries the
+  operator's support contact, a restrictive content security policy, no
+  referrer and no caching; `/robots.txt` is plain text without those headers.
+  A page route answers `405` with `Allow: GET` to HEAD,
+  so a link previewer can neither claim a connection nor run the callback. While
+  the relay is not ready, or its database cannot be reached, a page answers a
+  fitdocs-written "Not available" page.
+- **The link setting.** `FITDOCS_RELAY_STRAVA_LINKS` chooses what fitdocs writes
+  into a workout's page. Under `activity` every posted or uploaded answer
+  carries the activity's address, `<web URL>/activities/<id>`, so the person's
+  browser goes straight to Strava. Under `relay` the answer carries no address
+  and the page links to `/go/<publication id>` on the relay (a publication id is
+  32 lowercase hexadecimal characters); the relay looks the activity up when
+  the link is opened and redirects the browser to it, and keeps no address of its
+  own. `/go/` is served under both settings. A link that cannot be resolved
+  answers a page, never an error from Strava.
+- `/robots.txt` disallows `/go/` for every crawler.
+- **The webhook.** A request whose path secret is wrong answers `not-offered`.
+  A validation request with the right verify token is answered with Strava's
+  challenge as `{"hub.challenge": ...}`. An event is acknowledged with an empty
+  `200` and acted on only when it is an athlete's deauthorization; any other
+  body is ignored. A body over 64 KiB is refused with `request-too-large`
+  (413) before the route sees it.
+- **Rate limits.** Every Strava request the relay makes for an athlete is
+  counted before it is made, against `FITDOCS_RELAY_STRAVA_RATE_LIMIT`,
+  `FITDOCS_RELAY_STRAVA_READ_RATE_LIMIT` and the athlete's share of them. A
+  request the counts do not allow is not made.
+
+### What the relay keeps and when it deletes it
+
+For each connection the relay keeps the athlete's Strava access and refresh
+tokens, encrypted, with the time the access token expires; a keyed hash of the
+Strava account (not the identifier itself); the relay token issued for the connection,
+only as its identifier and keyed hash; and, for each publication, the identifier fitdocs made for it and
+the match facts fitdocs sent (start, sport, distance and duration). It keeps
+no activity, no Strava activity or athlete identifier, no profile detail and no
+copy of any Strava answer, and it writes no Strava token, authorization code or
+response into its logs. A connect session lives for at most ten minutes. The call
+counters hold counts only.
+
+The relay deletes a connection and its publication records at once, and
+revokes the connection's relay token (it stays listed as revoked, and fitdocs
+then gets `token-revoked`), when:
+
+- `fitdocs disconnect` reaches the relay. The relay also asks Strava to revoke
+  its access when its call budget allows, and deletes the connection whatever
+  Strava answered.
+- Strava reports a deauthorization through the webhook subscription (the
+  athlete revoked the relay's access, or removed the application). This needs
+  the [webhook subscription](#the-webhook-subscription).
+- Strava refuses to renew a connection's tokens. A redirect, a server error or
+  an unreachable Strava is transient: the stored tokens stay as they are.
+- The principal is deleted (`principal delete`), which deletes its tokens
+  outright as well.
+- The same Strava account is connected again from another principal: the
+  connection moves, and the earlier one is deleted. Connecting a different
+  Strava account from a principal that already has one deletes the
+  principal's earlier publication records.
+
+### Privacy policy and consent
+
+The relay serves its policy at `<public address>/privacy`. Give that address as
+the privacy policy of the Strava application. To publish your own policy
+instead, set `FITDOCS_RELAY_PRIVACY_POLICY_URL`; the relay's pages then link
+that address and `/privacy` stays served. The text is fixed by fitdocs and
+differs between the two link settings in one section and one consent paragraph
+only. The policy has these sections, in this order:
+
+- **The relay's operator** names the operator and says the relay publishes workouts to Strava on the athlete's behalf.
+- **What fitdocs sends** lists the workout facts, name and description, the publication identifier and, with uploads enabled, the file.
+- **What the relay receives from Strava and keeps** lists the encrypted tokens, the keyed account hash and the publication facts, and says nothing else is kept.
+- **What the relay sends to Strava** lists the code exchange, token renewal, the activity listing, the name and description update, uploads and revocation.
+- **What the relay returns to fitdocs** says what the link setting returns: the activity's address under `activity`, nothing that Strava supplied under `relay`.
+- **Deletion** lists four of the cases above: disconnecting, a deauthorization, a refused renewal and a deleted relay account. It does not list a connection moved to another principal.
+- **Your choices** names `fitdocs disconnect` and revoking access in Strava's settings.
+- **Security** says tokens are encrypted and not logged, and that a breach affecting an athlete's data is notified to Strava within 24 hours.
+- **Contact** shows the operator's support contact.
+
+The connect page shows the consent text, which says what the relay will do with
+the athlete's Strava access, what it returns to fitdocs under the link setting
+and what it will never do, before the "Connect with Strava" control. The page
+shows the user code and tells the athlete to continue only if their terminal
+shows the same one.
+
+### Operator obligations
+
+Operating a relay that offers the Strava target carries these obligations:
+
+- Keep the consent and privacy pages reachable at the addresses above.
+- Keep a support contact in `FITDOCS_RELAY_SUPPORT_CONTACT` that athletes can
+  reach.
+- Notify Strava of a breach within 24 hours.
+- Respect the application's athlete capacity: one athlete at first, up to ten
+  on the owner's request, and more only after Strava's review.
+- Never charge for the feature.
+- Publish no announcement that references Strava. Describe the feature, where
+  you must, as compatible with Strava ("Compatible with Strava"); the connect
+  control reads "Connect with Strava" and the link reads "View on Strava".
+
+### Running your own Strava application
+
+A self-hosted relay needs its own Strava application, registered under your own
+Strava account with your own callback domain, and its own webhook subscription.
+Never use another operator's application credentials: an application's client
+id and secret authorize requests in its owner's name. Give the application a
+name that does not contain Strava's name.
+
 ## Envelope v1
 
 fitdocs and the relay speak the *envelope*: JSON bodies over HTTPS with a
-closed vocabulary of codes. Every answer the relay sends is a JSON object with
+closed vocabulary of codes. Every envelope answer the relay sends is a JSON object with
 exactly the keys `envelope` (the version, `1`), `code` (one code from the table
-below) and `data` (an object whose fields depend on the route); the format also
-reserves an optional `outcome` key, which no route of this relay sends. It
-carries no free text.
+below) and `data` (an object whose fields depend on the route); an optional
+`outcome` key is sent only by the Strava target's `publish` and `upload`
+answers when they are `ok`. The envelope carries no free text.
 Answers carry `Content-Type: application/json` and `Cache-Control: no-store`.
 A request that names a token sends it as `Authorization: Bearer <token>` and
-never in a URL. Requests with a body are JSON objects of at most 64 KiB, with no
-duplicate keys and no extra fields.
+never in a URL. Requests with a body are JSON objects of at most 64 KiB (the Strava upload
+route is the one exception, under [The Strava target](#routes-and-pages)), with
+no duplicate keys and no extra fields.
 
 A relay token looks like `fdr1_` followed by 16 and then 52 lowercase base32
 characters, separated by an underscore.
@@ -469,6 +717,7 @@ characters, separated by an underscore.
 | POST | `/v1/registrations` | none | `email` | `registration-started`, `registration-refused`, `rate-limited`, `not-offered` |
 | POST | `/v1/registrations/poll` | none | `poll_secret` | `registration-pending`, `registration-slow-down`, `registration-issued` (`token`), `registration-refused`, `registration-expired`, `rate-limited`, `not-offered` |
 | any | `/vN/...` where N is not served | none | none | `envelope-unsupported` (`envelopes`) |
+| POST | the five `/v1/targets/strava/` routes, listed under [Routes and pages](#routes-and-pages) | bearer | see that section | served only while the Strava target is configured |
 | any | anything else | none | none | `not-offered` |
 
 Every route may also answer `request-malformed`, `request-too-large`,
@@ -476,6 +725,8 @@ Every route may also answer `request-malformed`, `request-too-large`,
 `{"retry_after_s": n}`. Capabilities lists the served envelope versions, whether
 a registration provider is installed, and the target ids the relay offers.
 `/x/<name>/...` routes belong to a wrapper and are served outside the envelope.
+So are the Strava target's HTML pages, `/robots.txt` and the `/go/` redirect, and
+the webhook's challenge echo and its empty `200`.
 
 ### Answer shape
 
@@ -485,8 +736,9 @@ a registration provider is installed, and the target ids the relay offers.
 
 The relay never sends a `Retry-After` header on anything but `rate-limited`.
 `relay/contract/envelope-v1.json` records one exchange per route and per code,
-with a visibly fake token (all `a`); both the relay's and fitdocs's test suites
-replay it.
+with a visibly fake token (all `a`; the connection token the Strava connect
+exchange issues is all `b`); both the relay's and fitdocs's test suites replay
+it.
 
 ### Code table
 
@@ -641,4 +893,7 @@ def load_extensions(references: tuple[str, ...]) -> tuple[RelayExtension, ...]: 
 Changing `FITDOCS_RELAY_TOKEN_PEPPER` invalidates every existing relay token:
 each stored hash was keyed with the old value, so every token answers
 `token-unknown` afterwards. Version 1 has no rotation procedure. To change the
-pepper, set the new value, restart, and mint new tokens for everyone.
+pepper, set the new value, restart, and mint new tokens for everyone. With the
+Strava target configured the change also breaks the match between
+deauthorization events and stored connections; see [Encryption keys and
+rotation](#encryption-keys-and-rotation).
