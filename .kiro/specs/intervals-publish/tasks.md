@@ -335,7 +335,7 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
   - _Requirements: 10.1, 10.2, 10.3, 10.4_
   - _Depends: 4.1_
 
-- [ ] 4.3 (P) Record the changelog, the amendments and the steering
+- [x] 4.3 (P) Record the changelog, the amendments and the steering
   - Append the Unreleased entries (Added: publishing to intervals.icu, the
     switch, the direct link; Changed: the connector writes to the account for
     pages that opt in, and, unless an earlier publish target's entry already
@@ -413,3 +413,4 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
 - 3.1: the `_Flow` harness in test_intervals_publish.py never merges requests. `_publish` asserts per-(method, path) raw counts equal one logical request (simulated from http.MAX_DATA_ATTEMPTS / RETRYABLE_STATUSES, which test_http.py pins with literals), and asserts the exact credential header on every request. Reuse `_Flow`/`_publish` for 3.2. Becoming a publish target changed tests/connectors/test_e2e.py offline publish output (bare root: "No publish target is configured."). 3.3/5.1 may need the same.
 - 3.2: the AST walker `_reachable` follows module functions, `self.` methods and every module-level class a reachable body names, and records attribute names, so qualified calls count. The sentinel test checks result fields, stdout, stderr and caplog.
 - 3.3: the CLI e2e tests live in tests/connectors/test_intervals_publish_cli.py. A refusal test must first make the page due again (change the target title), or "nothing sent / byte-identical" holds before the run.
+- 4.3: amendments taken: connectors 8, intervals-connector 2, distribution 8 (in-place tags on the criteria they change). The CHANGELOG Changed bullet claims the network statements name `fitdocs publish --yes`, which is true only after 4.2. Changelog pins read through `read_unreleased_since(_, V0_2_0)` so they survive the next cut.
