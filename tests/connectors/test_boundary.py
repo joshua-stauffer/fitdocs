@@ -101,6 +101,7 @@ CONNECTORS_MODULE_NAMES: Final[tuple[str, ...]] = (
     "fitdocs.connectors.relay_targets",
     "fitdocs.connectors.secrets",
     "fitdocs.connectors.settings",
+    "fitdocs.connectors.strava",
 )
 
 
@@ -423,6 +424,17 @@ _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
             "fitdocs.connectors.errors",
             "fitdocs.connectors.protocol",
             "fitdocs.settings",
+        }
+    ),
+    "fitdocs.connectors.strava": frozenset(
+        {
+            "fitdocs.connectors.errors",
+            "fitdocs.connectors.protocol",
+            "fitdocs.connectors.relay",
+            "fitdocs.connectors.relay_codes",
+            "fitdocs.connectors.relay_envelope",
+            "fitdocs.connectors.relay_targets",
+            "fitdocs.connectors.secrets",
         }
     ),
 }
