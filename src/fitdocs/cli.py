@@ -1461,7 +1461,8 @@ def _connect_browser(
         if outcome.env_override:
             _say(
                 "Overriding environment variables (used instead of the "
-                f"stored values during a pull): {', '.join(outcome.env_override)}"
+                "stored values during a publish): "
+                f"{', '.join(outcome.env_override)}"
             )
         raise typer.Exit(code=_EXIT_SUCCESS)
 

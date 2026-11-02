@@ -2028,3 +2028,99 @@ which line it replaces; each item states what is now true of the landed code.
   unconfigured relay keeps the default bound. Pinned by
   `relay/tests/test_targets_pipeline.py::test_without_the_strava_target_the_upload_path_keeps_the_default_bound`
   and `::test_the_upload_route_refuses_a_body_over_its_own_bound`.
+
+Recorded by the validate-impl remediation round (2026-11-02), from the rulings
+in `tasks.md` Implementation Notes under the task named and from the landed
+code. Each item says which approved line it replaces; the pin is named where
+one exists.
+
+- **PublishFlow, the link record** (ruling 3.6). The link record is written
+  only if the connection still exists just before `put_publication`; an update
+  that landed while the connection vanished still answers
+  `Landed(POSTED, page)` with no record, and a `put_publication` that returns
+  false after landing is ignored. Pinned by
+  `relay/tests/strava/test_publish.py::test_a_connection_withdrawn_before_the_record_is_written_leaves_no_record`
+  and `::test_a_record_another_principal_took_during_the_request_is_left_alone`.
+- **PublishFlow, upload** (ruling 3.7). After a failed upload the
+  re-resolution update is made once, with no repeat, so it stays within the
+  upload reservation (`UPLOAD_FOLLOW_UPS = 2`); a server failure there answers
+  through the update column. `StravaPublisher` takes a `sleep=` argument.
+  Pinned by
+  `relay/tests/strava/test_publish_upload.py::test_the_update_after_a_failed_upload_is_mapped_by_the_update_column_once`
+  and `::test_the_upload_is_reserved_with_the_polls_and_follow_ups_in_one_operation`.
+- **Link resolution** (ruling 3.8; replaces the `resolve_link` bullet's
+  wording on failures). `resolve_link` answers `TRY_LATER` only for a refresh
+  or link spend the budget refuses, or Strava's 429 on the refresh or the
+  listing. A Strava-refused refresh, an unavailable custody (refresh 5xx or
+  network failure, lease wait timeout), a passed deadline, an unknown id, no
+  connection, no single match and any other listing failure answer
+  `NOT_FOUND` (Requirement 10.4). The link deadline reuses
+  `PUBLISH_DEADLINE_S`. Pinned by
+  `relay/tests/strava/test_resolve_link.py::test_the_links_headroom_gives_try_later_with_no_call`,
+  `::test_a_refused_refresh_is_not_found_and_the_connection_goes` and
+  `::test_a_near_expiry_refresh_that_is_unavailable_is_not_found`.
+- **ConnectFlow** (ruling 3.9; `ConnectFlow` was silent on both). A 429 on the
+  code exchange calls `budget.mark_spent` (Requirement 9.4). A failure to store
+  the grant or write the result after the state was taken marks the session
+  refused (Requirement 3.7) instead of leaving it pending until it expires.
+  `TokenService.prepare` is keyword-only in `label`. Pinned by
+  `relay/tests/strava/test_connect.py::test_a_limited_exchange_marks_the_windows_strava_says_are_spent`
+  and `::test_a_grant_that_cannot_be_stored_leaves_the_poll_a_refusal`.
+- **Routes, webhook and page routes** (ruling 4.3; replaces "Always 200" for
+  the webhook body and adds HEAD). A webhook body over 64 KiB is refused by the
+  pipeline's admission bound with `request-too-large` (413) before the route
+  reads it, not acknowledged with 200: Strava's events are tiny. `HEAD` on
+  every page route answers 405 with `Allow: GET` and the page headers, so a
+  link previewer cannot claim a session or run the callback. Pinned by
+  `relay/tests/test_strava_pages_routes.py::test_an_event_over_the_bound_is_refused_at_admission_not_acknowledged`
+  and `::test_head_does_nothing_on_any_page_route`.
+- **Operator commands** (ruling 4.5). `strava webhook create` over another
+  application's callback creates nothing, prints `subscribed elsewhere` on
+  stderr and exits 1; a Strava failure prints `strava failure: <failure
+  value>` on stderr and exits 1; `reencrypt` and the three webhook commands
+  refuse with exit 2 when the Strava target is not configured. Pinned by
+  `relay/tests/test_cli_strava.py::test_create_over_another_callback_creates_nothing_and_exits_one`,
+  `::test_a_failed_create_prints_the_failure_class_and_exits_one` and
+  `::test_the_strava_commands_refuse_when_the_target_is_not_configured`.
+- **browser_connect imports** (ruling 5.6; replaces the allowed-dependency
+  list at the module's design entry). `fitdocs.connectors.browser_connect`
+  also imports `fitdocs.connectors.errors` (`NotConnectedError`) and
+  `fitdocs.connectors.relay` (the `RelaySettings` guard and the url). Pinned by
+  the module's row in `tests/connectors/test_boundary.py`.
+- **Requirement 4.6, where a token travels** (deviation from "only in a request
+  header"). Strava requires the refresh token on the token endpoint and the
+  token being revoked on the deauthorize endpoint in the form body, so those
+  two travel in the body (never in an address); the access token stays in
+  `Authorization: Bearer`. A request with a body never follows a redirect.
+  Pinned by
+  `relay/tests/strava/test_api_mapping.py::test_refresh_posts_the_refresh_token_and_returns_the_pair`,
+  `::test_revoke_sends_the_token_with_basic_client_credentials` and
+  `relay/tests/test_outbound.py::test_a_request_with_a_body_never_follows_a_redirect`.
+- **Requirements 11.6 and 11.7, the webhook body bound** (deviation). An oversized
+  webhook body is a 413 `request-too-large` at admission, as the 4.3 item
+  above states; Requirement 11.6's "acknowledge every other event" covers
+  events within the bound. Pinned by the 4.3 test named above and
+  `relay/tests/test_strava_pages_routes.py::test_every_other_event_is_acknowledged_and_ignored`.
+- **StravaBudget, subscription calls** (CONTROLLER RULING; amends "subscription
+  calls charge as `READ`" and Requirement 9.2's count). The operator's
+  `fitdocs-relay strava webhook show`, `create` and `delete` commands are not
+  budgeted: they open no storage and are rare operator actions outside any
+  athlete's share. Requirement 9.2's count applies to calls made for an
+  athlete. No test pins the absence of a charge.
+- **Monitoring and LogsAmendment** (CONTROLLER RULING; replaces "Strava call
+  events carry `step` and `failure` only"). No separate Strava call event is
+  emitted. The request record's `outcome` (present when the answer carried
+  one, which only the Strava `publish` and `upload` answers do) is the
+  operator-visible signal. Pinned by
+  `relay/tests/test_targets_pipeline.py::test_the_request_record_carries_the_outcome_when_the_answer_has_one`;
+  no test pins the absence of a call event.
+- **Import cycle between `fitdocs_relay.routes` and
+  `fitdocs_relay.strava.routes`** (accepted). `strava.routes` imports
+  `authorize` and `limited_answer` from `fitdocs_relay.routes`, and
+  `routes.core_routes` imports `strava.routes` late, inside the function, so
+  neither import runs while the other module is half-built. Not pinned beyond
+  the fact that the relay serves requests.
+- **Connect page path** (remediation C1). `CONNECT_PAGE_PATH` in
+  `strava/routes.py` is derived from the shared `CONNECT_PAGE_PREFIX` and
+  `STRAVA`; pinned by
+  `relay/tests/test_strava_pages_routes.py::test_the_served_connect_page_path_is_the_shared_helpers_path`.

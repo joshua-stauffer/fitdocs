@@ -342,8 +342,9 @@ timeout is often shorter than the default 20 seconds.
 The relay writes one JSON record per line to standard output, with `ts`,
 `level` and `event` first. A request record has the event `request` and the
 fields `request_id`, `method`, `route` (the route template, not the path),
-`status`, `code`, `duration_ms` and `token_id` (when the request
-authenticated). A failure carries only
+`status`, `code`, `duration_ms`, `token_id` (when the request
+authenticated) and `outcome` (when the answer carried one: the Strava target's
+`publish` and `upload` answers, whose publish outcome code is recorded here). A failure carries only
 `error_type` and `frames` (file, line and function), never a message or a
 value. `serve-refused` and `serve-failed` are the start-up refusals.
 
@@ -357,6 +358,11 @@ detail with `FITDOCS_RELAY_LOG_LEVEL`.
 The relay serves plain HTTP and does no TLS. Put a reverse proxy or load
 balancer in front that terminates TLS, and publish only the proxy. fitdocs
 refuses a relay URL that is not `https`, except for a loopback address such as `localhost`.
+
+While the Strava target is configured, the proxy must accept request bodies up
+to 22 MiB (the upload bound) on `/v1/targets/strava/upload`. A request the proxy
+refuses for size never reaches the relay, so the person gets the proxy's own
+answer, not an envelope answer.
 
 The relay rate-limits unauthenticated requests per client address. Behind a
 proxy every request arrives from the proxy's address, so without help they all
@@ -683,7 +689,7 @@ Operating a relay that offers the Strava target carries these obligations:
 ### Running your own Strava application
 
 A self-hosted relay needs its own Strava application, registered under your own
-Strava account with your own callback domain, and its own webhook subscription.
+Strava subscription with your own callback domain, and its own webhook subscription.
 Never use another operator's application credentials: an application's client
 id and secret authorize requests in its owner's name. Give the application a
 name that does not contain Strava's name.

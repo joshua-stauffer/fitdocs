@@ -256,7 +256,7 @@ def test_a_granted_connect_names_an_overriding_environment_variable(
     assert code == 0
     assert lines[7:] == [
         "Overriding environment variables (used instead of the stored values "
-        "during a pull): FITDOCS_CONNECTOR_STRAVA_TOKEN"
+        "during a publish): FITDOCS_CONNECTOR_STRAVA_TOKEN"
     ]
 
 

@@ -311,7 +311,7 @@ STATEMENTS = {
     "own application": (
         "### Running your own Strava application",
         "needs its own Strava application, registered under your own Strava "
-        "account with your own callback domain",
+        "subscription with your own callback domain",
     ),
     "never another's credentials": (
         "### Running your own Strava application",

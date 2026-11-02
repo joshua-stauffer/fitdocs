@@ -47,6 +47,7 @@ from fitdocs_relay.shared.relay_targets import (
     ACTION_DISCONNECT,
     ACTION_PUBLISH,
     ACTION_UPLOAD,
+    CONNECT_PAGE_PREFIX,
     LINK_FIELD,
     LINK_PREFIX,
     PUBLICATION_ID_RE,
@@ -98,7 +99,7 @@ _POLL_ANSWERS: Final = {
 }
 
 
-CONNECT_PAGE_PATH: Final = "/connect/strava"
+CONNECT_PAGE_PATH: Final = f"{CONNECT_PAGE_PREFIX}{STRAVA}"
 PRIVACY_PATH: Final = "/privacy"
 ROBOTS_PATH: Final = "/robots.txt"
 ROBOTS_TEXT: Final = "User-agent: *\nDisallow: /go/\n"

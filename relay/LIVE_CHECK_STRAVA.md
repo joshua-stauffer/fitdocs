@@ -25,9 +25,9 @@ is copied into the record, a commit, a queue item or a session.
 
 - A relay with the Strava target enabled: `FITDOCS_RELAY_STRAVA_CLIENT_ID`
   set to the application's client id, together with every variable the
-  relay requires "with Strava" (the client secret, the webhook token, the
-  public address, the encryption keys, the operator name and the support
-  contact). `FITDOCS_RELAY_PUBLIC_URL` is the relay's public address, and the
+  relay requires when that client id is set (the client secret, the webhook
+  token, the public address, the encryption keys, the operator name and the
+  support contact). `FITDOCS_RELAY_PUBLIC_URL` is the relay's public address, and the
   relay instance in the fitdocs install uses that same address as its url.
 - The relay's link setting, `FITDOCS_RELAY_STRAVA_LINKS`, decides what the
   page links to. This check runs under the default, `activity`: the link is
@@ -44,8 +44,8 @@ is copied into the record, a commit, a queue item or a session.
   `not subscribed` is a finding.
 - A fitdocs install with a Strava connector instance bound to a relay
   instance (`<name>` below is the Strava instance's name). The relay instance
-  must hold a relay token; otherwise connect prints "the relay instance X has
-  no stored token." and exits 1.
+  must hold a relay token; otherwise connect prints "<name>: the relay instance
+  X has no stored token." and exits 1.
 - One workout page with a `post` region, opted in to the Strava target, whose
   activity exists on Strava and may be edited.
 - A terminal where each command's exit code is visible.

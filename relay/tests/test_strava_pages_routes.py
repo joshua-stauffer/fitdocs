@@ -44,6 +44,7 @@ from fitdocs_relay.shared.relay_codes import RelayCode
 from fitdocs_relay.shared.relay_targets import (
     ACTION_CONNECT_POLL,
     STRAVA,
+    connect_page_path,
 )
 from fitdocs_relay.storage.interface import StorageUnreachable
 from fitdocs_relay.strava.api import Grant
@@ -451,6 +452,32 @@ def test_an_unconfigured_relay_serves_none_of_the_strava_paths(
     assert w.client.get("/robots.txt").text == sent.text  # no robots body either
 
 
+@pytest.mark.parametrize("method", ["POST", "HEAD"])
+def test_an_unconfigured_relay_answers_a_webhook_post_or_head_as_an_unknown_path(
+    make_world: Callable[..., World], method: str
+) -> None:
+    w = make_world(strava=False)
+    sent = w.client.request(method, HOOK, content=b"{}")
+    unknown = w.client.request(method, "/strava/webhook/unknown", content=b"{}")
+    assert sent.status_code == 404
+    assert (sent.status_code, sent.headers["content-type"], sent.text) == (
+        unknown.status_code,
+        unknown.headers["content-type"],
+        unknown.text,
+    )
+    if method == "POST":
+        assert decoded(sent).code is RelayCode.NOT_OFFERED
+
+
+def test_the_served_connect_page_path_is_the_shared_helpers_path(world: World) -> None:
+    started = started_session(world)
+    path = connect_page_path(STRAVA, started.user_code)
+    assert path.split("?", 1)[0] == CONNECT_PAGE
+    sent = world.client.get(path)
+    assert sent.status_code == 200
+    assert "text/html" in sent.headers["content-type"]
+
+
 # --- the page text never carries what Strava returned -------------------------
 
 
@@ -682,6 +709,18 @@ def test_an_event_of_the_largest_accepted_size_is_still_read(world: World) -> No
     assert len(padded) == MAX_EVENT_BYTES
     assert world.client.post(HOOK, content=padded).status_code == 200
     assert world.store.get_connection(world.principal, STRAVA) is None
+
+
+def test_an_event_over_the_bound_is_refused_at_admission_not_acknowledged(
+    world: World,
+) -> None:
+    connect_athlete(world)
+    padded = DEAUTH[:-1] + b" " * (MAX_EVENT_BYTES + 1 - len(DEAUTH)) + b"}"
+    assert len(padded) == MAX_EVENT_BYTES + 1
+    sent = world.client.post(HOOK, content=padded)
+    assert sent.status_code == 413
+    assert decoded(sent).code is RelayCode.REQUEST_TOO_LARGE
+    assert world.store.get_connection(world.principal, STRAVA) is not None
 
 
 def test_the_secret_is_in_no_log_record(
