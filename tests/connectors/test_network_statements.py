@@ -1204,3 +1204,37 @@ def test_moving_publish_yes_into_the_connectors_no_request_sentence_reds_the_pin
     assert _names_publish_command(mutated)  # presence alone is still true
     assert _names_publish_no_request_forms(mutated)
     assert not _connectors_position_ok(mutated)
+
+
+_STRAVA_LINE = (
+    "A [Strava](#strava) instance sends only to the relay instance it is bound "
+    "to, at that instance's `url`, and never to Strava: its publish and upload "
+    "requests, its connect requests and its disconnect request."
+)
+
+
+def test_connectors_page_says_a_strava_instance_sends_to_its_bound_relay() -> None:
+    """Req 17.3: the Strava line names the bound relay's `url`, says never to
+    Strava, and links the Strava section."""
+    section = _what_leaves_section()
+    flat = _collapse(section)
+    assert flat.count(_STRAVA_LINE) == 1
+    assert "://" not in section
+    assert "strava.com" not in flat.lower()
+
+
+def test_dropping_the_strava_line_from_the_connectors_page_reds_the_pin() -> None:
+    """Named mutation: delete the Strava line from "What leaves your machine"."""
+    flat = _collapse(_what_leaves_section())
+    assert flat.count(_STRAVA_LINE) == 1  # true before
+    mutated = flat.replace(_STRAVA_LINE, "")
+    assert mutated != flat
+    assert mutated.count(_STRAVA_LINE) != 1
+
+
+def test_a_strava_line_sending_to_strava_reds_the_pin() -> None:
+    """Named mutation: the line says requests go to Strava, not the relay."""
+    flat = _collapse(_what_leaves_section())
+    mutated = flat.replace("and never to Strava", "and to Strava")
+    assert mutated != flat
+    assert mutated.count(_STRAVA_LINE) != 1

@@ -611,7 +611,10 @@ starts, your email address).
 
 An [intervals.icu](#intervalsicu) instance's publish requests go to
 intervals.icu; what each one sends is described under
-[Publishing](#publishing). `fitdocs publish` without `--yes` and `fitdocs
+[Publishing](#publishing). A [Strava](#strava) instance sends only to the
+relay instance it is bound to, at that instance's `url`, and never to Strava:
+its publish and upload requests, its connect requests and its disconnect
+request. `fitdocs publish` without `--yes` and `fitdocs
 publish --targets` make no request, and no other fitdocs command ever makes a
 connector request, configured or not.
 
