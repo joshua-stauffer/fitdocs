@@ -27,6 +27,8 @@ import logging
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from enum import StrEnum
 from types import MappingProxyType
 from typing import Final
 
@@ -54,6 +56,7 @@ __all__ = [
     "UPLOAD_FOLLOW_UPS",
     "UPLOAD_POLL_INTERVAL_S",
     "Landed",
+    "LinkRefusal",
     "StravaPublisher",
     "activity_page",
 ]
@@ -152,6 +155,11 @@ class Landed:
     activity_page: str = field(repr=False)
 
 
+class LinkRefusal(StrEnum):
+    NOT_FOUND = "not-found"
+    TRY_LATER = "try-later"
+
+
 def activity_page(web_url: str, activity_id: str) -> str:
     """The address of an activity's page: ``<web_url>/activities/<id>``."""
     return f"{web_url}/activities/{activity_id}"
@@ -237,6 +245,57 @@ class StravaPublisher:
                 type(error).__name__,
             )
             return _P.UNCONFIRMED
+
+    def resolve_link(self, publication_id: str) -> str | LinkRefusal:
+        """The activity page the recorded publication is now, or why there is none.
+
+        TRY_LATER: a refresh or the link's own spend that the budget refuses
+        (which holds back headroom for these calls), or Strava's 429 on the
+        refresh or on the listing. NOT_FOUND: Strava refusing the refresh,
+        custody unavailable, a passed deadline, an unknown id, no connection,
+        no single match, and any other listing failure. The result is not
+        stored."""
+        deadline = self._monotonic() + PUBLISH_DEADLINE_S
+        known = self._storage.get_publication(STRAVA, publication_id)
+        if known is None:
+            return LinkRefusal.NOT_FOUND
+        access = self._custody.access_token(
+            known.principal_id, deadline=deadline, for_link=True
+        )
+        if not isinstance(access, Usable):
+            if access is _P.RATE_LIMITED:
+                return LinkRefusal.TRY_LATER
+            return LinkRefusal.NOT_FOUND
+        timeout = self._timeout(deadline)
+        if timeout is None:
+            return LinkRefusal.NOT_FOUND
+        if not self._budget.spend(known.principal_id, for_link=True).allowed:
+            return LinkRefusal.TRY_LATER
+        facts = PublishFacts(
+            publication_id=known.publication_id,
+            sport=known.sport,
+            start=datetime.fromtimestamp(known.start_s, tz=UTC),
+            elapsed_s=known.elapsed_s,
+            distance_m=known.distance_m,
+            title="",
+            description="",
+        )
+        after, before = list_window(facts.start)
+        listing = self._api.list_activities(
+            access.access,
+            after=after,
+            before=before,
+            per_page=LIST_PAGE_SIZE,
+            timeout=timeout,
+        )
+        if isinstance(listing, StravaFailure):
+            if self._failed(listing) is _P.RATE_LIMITED:
+                return LinkRefusal.TRY_LATER
+            return LinkRefusal.NOT_FOUND
+        picked = pick(facts, listing)
+        if not isinstance(picked, Candidate):
+            return LinkRefusal.NOT_FOUND
+        return activity_page(self._web_url, picked.activity_id)
 
     # --- the upload, once called -----------------------------------------------
 
