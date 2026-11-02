@@ -301,7 +301,7 @@ private, or less predictable.
 1. The fitdocs tool shall add no new runtime dependency in order to become publishable, installable, or self-reporting.
 2. The installed tool shall behave identically to the revision that passed the release gates; no build step shall alter behavior between the tested revision and the published artifact.
 3. No published artifact shall contain personal fitness data, generated workout documents, or the contents of any data root.
-4. Running the installed tool shall require no network access beyond the map-tile requests and the explicit connector commands (`fitdocs connect`, `fitdocs pull`) the project already documents, and the release process shall not introduce any new runtime network access beyond those two paths. *(amended by Amendment 3: formerly "beyond the map-tile requests the project already documents" and "any new runtime network access")* *(amended by Amendment 7: `fitdocs disconnect` joins the explicit connector commands)*
+4. Running the installed tool shall require no network access beyond the map-tile requests and the explicit connector commands (`fitdocs connect`, `fitdocs pull`) the project already documents, and the release process shall not introduce any new runtime network access beyond those two paths. *(amended by Amendment 3: formerly "beyond the map-tile requests the project already documents" and "any new runtime network access")* *(amended by Amendment 7: `fitdocs disconnect` joins the explicit connector commands)* *(amended by Amendment 8: `fitdocs publish --yes` joins the explicit connector commands; `fitdocs publish` without `--yes` and `fitdocs publish --targets` make none)*
 5. Building the same tagged revision twice shall produce artifacts with identical contents.
 6. Reorganizing the project's documentation shall preserve every behavior statement the project publishes at the time of the reorganization — its own and its sibling features' — including data-root resolution order, the persistent tile opt-out, tile-provider attribution, the inbox never-delete guarantee, the statement that fitdocs performs no watching and no scheduling, and a pointer to the published ownership contract.
 7. Rewriting the readme shall preserve rather than replace the sections other features publish there — the ownership section, the inbox section, and the plugins section — either keeping each in place or relocating each into the documentation set with the readme linking to it.
@@ -500,3 +500,14 @@ because publish-core landed its Amendment 6 first.
   `fitdocs pull`; nothing else is added, and the relay is a separate package
   that the installed tool never runs. Pinned with connectors Amendment 7 by
   `tests/connectors/test_network_statements.py::test_steering_publishes_the_relay_server_and_its_network_calls`.
+
+## Amendment 8 (2026-11-02): `fitdocs publish --yes` joins the explicit network commands, landed by intervals-publish
+
+`intervals-publish` is the first publish target that makes a request, which
+the Amendment 6 reading ("publish-core ships no target that makes a request")
+did not cover. Requirement 10 criterion 10.4: the explicit connector commands
+the installed tool may reach the network through are `fitdocs connect`,
+`fitdocs disconnect`, `fitdocs pull` and `fitdocs publish --yes`; `fitdocs
+publish` without `--yes` and `fitdocs publish --targets` make no request, and
+nothing else is added. Recorded as amended in place (10.4 tagged), with no
+criterion renumbered. Existing criteria and approvals are preserved word-for-word.
