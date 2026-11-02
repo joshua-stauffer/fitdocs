@@ -28,7 +28,6 @@ from fitdocs.connectors.disconnect import (
     Disconnected,
     DisconnectFailed,
     NothingToDisconnect,
-    UnsupportedDisconnect,
     run_disconnect,
 )
 from fitdocs.connectors.http import HttpResponse, TransportError
@@ -38,6 +37,7 @@ from fitdocs.connectors.relay_codes import RELAY_CODES, CodeOrigin, RelayCode, e
 from fitdocs.connectors.relay_envelope import Answer, encode_answer
 from fitdocs.connectors.secrets import REDACTED, Redactor, Secret
 from fitdocs.connectors.settings import ConnectorInstance
+from fitdocs.connectors.strava import StravaConnector, StravaSettings
 from tests.connectors.conftest import FakeTransport
 
 _CLOCK = datetime(2026, 3, 1, 12, 0, tzinfo=UTC)
@@ -86,6 +86,17 @@ def _relay_instance(name: str = "relay") -> ConnectorInstance:
         connector=RelayConnector(),
         lookback_days=30,
         settings=RelaySettings(url=_BASE),
+    )
+
+
+def _strava_instance(name: str = "strava") -> ConnectorInstance:
+    return ConnectorInstance(
+        name=name,
+        connector=StravaConnector(),
+        lookback_days=30,
+        settings=StravaSettings(
+            relay_instance="home", upload=False, relay=RelaySettings(url=_BASE)
+        ),
     )
 
 
@@ -463,29 +474,15 @@ def test_a_no_authentication_instance_has_nothing_to_disconnect(
     assert _snapshot(tmp_path) == before
 
 
-def test_the_reserved_style_is_refused_as_unsupported_before_anything_else(
-    tmp_path: Path,
-) -> None:
-    _seed(tmp_path, "svc", AuthStyle.API_KEY, field="key")
-    before = _snapshot(tmp_path)
-    transport = FakeTransport([])
-    with pytest.raises(UnsupportedDisconnect) as excinfo:
-        run_disconnect(
-            _fake_instance(AuthStyle.OAUTH_BROWSER),
-            local_only=True,
-            store=_store(tmp_path),
-            transport=transport,
-            environ={},
-            now=lambda: _CLOCK,
-            sleep=lambda seconds: None,
-            redactor=Redactor(),
-        )
-    assert str(excinfo.value) == (
-        "the oauth-browser authentication style is not supported by this "
-        "version of fitdocs"
+def test_no_current_style_is_refused_as_unsupported(tmp_path: Path) -> None:
+    # The browser-consent style used to raise UnsupportedDisconnect here.
+    path = _seed(tmp_path, "strava", AuthStyle.OAUTH_BROWSER)
+    result, transport = _disconnect(
+        tmp_path, _strava_instance(), [_envelope(RelayCode.OK)]
     )
-    assert transport.requests == []
-    assert _snapshot(tmp_path) == before
+    assert isinstance(result, Disconnected)
+    assert len(transport.requests) == 1
+    assert not path.exists()
 
 
 # The outcome of every style, with a stored file present and absent.
@@ -493,9 +490,12 @@ _STYLE_OUTCOMES: dict[AuthStyle, tuple[type | None, type]] = {
     AuthStyle.NONE: (NothingToDisconnect, NothingToDisconnect),
     AuthStyle.API_KEY: (Disconnected, NothingToDisconnect),
     AuthStyle.LOGIN: (Disconnected, NothingToDisconnect),
-    AuthStyle.OAUTH_BROWSER: (None, None),  # type: ignore[dict-item]
+    AuthStyle.OAUTH_BROWSER: (Disconnected, NothingToDisconnect),
     AuthStyle.RELAY_TOKEN: (Disconnected, NothingToDisconnect),
 }
+
+
+_TOKEN_STYLES = (AuthStyle.RELAY_TOKEN, AuthStyle.OAUTH_BROWSER)
 
 
 def test_every_authentication_style_has_a_pinned_outcome() -> None:
@@ -510,6 +510,9 @@ def test_each_style_reaches_its_outcome_with_the_file_present_and_absent(
     if style is AuthStyle.RELAY_TOKEN:
         instance = _relay_instance("inst")
         script: list[HttpResponse | TransportError] = [_envelope(RelayCode.OK)]
+    elif style is AuthStyle.OAUTH_BROWSER:
+        instance = _strava_instance("inst")
+        script = [_envelope(RelayCode.OK)]
     else:
         instance = _fake_instance(style, "inst")
         script = []
@@ -518,12 +521,8 @@ def test_each_style_reaches_its_outcome_with_the_file_present_and_absent(
             tmp_path,
             "inst",
             style,
-            field="token" if style is AuthStyle.RELAY_TOKEN else "key",
+            field="token" if style in _TOKEN_STYLES else "key",
         )
-    if style is AuthStyle.OAUTH_BROWSER:
-        with pytest.raises(UnsupportedDisconnect):
-            _disconnect(tmp_path, instance)
-        return
     result, _ = _disconnect(tmp_path, instance, script)
     expected = _STYLE_OUTCOMES[style][0 if present else 1]
     assert type(result) is expected
@@ -606,3 +605,191 @@ def test_the_result_dataclasses_are_frozen() -> None:
     for value in frozen:
         with pytest.raises(dataclasses.FrozenInstanceError):
             value.instance = "other"  # type: ignore[attr-defined]
+
+
+# --------------------------------------------------------------------------
+# strava-publish Req 11.1-11.4: the browser-consent rows
+# --------------------------------------------------------------------------
+
+_STRAVA_NOTE_UNKNOWN = (
+    "the relay no longer knows this token; a remaining Strava connection can "
+    "be revoked in Strava's settings"
+)
+_STRAVA_LOCAL_ONLY_NOTE = (
+    "the Strava connection stays at the relay until this instance is connected "
+    "and disconnected again, or access is revoked in Strava's settings"
+)
+_STRAVA_DISCONNECT_URL = _BASE + "/v1/targets/strava/disconnect"
+
+# Answers that mean success on another route: the disconnect route reads
+# them as malformed.
+_STRAVA_OTHER_ROUTE_CODES = _OTHER_ROUTE_CODES | {
+    RelayCode.CONNECT_STARTED,
+    RelayCode.CONNECT_PENDING,
+    RelayCode.CONNECT_GRANTED,
+}
+
+
+@pytest.mark.parametrize(
+    ("code", "note"),
+    [
+        (RelayCode.OK, None),
+        (RelayCode.TOKEN_UNKNOWN, _STRAVA_NOTE_UNKNOWN),
+        (RelayCode.TOKEN_REVOKED, _STRAVA_NOTE_UNKNOWN),
+    ],
+    ids=["ok", "token-unknown", "token-revoked"],
+)
+def test_strava_ok_unknown_and_revoked_remove_the_file_after_one_request(
+    tmp_path: Path, code: RelayCode, note: str | None
+) -> None:
+    path = _seed(tmp_path, "strava", AuthStyle.OAUTH_BROWSER)
+    other = _seed(tmp_path, "other", AuthStyle.RELAY_TOKEN, token=_ENV_TOKEN)
+    other_before = other.read_bytes()
+    assert path.exists()
+    result, transport = _disconnect(tmp_path, _strava_instance(), [_envelope(code)])
+    assert result == Disconnected(
+        instance="strava",
+        path=path,
+        code=code,
+        remote_revoked=code is RelayCode.OK,
+        note=note,
+    )
+    assert not path.exists()
+    assert other.read_bytes() == other_before
+    assert (tmp_path / "credentials").is_dir()
+    [request] = transport.requests
+    assert (request.method, request.url) == ("POST", _STRAVA_DISCONNECT_URL)
+    assert {k: v.reveal() for k, v in request.secret_headers.items()} == {
+        "Authorization": "Bearer " + _TOKEN
+    }
+
+
+_STRAVA_NON_REMOVING = [c for c in RELAY_CODES if c not in _REMOVING]
+
+
+@pytest.mark.parametrize("code", _STRAVA_NON_REMOVING, ids=lambda c: c.value)
+def test_strava_every_other_code_keeps_the_file_and_speaks_only_fitdocs_text(
+    tmp_path: Path, code: RelayCode
+) -> None:
+    path = _seed(tmp_path, "strava", AuthStyle.OAUTH_BROWSER)
+    _seed(tmp_path, "other", AuthStyle.RELAY_TOKEN, token=_ENV_TOKEN)
+    before = _snapshot(tmp_path)
+    assert set(before) == {"strava.toml", "other.toml"}
+    result, transport = _disconnect(tmp_path, _strava_instance(), _scripted_for(code))
+    expected = RelayCode.ANSWER_MALFORMED if code in _STRAVA_OTHER_ROUTE_CODES else code
+    assert result == DisconnectFailed(
+        instance="strava",
+        code=expected,
+        explanation=explain(expected),
+        next_step=_NEXT_STEP.format(name="strava"),
+    )
+    assert len(transport.requests) == 1
+    assert _snapshot(tmp_path) == before
+    assert path.exists()
+    assert _PLANT not in repr(result)
+
+
+def test_strava_a_503_is_attempted_once_and_keeps_the_file(tmp_path: Path) -> None:
+    _seed(tmp_path, "strava", AuthStyle.OAUTH_BROWSER)
+    before = _snapshot(tmp_path)
+    sleeps: list[float] = []
+    result, transport = _disconnect(
+        tmp_path,
+        _strava_instance(),
+        [
+            HttpResponse(status=503, headers={}, body=b"down"),
+            _envelope(RelayCode.OK),
+            _envelope(RelayCode.OK),
+        ],
+        sleeps=sleeps,
+    )
+    assert len(transport.requests) == 1
+    assert isinstance(result, DisconnectFailed)
+    assert sleeps == []
+    assert _snapshot(tmp_path) == before
+
+
+def test_strava_the_request_carries_the_stored_token_never_the_override(
+    tmp_path: Path,
+) -> None:
+    _seed(tmp_path, "strava", AuthStyle.OAUTH_BROWSER)
+    var = env_var_name("strava", "token")
+    assert var == "FITDOCS_CONNECTOR_STRAVA_TOKEN"
+    _, transport = _disconnect(
+        tmp_path,
+        _strava_instance(),
+        [_envelope(RelayCode.OK)],
+        environ={var: _ENV_TOKEN},
+    )
+    [request] = transport.requests
+    assert request.secret_headers["Authorization"].reveal() == "Bearer " + _TOKEN
+    everything = repr(request.headers) + str(request.body) + request.url
+    everything += "".join(v.reveal() for v in request.secret_headers.values())
+    assert _ENV_TOKEN not in everything
+
+
+def test_strava_the_stored_token_is_registered_for_redaction(tmp_path: Path) -> None:
+    _seed(tmp_path, "strava", AuthStyle.OAUTH_BROWSER)
+    redactor = Redactor()
+    assert redactor.redact(_TOKEN) == _TOKEN
+    _disconnect(
+        tmp_path,
+        _strava_instance(),
+        [_envelope(RelayCode.OK)],
+        redactor=redactor,
+    )
+    assert redactor.redact(_TOKEN) == REDACTED
+
+
+def test_strava_a_stored_file_holding_no_token_is_an_error_and_sends_nothing(
+    tmp_path: Path,
+) -> None:
+    path = _seed(tmp_path, "strava", AuthStyle.OAUTH_BROWSER, field="other")
+    before = _snapshot(tmp_path)
+    with pytest.raises(CredentialStoreError) as caught:
+        _disconnect(tmp_path, _strava_instance(), [_envelope(RelayCode.OK)])
+    assert str(caught.value) == (
+        f"{path} holds no connection token; run: fitdocs disconnect strava --local-only"
+    )
+    assert _snapshot(tmp_path) == before
+
+
+def test_strava_local_only_removes_the_file_with_no_request_and_a_note(
+    tmp_path: Path,
+) -> None:
+    path = _seed(tmp_path, "strava", AuthStyle.OAUTH_BROWSER)
+    other = _seed(tmp_path, "other", AuthStyle.RELAY_TOKEN, token=_ENV_TOKEN)
+    other_before = other.read_bytes()
+    result, transport = _disconnect(
+        tmp_path, _strava_instance(), [_envelope(RelayCode.OK)], local_only=True
+    )
+    assert result == Disconnected(
+        instance="strava",
+        path=path,
+        code=None,
+        remote_revoked=False,
+        note=_STRAVA_LOCAL_ONLY_NOTE,
+    )
+    assert transport.requests == []
+    assert not path.exists()
+    assert other.read_bytes() == other_before
+
+
+@pytest.mark.parametrize("local_only", [False, True], ids=["plain", "local-only"])
+def test_strava_an_absent_file_is_nothing_to_disconnect_with_no_request(
+    tmp_path: Path, local_only: bool
+) -> None:
+    var = env_var_name("strava", "token")
+    other = _seed(tmp_path, "other", AuthStyle.RELAY_TOKEN, token=_ENV_TOKEN)
+    before = _snapshot(tmp_path)
+    result, transport = _disconnect(
+        tmp_path,
+        _strava_instance(),
+        [_envelope(RelayCode.OK)],
+        local_only=local_only,
+        environ={var: _ENV_TOKEN},
+    )
+    assert result == NothingToDisconnect(instance="strava", env_override=(var,))
+    assert transport.requests == []
+    assert _snapshot(tmp_path) == before
+    assert other.exists()

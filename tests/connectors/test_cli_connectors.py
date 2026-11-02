@@ -91,9 +91,30 @@ from tests.fixtures import builder
 runner = CliRunner()
 
 
+@dataclass(frozen=True)
+class _ReservedSettings:
+    """Settings that name a relay instance (so the browser-consent binding
+    pass accepts the instance) and bind to themselves."""
+
+    relay_instance: str
+
+    def bound(self, relay_settings: object) -> _ReservedSettings:
+        return self
+
+
+RESERVED_RELAY_TABLE = (
+    '\n[connectors.reserved-relay]\nconnector = "relay"\n'
+    'url = "https://relay.example.com"\n'
+)
+"""A relay instance for the reserved-style connector to bind to; append it
+to any settings file that configures that connector."""
+
+
 @dataclass
 class _ReservedConnector:
-    """A minimal ``AuthStyle.OAUTH_BROWSER`` connector (Req 1.7, 5.3).
+    """A minimal ``AuthStyle.OAUTH_BROWSER`` connector whose consent
+    operations are never driven (Req 1.7, 5.3); other test modules import it as a
+    non-relay instance.
 
     No counterpart in ``tests/connectors/conftest.py`` -- local per the
     plan's rule that tasks after 2.3 keep their own fixtures local.
@@ -112,7 +133,18 @@ class _ReservedConnector:
     def parse_settings(
         self, table: Mapping[str, object], context: SettingsContext
     ) -> object:
-        return None
+        return _ReservedSettings(relay_instance="reserved-relay")
+
+    def start_consent(self, session: object, relay_token: object) -> object:
+        raise AssertionError("not driven by these tests")
+
+    def poll_consent(
+        self, session: object, started: object, relay_token: object
+    ) -> object:
+        raise AssertionError("not driven by these tests")
+
+    def withdraw_consent(self, session: object, token: object) -> object:
+        raise AssertionError("not driven by these tests")
 
 
 class _TwoFieldKey(ScriptedPersonalKeyConnector):
@@ -345,11 +377,19 @@ def test_none_style_prints_nothing_to_connect_and_exits_zero(
     assert not _credentials_dir().exists() or list(_credentials_dir().iterdir()) == []
 
 
-def test_reserved_style_exact_message(
+def test_a_style_outside_the_supported_set_is_refused_exactly(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Every style is supported today, so the refusal branch is reached by
+    removing one from the CLI's supported set."""
     connector_registry.register(_ReservedConnector())
-    _write_settings(tmp_path, connectors="[connectors.reserved-style]\n")
+    _write_settings(
+        tmp_path, connectors="[connectors.reserved-style]\n" + RESERVED_RELAY_TABLE
+    )
+    monkeypatch.setattr(
+        "fitdocs.cli.SUPPORTED_AUTH_STYLES",
+        frozenset(AuthStyle) - {AuthStyle.OAUTH_BROWSER},
+    )
     secret_calls, value_calls = _patch_prompts(monkeypatch)
 
     result = runner.invoke(app, ["connect", "reserved-style", "--out", str(tmp_path)])
@@ -424,28 +464,6 @@ def test_none_style_wins_over_a_bad_credentials_directory(
         "scripted-puller: this connector requires no authentication; "
         "nothing to connect."
     ]
-
-
-def test_reserved_style_wins_over_credentials_directory_check(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Both the reserved-style refusal and the credentials-directory refusal
-    would fire; design.md's order puts the style check first."""
-    connector_registry.register(_ReservedConnector())
-    _write_settings(tmp_path, connectors="[connectors.reserved-style]\n")
-    # Violate the credentials-directory check too: point it at a *relative*
-    # path, which resolve_credentials_dir refuses outright.
-    monkeypatch.setenv("FITDOCS_CREDENTIALS_DIR", "relative/creds")
-    secret_calls, value_calls = _patch_prompts(monkeypatch)
-
-    result = runner.invoke(app, ["connect", "reserved-style", "--out", str(tmp_path)])
-
-    assert result.exit_code == 2
-    lowered = result.output.lower()
-    assert "oauth-browser" in lowered or "reserved" in lowered
-    assert "FITDOCS_CREDENTIALS_DIR" not in result.output
-    assert secret_calls == []
-    assert value_calls == []
 
 
 def test_credentials_inside_data_root_names_the_directory(

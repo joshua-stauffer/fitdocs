@@ -587,6 +587,20 @@ def test_login_style_never_reports_an_env_override(tmp_path: Path) -> None:
     assert result.env_override == ()
 
 
+def test_browser_consent_style_reports_its_overriding_variable() -> None:
+    connector = SimpleNamespace(
+        auth_style=AuthStyle.OAUTH_BROWSER,
+        credential_fields=(CredentialField("token", "Token", secret=True),),
+    )
+    instance = _instance(name="my-strava", connector=cast(Connector, connector))
+    token_var = env_var_name("my-strava", "token")
+    assert token_var == "FITDOCS_CONNECTOR_MY_STRAVA_TOKEN"
+
+    assert _env_override(instance, {token_var: "override"}) == (token_var,)
+    assert _env_override(instance, {token_var: ""}) == ()
+    assert _env_override(instance, {}) == ()
+
+
 def test_relay_token_style_reports_its_overriding_variable() -> None:
     connector = SimpleNamespace(
         auth_style=AuthStyle.RELAY_TOKEN,

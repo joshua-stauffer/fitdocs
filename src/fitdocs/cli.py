@@ -226,6 +226,13 @@ from fitdocs.athlete import AthleteFileError, load_athlete_inputs
 from fitdocs.audit import AuditReport, audit
 from fitdocs.benchmarks import Benchmark, BenchmarkKind
 from fitdocs.config import DataRootError, resolve_data_root
+from fitdocs.connectors.browser_connect import (
+    BrowserConnected,
+    BrowserConnectFailed,
+    ConsentShown,
+    RelayNotConnected,
+    run_browser_connect,
+)
 from fitdocs.connectors.connect import Connected, ConnectFailed, run_connect
 from fitdocs.connectors.credentials import (
     CredentialsLocationError,
@@ -247,6 +254,7 @@ from fitdocs.connectors.protocol import (
     SUPPORTED_AUTH_STYLES,
     AuthStyle,
     Capability,
+    RelayBound,
     SettingsContext,
 )
 from fitdocs.connectors.pull import (
@@ -554,6 +562,14 @@ _CONNECT_EMAIL_OPTION = typer.Option(
     None,
     "--email",
     help="Relay instances only, with --register: the address to register.",
+)
+_CONNECT_NO_BROWSER_OPTION = typer.Option(
+    False,
+    "--no-browser",
+    help=(
+        "Browser-consent instances only: print the address to open and do "
+        "not ask the operating system to open it."
+    ),
 )
 _DISCONNECT_LOCAL_ONLY_OPTION = typer.Option(
     False,
@@ -1369,6 +1385,95 @@ def _say(line: str) -> None:
     Console().print(line, markup=False, highlight=False, emoji=False, soft_wrap=True)
 
 
+def _remaining_text(seconds: int) -> str:
+    """A time left, in whole minutes, for a printed expiry line."""
+    minutes = seconds // 60
+    if minutes == 0:
+        return "less than a minute"
+    return f"{minutes} minute{'' if minutes == 1 else 's'}"
+
+
+def _open_browser(url: str) -> bool:
+    """Ask the operating system to open ``url`` in a browser; ``False`` when
+    it cannot (design: CliStrava). Tests patch this."""
+    import webbrowser
+
+    try:
+        return bool(webbrowser.open(url, new=2))
+    except Exception:  # noqa: BLE001 - any opener failure is the same answer
+        return False
+
+
+def _connect_browser(
+    instance: ConnectorInstance,
+    relay_instance: ConnectorInstance,
+    store: CredentialStore,
+    *,
+    no_browser: bool,
+) -> NoReturn:
+    """Connect a browser-consent instance through its bound relay instance
+    (strava-publish design: CliStrava; Req 2.1-2.9).
+
+    Always exits: ``0`` connected, ``1`` the relay (or the network) said no
+    or the relay instance has no token, ``130`` on an interrupt. Prompts for
+    nothing and stores nothing unless the engine reports a grant.
+    """
+    name = instance.name
+    redactor = Redactor()
+
+    def on_started(shown: ConsentShown) -> None:
+        _say(f"{name}: open this address in a browser to connect this instance:")
+        _say(f"  {shown.page_url}")
+        _say(
+            f"Code: {shown.user_code}. Continue only if the page shows this same code."
+        )
+        _say(f"This attempt expires in {_remaining_text(shown.expires_in_s)}.")
+        if not no_browser and not _open_browser(shown.page_url):
+            _say("Could not open a browser; open the address above yourself.")
+
+    try:
+        outcome = run_browser_connect(
+            instance,
+            relay_instance,
+            store=store,
+            transport=_connector_transport(),
+            environ=os.environ,
+            now=lambda: datetime.now(UTC),
+            sleep=time.sleep,
+            redactor=redactor,
+            on_started=on_started,
+        )
+    except KeyboardInterrupt:
+        _say(f"{name}: interrupted; nothing was stored.")
+        raise typer.Exit(code=_EXIT_INTERRUPTED) from None
+    except Exception as exc:  # noqa: BLE001 - mapped to a redacted, typed line
+        _say(f"{type(exc).__name__}: {redactor.redact(str(exc))}")
+        raise typer.Exit(code=_EXIT_FILE_FAILURES) from None
+
+    if isinstance(outcome, BrowserConnected):
+        _say(f"{name}: connected.")
+        _say(f"Credentials: {outcome.path}")
+        _say(f"Relay: {outcome.relay_url}")
+        if outcome.env_override:
+            _say(
+                "Overriding environment variables (used instead of the "
+                f"stored values during a pull): {', '.join(outcome.env_override)}"
+            )
+        raise typer.Exit(code=_EXIT_SUCCESS)
+
+    if isinstance(outcome, RelayNotConnected):
+        _say(
+            f"{name}: the relay instance {outcome.relay_instance} has no stored token."
+        )
+        _say(outcome.next_step)
+        raise typer.Exit(code=_EXIT_FILE_FAILURES)
+
+    assert isinstance(outcome, BrowserConnectFailed)
+    _say(f"{name}: {outcome.code.value}: {outcome.explanation}")
+    _say(outcome.next_step)
+    raise typer.Exit(code=_EXIT_FILE_FAILURES)
+
+
 def _connect_relay(
     instance: ConnectorInstance,
     store: CredentialStore,
@@ -1400,12 +1505,7 @@ def _connect_relay(
     redactor = Redactor()
 
     def on_started(shown: RegistrationShown) -> None:
-        minutes = shown.expires_in_s // 60
-        remaining = (
-            "less than a minute"
-            if minutes == 0
-            else f"{minutes} minute{'' if minutes == 1 else 's'}"
-        )
+        remaining = _remaining_text(shown.expires_in_s)
         _say(f"Registering {shown.email}.")
         _say(f"Your code: {shown.user_code}")
         _say(
@@ -1476,6 +1576,7 @@ def connect_command(
     out: Path | None = _OUT_OPTION,
     register: bool = _CONNECT_REGISTER_OPTION,
     email: str | None = _CONNECT_EMAIL_OPTION,
+    no_browser: bool = _CONNECT_NO_BROWSER_OPTION,
 ) -> None:
     """Authenticate one configured connector instance once and store its
     credentials only on success.
@@ -1491,8 +1592,8 @@ def connect_command(
     configured instance (Req 5.3). A connector that needs no authentication
     reports that there is nothing to connect and exits with the success code,
     prompting for and writing nothing (Req 5.2); a connector whose
-    authentication style is reserved exits with the configuration-error code
-    naming it unsupported by this version (Req 1.7, 5.3).
+    authentication style this version does not support exits with the
+    configuration-error code naming it unsupported (Req 1.7, 5.3).
 
     The per-user credentials directory is then resolved and checked to be
     outside the data root (Req 4.1, 4.2); when standard input is not an
@@ -1528,6 +1629,12 @@ def connect_command(
     address from ``--email`` or a prompt. ``--register`` and ``--email`` on
     any other instance, and ``--email`` without ``--register``, exit with the
     configuration-error code before any request.
+
+    A browser-consent instance (strava-publish Req 2) is connected by
+    :func:`_connect_browser` instead: it prompts for nothing, prints the
+    relay's connect page address and code, and opens the address in a browser
+    unless ``--no-browser`` is given. ``--no-browser`` on any other instance
+    exits with the configuration-error code before any request.
     """
     data_root = _resolved_data_root(out)
     try:
@@ -1555,6 +1662,11 @@ def connect_command(
 
     connector = instance.connector
     is_relay = connector.auth_style is AuthStyle.RELAY_TOKEN
+    is_browser = connector.auth_style is AuthStyle.OAUTH_BROWSER
+    if no_browser and not is_browser:
+        _config_error(
+            f"{name}: --no-browser applies only to a browser-consent instance."
+        )
     if (register or email is not None) and not is_relay:
         _config_error(f"{name}: --register and --email apply only to a relay instance.")
     if email is not None and not register:
@@ -1583,6 +1695,15 @@ def connect_command(
     if is_relay:
         _connect_relay(
             instance, CredentialStore(credentials_dir), register=register, email=email
+        )
+    if is_browser:
+        settings = instance.settings
+        assert isinstance(settings, RelayBound)
+        _connect_browser(
+            instance,
+            by_name[settings.relay_instance],
+            CredentialStore(credentials_dir),
+            no_browser=no_browser,
         )
 
     if not _stdin_is_interactive():
@@ -1705,7 +1826,7 @@ def disconnect_command(
 
     Exit codes: ``0`` credentials removed, or none to remove; ``1`` the relay
     (or the network) did not confirm the revocation, and the stored file is
-    kept; ``2`` a configuration error -- including a reserved authentication
+    kept; ``2`` a configuration error -- including an unsupported authentication
     style and a credentials file that cannot be read, which
     ``--local-only`` removes without reading.
     """

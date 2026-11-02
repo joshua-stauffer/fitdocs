@@ -117,13 +117,17 @@ def _env_override(
 ) -> tuple[str, ...]:
     """The variables that will override the stored values during a pull.
 
-    Only a personal-key (``API_KEY``) or relay-token (``RELAY_TOKEN``)
-    connector's fields are ever overridden
+    Only a personal-key (``API_KEY``), relay-token (``RELAY_TOKEN``) or
+    browser-consent (``OAUTH_BROWSER``) connector's fields are ever overridden
     by the environment (``connectors/credentials.py``'s ``resolve_credentials``);
     a login-style connector's ``resolve_credentials`` reads only the store.
     """
 
-    if instance.connector.auth_style not in (AuthStyle.API_KEY, AuthStyle.RELAY_TOKEN):
+    if instance.connector.auth_style not in (
+        AuthStyle.API_KEY,
+        AuthStyle.RELAY_TOKEN,
+        AuthStyle.OAUTH_BROWSER,
+    ):
         return ()
     overridden: list[str] = []
     for field in instance.connector.credential_fields:
@@ -148,8 +152,8 @@ def run_connect(
     success (Req 4.6, 4.8, 5.5-5.8, 10.2). ``answers`` is a plain mapping of
     field name to the value the user typed; the CLI layer (task 5.1) is
     responsible for prompting and for refusing an instance whose connector
-    needs no authentication or declares a reserved style before calling
-    this.
+    needs no authentication or declares a style this version does not
+    support before calling this.
     """
 
     http = HttpClient(transport, mode=CallMode.AUTH, redactor=redactor, sleep=sleep)

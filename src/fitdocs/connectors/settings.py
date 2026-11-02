@@ -35,11 +35,18 @@ wellness ...; any remaining key ...; connector.parse_settings(...)"):
    ConnectorSettingsError` it raises is wrapped naming the key, any other
    exception is wrapped naming the connector (Req 3.4).
 
-After every instance passes those seven checks, one more pass runs across all of
-them: two instances whose (instance, credential field) pairs resolve to the
-same environment-variable name via :func:`fitdocs.connectors.credentials.
-env_var_name` are refused together, naming both instances (Req 3.6) -- this
-is a cross-instance rule and so cannot run per instance.
+After every instance passes those seven checks, two more passes run across all
+of them, in this order. First, two instances whose (instance, credential field)
+pairs resolve to the same environment-variable name via :func:`fitdocs.
+connectors.credentials.env_var_name` are refused together, naming both
+instances (Req 3.6). Second, each instance whose connector declares
+``AuthStyle.OAUTH_BROWSER`` is bound to its relay instance (strava-publish
+Req 1.3): its settings must satisfy :class:`~fitdocs.connectors.protocol.
+RelayBound`, the instance they name must be configured and its connector must
+declare ``AuthStyle.RELAY_TOKEN``, and the instance is replaced by one whose
+settings are ``settings.bound(<that relay instance's settings>)``. No other
+instance takes part in the second pass. Both are cross-instance rules and so
+cannot run per instance.
 
 **Absent is not an error** (Req 3.7): no settings file, or a settings file
 with no ``[connectors]`` table, projects to ``()`` -- no connectors -- not a
@@ -52,6 +59,7 @@ instance, and the key so a user can find and fix the exact line.
 
 from __future__ import annotations
 
+import dataclasses
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -61,7 +69,13 @@ from typing import Final
 from fitdocs.connectors import registry
 from fitdocs.connectors.credentials import env_var_name
 from fitdocs.connectors.errors import ConnectorSettingsError
-from fitdocs.connectors.protocol import Capability, Connector, SettingsContext
+from fitdocs.connectors.protocol import (
+    AuthStyle,
+    Capability,
+    Connector,
+    RelayBound,
+    SettingsContext,
+)
 from fitdocs.settings import SettingsError
 
 CONNECTORS_TABLE: Final[str] = "connectors"
@@ -239,6 +253,57 @@ def _check_credential_collisions(
             seen[var_name] = instance.name
 
 
+_RELAY_KEY: Final[str] = "relay"
+
+
+def _bind_relay_instances(
+    instances: tuple[ConnectorInstance, ...], *, settings_file: Path
+) -> tuple[ConnectorInstance, ...]:
+    relays = {
+        instance.name: instance
+        for instance in instances
+        if instance.connector.auth_style is AuthStyle.RELAY_TOKEN
+    }
+    bound_instances: list[ConnectorInstance] = []
+    for instance in instances:
+        if instance.connector.auth_style is not AuthStyle.OAUTH_BROWSER:
+            bound_instances.append(instance)
+            continue
+        settings = instance.settings
+        if not isinstance(settings, RelayBound):
+            raise _fail(
+                settings_file,
+                instance.name,
+                _CONNECTOR_KEY,
+                f"the {instance.connector.connector_id} connector declares browser "
+                "consent but its settings do not name a relay instance "
+                "(a defect in the connector)",
+            )
+        relay = relays.get(settings.relay_instance)
+        if relay is None:
+            listed = ", ".join(sorted(relays)) or "none"
+            raise _fail(
+                settings_file,
+                instance.name,
+                _RELAY_KEY,
+                "must name a configured relay instance; "
+                f"configured relay instances: {listed}",
+            )
+        try:
+            bound = settings.bound(relay.settings)
+        except ConnectorSettingsError as exc:
+            raise _fail(settings_file, instance.name, exc.key, exc.message) from exc
+        except Exception as exc:
+            raise _fail(
+                settings_file,
+                instance.name,
+                _CONNECTOR_KEY,
+                f"{instance.connector.connector_id} settings error: {exc}",
+            ) from exc
+        bound_instances.append(dataclasses.replace(instance, settings=bound))
+    return tuple(bound_instances)
+
+
 def load_connectors_settings(
     document: Mapping[str, object],
     *,
@@ -250,8 +315,9 @@ def load_connectors_settings(
     Returns ``()`` when the file or its ``[connectors]`` table is absent
     (Req 3.7). Otherwise validates every named sub-table in the order
     documented on this module, then checks for a shared credential
-    environment variable across every instance, and returns the result
-    sorted by instance name. Reads no file and writes nothing (Req 3.8).
+    environment variable across every instance, binds each browser-consent
+    instance to its relay instance, and returns the result sorted by
+    instance name. Reads no file and writes nothing (Req 3.8).
     """
     if CONNECTORS_TABLE not in document:
         return ()
@@ -314,4 +380,5 @@ def load_connectors_settings(
 
     result = tuple(instances)
     _check_credential_collisions(result, settings_file=settings_file)
+    result = _bind_relay_instances(result, settings_file=settings_file)
     return tuple(sorted(result, key=lambda instance: instance.name))

@@ -10,13 +10,14 @@ sync`, or `pull --sync`) picks it up exactly as it would a file you dropped
 there yourself.
 
 This page documents the connector *framework*: the commands, the settings
-keys, the credential rules, and the three connectors fitdocs ships: `folder`,
+keys, the credential rules, and the four connectors fitdocs ships: `folder`,
 which needs no service at all; `intervals`, for an intervals.icu account
-([its section](#intervalsicu) below); and `relay`, for a fitdocs relay
-([its section](#the-relay-connector) below). Outside those two sections, the
+([its section](#intervalsicu) below); `relay`, for a fitdocs relay
+([its section](#the-relay-connector) below); and `strava`, for a Strava
+account through a relay. Outside those two sections, the
 framework sections of this page describe no online service and no network
-protocol; the services they mention, intervals.icu and the relay, are named
-only to point to their sections.
+protocol; the services they mention (intervals.icu, the relay, and Strava)
+are named only to say which connector they belong to.
 
 ## Configuring an instance
 
