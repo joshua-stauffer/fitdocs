@@ -57,7 +57,7 @@ route map. Every other operation this engine performs -- discovery, decode,
 identity, render, merge, write, archive -- stays fully offline, and the source
 directory remains strictly read-only; this engine makes no connector request
 of its own -- map tiles and the connector commands, ``fitdocs connect`` (registration
-included), ``fitdocs disconnect`` and ``fitdocs pull``
+included), ``fitdocs disconnect``, ``fitdocs pull`` and ``fitdocs publish --yes``
 (:mod:`fitdocs.connectors.http`), are the tool's only
 network-touching paths. A tile that cannot
 be resolved (offline, provider error, or the persistent opt-out) never fails a

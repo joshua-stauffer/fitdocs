@@ -80,9 +80,10 @@ markdown; fixture `.fit` files under `tests/fixtures/`.
   re-read `.fit` files directly. `identity` (source roles, the match rule and
   held files) imports only `model`, `contract`, `docio`, `layout` and
   `settings`; `render`, `sync`, `audit` and
-  `cli` import it. `connectors` (the `fitdocs connect`, `fitdocs disconnect` and
-  `fitdocs pull` commands) imports only `layout`, `settings`, `inbox` and
-  `version` from
+  `cli` import it, and so does the intervals connector's publish path (its
+  listing-match helper imports `identity.matching` lazily). `connectors`
+  (the `fitdocs connect`, `fitdocs disconnect` and `fitdocs pull` commands)
+  imports only `layout`, `settings`, `inbox` and `version` from
   the rest of the package, and only `cli` imports it; it does not depend
   on rendering, training load, metrics, `.fit` ingestion, or the sync
   engine. Two standard-library leaves of the publish package join what
@@ -94,6 +95,10 @@ markdown; fixture `.fit` files under `tests/fixtures/`.
   (today `relay_codes` and `relay_envelope`) import nothing else from the
   package: `relay_codes` imports only the standard library, and
   `relay_envelope` only the standard library and `relay_codes`.
+  The intervals connector (`connectors.intervals`) also imports
+  activity-identity's match rule (`identity.matching`) on its publish path only,
+  inside its listing-match helper, and names publish codes only through the
+  connector protocol's re-export, never by importing `publish`.
   `compose` (one activity from a base and its extras) imports
   `model` and `identity`, and in `compose.archive` alone `contract`,
   `layout` and `ingest`; `sync`, the load and benchmark passes and

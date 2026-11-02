@@ -127,3 +127,27 @@ user-facing docs then. The wellness-side note stays in `docs/connectors.md`'s
 `### Wellness`: the 403 message, `wellness = false`, and the Garmin export
 route. wellness-pull Requirement 12.2 requires it, and it documents a message
 the CLI prints. The fallback-route decision is still open.
+
+## Update (2026-11-02): Garmin relaunched its developer program, a new fallback candidate
+
+Garmin relaunched the Connect Developer Program on 2026-10-21 with three
+tiers (researched in a pkm-repo session on 2026-11-01; sources below).
+This adds a fallback candidate to step 3:
+
+- **Personal tier**: a user generates their own key in Garmin Connect, with
+  no review; pull-only Activity (JSON + .FIT), Health and Women's Health
+  APIs; free. This fits fitdocs' existing personal-key auth style (a
+  `fitdocs connect garmin` direct connector, no relay). Unknowns: history
+  depth, rate limits, and whether Garmin strips fields from the .FIT files
+  it serves.
+- **Starter tier** (free, a request form): push-only to a webhook, with no
+  pre-connect history. It would make the relay hold users' health data, so
+  it is a product decision, not a fallback.
+- **Agreement FRM-0952 Rev. B** §5.2(o) (no onward API to unapproved third
+  parties) and §6.4 (Garmin attribution) also bear on strava-publish and
+  relay-intervals republishing Garmin-recorded activities. That is the
+  maintainer's call before shipping those for Garmin-sourced pages.
+
+Sources: <https://developer.garmin.com/gc-developer-program/overview/>,
+<https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html>,
+<https://the5krunner.com/2026/10/22/garmin-personal-api/>.

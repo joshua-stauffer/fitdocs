@@ -68,10 +68,10 @@ is not yet shipped.
 Outdoor activities get a **Map** section drawn over real basemap tiles.
 Fetching those tiles, and the connector commands — `fitdocs connect`
 (authenticating once against a configured source, or registering with a
-relay), `fitdocs disconnect` (revoking a relay token) and `fitdocs pull`
-(fetching activities from it) — are the only times fitdocs touches the
-network. What leaves your machine and when, the persistent opt-out, choosing
-a provider, attribution, and the tile cache all now live in
+relay), `fitdocs disconnect` (revoking a relay token), `fitdocs pull`
+(fetching activities from it) and `fitdocs publish --yes` (posting to a
+publish target) — are the only times fitdocs touches the network. What leaves your machine
+and when, the persistent opt-out, choosing a provider, attribution, and the tile cache all now live in
 [Configuration](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/configuration.md#tiles-the-map-tile-provider-and-the-offline-opt-out).
 
 Each map file carries **one basemap image**: the tiles under the route,
@@ -156,8 +156,9 @@ and `fitdocs pull` fetches what's new from it straight into the inbox, where
 the existing drain picks it up like any other file. fitdocs ships two
 connectors: `folder`, which needs no service at all, and `intervals`, which
 pulls the original `.fit` files of an intervals.icu account with a personal
-API key; both run on the framework — credential storage, per-instance
-ledgers, and the pull report — any future connector builds on. See
+API key and also publishes posts to it; both run on the framework —
+credential storage, per-instance ledgers, and the pull report — any future
+connector builds on. See
 [Connectors](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/connectors.md)
 for the full interface: configuring an instance, the credentials directory,
 what leaves your machine and how to switch it off, and the terms-first

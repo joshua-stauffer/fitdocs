@@ -9,8 +9,8 @@ cache-first, fetching a miss politely and writing it through to the cache
 atomically before returning, and gates every request behind the persistent
 opt-out. This module and :mod:`fitdocs.connectors.http` (the connector
 transport ``fitdocs connect`` (relay registration included),
-``fitdocs disconnect`` and ``fitdocs pull`` send every request
-through) are the package's only two network-touching modules.
+``fitdocs disconnect``, ``fitdocs pull`` and ``fitdocs publish --yes`` send
+every request through) are the package's only two network-touching modules.
 
 Settings half
 -------------
@@ -248,8 +248,8 @@ def _setting_url(table: dict[str, Any], path: Path) -> str:
 #
 # The network-touching code for map tiles; :mod:`fitdocs.connectors.http`,
 # the connector transport ``fitdocs connect`` (relay registration included),
-# ``fitdocs disconnect`` and ``fitdocs pull`` send every request through, is
-# the package's other network-touching module.
+# ``fitdocs disconnect``, ``fitdocs pull`` and ``fitdocs publish --yes`` send
+# every request through, is the package's other network-touching module.
 # Everything above is pure configuration parsing; everything below reaches
 # the filesystem cache and, on a miss, the configured provider over HTTPS.
 # ===========================================================================
@@ -415,7 +415,8 @@ def _default_fetch(url: str) -> bytes:
     This module's only network call, one of the requests that fetch map
     tiles; :mod:`fitdocs.connectors.http` makes the package's other kind of
     network call, on behalf of ``fitdocs connect`` (relay registration
-    included), ``fitdocs disconnect`` and ``fitdocs pull``.
+    included), ``fitdocs disconnect``, ``fitdocs publish --yes`` and
+    ``fitdocs pull``.
     Issues a single GET carrying
     :func:`_user_agent` (OSM blocks default library UAs) and a
     :data:`_FETCH_TIMEOUT_SECONDS`-second timeout, returning the raw response

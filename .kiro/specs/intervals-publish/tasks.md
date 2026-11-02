@@ -36,9 +36,9 @@ command and no runtime dependency, so no version or command-count pin
 moves. Nothing under `website/content/` is edited (R9); the site copy is
 `.kiro/queue/2026-10-31-intervals-publish-site-copy.md`.
 
-- [ ] 1. Foundation: the update method and the upload switch
+- [x] 1. Foundation: the update method and the upload switch
 
-- [ ] 1.1 (P) Add the update method to the connector transport
+- [x] 1.1 (P) Add the update method to the connector transport
   - Admit the update method in the request value and add the client's update
     helper beside the existing post helper, taking a body, plain and secret
     headers, and publish-core's single-attempt marker.
@@ -57,7 +57,7 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
   - _Requirements: 5.5_
   - _Boundary: TransportPut_
 
-- [ ] 1.2 (P) Read the per-instance upload switch
+- [x] 1.2 (P) Read the per-instance upload switch
   - The intervals.icu settings gain an upload switch, off when the key is
     absent; a boolean sets it; any other value is a settings error naming the
     key and the offending value, which the framework reports naming the
@@ -72,9 +72,9 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
   - _Requirements: 1.5, 2.1, 2.3_
   - _Boundary: IntervalsDeclaration_
 
-- [ ] 2. Core: finding the activity and writing to it
+- [x] 2. Core: finding the activity and writing to it
 
-- [ ] 2.1 Map intervals.icu's answers into publish codes
+- [x] 2.1 Map intervals.icu's answers into publish codes
   - Add the three request kinds (a read, a write safe to repeat, a write that
     creates), the answer classes, the success statuses per kind, and the one
     answer table of the design, with every cell a code a publish target may
@@ -96,7 +96,7 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
   - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 8.2, 8.3_
   - _Boundary: AnswerMapping_
 
-- [ ] 2.2 Find the activity through the recorded link and the pull record
+- [x] 2.2 Find the activity through the recorded link and the pull record
   - Read the instance's own pull record read-only through the connectors
     ledger reader; an absent record names no activity; an unreadable one is
     reported to the caller as the local-record-unreadable code (which the
@@ -120,7 +120,7 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 8.3_
   - _Boundary: ActivityFinding_
 
-- [ ] 2.3 List the activities around the page's start
+- [x] 2.3 List the activities around the page's start
   - Compute the local-date window from the page's UTC start date, one day
     before through two days after, as date-time bounds; request the listing
     for the key's own athlete with exactly the design's fields, through the
@@ -139,7 +139,7 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
   - _Requirements: 3.5, 7.4, 9.3, 9.5_
   - _Boundary: ActivityFinding_
 
-- [ ] 2.4 Match the listing one-to-one
+- [x] 2.4 Match the listing one-to-one
   - Over entries not already answered absent: the one non-Strava entry
     carrying the publication id as its external identifier; otherwise the one
     non-Strava entry for which activity-identity's rule gives the strict
@@ -167,7 +167,7 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
   - _Requirements: 3.6, 3.7, 3.8, 4.1, 4.2_
   - _Boundary: ActivityFinding_
 
-- [ ] 2.5 Update an activity's name and description
+- [x] 2.5 Update an activity's name and description
   - Send one update to the activity's address with a JSON body holding
     exactly the post's title as the name and its description, an empty
     description sent empty, through the unmarked data-mode client with the
@@ -184,7 +184,7 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
   - _Boundary: ActivityWrites_
   - _Depends: 1.1_
 
-- [ ] 2.6 Upload the base file once
+- [x] 2.6 Upload the base file once
   - Read the page's base file from the archive only when it is present,
     readable and hashes to the base digest; otherwise no file.
   - Build the one-part multipart body (field, file name, content type and the
@@ -204,9 +204,9 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
   - _Requirements: 6.2, 6.3, 6.4, 6.7, 9.5_
   - _Boundary: ActivityWrites_
 
-- [ ] 3. Integration: the publish operation and the target
+- [x] 3. Integration: the publish operation and the target
 
-- [ ] 3.1 Answer publish requests and declare the publish target
+- [x] 3.1 Answer publish requests and declare the publish target
   - Implement the publish operation in the design's order: the recorded
     link, the pull record, the facts check, the listing match, then the
     absent branch (local record unreadable when the pull record could not be
@@ -240,7 +240,7 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.2, 3.4, 3.9, 3.10, 4.2, 5.3, 6.1, 6.5, 6.6, 6.7, 6.8, 7.1, 7.8, 9.4_
   - _Depends: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6_
 
-- [ ] 3.2 Guard the publish path against service text
+- [x] 3.2 Guard the publish path against service text
   - Add the call-graph test: parse the intervals module, follow every
     module-level function a call reachable from the publish operation names,
     and assert that the two service-message helpers, the generic failure
@@ -255,7 +255,7 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
     from the listing helper.
   - _Requirements: 8.1_
 
-- [ ] 3.3 Publish through the CLI end to end
+- [x] 3.3 Publish through the CLI end to end
   - Over a synced temporary data root with an intervals instance, its key in
     the override variable and the CLI's connector transport patched to a
     scripted transport, run `fitdocs publish --yes` for a page that opts in.
@@ -278,9 +278,9 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
   - _Requirements: 1.3, 2.3, 5.3, 6.5, 9.1, 9.6_
   - _Depends: 3.1_
 
-- [ ] 4. Documentation, network statements and records
+- [x] 4. Documentation, network statements and records
 
-- [ ] 4.1 Document publishing in the intervals.icu section
+- [x] 4.1 Document publishing in the intervals.icu section
   - Rewrite the section's opening (pulls and publishes; writes only an
     activity's name and description, and the base file while uploads are
     on), remove "It never writes to the account.", add the switch to
@@ -305,7 +305,7 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
   - _Requirements: 11.1, 11.2, 11.3_
   - _Depends: 3.1_
 
-- [ ] 4.2 Name `fitdocs publish --yes` in every network statement
+- [x] 4.2 Name `fitdocs publish --yes` in every network statement
   - In every statement that lists the commands making network requests
     (README "Route maps", `docs/configuration.md` twice, the CLI module
     docstring, the sync engine's docstring, the tiles module three times,
@@ -335,7 +335,7 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
   - _Requirements: 10.1, 10.2, 10.3, 10.4_
   - _Depends: 4.1_
 
-- [ ] 4.3 (P) Record the changelog, the amendments and the steering
+- [x] 4.3 (P) Record the changelog, the amendments and the steering
   - Append the Unreleased entries (Added: publishing to intervals.icu, the
     switch, the direct link; Changed: the connector writes to the account for
     pages that opt in, and, unless an earlier publish target's entry already
@@ -365,9 +365,9 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
   - _Boundary: Records_
   - _Depends: 3.1_
 
-- [ ] 5. Validation
+- [x] 5. Validation
 
-- [ ] 5.1 Prove the privacy and offline guarantees
+- [x] 5.1 Prove the privacy and offline guarantees
   - Through the CLI with an intervals instance configured: `fitdocs publish`
     without `--yes` and `fitdocs publish --targets` against an empty script
     (any request fails the test); a posting run whose every scripted body and
@@ -401,3 +401,19 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
   - Done when the findings section exists with every TBC-P item confirmed or
     contradicted, and any contradiction's repair is merged.
   - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5_
+
+## Implementation Notes
+
+- 2.1: `_activity_link` does not check its argument (design); Req 8.2 "link only from a usable id" must be pinned at each caller (2.2, 2.6, 3.1). Design claims every `_activity_link` result passes publish-core `valid_link` — untested so far; 3.1 should assert it.
+- 2.2: test fixtures use instance `icu-main` (not the connector id) and `_write` appends a hand line so a canonical re-save is visible; keep both when adding ledger tests. Malformed ids must be tested in each tier separately (review found an unfiltered tier-2 survivor).
+- 2.3: response parsing must survive hostile 200 bodies — catch RecursionError with ValueError around json.loads, treat float() OverflowError as absent, decode strictly as UTF-8 (fixtures: utf-16 JSON and a latin-1 byte). 2.6 (upload answer parser) should reuse the same shape.
+- 2.4: time-comparison tests need a non-UTC page start (+02:00), or instant-vs-wall-clock mutations survive. `_match_listing` imports `fitdocs.identity.matching` lazily; tests patch `matching.pair_evidence` by module attribute, so keep the call-time `matching.pair_evidence` lookup.
+- 2.5: "body never read" needs a per-status result assertion plus a wide tripwire bytes subclass; buffer-protocol reads cannot be intercepted on 3.11. Scripted 200s should carry a realistic non-empty body. 2.6 and 3.2 (sentinel) should reuse this.
+- 2.6 RULING (controller): the multipart boundary is re-chosen whenever `--<boundary>` occurs anywhere in the file (substring), a strict superset of the design's "delimiter line" condition. Kept as safer, still deterministic, and consistent with RFC 2046; pinned by test_the_boundary_collision_reaches_the_wire. `_Tripwire` is module-level in test_intervals_publish.py; reuse it for 3.2.
+- 3.1: the `_Flow` harness in test_intervals_publish.py never merges requests. `_publish` asserts per-(method, path) raw counts equal one logical request (simulated from http.MAX_DATA_ATTEMPTS / RETRYABLE_STATUSES, which test_http.py pins with literals), and asserts the exact credential header on every request. Reuse `_Flow`/`_publish` for 3.2. Becoming a publish target changed tests/connectors/test_e2e.py offline publish output (bare root: "No publish target is configured."). 3.3/5.1 may need the same.
+- 3.2: the AST walker `_reachable` follows module functions, `self.` methods and every module-level class a reachable body names, and records attribute names, so qualified calls count. The sentinel test checks result fields, stdout, stderr and caplog.
+- 3.3: the CLI e2e tests live in tests/connectors/test_intervals_publish_cli.py. A refusal test must first make the page due again (change the target title), or "nothing sent / byte-identical" holds before the run.
+- 4.3: amendments taken: connectors 8, intervals-connector 2, distribution 8 (in-place tags on the criteria they change). The CHANGELOG Changed bullet claims the network statements name `fitdocs publish --yes`, which is true only after 4.2. Changelog pins read through `read_unreleased_since(_, V0_2_0)` so they survive the next cut.
+- 4.1: the docs codes notes were rewritten from the complete list of what `publish()` returns; each claim is observed by a `_Flow` scenario. Pins in tests/connectors/test_intervals_docs.py bind the answer table to ANSWER_CODES, success statuses to SUCCESS_STATUSES, and the window, file name and fields to their constants. Three review rounds found missing members of exception lists; when the flow changes, re-derive the notes rather than patch them.
+- 4.2: tests/connectors/test_network_statements.py has `_names_publish_command` (shared name with strava-publish) and position pins for tech.md and docs/connectors.md (`_tech_position_ok`, `_connectors_position_ok`), because a presence-only pin passed when `--yes` moved into the no-request list. The connectors page names intervals.icu only by host plus a section pointer, per its preamble.
+- Validation: wellness-pull Req 7.1 ("pull-activities and pull-wellness and no other") was also falsified by 3.1, though Req 11.5 does not list it, so wellness-pull Amendment 1 records it. The 4.3 changelog test docstring held the literal release version, which tests/test_version_identity.py forbids; branch CI missed it because it was already red from the UTC-zone test.

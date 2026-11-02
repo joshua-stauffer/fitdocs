@@ -9,7 +9,7 @@ kind: docs
 area: intervals-publish, website/content/guides/connectors.md, website/content/guides/privacy-and-network.md, website/content/reference/configuration.md
 created: 2026-10-31
 surfaced_by: /kiro-spec-batch Phase 14 (intervals-publish spec writer)
-pinned_at: bddc0a46
+pinned_at: 53492a09
 resume_command: "do: at the release that ships intervals-publish, update the site lines listed in .kiro/queue/2026-10-31-intervals-publish-site-copy.md on the site-copy branch (never on main before the release is on PyPI)"
 context:
   - .kiro/specs/intervals-publish/design.md
@@ -51,7 +51,7 @@ The site would tell users the connector never writes to their account after
 a release in which it can. That is a false privacy statement.
 
 ## Evidence
-At `bddc0a46` (branch `chore/p14-intervals-publish`):
+At `53492a09` (branch `impl/ip-records`, verified 2026-11-02):
 - `website/content/guides/connectors.md:14`: "- **`intervals`** reads an
   [intervals.icu](https://intervals.icu) account with your own API key. It
   never writes to the account."

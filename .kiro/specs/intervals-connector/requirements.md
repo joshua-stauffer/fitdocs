@@ -102,7 +102,7 @@ real account before the connector is used on a real data root.
 **Objective:** As an athlete, I want to connect my intervals.icu account once with the personal API key from its developer settings, so that later pulls run unattended without my password ever being stored.
 
 #### Acceptance Criteria
-1. The intervals.icu connector shall declare exactly one credential field, the athlete's personal API key, marked secret, and shall declare the pull-activities capability and no other.
+1. The intervals.icu connector shall declare exactly one credential field, the athlete's personal API key, marked secret, and shall declare the pull-activities capability and no other. *(amended by Amendment 2: beside pull-activities and pull-wellness (Amendment 1), the three publish capabilities and a link label are also declared)*
 2. When `fitdocs connect` verifies a key for an intervals.icu instance, the intervals.icu connector shall make exactly one read request for the key's own athlete, authenticated with that key, and shall never repeat it, whatever intervals.icu answers.
 3. When intervals.icu accepts the verification request, the intervals.icu connector shall report that no scopes were granted, recording the scopes as absent rather than as an empty grant.
 4. If intervals.icu answers the verification request as unauthorized, the intervals.icu connector shall report a rejected key; if it answers as forbidden, a blocked client; if it answers as rate-limited, a rate limit with any wait the service states; if it answers with a server error, or with any other status that is not success, the service as unavailable, naming the status.
@@ -115,7 +115,7 @@ real account before the connector is used on a real data root.
 1. Where a connectors instance names the intervals.icu connector, the intervals.icu connector shall accept an optional source filter listing intervals.icu source names, and shall default it to only the activities intervals.icu received from Garmin Connect.
 2. If the source filter is not a non-empty list, or any entry is not a source name written in intervals.icu's upper-case form (letters, digits and underscores, starting with a letter), the fitdocs CLI shall stop with a configuration error naming the settings file, the instance, the key and the offending value, before any request and before any write.
 3. When the source filter names a well-formed source name that intervals.icu's published vocabulary does not list, the intervals.icu connector shall accept it, so that a source intervals.icu adds later can be pulled without a fitdocs upgrade.
-4. The intervals.icu connector shall ignore instance keys it does not recognize.
+4. The intervals.icu connector shall ignore instance keys it does not recognize. *(amended by Amendment 2: `publish_upload` is recognized)*
 
 ### Requirement 3: Listing Activities by Date Range
 **Objective:** As an athlete running pulls on a schedule, I want each pull to list exactly the intervals.icu activities that started within its window, so that new rides arrive and nothing already handled is fetched again.
@@ -205,3 +205,19 @@ The Boundary Context's out-of-scope wellness exclusion is lifted for listing
 and packaging (wellness-pull Requirements 7–9). Requirement 9's live check
 gains the wellness items, recorded in wellness-pull's `research.md`
 (wellness-pull Requirement 11).
+
+## Amendment 2 (2026-11-02): the connector also publishes, landed by intervals-publish
+
+Landed by intervals-publish. Existing criteria and approvals are preserved
+word-for-word; nothing is renumbered.
+
+- Requirement 1 criterion 1 now also declares the three publish capabilities
+  (push activity, annotate remote activity and resolve remote activity) beside
+  pull-activities and pull-wellness, and a link label.
+- Requirement 2 criterion 4: the ignored keys exclude `publish_upload`, which
+  the connector reads (an optional boolean, default `false`).
+- The design's responsibility "it never reads a page, the ledger, the archive
+  or the inbox" now reads: the pull never does; the publish operation reads
+  the instance's own ledger and the one base file a request names.
+- The publish behavior is intervals-publish Requirements 3-8; Requirement 9's
+  live check is extended by intervals-publish Requirement 12.

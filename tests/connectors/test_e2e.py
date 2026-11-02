@@ -16,15 +16,17 @@ guard, registry snapshot/restore, credentials/environment isolation):
    never the pull's.
 2. With ``[connectors]`` configured, every command Req 14.1 names that is
    not ``connect``/``pull`` itself -- ``sync``, ``regen``, ``load``,
-   ``check``, ``history``, ``plan``, ``publish`` (a dry run and ``--targets``),
-   ``derive-benchmarks``, ``index``,
+   ``check``, ``history``, ``plan``, ``publish`` (a dry run and ``--targets``; see
+   below), ``derive-benchmarks``, ``index``,
    ``query``, ``dashboard refresh`` and ``recovery`` -- completing exactly as
    it would with no ``[connectors]`` table at all: same exit code and output, the
    same number of socket attempts as the bare run (an in-test recorder that
    also raises), and no call on a scripted connector. ``publish`` is the one
-   exception to "same output": the wired root's Strava instance is a publish
-   target, so its dry run and ``--targets`` name it where the bare root reports
-   none; both outputs are pinned literally, with no socket attempt either way.
+   exception to "same output": the wired root carries two publish targets (a
+   Strava instance and a wellness-enabled intervals instance), so its dry run
+   and ``--targets`` differ from the bare root's "No publish target" report;
+   ``--targets`` lists both and both outputs are pinned literally, with no
+   socket attempt either way.
 """
 
 from __future__ import annotations
@@ -519,13 +521,17 @@ def test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded(
         str(wired_location.database), "<resolved-index-database>"
     )
     if command == "publish":
-        # A publish target now exists in the wired root only, so the two
-        # outputs differ by construction; the wired run is pinned literally.
+        # Publish targets exist in the wired root only (a Strava instance and a
+        # wellness-enabled intervals instance), so the two outputs differ by
+        # construction; the wired run is pinned literally.
         assert bare_output == "No publish target is configured.\n"
         if args == ["--targets"]:
             assert wired_output == (
                 "strava-src: strava (Strava); capabilities: push-activity, "
                 "annotate-remote-activity, resolve-remote-activity; "
+                "state: ready\n"
+                "wellness-src: intervals (intervals.icu); capabilities: "
+                "push-activity, annotate-remote-activity, resolve-remote-activity; "
                 "state: ready\n\n"
                 "ready: This target is configured and has the credentials "
                 "it needs.\n"

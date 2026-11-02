@@ -292,6 +292,27 @@ def _names_registration(window: str) -> bool:
     )
 
 
+def _names_publish_command(window: str) -> bool:
+    """The window names ``fitdocs publish --yes``, the one form of the command
+    that makes requests. A bare ``fitdocs publish`` or ``fitdocs publish
+    --targets`` does not count."""
+    return "fitdocs publish --yes" in _collapse(window).lower()
+
+
+def _names_publish_no_request_forms(text: str) -> bool:
+    """The text says that ``fitdocs publish`` without ``--yes`` and ``fitdocs
+    publish --targets`` make no request, in one sentence."""
+    collapsed = _collapse(text).lower()
+    return (
+        re.search(
+            r"`fitdocs publish` without `--yes` and `fitdocs publish --targets` "
+            r"make (?:none|no request)",
+            collapsed,
+        )
+        is not None
+    )
+
+
 def _names_connector_transport_module(window: str) -> bool:
     return "fitdocs.connectors.http" in _collapse(window)
 
@@ -609,15 +630,14 @@ def test_rewriting_the_registration_clause_as_a_registered_source_reds_the_pin(
         (
             "tiles.py:407",
             "``fitdocs connect`` (relay registration included), "
-            "``fitdocs disconnect`` and",
+            "``fitdocs disconnect``,",
             "``fitdocs connect``, ``fitdocs disconnect`` (ending a relay "
-            "registration) and",
+            "registration),",
         ),
         (
             "docs/configuration.md:94-100",
-            "`fitdocs connect` (including a relay registration), "
-            "`fitdocs disconnect` and",
-            "`fitdocs connect`, `fitdocs disconnect` (ending a relay registration) and",
+            "`fitdocs connect` (including a relay registration), `fitdocs disconnect`,",
+            "`fitdocs connect`, `fitdocs disconnect` (ending a relay registration),",
         ),
         (
             "docs/connectors.md:what-leaves",
@@ -722,9 +742,7 @@ def test_dropping_pull_clause_from_configuration_opener_reds_the_positive_pin() 
     text = path.read_text(encoding="utf-8")
     window_before = _window_after(text, start, end)
     assert _names_tiles_and_both_commands(window_before)  # true before the mutation
-    mutated_text = _delete_phrase(
-        text, "and `fitdocs pull` (fetching activities from it)"
-    )
+    mutated_text = _delete_phrase(text, "`fitdocs pull` (fetching activities from it)")
     mutated_window = _window_after(mutated_text, start, end)
     assert not _names_tiles_and_both_commands(mutated_window)
 
@@ -965,3 +983,224 @@ def test_steering_publishes_the_relay_server_and_its_network_calls() -> None:
         "package: `relay_codes` imports only the standard library, and "
         "`relay_envelope` only the standard library and `relay_codes`."
     ) in flat_structure
+
+
+# --------------------------------------------------------------------------
+# Publishing (intervals-publish Req 10.1-10.4): every window names
+# `fitdocs publish --yes`; the statements that list commands making no
+# request name the forms that make none.
+# --------------------------------------------------------------------------
+
+
+def test_every_rewritten_place_names_publish_yes() -> None:
+    assert len(REWRITTEN_PLACES) == 9, "a place was added or dropped"
+    for rel_path, label, start, end in REWRITTEN_PLACES:
+        text = (_REPO_ROOT / rel_path).read_text(encoding="utf-8")
+        window = _window_after(text, start, end)
+        assert _names_publish_command(window), (
+            f"{label} ({rel_path}) does not name `fitdocs publish --yes`"
+        )
+
+
+def test_publish_predicate_accepts_only_the_yes_form() -> None:
+    assert _names_publish_command("and ``fitdocs publish --yes`` (requests)")
+    assert _names_publish_command("`fitdocs\npublish --yes`")
+    assert not _names_publish_command("and `fitdocs publish` (a dry run)")
+    assert not _names_publish_command("`fitdocs publish --targets` lists")
+    assert not _names_publish_command("`fitdocs publish` without `--yes`")
+
+
+@pytest.mark.parametrize("label", [lbl for _p, lbl, _s, _e in REWRITTEN_PLACES])
+def test_dropping_publish_yes_from_a_place_reds_the_publish_pin(label: str) -> None:
+    """Named mutation, one per place: `fitdocs publish --yes` becomes the bare
+    `fitdocs publish` inside that place's own window; the window's other pins
+    stay green."""
+    rel_path, start, end = _place_anchors(label)
+    text = (_REPO_ROOT / rel_path).read_text(encoding="utf-8")
+    assert _names_publish_command(_window_after(text, start, end))  # true before
+    mutated = _mutate_window(
+        text, start, end, r"fitdocs(\s+)publish(\s+)--yes", r"fitdocs\1publish"
+    )
+    window = _window_after(mutated, start, end)
+    assert not _names_publish_command(window)
+    assert _names_tiles_and_both_commands(window)
+    assert _names_disconnect(window)
+    assert _names_registration(window)
+
+
+@pytest.mark.parametrize("label", [lbl for _p, lbl, _s, _e in REWRITTEN_PLACES])
+def test_naming_publish_without_the_command_reds_the_publish_pin(label: str) -> None:
+    """Named mutation, one per place: `fitdocs publish --yes` becomes
+    `fitdocs publish --targets` (the command is named, the form that makes
+    requests is not)."""
+    rel_path, start, end = _place_anchors(label)
+    text = (_REPO_ROOT / rel_path).read_text(encoding="utf-8")
+    mutated = _mutate_window(
+        text,
+        start,
+        end,
+        r"fitdocs(\s+)publish(\s+)--yes",
+        r"fitdocs\1publish\2--targets",
+    )
+    window = _window_after(mutated, start, end)
+    assert "fitdocs publish --targets" in _collapse(window)
+    assert not _names_publish_command(window)
+
+
+def _network_section_of_tech() -> str:
+    tech = (_REPO_ROOT / ".kiro" / "steering" / "tech.md").read_text(encoding="utf-8")
+    return tech.split("## Network and Credentials", 1)[1].split(
+        "## Development Standards", 1
+    )[0]
+
+
+def test_tech_names_publish_yes_among_the_commands_that_make_requests() -> None:
+    network = _network_section_of_tech()
+    assert _names_publish_command(network)
+    assert _names_publish_no_request_forms(network)
+
+
+def test_dropping_publish_yes_from_tech_reds_the_publish_pin() -> None:
+    network = _network_section_of_tech()
+    mutated, count = re.subn(r"`fitdocs publish --yes`", "`fitdocs publish`", network)
+    assert count >= 1
+    assert not _names_publish_command(mutated)
+    assert _names_publish_no_request_forms(mutated)
+
+
+def test_dropping_the_no_request_forms_from_tech_reds_the_pin() -> None:
+    network = _network_section_of_tech()
+    mutated, count = re.subn(
+        r"`fitdocs publish` without `--yes` and `fitdocs publish --targets` make none",
+        "",
+        _collapse(network),
+    )
+    assert count == 1
+    assert not _names_publish_no_request_forms(mutated)
+    assert _names_publish_command(mutated)
+
+
+def _what_leaves_section() -> str:
+    text = (_REPO_ROOT / "docs" / "connectors.md").read_text(encoding="utf-8")
+    return text.split("\n## What leaves your machine\n", 1)[1].split("\n## ", 1)[0]
+
+
+def test_connectors_page_says_where_a_publish_request_goes() -> None:
+    """Req 10.3: the intervals.icu instance's publish requests go to
+    intervals.icu, by name and section link, with no URL."""
+    section = _what_leaves_section()
+    flat = _collapse(section)
+    assert (
+        "An [intervals.icu](#intervalsicu) instance's publish requests go to "
+        "intervals.icu"
+    ) in flat
+    assert "://" not in section
+    assert _names_publish_no_request_forms(section)
+    assert "No other fitdocs command ever makes a connector request" not in flat
+
+
+def test_dropping_the_host_line_from_the_connectors_page_reds_the_pin() -> None:
+    flat = _collapse(_what_leaves_section())
+    mutated = flat.replace(
+        "publish requests go to intervals.icu", "publish requests go"
+    )
+    assert mutated != flat
+    assert "publish requests go to intervals.icu" not in mutated
+
+
+def _tech_request_list(network: str) -> str:
+    """The span that lists the commands making connector requests."""
+    flat = _collapse(network)
+    return flat.split("Connector requests happen only during", 1)[1].split(
+        "every other command \u2014", 1
+    )[0]
+
+
+def _tech_no_request_sentence(network: str) -> str:
+    flat = _collapse(network)
+    start = flat.index("`fitdocs publish` without")
+    return flat[start : flat.index(" make none.", start)]
+
+
+def _tech_position_ok(network: str) -> bool:
+    return (
+        _names_publish_command(_tech_request_list(network))
+        and "publish --yes" not in _tech_no_request_sentence(network)
+        and _tech_no_request_sentence(network).startswith(
+            "`fitdocs publish` without `--yes` and `fitdocs publish --targets`"
+        )
+    )
+
+
+def test_tech_publish_yes_is_in_the_request_list_not_the_no_request_sentence() -> None:
+    assert _tech_position_ok(_network_section_of_tech())
+
+
+def test_moving_publish_yes_into_the_tech_no_request_sentence_reds_the_pin() -> None:
+    """Named mutation (M4): `fitdocs publish --yes` leaves the list of
+    commands that make requests and is named in the no-request sentence."""
+    network = _collapse(_network_section_of_tech())
+    mutated, n = re.subn(
+        r" and `fitdocs publish --yes` \(for each page it sends to a target, any of "
+        r"a listing, an update and an upload request, one at a time\)",
+        "",
+        network,
+    )
+    assert n == 1
+    mutated, n = re.subn(
+        r"`fitdocs publish` without `--yes`",
+        "`fitdocs publish --yes` and `fitdocs publish` without `--yes`",
+        mutated,
+    )
+    assert n == 1
+    assert _names_publish_command(mutated)  # presence alone is still true
+    assert _names_publish_no_request_forms(mutated)
+    assert not _tech_position_ok(mutated)
+
+
+def _connectors_request_clause(section: str) -> str:
+    flat = _collapse(section)
+    return flat.split("The only requests any connector instance makes", 1)[1].split(
+        "make for that instance", 1
+    )[0]
+
+
+def _connectors_no_request_sentence(section: str) -> str:
+    flat = _collapse(section)
+    start = flat.index("`fitdocs publish` without")
+    return flat[start : flat.index("configured or not.", start)]
+
+
+def _connectors_position_ok(section: str) -> bool:
+    return _names_publish_command(
+        _connectors_request_clause(section)
+    ) and not _names_publish_command(_connectors_no_request_sentence(section))
+
+
+def test_connectors_publish_yes_is_in_the_request_clause() -> None:
+    assert _connectors_position_ok(_what_leaves_section())
+
+
+def test_moving_publish_yes_into_the_connectors_no_request_sentence_reds_the_pin() -> (
+    None
+):
+    """Named mutation (M6): `fitdocs publish --yes` leaves "the only requests
+    ... make for that instance" and heads the no-request sentence."""
+    section = _collapse(_what_leaves_section())
+    mutated, n = re.subn(
+        r"pull` and `fitdocs publish --yes` make for that instance, while you are "
+        r"running one of those four commands",
+        "pull` make for that instance, while you are running one of those three "
+        "commands",
+        section,
+    )
+    assert n == 1
+    mutated, n = re.subn(
+        r"`fitdocs publish` without",
+        "`fitdocs publish --yes`, `fitdocs publish` without",
+        mutated,
+    )
+    assert n == 1
+    assert _names_publish_command(mutated)  # presence alone is still true
+    assert _names_publish_no_request_forms(mutated)
+    assert not _connectors_position_ok(mutated)

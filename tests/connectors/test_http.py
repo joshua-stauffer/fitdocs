@@ -393,6 +393,55 @@ def test_post_is_unmarked_by_default_and_retries_in_data_mode() -> None:
     assert all(r.single_attempt is False for r in transport.requests)
 
 
+# --- the update method (intervals-publish Req 5.5) ---------------------------
+
+
+def test_put_reaches_the_transport_with_its_method_body_and_secret_headers() -> None:
+    transport = FakeTransport([_response(200)])
+    client, _ = _client(transport, mode=CallMode.DATA)
+
+    response = client.put(
+        "https://svc.example/w/1",
+        body=b'{"name": "x"}',
+        headers={"Content-Type": "application/json"},
+        secret_headers={"Authorization": Secret(SECRET_VALUE)},
+    )
+
+    assert response.status == 200
+    assert len(transport.requests) == 1
+    sent = transport.requests[0]
+    assert sent.method == "PUT"
+    assert sent.url == "https://svc.example/w/1"
+    assert sent.body == b'{"name": "x"}'
+    assert sent.headers["Content-Type"] == "application/json"
+    assert sent.secret_headers["Authorization"].reveal() == SECRET_VALUE
+    assert sent.single_attempt is False
+
+
+def test_unmarked_put_in_data_mode_is_retried_like_any_data_request() -> None:
+    transport = FakeTransport([_response(503), _response(503), _response(200)])
+    client, sleeps = _client(transport, mode=CallMode.DATA)
+
+    response = client.put("https://svc.example/w/1", body=b"x")
+
+    assert response.status == 200
+    assert [r.method for r in transport.requests] == ["PUT", "PUT", "PUT"]
+    assert sleeps == [2.0, 4.0]
+
+
+def test_marked_put_is_sent_once_even_when_the_answer_is_retryable() -> None:
+    transport = FakeTransport([_response(503), _response(503), _response(200)])
+    client, sleeps = _client(transport, mode=CallMode.DATA)
+
+    response = client.put("https://svc.example/w/1", body=b"x", single_attempt=True)
+
+    assert response.status == 503
+    assert len(transport.requests) == 1
+    assert transport.requests[0].method == "PUT"
+    assert transport.requests[0].single_attempt is True
+    assert sleeps == []
+
+
 # --- DATA mode: bounded retries (Req 9.3) -----------------------------------
 
 
@@ -846,6 +895,27 @@ def test_urllib_transport_sends_the_secret_header_only_unredirected(
     # (mutation: `add_header` instead of `add_unredirected_header`).
     assert sent.unredirected_hdrs.get("Authorization") == SECRET_VALUE
     assert "Authorization" not in sent.headers
+
+
+def test_urllib_transport_sends_the_method_it_is_given_for_an_update(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_urlopen(
+        request: urllib.request.Request, timeout: float
+    ) -> _FakeUrlResponse:
+        captured["request"] = request
+        return _FakeUrlResponse(200, {}, b"")
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+
+    request = HttpRequest(method="PUT", url="https://svc.example/path", body=b"payload")
+    urllib_transport(request, 5.0)
+
+    sent: urllib.request.Request = captured["request"]
+    assert sent.get_method() == "PUT"
+    assert sent.data == b"payload"
 
 
 def test_urllib_transport_converts_httperror_into_a_response(

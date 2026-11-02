@@ -1,10 +1,14 @@
 """The intervals.icu connector (design.md "IntervalsConnector").
 
 Lists, filters and fetches intervals.icu originals for the key's own athlete
-with a personal API key. This module is the one module in the connectors
+with a personal API key, and publishes posts: it sets an activity's name and
+description, and, for an instance that turns uploads on, uploads the page's
+base file once. This module is the one module in the connectors
 package that names the service's address (the service-neutral scan admits it
 here, in its own tests and in its own documentation section only). It imports only the
-standard library and ``fitdocs.connectors.{errors,http,protocol,secrets}``,
+standard library and ``fitdocs.connectors.{errors,http,ledger,protocol,secrets}``,
+plus ``fitdocs.identity.matching``, imported inside the publish path's
+listing-match helper only (so importing the package loads no identity module),
 builds no HTTP client of its own, and reads no clock: ``session.now`` is the
 only time source.
 
@@ -21,11 +25,14 @@ import gzip
 import hashlib
 import io
 import json
+import math
 import re
 import zlib
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
+from enum import Enum, StrEnum
+from types import MappingProxyType
 from typing import Final, NoReturn
 from urllib.parse import quote, urlencode
 
@@ -38,11 +45,14 @@ from fitdocs.connectors.errors import (
 from fitdocs.connectors.http import (
     MAX_RESPONSE_BYTES,
     HttpResponse,
+    TransportError,
     auth_failure_from,
 )
+from fitdocs.connectors.ledger import LedgerError, load_ledger
 from fitdocs.connectors.protocol import (
     AuthStyle,
     Capability,
+    CompletedActivity,
     ConnectorSession,
     CredentialField,
     Declined,
@@ -50,6 +60,10 @@ from fitdocs.connectors.protocol import (
     FetchResult,
     Granted,
     Listing,
+    Post,
+    PublishCode,
+    PublishRequest,
+    PublishResult,
     RemoteActivity,
     SettingsContext,
     WellnessDay,
@@ -117,6 +131,9 @@ LISTING_FORM_MESSAGE: Final[str] = (
 SERVICE_MESSAGE_BODY_BYTES: Final[int] = 4096
 SERVICE_MESSAGE_CHARS: Final[int] = 300
 
+PUBLISH_UPLOAD_KEY: Final[str] = "publish_upload"
+LINK_LABEL: Final[str] = "intervals.icu"
+
 _SOURCE_NAME_RE = re.compile(SOURCE_NAME_PATTERN)
 
 
@@ -127,6 +144,10 @@ class IntervalsSettings:
 
     sources: frozenset[str]
     """The service-reported recording sources a pull keeps."""
+
+    publish_upload: bool = False
+    """Whether a publish may create an activity from the workout's source
+    file; off unless the instance's table sets it to ``true``."""
 
 
 class IntervalsDownloadError(Exception):
@@ -168,7 +189,16 @@ class IntervalsConnector:
     connector_id = INTERVALS_CONNECTOR_ID
     display_name = "intervals.icu"
     auth_style = AuthStyle.API_KEY
-    capabilities = frozenset({Capability.PULL_ACTIVITIES, Capability.PULL_WELLNESS})
+    capabilities = frozenset(
+        {
+            Capability.PULL_ACTIVITIES,
+            Capability.PULL_WELLNESS,
+            Capability.PUSH_ACTIVITY,
+            Capability.ANNOTATE_REMOTE_ACTIVITY,
+            Capability.RESOLVE_REMOTE_ACTIVITY,
+        }
+    )
+    link_label = LINK_LABEL
     credential_fields = (
         CredentialField(
             "api_key", "intervals.icu API key (Settings, Developer Settings)", True
@@ -180,16 +210,24 @@ class IntervalsConnector:
     ) -> IntervalsSettings:
         """``sources`` (optional): a non-empty list of upper-case source
         names; absent gives :data:`DEFAULT_SOURCES`. A name the published
-        vocabulary lacks is accepted. Every other key is ignored."""
+        vocabulary lacks is accepted. ``publish_upload`` (optional): a
+        boolean; absent is ``False``, any other value is refused. Every other
+        key is ignored."""
+        upload = table.get(PUBLISH_UPLOAD_KEY, False)
+        if not isinstance(upload, bool):
+            raise ConnectorSettingsError(
+                PUBLISH_UPLOAD_KEY,
+                f"{PUBLISH_UPLOAD_KEY} must be true or false, got {upload!r}",
+            )
         if "sources" not in table:
-            return IntervalsSettings(sources=DEFAULT_SOURCES)
+            return IntervalsSettings(sources=DEFAULT_SOURCES, publish_upload=upload)
         value = table["sources"]
         if not isinstance(value, list) or not value:
             raise _sources_error(value)
         for item in value:
             if not isinstance(item, str) or not _SOURCE_NAME_RE.fullmatch(item):
                 raise _sources_error(item)
-        return IntervalsSettings(sources=frozenset(value))
+        return IntervalsSettings(sources=frozenset(value), publish_upload=upload)
 
     def verify(
         self, session: ConnectorSession, values: Mapping[str, Secret]
@@ -364,6 +402,77 @@ class IntervalsConnector:
         return WellnessPackage(
             data, WELLNESS_SUFFIX, WELLNESS_FORMAT, frozenset(origins.values())
         )
+
+    def publish(
+        self, session: ConnectorSession, request: PublishRequest
+    ) -> PublishResult:
+        """Answer one publish request with one code (design.md
+        "IntervalsPublisher"): the recorded link, the pull record, the facts
+        check, the listing match, then the absent branch. Each activity is
+        updated at most once; one answered absent is excluded from every
+        later step. A link rides only with a landed code, always built from
+        a usable identifier. Never raises for an intervals.icu answer."""
+        settings = session.settings
+        if not isinstance(settings, IntervalsSettings):
+            raise ConnectorError(
+                "the intervals connector was given another connector's settings"
+            )
+        headers = _auth_headers(session, session.credentials.value("api_key"))
+        subject = request.subject
+        absent: set[str] = set()
+
+        def update(activity_id: str) -> PublishResult | None:
+            return _publish_update(session, headers, activity_id, request.post, absent)
+
+        linked = _linked_activity(request.recorded_link)
+        if linked is not None:
+            answered = update(linked)
+            if answered is not None:
+                return answered
+        recorded = _record_activity(session, subject)
+        record_unreadable = recorded is PublishCode.LOCAL_RECORD_UNREADABLE
+        if recorded is PublishCode.AMBIGUOUS:
+            return PublishResult(PublishCode.AMBIGUOUS)
+        if isinstance(recorded, str) and recorded not in absent:
+            answered = update(recorded)
+            if answered is not None:
+                return answered
+        if subject.start.utcoffset() is None or (
+            subject.distance_m is None and subject.elapsed_s is None
+        ):
+            return PublishResult(PublishCode.ACTIVITY_FACTS_MISSING)
+        listed = _list(session, headers, subject)
+        if isinstance(listed, PublishCode):
+            return PublishResult(listed)
+        matched = _match_listing(listed, subject, request.publication_id, absent=absent)
+        if isinstance(matched, PublishCode):
+            return PublishResult(matched)
+        if matched is not None:
+            answered = update(matched)
+            if answered is not None:
+                return answered
+        if record_unreadable:
+            return PublishResult(PublishCode.LOCAL_RECORD_UNREADABLE)
+        if not settings.publish_upload:
+            return PublishResult(PublishCode.NOT_FOUND)
+        data = _base_file(subject)
+        if data is None:
+            return PublishResult(PublishCode.ACTIVITY_FILE_MISSING)
+        uploaded = _upload(session, headers, data, request.publication_id)
+        if isinstance(uploaded, PublishCode):
+            return PublishResult(uploaded)
+        named = uploaded.activity_id
+        if named is None or named in absent:
+            return PublishResult(PublishCode.UNCONFIRMED)
+        confirmed = _update(session, headers, named, request.post)
+        if confirmed is UpdateResult.CONFIRMED:
+            return PublishResult(
+                PublishCode.UPLOADED if uploaded.created else PublishCode.POSTED,
+                _activity_link(named),
+            )
+        if uploaded.created or confirmed is UpdateResult.ABSENT:
+            return PublishResult(PublishCode.UNCONFIRMED)
+        return PublishResult(confirmed)
 
     def fetch_activity(
         self, session: ConnectorSession, activity: RemoteActivity
@@ -684,3 +793,540 @@ def _envelope_bytes(records: list[dict[str, object]], origins: dict[str, str]) -
         ).encode("utf-8")
         + b"\n"
     )
+
+
+# --- Publish: intervals.icu's answers as publish codes ----------------------
+# (intervals-publish design.md "AnswerMapping"; Req 7.1-7.7, 8.2, 8.3)
+
+
+class CallKind(StrEnum):
+    """What a request does, which alone decides how its answers map."""
+
+    READ = "read"  # the listing; retried by the transport
+    UPDATE = "update"  # a write that is safe to repeat; retried by the transport
+    CREATE = "create"  # a write that creates something; single attempt
+
+
+class AnswerClass(StrEnum):
+    SUCCESS = "success"
+    UNAUTHORIZED = "401"
+    FORBIDDEN = "403"
+    NOT_FOUND = "404"
+    RATE_LIMITED = "429"
+    CLIENT_ERROR = "other 4xx"
+    SERVER_ERROR = "5xx"
+    OTHER = "other status"
+    NETWORK_FAILURE = "network failure"
+
+
+SUCCESS_STATUSES: Final[Mapping[CallKind, frozenset[int]]] = MappingProxyType(
+    {
+        CallKind.READ: frozenset({200}),
+        CallKind.UPDATE: frozenset({200}),
+        CallKind.CREATE: frozenset({200, 201}),
+    }
+)
+
+
+def _row(
+    read: PublishCode | None, update: PublishCode | None, create: PublishCode | None
+) -> Mapping[CallKind, PublishCode | None]:
+    return MappingProxyType(
+        {CallKind.READ: read, CallKind.UPDATE: update, CallKind.CREATE: create}
+    )
+
+
+# ``None``: the calling flow decides.
+ANSWER_CODES: Final[Mapping[AnswerClass, Mapping[CallKind, PublishCode | None]]] = (
+    MappingProxyType(
+        {
+            AnswerClass.SUCCESS: _row(None, None, None),
+            AnswerClass.UNAUTHORIZED: _row(
+                PublishCode.AUTH_REJECTED,
+                PublishCode.AUTH_REJECTED,
+                PublishCode.AUTH_REJECTED,
+            ),
+            AnswerClass.FORBIDDEN: _row(
+                PublishCode.PERMISSION_DENIED,
+                PublishCode.PERMISSION_DENIED,
+                PublishCode.PERMISSION_DENIED,
+            ),
+            AnswerClass.NOT_FOUND: _row(
+                PublishCode.REJECTED, None, PublishCode.REJECTED
+            ),
+            AnswerClass.RATE_LIMITED: _row(
+                PublishCode.RATE_LIMITED,
+                PublishCode.RATE_LIMITED,
+                PublishCode.RATE_LIMITED,
+            ),
+            AnswerClass.CLIENT_ERROR: _row(
+                PublishCode.REJECTED, PublishCode.REJECTED, PublishCode.REJECTED
+            ),
+            AnswerClass.SERVER_ERROR: _row(
+                PublishCode.UNAVAILABLE,
+                PublishCode.UNAVAILABLE,
+                PublishCode.UNCONFIRMED,
+            ),
+            AnswerClass.OTHER: _row(
+                PublishCode.UNAVAILABLE,
+                PublishCode.UNCONFIRMED,
+                PublishCode.UNCONFIRMED,
+            ),
+            AnswerClass.NETWORK_FAILURE: _row(
+                PublishCode.UNAVAILABLE,
+                PublishCode.UNAVAILABLE,
+                PublishCode.UNCONFIRMED,
+            ),
+        }
+    )
+)
+
+ACTIVITY_ID_PATTERN: Final[str] = r"^[A-Za-z0-9]{1,64}$"
+ACTIVITY_LINK_BASE: Final[str] = "https://intervals.icu/activities/"
+
+_SPECIFIC_CLASSES: Final[Mapping[int, AnswerClass]] = MappingProxyType(
+    {
+        401: AnswerClass.UNAUTHORIZED,
+        403: AnswerClass.FORBIDDEN,
+        404: AnswerClass.NOT_FOUND,
+        429: AnswerClass.RATE_LIMITED,
+    }
+)
+
+
+def _answer_class(kind: CallKind, status: int) -> AnswerClass:
+    """Classify an HTTP status for one request kind (a transport failure is
+    ``AnswerClass.NETWORK_FAILURE``, chosen by the caller)."""
+    if status in SUCCESS_STATUSES[kind]:
+        return AnswerClass.SUCCESS
+    if status in _SPECIFIC_CLASSES:
+        return _SPECIFIC_CLASSES[status]
+    if 400 <= status <= 499:
+        return AnswerClass.CLIENT_ERROR
+    if 500 <= status <= 599:
+        return AnswerClass.SERVER_ERROR
+    return AnswerClass.OTHER
+
+
+def _answer_code(kind: CallKind, answer: AnswerClass) -> PublishCode | None:
+    return ANSWER_CODES[answer][kind]
+
+
+def _usable_activity_id(activity_id: str) -> bool:
+    return re.fullmatch(ACTIVITY_ID_PATTERN, activity_id) is not None
+
+
+def _activity_link(activity_id: str) -> str:
+    """The direct link; called only with a usable identifier."""
+    return ACTIVITY_LINK_BASE + activity_id
+
+
+def _linked_activity(link: str | None) -> str | None:
+    """The identifier in a link of exactly the form ``_activity_link`` builds."""
+    if link is None or not link.startswith(ACTIVITY_LINK_BASE):
+        return None
+    activity_id = link[len(ACTIVITY_LINK_BASE) :]
+    return activity_id if _usable_activity_id(activity_id) else None
+
+
+def _record_activity(
+    session: ConnectorSession, subject: CompletedActivity
+) -> str | PublishCode | None:
+    """The activity the instance's pull record names for the page's files.
+
+    Read-only. The base file's digest is read first; the page's other digests
+    only when the base names no activity. One identifier in a tier answers it,
+    several answer ``AMBIGUOUS``, none (or no digest) answer ``None``. An
+    unreadable record answers ``LOCAL_RECORD_UNREADABLE``.
+    """
+    try:
+        ledger = load_ledger(
+            session.data_root, session.instance, connector_id=INTERVALS_CONNECTOR_ID
+        )
+    except LedgerError:
+        return PublishCode.LOCAL_RECORD_UNREADABLE
+    if not subject.source_shas:
+        return None
+    base = subject.source_shas[-1]
+    for digests in (frozenset({base}), frozenset(subject.source_shas[:-1]) - {base}):
+        ids = {
+            entry.remote_id
+            for entry in ledger.entries
+            if entry.sha256 in digests and _usable_activity_id(entry.remote_id)
+        }
+        if len(ids) > 1:
+            return PublishCode.AMBIGUOUS
+        if ids:
+            return next(iter(ids))
+    return None
+
+
+# --- Publish: the activities listed around the page's start ------------------
+# (intervals-publish design.md "ActivityFinding"; Req 3.5, 7.4, 9.3, 9.5)
+
+RESOLVE_FIELDS: Final[tuple[str, ...]] = (
+    "id",
+    "source",
+    "start_date",
+    "start_date_local",
+    "distance",
+    "elapsed_time",
+    "external_id",
+)
+WINDOW_DAYS_BEFORE: Final[int] = 1
+WINDOW_DAYS_AFTER: Final[int] = 2
+
+
+@dataclass(frozen=True)
+class ListedActivity:
+    """One listing entry, each field ``None`` when absent or malformed."""
+
+    activity_id: str  # a usable identifier
+    strava: bool  # source == STRAVA_SOURCE
+    start: datetime | None  # start_date with an offset, in UTC
+    local_start: datetime | None  # start_date_local's wall clock, naive
+    distance_m: float | None  # finite, >= 0, not bool
+    elapsed_s: float | None  # int >= 0, not bool
+    external_id: str | None  # non-empty text
+
+
+def _listing_window(start: datetime) -> tuple[str, str]:
+    """The ``oldest`` and ``newest`` local date-times that hold the page's
+    start in any zone: from one day before the UTC date to two days after."""
+    day = start.astimezone(UTC).date()
+    oldest = day - timedelta(days=WINDOW_DAYS_BEFORE)
+    newest = day + timedelta(days=WINDOW_DAYS_AFTER)
+    return f"{oldest.isoformat()}T00:00:00", f"{newest.isoformat()}T00:00:00"
+
+
+def _local_wall_clock(value: object) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        return datetime.fromisoformat(value).replace(tzinfo=None)
+    except ValueError:
+        return None
+
+
+def _listed_activity(entry: object) -> ListedActivity | None:
+    if not isinstance(entry, dict):
+        return None
+    activity_id = entry.get("id")
+    if not isinstance(activity_id, str) or not _usable_activity_id(activity_id):
+        return None
+    distance = entry.get("distance")
+    distance_m: float | None = None
+    if isinstance(distance, int | float) and not isinstance(distance, bool):
+        try:
+            as_float = float(distance)
+        except OverflowError:
+            as_float = math.nan
+        if math.isfinite(as_float) and as_float >= 0:
+            distance_m = as_float
+    elapsed = entry.get("elapsed_time")
+    elapsed_s: float | None = None
+    if isinstance(elapsed, int) and not isinstance(elapsed, bool) and elapsed >= 0:
+        try:
+            elapsed_s = float(elapsed)
+        except OverflowError:
+            elapsed_s = None
+    external_id = entry.get("external_id")
+    return ListedActivity(
+        activity_id=activity_id,
+        strava=entry.get("source") == STRAVA_SOURCE,
+        start=_start(entry.get("start_date")),
+        local_start=_local_wall_clock(entry.get("start_date_local")),
+        distance_m=distance_m,
+        elapsed_s=elapsed_s,
+        external_id=external_id
+        if isinstance(external_id, str) and external_id
+        else None,
+    )
+
+
+def _listed_activities(body: bytes) -> tuple[ListedActivity, ...] | None:
+    """The entries of a listing body, a repeated identifier kept once (first
+    wins); ``None`` when the body is not a JSON array of objects each with a
+    usable identifier."""
+    try:
+        payload = json.loads(body.decode("utf-8"))
+    except (ValueError, RecursionError):
+        return None
+    if not isinstance(payload, list):
+        return None
+    listed: dict[str, ListedActivity] = {}
+    for entry in payload:
+        parsed = _listed_activity(entry)
+        if parsed is None:
+            return None
+        listed.setdefault(parsed.activity_id, parsed)
+    return tuple(listed.values())
+
+
+def _list(
+    session: ConnectorSession,
+    headers: Mapping[str, Secret],
+    subject: CompletedActivity,
+) -> tuple[ListedActivity, ...] | PublishCode:
+    """The key's own activities around the page's start, or the code the
+    answer maps to (Req 3.5, 7.4, 9.3, 9.5)."""
+    oldest, newest = _listing_window(subject.start)
+    query = urlencode(
+        {"oldest": oldest, "newest": newest, "fields": ",".join(RESOLVE_FIELDS)}
+    )
+    try:
+        response = session.http.get(
+            f"{API_BASE}/athlete/{SELF_ATHLETE}/activities?{query}",
+            secret_headers=headers,
+        )
+    except TransportError:
+        return _answer_code(CallKind.READ, AnswerClass.NETWORK_FAILURE) or (
+            PublishCode.UNAVAILABLE
+        )
+    answer = _answer_class(CallKind.READ, response.status)
+    if answer is not AnswerClass.SUCCESS:
+        return _answer_code(CallKind.READ, answer) or PublishCode.UNAVAILABLE
+    listed = _listed_activities(response.body)
+    if listed is None:
+        return PublishCode.UNAVAILABLE
+    return listed
+
+
+def _match_listing(
+    listed: Sequence[ListedActivity],
+    subject: CompletedActivity,
+    publication_id: str,
+    *,
+    absent: Collection[str],
+) -> str | PublishCode | None:
+    """The one listed activity that is the page's, ``AMBIGUOUS`` when several
+    are, ``NOT_UPDATABLE`` when only a Strava import is, else ``None``.
+
+    Entries answered absent are left out. A non-Strava entry carrying the
+    publication id as its external identifier wins; otherwise a non-Strava
+    entry for which the identity rule gives the strict tier, the keys carrying
+    the page's sport and no device or kind so that sport is not compared and no
+    other tier can hold. No step orders candidates: a count above one is the
+    answer. With no match, a Strava entry starting within the rule's start
+    tolerance of the page (by its instant start, or without one by its local
+    wall clock against the page's recorded wall clock) is ``NOT_UPDATABLE``.
+    """
+    from fitdocs.identity.matching import (
+        START_TOLERANCE_S,
+        Evidence,
+        SessionKey,
+        pair_evidence,
+    )
+
+    entries = [entry for entry in listed if entry.activity_id not in absent]
+    mine = [entry for entry in entries if not entry.strava]
+
+    def one(candidates: Collection[str]) -> str | PublishCode | None:
+        if len(candidates) > 1:
+            return PublishCode.AMBIGUOUS
+        return next(iter(candidates), None)
+
+    by_external = {
+        entry.activity_id for entry in mine if entry.external_id == publication_id
+    }
+    if by_external:
+        return one(by_external)
+
+    def key(start: datetime | None, entry: ListedActivity | None) -> SessionKey:
+        source = subject if entry is None else entry
+        return SessionKey(
+            sport=subject.sport,
+            start=start,
+            elapsed_s=source.elapsed_s,
+            distance_m=source.distance_m,
+            device=None,
+            kind=None,
+        )
+
+    page_key = key(subject.start, None)
+    strict = {
+        entry.activity_id
+        for entry in mine
+        if pair_evidence(page_key, key(entry.start, entry)) is Evidence.STRICT
+    }
+    if strict:
+        return one(strict)
+
+    wall_clock = subject.start.replace(tzinfo=None)
+    for entry in entries:
+        if not entry.strava:
+            continue
+        if entry.start is not None:
+            gap = abs((entry.start - subject.start).total_seconds())
+        elif entry.local_start is not None:
+            gap = abs((entry.local_start - wall_clock).total_seconds())
+        else:
+            continue
+        if gap <= START_TOLERANCE_S:
+            return PublishCode.NOT_UPDATABLE
+    return None
+
+
+class UpdateResult(Enum):
+    CONFIRMED = "confirmed"
+    ABSENT = "absent"
+
+
+def _update(
+    session: ConnectorSession,
+    headers: Mapping[str, Secret],
+    activity_id: str,
+    post: Post,
+) -> UpdateResult | PublishCode:
+    """Set the activity's name and description to the post's, or the code the
+    answer maps to (Req 5.1, 5.2, 5.4-5.6, 9.2, 9.5). The request is safe to
+    repeat, so it is unmarked and the data-mode client retries it. The answer
+    body is never read."""
+    body = json.dumps(
+        {"name": post.title, "description": post.description},
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    try:
+        response = session.http.put(
+            f"{API_BASE}/activity/{quote(activity_id, safe='')}",
+            body=body,
+            headers={"Content-Type": "application/json"},
+            secret_headers=headers,
+        )
+    except TransportError:
+        return _answer_code(CallKind.UPDATE, AnswerClass.NETWORK_FAILURE) or (
+            PublishCode.UNAVAILABLE
+        )
+    answer = _answer_class(CallKind.UPDATE, response.status)
+    if answer is AnswerClass.SUCCESS:
+        return UpdateResult.CONFIRMED
+    if answer is AnswerClass.NOT_FOUND:
+        return UpdateResult.ABSENT
+    return _answer_code(CallKind.UPDATE, answer) or PublishCode.UNAVAILABLE
+
+
+UPLOAD_FIELD: Final[str] = "file"
+UPLOAD_FILENAME: Final[str] = "activity.fit"
+MULTIPART_BOUNDARY_PREFIX: Final[str] = "fitdocs-"
+
+
+@dataclass(frozen=True)
+class UploadAnswer:
+    created: bool  # 201 (True) or 200 (False)
+    activity_id: str | None  # the one usable id the answer names, or None
+
+
+def _base_file(subject: CompletedActivity) -> bytes | None:
+    """The page's base file, only when it is present, readable and hashes to
+    the base digest (the last of the page's source digests); otherwise
+    ``None`` (Req 6.3)."""
+    if subject.base_fit is None or not subject.source_shas:
+        return None
+    try:
+        data = subject.base_fit.read_bytes()
+    except OSError:
+        return None
+    if hashlib.sha256(data).hexdigest() != subject.source_shas[-1]:
+        return None
+    return data
+
+
+def _multipart_body(data: bytes, publication_id: str) -> tuple[bytes, str]:
+    """The one-part ``multipart/form-data`` body holding ``data`` unmodified,
+    and its content type (Req 6.2). The boundary is the first of
+    ``fitdocs-<id>``, ``fitdocs-<id>-1``, ``-2``, ... whose delimiter does not
+    occur in the file; the same file and id give the same bytes."""
+    base = f"{MULTIPART_BOUNDARY_PREFIX}{publication_id}"
+    boundary = base
+    suffix = 0
+    while b"--" + boundary.encode("ascii") in data:
+        suffix += 1
+        boundary = f"{base}-{suffix}"
+    delimiter = b"--" + boundary.encode("ascii")
+    head = (
+        f'Content-Disposition: form-data; name="{UPLOAD_FIELD}"; '
+        f'filename="{UPLOAD_FILENAME}"\r\n'
+        "Content-Type: application/octet-stream\r\n\r\n"
+    ).encode("ascii")
+    body = delimiter + b"\r\n" + head + data + b"\r\n" + delimiter + b"--\r\n"
+    return body, f"multipart/form-data; boundary={boundary}"
+
+
+def _uploaded_activity(body: bytes) -> str | None:
+    """The one usable identifier an upload answer names, else ``None``: the
+    body is a JSON object whose ``activities`` is a non-empty list of objects
+    each holding a usable string ``id``, all naming one identifier (Req
+    6.5-6.7)."""
+    try:
+        payload = json.loads(body.decode("utf-8"))
+    except (ValueError, RecursionError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    activities = payload.get("activities")
+    if not isinstance(activities, list) or not activities:
+        return None
+    ids: set[str] = set()
+    for entry in activities:
+        if not isinstance(entry, dict):
+            return None
+        activity_id = entry.get("id")
+        if not isinstance(activity_id, str) or not _usable_activity_id(activity_id):
+            return None
+        ids.add(activity_id)
+    return next(iter(ids)) if len(ids) == 1 else None
+
+
+def _upload(
+    session: ConnectorSession,
+    headers: Mapping[str, Secret],
+    data: bytes,
+    publication_id: str,
+) -> UploadAnswer | PublishCode:
+    """Upload the base file once to the key's own athlete, the publication id
+    the only query value (Req 6.2, 6.4, 9.5). The request creates something,
+    so it is marked single-attempt; a transport failure is unconfirmed."""
+    body, content_type = _multipart_body(data, publication_id)
+    query = urlencode({"external_id": publication_id})
+    try:
+        response = session.http.post(
+            f"{API_BASE}/athlete/{SELF_ATHLETE}/activities?{query}",
+            body=body,
+            headers={"Content-Type": content_type},
+            secret_headers=headers,
+            single_attempt=True,
+        )
+    except TransportError:
+        return _answer_code(CallKind.CREATE, AnswerClass.NETWORK_FAILURE) or (
+            PublishCode.UNCONFIRMED
+        )
+    answer = _answer_class(CallKind.CREATE, response.status)
+    if answer is AnswerClass.SUCCESS:
+        return UploadAnswer(
+            created=response.status == 201,
+            activity_id=_uploaded_activity(response.body),
+        )
+    return _answer_code(CallKind.CREATE, answer) or PublishCode.UNCONFIRMED
+
+
+def _publish_update(
+    session: ConnectorSession,
+    headers: Mapping[str, Secret],
+    activity_id: str,
+    post: Post,
+    absent: set[str],
+) -> PublishResult | None:
+    """Update one activity of a publish request: ``POSTED`` with its link, the
+    code of any other answer, or ``None`` after noting the activity absent (or
+    when the identifier is not a usable one, which names nothing and so
+    receives neither a request nor a link, Req 8.2)."""
+    if not _usable_activity_id(activity_id):
+        return None
+    result = _update(session, headers, activity_id, post)
+    if result is UpdateResult.CONFIRMED:
+        return PublishResult(PublishCode.POSTED, _activity_link(activity_id))
+    if result is UpdateResult.ABSENT:
+        absent.add(activity_id)
+        return None
+    return PublishResult(result)
