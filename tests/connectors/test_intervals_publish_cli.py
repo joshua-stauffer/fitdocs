@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import base64
 import json
+import os
+import time
 from collections.abc import Iterator
 from datetime import UTC
 from pathlib import Path
@@ -145,6 +147,27 @@ class Rig:
             "elapsed_time": subject.elapsed_s,
             "external_id": None,
         }
+
+
+# The fixture file records no local clock, so a synced page takes the machine's
+# zone. Pin a fixed non-UTC zone (POSIX form, no tz database needed) so the
+# page start is non-UTC on every machine, the UTC-zoned CI runners included.
+_FIXED_ZONE = "FDT-2"
+
+
+@pytest.fixture(autouse=True)
+def _fixed_local_zone() -> Iterator[None]:
+    before = os.environ.get("TZ")
+    os.environ["TZ"] = _FIXED_ZONE
+    time.tzset()
+    try:
+        yield
+    finally:
+        if before is None:
+            os.environ.pop("TZ", None)
+        else:
+            os.environ["TZ"] = before
+        time.tzset()
 
 
 @pytest.fixture
