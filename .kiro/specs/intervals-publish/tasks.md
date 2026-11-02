@@ -74,7 +74,7 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
 
 - [ ] 2. Core: finding the activity and writing to it
 
-- [ ] 2.1 Map intervals.icu's answers into publish codes
+- [x] 2.1 Map intervals.icu's answers into publish codes
   - Add the three request kinds (a read, a write safe to repeat, a write that
     creates), the answer classes, the success statuses per kind, and the one
     answer table of the design, with every cell a code a publish target may
@@ -401,3 +401,7 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
   - Done when the findings section exists with every TBC-P item confirmed or
     contradicted, and any contradiction's repair is merged.
   - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5_
+
+## Implementation Notes
+
+- 2.1: `_activity_link` does not check its argument (design); Req 8.2 "link only from a usable id" must be pinned at each caller (2.2, 2.6, 3.1). Design claims every `_activity_link` result passes publish-core `valid_link` — untested so far; 3.1 should assert it.

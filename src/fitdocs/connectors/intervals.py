@@ -26,6 +26,8 @@ import zlib
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
+from enum import StrEnum
+from types import MappingProxyType
 from typing import Final, NoReturn
 from urllib.parse import quote, urlencode
 
@@ -50,6 +52,7 @@ from fitdocs.connectors.protocol import (
     FetchResult,
     Granted,
     Listing,
+    PublishCode,
     RemoteActivity,
     SettingsContext,
     WellnessDay,
@@ -698,3 +701,137 @@ def _envelope_bytes(records: list[dict[str, object]], origins: dict[str, str]) -
         ).encode("utf-8")
         + b"\n"
     )
+
+
+# --- Publish: intervals.icu's answers as publish codes ----------------------
+# (intervals-publish design.md "AnswerMapping"; Req 7.1-7.7, 8.2, 8.3)
+
+
+class CallKind(StrEnum):
+    """What a request does, which alone decides how its answers map."""
+
+    READ = "read"  # the listing; retried by the transport
+    UPDATE = "update"  # a write that is safe to repeat; retried by the transport
+    CREATE = "create"  # a write that creates something; single attempt
+
+
+class AnswerClass(StrEnum):
+    SUCCESS = "success"
+    UNAUTHORIZED = "401"
+    FORBIDDEN = "403"
+    NOT_FOUND = "404"
+    RATE_LIMITED = "429"
+    CLIENT_ERROR = "other 4xx"
+    SERVER_ERROR = "5xx"
+    OTHER = "other status"
+    NETWORK_FAILURE = "network failure"
+
+
+SUCCESS_STATUSES: Final[Mapping[CallKind, frozenset[int]]] = MappingProxyType(
+    {
+        CallKind.READ: frozenset({200}),
+        CallKind.UPDATE: frozenset({200}),
+        CallKind.CREATE: frozenset({200, 201}),
+    }
+)
+
+
+def _row(
+    read: PublishCode | None, update: PublishCode | None, create: PublishCode | None
+) -> Mapping[CallKind, PublishCode | None]:
+    return MappingProxyType(
+        {CallKind.READ: read, CallKind.UPDATE: update, CallKind.CREATE: create}
+    )
+
+
+# ``None``: the calling flow decides.
+ANSWER_CODES: Final[Mapping[AnswerClass, Mapping[CallKind, PublishCode | None]]] = (
+    MappingProxyType(
+        {
+            AnswerClass.SUCCESS: _row(None, None, None),
+            AnswerClass.UNAUTHORIZED: _row(
+                PublishCode.AUTH_REJECTED,
+                PublishCode.AUTH_REJECTED,
+                PublishCode.AUTH_REJECTED,
+            ),
+            AnswerClass.FORBIDDEN: _row(
+                PublishCode.PERMISSION_DENIED,
+                PublishCode.PERMISSION_DENIED,
+                PublishCode.PERMISSION_DENIED,
+            ),
+            AnswerClass.NOT_FOUND: _row(
+                PublishCode.REJECTED, None, PublishCode.REJECTED
+            ),
+            AnswerClass.RATE_LIMITED: _row(
+                PublishCode.RATE_LIMITED,
+                PublishCode.RATE_LIMITED,
+                PublishCode.RATE_LIMITED,
+            ),
+            AnswerClass.CLIENT_ERROR: _row(
+                PublishCode.REJECTED, PublishCode.REJECTED, PublishCode.REJECTED
+            ),
+            AnswerClass.SERVER_ERROR: _row(
+                PublishCode.UNAVAILABLE,
+                PublishCode.UNAVAILABLE,
+                PublishCode.UNCONFIRMED,
+            ),
+            AnswerClass.OTHER: _row(
+                PublishCode.UNAVAILABLE,
+                PublishCode.UNCONFIRMED,
+                PublishCode.UNCONFIRMED,
+            ),
+            AnswerClass.NETWORK_FAILURE: _row(
+                PublishCode.UNAVAILABLE,
+                PublishCode.UNAVAILABLE,
+                PublishCode.UNCONFIRMED,
+            ),
+        }
+    )
+)
+
+ACTIVITY_ID_PATTERN: Final[str] = r"^[A-Za-z0-9]{1,64}$"
+ACTIVITY_LINK_BASE: Final[str] = "https://intervals.icu/activities/"
+
+_SPECIFIC_CLASSES: Final[Mapping[int, AnswerClass]] = MappingProxyType(
+    {
+        401: AnswerClass.UNAUTHORIZED,
+        403: AnswerClass.FORBIDDEN,
+        404: AnswerClass.NOT_FOUND,
+        429: AnswerClass.RATE_LIMITED,
+    }
+)
+
+
+def _answer_class(kind: CallKind, status: int) -> AnswerClass:
+    """Classify an HTTP status for one request kind (a transport failure is
+    ``AnswerClass.NETWORK_FAILURE``, chosen by the caller)."""
+    if status in SUCCESS_STATUSES[kind]:
+        return AnswerClass.SUCCESS
+    if status in _SPECIFIC_CLASSES:
+        return _SPECIFIC_CLASSES[status]
+    if 400 <= status <= 499:
+        return AnswerClass.CLIENT_ERROR
+    if 500 <= status <= 599:
+        return AnswerClass.SERVER_ERROR
+    return AnswerClass.OTHER
+
+
+def _answer_code(kind: CallKind, answer: AnswerClass) -> PublishCode | None:
+    return ANSWER_CODES[answer][kind]
+
+
+def _usable_activity_id(activity_id: str) -> bool:
+    return re.fullmatch(ACTIVITY_ID_PATTERN, activity_id) is not None
+
+
+def _activity_link(activity_id: str) -> str:
+    """The direct link; called only with a usable identifier."""
+    return ACTIVITY_LINK_BASE + activity_id
+
+
+def _linked_activity(link: str | None) -> str | None:
+    """The identifier in a link of exactly the form ``_activity_link`` builds."""
+    if link is None or not link.startswith(ACTIVITY_LINK_BASE):
+        return None
+    activity_id = link[len(ACTIVITY_LINK_BASE) :]
+    return activity_id if _usable_activity_id(activity_id) else None

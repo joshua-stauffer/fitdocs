@@ -664,6 +664,7 @@ NEUTRAL_SCAN_EXEMPTIONS: dict[str, frozenset[str]] = {
             "src/fitdocs/connectors/intervals.py",
             "tests/connectors/test_intervals.py",
             "tests/connectors/test_intervals_pull.py",
+            "tests/connectors/test_intervals_publish.py",
             "tests/connectors/test_intervals_docs.py",
             "docs/connectors.md#intervals.icu",
         }
