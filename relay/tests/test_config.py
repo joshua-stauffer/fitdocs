@@ -493,13 +493,13 @@ def test_no_error_prints_a_planted_secret(label: str, changes: dict[str, str]) -
     assert str(error).startswith(error.variable + ": ")
 
 
-def test_the_secret_cases_exercise_every_variable_of_the_table() -> None:
+def test_the_secret_cases_exercise_every_variable_of_relay_servers_rows() -> None:
     named = set()
     for _, changes in SECRET_CASES:
         environ = env()
         environ.update(changes)
         named.add(refusal(environ).variable)
-    assert named == {var.name for var in ENVIRONMENT}
+    assert named == {var.name for var in ENVIRONMENT[:11]}
 
 
 def test_the_loaded_configuration_hides_its_secrets_in_repr() -> None:
@@ -534,7 +534,7 @@ def test_the_names_used_here_are_the_pinned_tables_variables() -> None:
         LEVEL,
         EXTENSIONS,
     ]
-    assert used == [row[0] for row in PINNED_ENVIRONMENT]
-    assert [(v.name, v.required, v.default, v.secret) for v in ENVIRONMENT] == [
-        row[:4] for row in PINNED_ENVIRONMENT
+    assert used == [row[0] for row in PINNED_ENVIRONMENT[:11]]
+    assert [(v.name, v.required, v.default, v.secret) for v in ENVIRONMENT[:11]] == [
+        row[:4] for row in PINNED_ENVIRONMENT[:11]
     ]

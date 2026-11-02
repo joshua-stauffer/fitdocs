@@ -355,11 +355,14 @@ def test_a_secret_contract_variable_is_refused_by_name() -> None:
     )
 
 
-def test_the_secret_variables_the_image_must_not_name_are_the_contracts_three() -> None:
+def test_the_secret_variables_the_image_must_not_name_are_the_contracts_six() -> None:
     assert [v.name for v in ENVIRONMENT if v.secret] == [
         "FITDOCS_RELAY_DATABASE_URL",
         "FITDOCS_RELAY_DATABASE_PASSWORD",
         "FITDOCS_RELAY_TOKEN_PEPPER",
+        "FITDOCS_RELAY_ENCRYPTION_KEYS",
+        "FITDOCS_RELAY_STRAVA_CLIENT_SECRET",
+        "FITDOCS_RELAY_STRAVA_WEBHOOK_TOKEN",
     ]
     assert ENV_DATABASE_URL == "FITDOCS_RELAY_DATABASE_URL"
 

@@ -25,8 +25,10 @@ from fitdocs_relay.shared.relay_envelope import (
 
 CHANGELOG = Path(__file__).resolve().parents[1] / "CHANGELOG.md"
 
-# (name, required, default, secret, meaning), copied from design.md's table.
-PINNED_ENVIRONMENT: list[tuple[str, bool, str | None, bool, str]] = [
+CLIENT_ID = "FITDOCS_RELAY_STRAVA_CLIENT_ID"
+
+# relay-server's eleven rows: (name, required, default, secret, meaning).
+_RELAY_SERVER_ROWS: list[tuple[str, bool, str | None, bool, str]] = [
     (
         "FITDOCS_RELAY_DATABASE_URL",
         True,
@@ -104,6 +106,139 @@ PINNED_ENVIRONMENT: list[tuple[str, bool, str | None, bool, str]] = [
     ),
 ]
 
+# strava-publish's fourteen rows, from its design.md with two deviations: the
+# ENCRYPTION_KEYS meaning adds "and distinct" after the id pattern, and the
+# PRIVACY_POLICY_URL default is the plain text "the relay's /privacy" without
+# the code span design.md puts around `/privacy`.
+# Row format:
+# (name, required, default, secret, meaning, required_with).
+_STRAVA_ROWS: list[tuple[str, bool, str | None, bool, str, tuple[str, ...]]] = [
+    (
+        "FITDOCS_RELAY_PUBLIC_URL",
+        False,
+        None,
+        False,
+        "The relay's public base address (`https`, or `http` to loopback); builds "
+        "the callback `<url>/strava/callback` and page links",
+        (CLIENT_ID,),
+    ),
+    (
+        "FITDOCS_RELAY_ENCRYPTION_KEYS",
+        False,
+        None,
+        True,
+        "Comma-separated `<id>:<key>` entries, 1-8; id `[a-z0-9]{1,16}` and "
+        "distinct, key 32 bytes in unpadded base64url; the first encrypts "
+        "(`fitdocs-relay new-encryption-key`)",
+        (CLIENT_ID,),
+    ),
+    (
+        "FITDOCS_RELAY_OPERATOR_NAME",
+        False,
+        None,
+        False,
+        "The relay's operator, as the pages name them; 1-100 printable characters",
+        (CLIENT_ID,),
+    ),
+    (
+        "FITDOCS_RELAY_SUPPORT_CONTACT",
+        False,
+        None,
+        False,
+        "An email address or `https` address where athletes reach the operator",
+        (CLIENT_ID,),
+    ),
+    (
+        "FITDOCS_RELAY_PRIVACY_POLICY_URL",
+        False,
+        "the relay's /privacy",
+        False,
+        "An `https` address of the operator's own policy",
+        (),
+    ),
+    (
+        CLIENT_ID,
+        False,
+        None,
+        False,
+        "The Strava application's client id (digits); setting it enables the "
+        "Strava target",
+        (),
+    ),
+    (
+        "FITDOCS_RELAY_STRAVA_CLIENT_SECRET",
+        False,
+        None,
+        True,
+        "The application's client secret",
+        (CLIENT_ID,),
+    ),
+    (
+        "FITDOCS_RELAY_STRAVA_WEBHOOK_TOKEN",
+        False,
+        None,
+        True,
+        "32-128 characters of `[A-Za-z0-9_-]`; the webhook path secret and verify "
+        "token",
+        (CLIENT_ID,),
+    ),
+    (
+        "FITDOCS_RELAY_STRAVA_API_URL",
+        False,
+        "https://www.strava.com/api/v3",
+        False,
+        "Strava's API base",
+        (),
+    ),
+    (
+        "FITDOCS_RELAY_STRAVA_OAUTH_URL",
+        False,
+        "https://www.strava.com/oauth",
+        False,
+        "Strava's OAuth base (authorize, token, revoke)",
+        (),
+    ),
+    (
+        "FITDOCS_RELAY_STRAVA_WEB_URL",
+        False,
+        "https://www.strava.com",
+        False,
+        "Base of activity pages (`/activities/<id>`)",
+        (),
+    ),
+    (
+        "FITDOCS_RELAY_STRAVA_LINKS",
+        False,
+        "activity",
+        False,
+        "The link setting: `activity` puts the activity's address "
+        "`<web URL>/activities/<id>` in every posted or uploaded answer; `relay` "
+        "puts none, and pages link to `/go/<publication id>`",
+        (),
+    ),
+    (
+        "FITDOCS_RELAY_STRAVA_RATE_LIMIT",
+        False,
+        "200,2000",
+        False,
+        "Overall limit per 15 minutes and per day",
+        (),
+    ),
+    (
+        "FITDOCS_RELAY_STRAVA_READ_RATE_LIMIT",
+        False,
+        "100,1000",
+        False,
+        "Non-upload limit per 15 minutes and per day",
+        (),
+    ),
+]
+
+# The whole table, each row with its `required_with` tuple.
+PINNED_ENVIRONMENT: list[tuple[str, bool, str | None, bool, str, tuple[str, ...]]] = [
+    (*row, ()) for row in _RELAY_SERVER_ROWS
+] + _STRAVA_ROWS
+
 
 def test_contract_version_is_one() -> None:
     assert contract.DEPLOY_CONTRACT_VERSION == 1
@@ -117,11 +252,11 @@ def test_other_versions_are_plain_ints() -> None:
 
 def test_environment_table_is_pinned_whole() -> None:
     actual = [
-        (v.name, v.required, v.default, v.secret, v.meaning)
+        (v.name, v.required, v.default, v.secret, v.meaning, v.required_with)
         for v in contract.ENVIRONMENT
     ]
     assert actual == PINNED_ENVIRONMENT
-    assert len(PINNED_ENVIRONMENT) == 11, "the pin lost rows"
+    assert len(PINNED_ENVIRONMENT) == 25, "the pin lost rows"
     assert contract.ENV_PREFIX == "FITDOCS_RELAY_"
 
 

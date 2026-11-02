@@ -14,6 +14,7 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.parse import parse_qsl, urlsplit
 
 from fitdocs_relay.contract import (
@@ -27,10 +28,14 @@ from fitdocs_relay.contract import (
     ENV_PORT,
     ENV_PREFIX,
     ENV_SHUTDOWN_GRACE,
+    ENV_STRAVA_CLIENT_ID,
     ENV_TOKEN_PEPPER,
     ENV_TOKEN_RATE_LIMIT,
     ENVIRONMENT,
 )
+
+if TYPE_CHECKING:
+    from fitdocs_relay.strava.config import StravaConfig, TargetsConfig
 
 PEPPER_MIN_CHARACTERS = 43
 PORT_RANGE = (1, 65535)
@@ -73,6 +78,8 @@ class RelayConfig:
     shutdown_grace_s: int
     log_level: str
     extensions: tuple[str, ...]
+    targets: TargetsConfig | None = None
+    strava: StravaConfig | None = None
 
 
 def _fail(variable: str, reason: str) -> ConfigError:
@@ -229,6 +236,9 @@ def load_config(environ: Mapping[str, str] | None = None) -> RelayConfig:
                 name, f"{name}: unknown variable with the reserved prefix {ENV_PREFIX}"
             )
 
+    # strava.config imports ConfigError from here, so it is imported here late.
+    from fitdocs_relay.strava.config import load_strava_config, load_targets_config
+
     values: dict[str, str] = {}
     for var in ENVIRONMENT:
         raw = env.get(var.name)
@@ -257,4 +267,6 @@ def load_config(environ: Mapping[str, str] | None = None) -> RelayConfig:
         shutdown_grace_s=integer(ENV_SHUTDOWN_GRACE, GRACE_RANGE),
         log_level=_log_level(values[ENV_LOG_LEVEL]),
         extensions=_extensions(values[ENV_EXTENSIONS]),
+        targets=load_targets_config(env, any_target=ENV_STRAVA_CLIENT_ID in env),
+        strava=load_strava_config(env),
     )

@@ -59,13 +59,24 @@ def default_cell(variable: EnvVar) -> str:
         return "—"
     if variable.default == "":
         return "empty"
+    if variable.default.startswith("the "):
+        return variable.default  # prose, not a literal value
     return f"`{variable.default}`"
+
+
+def required_cell(variable: EnvVar) -> str:
+    if variable.required:
+        return "yes"
+    if variable.required_with:
+        names = " or ".join(f"`{name}`" for name in variable.required_with)
+        return f"with {names}"
+    return "no"
 
 
 def environment_row(variable: EnvVar) -> list[str]:
     return [
         f"`{variable.name}`",
-        "yes" if variable.required else "no",
+        required_cell(variable),
         default_cell(variable),
         "yes" if variable.secret else "no",
         variable.meaning,
@@ -178,7 +189,7 @@ def test_the_environment_table_is_the_codes_table() -> None:
 
 def test_the_environment_table_was_actually_read() -> None:
     rows = table_rows(page_text(), ENV_HEADER)
-    assert len(rows) == len(contract.ENVIRONMENT) >= 11
+    assert len(rows) == len(contract.ENVIRONMENT) >= 25
     assert all(len(row) == 5 for row in rows)
 
 
@@ -215,6 +226,23 @@ def test_deleting_any_environment_row_reds_the_binding(index: int) -> None:
     problems = environment_problems("\n".join(lines))
     assert len(problems) == 1
     assert contract.ENVIRONMENT[index].name in problems[0]
+
+
+def test_a_two_name_tuple_renders_joined_with_or() -> None:
+    both = EnvVar("FITDOCS_RELAY_X", False, None, False, "m", ("A_ONE", "B_TWO"))
+    one = EnvVar("FITDOCS_RELAY_Y", False, None, False, "m", ("A_ONE",))
+    assert environment_row(both)[1] == "with `A_ONE` or `B_TWO`"
+    assert environment_row(one)[1] == "with `A_ONE`"
+    page = page_text()
+    assert "| with `FITDOCS_RELAY_STRAVA_CLIENT_ID` |" in page
+
+
+def test_dropping_the_required_with_rendering_reds_the_binding() -> None:
+    changed = page_text().replace(
+        "| with `FITDOCS_RELAY_STRAVA_CLIENT_ID` |", "| no |", 1
+    )
+    assert changed != page_text(), "the fixture changed nothing"
+    assert len(environment_problems(changed)) == 2
 
 
 def test_changing_a_cell_reds_the_binding() -> None:

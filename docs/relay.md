@@ -216,10 +216,34 @@ the process exits with code 2.
 | `FITDOCS_RELAY_SHUTDOWN_GRACE_SECONDS` | no | `20` | no | Graceful-shutdown wait, 0-600 |
 | `FITDOCS_RELAY_LOG_LEVEL` | no | `info` | no | `debug`, `info`, `warning` or `error` |
 | `FITDOCS_RELAY_EXTENSIONS` | no | empty | no | Comma-separated `module:attribute` references to `RelayExtension` objects |
+| `FITDOCS_RELAY_PUBLIC_URL` | with `FITDOCS_RELAY_STRAVA_CLIENT_ID` | — | no | The relay's public base address (`https`, or `http` to loopback); builds the callback `<url>/strava/callback` and page links |
+| `FITDOCS_RELAY_ENCRYPTION_KEYS` | with `FITDOCS_RELAY_STRAVA_CLIENT_ID` | — | yes | Comma-separated `<id>:<key>` entries, 1-8; id `[a-z0-9]{1,16}` and distinct, key 32 bytes in unpadded base64url; the first encrypts (`fitdocs-relay new-encryption-key`) |
+| `FITDOCS_RELAY_OPERATOR_NAME` | with `FITDOCS_RELAY_STRAVA_CLIENT_ID` | — | no | The relay's operator, as the pages name them; 1-100 printable characters |
+| `FITDOCS_RELAY_SUPPORT_CONTACT` | with `FITDOCS_RELAY_STRAVA_CLIENT_ID` | — | no | An email address or `https` address where athletes reach the operator |
+| `FITDOCS_RELAY_PRIVACY_POLICY_URL` | no | the relay's /privacy | no | An `https` address of the operator's own policy |
+| `FITDOCS_RELAY_STRAVA_CLIENT_ID` | no | — | no | The Strava application's client id (digits); setting it enables the Strava target |
+| `FITDOCS_RELAY_STRAVA_CLIENT_SECRET` | with `FITDOCS_RELAY_STRAVA_CLIENT_ID` | — | yes | The application's client secret |
+| `FITDOCS_RELAY_STRAVA_WEBHOOK_TOKEN` | with `FITDOCS_RELAY_STRAVA_CLIENT_ID` | — | yes | 32-128 characters of `[A-Za-z0-9_-]`; the webhook path secret and verify token |
+| `FITDOCS_RELAY_STRAVA_API_URL` | no | `https://www.strava.com/api/v3` | no | Strava's API base |
+| `FITDOCS_RELAY_STRAVA_OAUTH_URL` | no | `https://www.strava.com/oauth` | no | Strava's OAuth base (authorize, token, revoke) |
+| `FITDOCS_RELAY_STRAVA_WEB_URL` | no | `https://www.strava.com` | no | Base of activity pages (`/activities/<id>`) |
+| `FITDOCS_RELAY_STRAVA_LINKS` | no | `activity` | no | The link setting: `activity` puts the activity's address `<web URL>/activities/<id>` in every posted or uploaded answer; `relay` puts none, and pages link to `/go/<publication id>` |
+| `FITDOCS_RELAY_STRAVA_RATE_LIMIT` | no | `200,2000` | no | Overall limit per 15 minutes and per day |
+| `FITDOCS_RELAY_STRAVA_READ_RATE_LIMIT` | no | `100,1000` | no | Non-upload limit per 15 minutes and per day |
 
+- A row marked "with" is required when the variable it names is set (when any
+  of several is set). While `FITDOCS_RELAY_STRAVA_CLIENT_ID` is unset, none of
+  the rows from `FITDOCS_RELAY_PUBLIC_URL` to `FITDOCS_RELAY_STRAVA_READ_RATE_LIMIT`
+  may be set, and the relay refuses to start if one is.
+- `FITDOCS_RELAY_STRAVA_RATE_LIMIT` and `FITDOCS_RELAY_STRAVA_READ_RATE_LIMIT`
+  each take two comma-separated numbers, the limit per 15 minutes then the
+  limit per day; the first may not exceed the second. The windows are aligned
+  to Strava's: quarter hours, and days from midnight UTC.
 - `FITDOCS_RELAY_FORWARDED_ALLOW_IPS` takes IP addresses or networks
   (`10.0.0.0/8`); `*` is refused. See [TLS in front](#tls-terminated-in-front).
-- The rate limits count in fixed windows of 60 seconds.
+- The two `_PER_MINUTE` limits (`FITDOCS_RELAY_TOKEN_RATE_LIMIT_PER_MINUTE`
+  and `FITDOCS_RELAY_CLIENT_RATE_LIMIT_PER_MINUTE`) count in fixed windows of 60
+  seconds.
 - A `rate-limited` answer carries the wait in seconds, in its data and in a
   `Retry-After` header.
 
