@@ -1,13 +1,16 @@
-"""intervals-publish task 2.1: intervals.icu's answers mapped into publish codes.
+"""intervals-publish tasks 2.1-2.2: intervals.icu's answers mapped into publish
+codes, and the activity found through the pull record.
 
 Req 7.1-7.7 (the answer table, by request kind) and 8.2, 8.3 (the remote
-identifier rule and the direct link). Pure functions and constants; no
-transport is involved.
+identifier rule and the direct link); 3.1-3.4 (the recorded link and the pull
+record). No transport is involved.
 """
 
 from __future__ import annotations
 
 import re
+from datetime import UTC, datetime
+from pathlib import Path
 from types import MappingProxyType
 
 import pytest
@@ -16,6 +19,7 @@ from fitdocs.connectors.intervals import (
     ACTIVITY_ID_PATTERN,
     ACTIVITY_LINK_BASE,
     ANSWER_CODES,
+    INTERVALS_CONNECTOR_ID,
     SUCCESS_STATUSES,
     AnswerClass,
     CallKind,
@@ -23,8 +27,23 @@ from fitdocs.connectors.intervals import (
     _answer_class,
     _answer_code,
     _linked_activity,
+    _record_activity,
+    _usable_activity_id,
 )
-from fitdocs.connectors.protocol import TARGET_CODES, PublishCode
+from fitdocs.connectors.ledger import (
+    Ledger,
+    LedgerEntry,
+    Outcome,
+    load_ledger,
+    save_ledger,
+)
+from fitdocs.connectors.protocol import (
+    TARGET_CODES,
+    CompletedActivity,
+    ConnectorSession,
+    PublishCode,
+)
+from fitdocs.connectors.secrets import Redactor
 
 C = PublishCode
 K = CallKind
@@ -210,3 +229,230 @@ def test_links_not_of_exactly_the_form_name_nothing(link: str | None) -> None:
 
 def test_the_good_link_is_accepted() -> None:
     assert _linked_activity("https://intervals.icu/activities/i9000001") == "i9000001"
+
+
+# --- Task 2.2: the pull record (Req 3.2, 3.3, 3.4, 8.3) ----------------------
+
+_BASE_SHA = "b" * 64
+_EXTRA_1 = "1" * 64
+_EXTRA_2 = "2" * 64
+_UNRELATED = "9" * 64
+
+
+def _entry(
+    remote_id: str, sha: str | None, outcome: Outcome = Outcome.DELIVERED
+) -> LedgerEntry:
+    detail = "not wanted" if outcome is Outcome.SKIPPED else None
+    return LedgerEntry(remote_id=remote_id, outcome=outcome, sha256=sha, detail=detail)
+
+
+INSTANCE = "icu-main"  # differs from INTERVALS_CONNECTOR_ID on purpose
+HAND_NOTE = b"# kept by hand\n"
+
+
+def _path(data_root: Path, instance: str = INSTANCE) -> Path:
+    return data_root / ".fitdocs" / "connectors" / f"{instance}.toml"
+
+
+def _write(data_root: Path, *entries: LedgerEntry, instance: str = INSTANCE) -> bytes:
+    """Save the ledger with the writer, then append a line the writer would
+    not produce, so that any rewrite of the file changes its bytes."""
+    ledger = Ledger(
+        connector_id="intervals",
+        watermark=None,
+        entries=tuple(sorted(entries, key=lambda e: e.remote_id)),
+    )
+    save_ledger(data_root, instance, ledger)
+    path = _path(data_root, instance)
+    path.write_bytes(path.read_bytes() + HAND_NOTE)
+    assert load_ledger(data_root, instance, connector_id="intervals").entries
+    return path.read_bytes()
+
+
+def _snapshot(path: Path) -> tuple[bytes, int, int]:
+    st = path.stat()
+    return path.read_bytes(), st.st_ino, st.st_mtime_ns
+
+
+class _NoTransport:
+    def __call__(self, request: object, timeout: float) -> object:
+        raise AssertionError("the pull record is read without a request")
+
+
+def _session(data_root: Path) -> ConnectorSession:
+    from fitdocs.connectors.http import CallMode, HttpClient
+
+    redactor = Redactor()
+    return ConnectorSession(
+        instance=INSTANCE,
+        settings=object(),
+        http=HttpClient(
+            _NoTransport(),  # type: ignore[arg-type]
+            mode=CallMode.DATA,
+            redactor=redactor,
+            sleep=lambda seconds: None,
+        ),
+        credentials=None,  # type: ignore[arg-type]
+        data_root=data_root,
+        now=lambda: datetime(2026, 1, 1, tzinfo=UTC),
+        sleep=lambda seconds: None,
+        redactor=redactor,
+    )
+
+
+def _subject(*shas: str) -> CompletedActivity:
+    return CompletedActivity(
+        sport="Run",
+        start=datetime(2026, 3, 1, 7, 0, tzinfo=UTC),
+        elapsed_s=1800.0,
+        distance_m=5000.0,
+        source_shas=shas,
+        base_fit=None,
+    )
+
+
+def test_base_digest_mapped_and_the_record_is_not_rewritten(tmp_path: Path) -> None:
+    _write(tmp_path, _entry("i1", _BASE_SHA), _entry("i2", _UNRELATED))
+    before = _snapshot(_path(tmp_path))
+    assert before[0].endswith(HAND_NOTE)
+    assert _record_activity(_session(tmp_path), _subject(_EXTRA_1, _BASE_SHA)) == "i1"
+    assert _snapshot(_path(tmp_path)) == before
+
+
+def test_only_an_extra_mapped(tmp_path: Path) -> None:
+    _write(tmp_path, _entry("i1", _EXTRA_1), _entry("i2", _UNRELATED))
+    assert _record_activity(_session(tmp_path), _subject(_EXTRA_1, _BASE_SHA)) == "i1"
+
+
+def test_the_base_wins_over_an_extra_with_another_activity(tmp_path: Path) -> None:
+    _write(tmp_path, _entry("i1", _BASE_SHA), _entry("i2", _EXTRA_1))
+    assert _record_activity(_session(tmp_path), _subject(_EXTRA_1, _BASE_SHA)) == "i1"
+
+
+def test_a_tier_with_two_activities_is_ambiguous_even_when_the_other_tier_has_one(
+    tmp_path: Path,
+) -> None:
+    _write(
+        tmp_path,
+        _entry("i1", _BASE_SHA),
+        _entry("i2", _BASE_SHA),
+        _entry("i3", _EXTRA_1),
+    )
+    got = _record_activity(_session(tmp_path), _subject(_EXTRA_1, _BASE_SHA))
+    assert got is PublishCode.AMBIGUOUS
+
+
+def test_two_activities_among_the_extras_with_none_for_the_base_are_ambiguous(
+    tmp_path: Path,
+) -> None:
+    _write(
+        tmp_path,
+        _entry("i1", _EXTRA_1),
+        _entry("i2", _EXTRA_2),
+        _entry("i3", _UNRELATED),
+    )
+    got = _record_activity(_session(tmp_path), _subject(_EXTRA_1, _EXTRA_2, _BASE_SHA))
+    assert got is PublishCode.AMBIGUOUS
+
+
+def test_one_extra_digest_among_several_names_its_activity(
+    tmp_path: Path,
+) -> None:
+    # only the second extra is in the ledger; the first and the base are not
+    _write(tmp_path, _entry("i1", _EXTRA_2), _entry("i2", _UNRELATED))
+    got = _record_activity(_session(tmp_path), _subject(_EXTRA_1, _EXTRA_2, _BASE_SHA))
+    assert got == "i1"
+
+
+@pytest.mark.parametrize(
+    "outcome", [Outcome.DELIVERED, Outcome.ALREADY_HELD, Outcome.SKIPPED]
+)
+def test_an_entrys_outcome_does_not_matter(tmp_path: Path, outcome: Outcome) -> None:
+    _write(tmp_path, _entry("i1", _BASE_SHA, outcome))
+    assert _record_activity(_session(tmp_path), _subject(_BASE_SHA)) == "i1"
+
+
+def test_an_absent_record_names_no_activity_and_is_not_created(tmp_path: Path) -> None:
+    assert _record_activity(_session(tmp_path), _subject(_BASE_SHA)) is None
+    assert not (tmp_path / ".fitdocs").exists()
+
+
+def test_a_record_with_no_matching_digest_names_nothing(tmp_path: Path) -> None:
+    _write(tmp_path, _entry("i1", _UNRELATED))
+    before = _snapshot(_path(tmp_path))
+    assert before[0].endswith(HAND_NOTE)
+    assert _record_activity(_session(tmp_path), _subject(_BASE_SHA)) is None
+    assert _snapshot(_path(tmp_path)) == before
+
+
+def test_no_source_digests_name_nothing(tmp_path: Path) -> None:
+    _write(tmp_path, _entry("i1", _BASE_SHA))
+    assert _record_activity(_session(tmp_path), _subject()) is None
+
+
+def test_an_unreadable_record_is_reported_and_left_unchanged(tmp_path: Path) -> None:
+    path = _path(tmp_path)
+    path.parent.mkdir(parents=True)
+    path.write_bytes(b"this = [is not valid toml\n")
+    before = path.read_bytes()
+    got = _record_activity(_session(tmp_path), _subject(_BASE_SHA))
+    assert got is PublishCode.LOCAL_RECORD_UNREADABLE
+    assert path.read_bytes() == before
+
+
+def test_a_malformed_identifier_names_nothing(tmp_path: Path) -> None:
+    # the precondition: the ledger writer accepts the id, the digest matches
+    _write(tmp_path, _entry("i1/x", _BASE_SHA))
+    assert _usable_activity_id("i1/x") is False
+    assert _record_activity(_session(tmp_path), _subject(_BASE_SHA)) is None
+
+
+def test_a_malformed_identifier_in_a_tier_does_not_count_toward_ambiguity(
+    tmp_path: Path,
+) -> None:
+    _write(tmp_path, _entry("i1", _BASE_SHA), _entry("i1/x", _BASE_SHA))
+    assert _record_activity(_session(tmp_path), _subject(_BASE_SHA)) == "i1"
+
+
+def test_a_malformed_base_identifier_does_not_hide_the_extra_tier(
+    tmp_path: Path,
+) -> None:
+    _write(tmp_path, _entry("i1/x", _BASE_SHA), _entry("i2", _EXTRA_1))
+    assert _record_activity(_session(tmp_path), _subject(_EXTRA_1, _BASE_SHA)) == "i2"
+
+
+def test_a_malformed_extra_identifier_names_nothing(tmp_path: Path) -> None:
+    _write(tmp_path, _entry("i1/x", _EXTRA_1))
+    assert _record_activity(_session(tmp_path), _subject(_EXTRA_1, _BASE_SHA)) is None
+
+
+def test_a_malformed_extra_identifier_does_not_count_toward_ambiguity(
+    tmp_path: Path,
+) -> None:
+    _write(tmp_path, _entry("i1", _EXTRA_1), _entry("i2/x", _EXTRA_2))
+    assert (
+        _record_activity(_session(tmp_path), _subject(_EXTRA_1, _EXTRA_2, _BASE_SHA))
+        == "i1"
+    )
+
+
+def test_a_tier_two_ambiguity_does_not_override_a_single_base_activity(
+    tmp_path: Path,
+) -> None:
+    _write(
+        tmp_path,
+        _entry("i1", _BASE_SHA),
+        _entry("i2", _EXTRA_1),
+        _entry("i3", _EXTRA_2),
+    )
+    got = _record_activity(_session(tmp_path), _subject(_EXTRA_1, _EXTRA_2, _BASE_SHA))
+    assert got == "i1"
+
+
+def test_the_record_read_is_the_sessions_instance_not_the_connector_id(
+    tmp_path: Path,
+) -> None:
+    _write(tmp_path, _entry("i8", _BASE_SHA), instance=INTERVALS_CONNECTOR_ID)
+    _write(tmp_path, _entry("i1", _BASE_SHA))
+    assert INSTANCE != INTERVALS_CONNECTOR_ID
+    assert _record_activity(_session(tmp_path), _subject(_BASE_SHA)) == "i1"

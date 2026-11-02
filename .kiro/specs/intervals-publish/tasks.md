@@ -96,7 +96,7 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
   - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 8.2, 8.3_
   - _Boundary: AnswerMapping_
 
-- [ ] 2.2 Find the activity through the recorded link and the pull record
+- [x] 2.2 Find the activity through the recorded link and the pull record
   - Read the instance's own pull record read-only through the connectors
     ledger reader; an absent record names no activity; an unreadable one is
     reported to the caller as the local-record-unreadable code (which the
@@ -405,3 +405,4 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
 ## Implementation Notes
 
 - 2.1: `_activity_link` does not check its argument (design); Req 8.2 "link only from a usable id" must be pinned at each caller (2.2, 2.6, 3.1). Design claims every `_activity_link` result passes publish-core `valid_link` — untested so far; 3.1 should assert it.
+- 2.2: test fixtures use instance `icu-main` (not the connector id) and `_write` appends a hand line so a canonical re-save is visible; keep both when adding ledger tests. Malformed ids must be tested in each tier separately (review found an unfiltered tier-2 survivor).

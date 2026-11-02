@@ -333,6 +333,7 @@ _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
         {
             "fitdocs.connectors.errors",
             "fitdocs.connectors.http",
+            "fitdocs.connectors.ledger",
             "fitdocs.connectors.protocol",
             "fitdocs.connectors.secrets",
         }

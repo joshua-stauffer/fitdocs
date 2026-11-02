@@ -4,7 +4,7 @@ Lists, filters and fetches intervals.icu originals for the key's own athlete
 with a personal API key. This module is the one module in the connectors
 package that names the service's address (the service-neutral scan admits it
 here, in its own tests and in its own documentation section only). It imports only the
-standard library and ``fitdocs.connectors.{errors,http,protocol,secrets}``,
+standard library and ``fitdocs.connectors.{errors,http,ledger,protocol,secrets}``,
 builds no HTTP client of its own, and reads no clock: ``session.now`` is the
 only time source.
 
@@ -42,9 +42,11 @@ from fitdocs.connectors.http import (
     HttpResponse,
     auth_failure_from,
 )
+from fitdocs.connectors.ledger import LedgerError, load_ledger
 from fitdocs.connectors.protocol import (
     AuthStyle,
     Capability,
+    CompletedActivity,
     ConnectorSession,
     CredentialField,
     Declined,
@@ -835,3 +837,35 @@ def _linked_activity(link: str | None) -> str | None:
         return None
     activity_id = link[len(ACTIVITY_LINK_BASE) :]
     return activity_id if _usable_activity_id(activity_id) else None
+
+
+def _record_activity(
+    session: ConnectorSession, subject: CompletedActivity
+) -> str | PublishCode | None:
+    """The activity the instance's pull record names for the page's files.
+
+    Read-only. The base file's digest is read first; the page's other digests
+    only when the base names no activity. One identifier in a tier answers it,
+    several answer ``AMBIGUOUS``, none (or no digest) answer ``None``. An
+    unreadable record answers ``LOCAL_RECORD_UNREADABLE``.
+    """
+    try:
+        ledger = load_ledger(
+            session.data_root, session.instance, connector_id=INTERVALS_CONNECTOR_ID
+        )
+    except LedgerError:
+        return PublishCode.LOCAL_RECORD_UNREADABLE
+    if not subject.source_shas:
+        return None
+    base = subject.source_shas[-1]
+    for digests in (frozenset({base}), frozenset(subject.source_shas[:-1]) - {base}):
+        ids = {
+            entry.remote_id
+            for entry in ledger.entries
+            if entry.sha256 in digests and _usable_activity_id(entry.remote_id)
+        }
+        if len(ids) > 1:
+            return PublishCode.AMBIGUOUS
+        if ids:
+            return next(iter(ids))
+    return None
