@@ -44,6 +44,34 @@ recorded as one.
   `fitdocs.toml` settings schema (additive): the `intervals` connector's
   optional `publish_upload` key, default `false`. Action: none; add the key
   only to enable the upload.
+- The `strava` connector, Compatible with Strava, which reaches Strava only
+  through a fitdocs relay that offers the Strava target: configure
+  `[connectors.NAME]` with `connector = "strava"`, `relay = "RELAY"` (the name
+  of a `relay` instance) and an optional `upload` key, then run
+  `fitdocs connect NAME`. A page whose `publish` key names the instance has
+  its Strava activity's name and description updated by `fitdocs publish
+  --yes`; with `upload = true`, a publish that finds no matching activity
+  sends the page's base `.fit` file and has the relay create the activity.
+  `fitdocs.toml` settings schema (additive): the `strava` connector's
+  required `relay` key and optional `upload` key, default `false`. Action:
+  none; add the instance table to use it.
+- `fitdocs connect NAME --no-browser`, for an instance that connects through
+  browser consent such as `strava`. `fitdocs connect NAME` prints the relay's
+  connect page address and a code, opens the connect page address in your
+  browser unless you pass `--no-browser`, and stores the connection token
+  the relay issues once consent is given; nothing is stored if the attempt is
+  refused, expires or is stopped with Ctrl-C. Action: none; add the flag only
+  to stop the browser opening.
+- Disconnecting a Strava instance: `fitdocs disconnect NAME` for a Strava
+  instance asks the relay to end the connection first. It removes the stored
+  credentials file once the relay confirms it, or answers that it no longer
+  knows the token (fitdocs then notes that a remaining connection can be
+  revoked in Strava's settings), and keeps the file on any other answer or
+  when the relay cannot be reached. `--local-only` removes the file without
+  contacting the relay; the connection then stays at the relay until the
+  instance is connected and disconnected again, or access is revoked in
+  Strava's settings. Action: run `fitdocs disconnect NAME` to
+  retire a Strava connection you no longer want.
 - `fitdocs publish` turns workout pages into posts and sends them to the
   publish targets you configured as connectors; the `[publish]` settings
   table sets the title and description templates a post is composed from. A page
@@ -120,6 +148,10 @@ recorded as one.
   fitdocs reports a file carrying `relay-token` as malformed. Action: none for
   existing files; do not share one credentials directory with an older
   fitdocs.
+- The credentials file's `auth_style` value `oauth-browser`, reserved until
+  now, is now supported: it is written for a browser-consent instance such as
+  `strava`. Existing credentials files are unchanged. Action: none for existing
+  files.
 - The `intervals` connector now writes to the account for pages that opt in
   (`fitdocs publish --yes` updates an activity and, with `publish_upload`, uploads
   one); `fitdocs connect` and `fitdocs pull` still only read. Every statement of
