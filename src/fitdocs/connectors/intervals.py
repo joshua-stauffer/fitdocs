@@ -117,6 +117,8 @@ LISTING_FORM_MESSAGE: Final[str] = (
 SERVICE_MESSAGE_BODY_BYTES: Final[int] = 4096
 SERVICE_MESSAGE_CHARS: Final[int] = 300
 
+PUBLISH_UPLOAD_KEY: Final[str] = "publish_upload"
+
 _SOURCE_NAME_RE = re.compile(SOURCE_NAME_PATTERN)
 
 
@@ -127,6 +129,10 @@ class IntervalsSettings:
 
     sources: frozenset[str]
     """The service-reported recording sources a pull keeps."""
+
+    publish_upload: bool = False
+    """Whether a publish may create an activity from the workout's source
+    file; off unless the instance's table sets it to ``true``."""
 
 
 class IntervalsDownloadError(Exception):
@@ -180,16 +186,24 @@ class IntervalsConnector:
     ) -> IntervalsSettings:
         """``sources`` (optional): a non-empty list of upper-case source
         names; absent gives :data:`DEFAULT_SOURCES`. A name the published
-        vocabulary lacks is accepted. Every other key is ignored."""
+        vocabulary lacks is accepted. ``publish_upload`` (optional): a
+        boolean; absent is ``False``, any other value is refused. Every other
+        key is ignored."""
+        upload = table.get(PUBLISH_UPLOAD_KEY, False)
+        if not isinstance(upload, bool):
+            raise ConnectorSettingsError(
+                PUBLISH_UPLOAD_KEY,
+                f"{PUBLISH_UPLOAD_KEY} must be true or false, got {upload!r}",
+            )
         if "sources" not in table:
-            return IntervalsSettings(sources=DEFAULT_SOURCES)
+            return IntervalsSettings(sources=DEFAULT_SOURCES, publish_upload=upload)
         value = table["sources"]
         if not isinstance(value, list) or not value:
             raise _sources_error(value)
         for item in value:
             if not isinstance(item, str) or not _SOURCE_NAME_RE.fullmatch(item):
                 raise _sources_error(item)
-        return IntervalsSettings(sources=frozenset(value))
+        return IntervalsSettings(sources=frozenset(value), publish_upload=upload)
 
     def verify(
         self, session: ConnectorSession, values: Mapping[str, Secret]

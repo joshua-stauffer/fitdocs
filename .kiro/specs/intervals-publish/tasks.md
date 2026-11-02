@@ -57,7 +57,7 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
   - _Requirements: 5.5_
   - _Boundary: TransportPut_
 
-- [ ] 1.2 (P) Read the per-instance upload switch
+- [x] 1.2 (P) Read the per-instance upload switch
   - The intervals.icu settings gain an upload switch, off when the key is
     absent; a boolean sets it; any other value is a settings error naming the
     key and the offending value, which the framework reports naming the

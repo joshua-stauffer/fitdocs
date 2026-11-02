@@ -200,6 +200,83 @@ def test_an_empty_sources_list_in_a_settings_file_names_file_instance_and_key(
     assert "[]" in message
 
 
+def test_absent_publish_upload_is_off(tmp_path: Path) -> None:
+    assert _parse(tmp_path, {}).publish_upload is False
+    assert _parse(tmp_path, {"sources": ["ZWIFT"]}).publish_upload is False
+
+
+@pytest.mark.parametrize("value", [True, False])
+def test_a_boolean_publish_upload_sets_the_switch(tmp_path: Path, value: bool) -> None:
+    settings = _parse(tmp_path, {"publish_upload": value})
+    assert settings.publish_upload is value
+
+
+def test_publish_upload_leaves_the_source_filter_alone(tmp_path: Path) -> None:
+    settings = _parse(tmp_path, {"publish_upload": True, "sources": ["ZWIFT"]})
+    assert settings == IntervalsSettings(
+        sources=frozenset({"ZWIFT"}), publish_upload=True
+    )
+    assert _parse(tmp_path, {"publish_upload": True}).sources == DEFAULT_SOURCES
+
+
+# 1 == True in Python, so 1 and 0 sit beside the string, list and float cases
+# an implementation built on bool(x) or on `x in (True, False)` would accept.
+_NOT_BOOLEANS: list[tuple[object, str]] = [
+    ("yes", "'yes'"),
+    ("false", "'false'"),
+    ("", "''"),
+    (1, "1"),
+    (0, "0"),
+    ([True], "[True]"),
+    ([], "[]"),
+    (1.0, "1.0"),
+]
+
+
+@pytest.mark.parametrize(("value", "shown"), _NOT_BOOLEANS)
+def test_a_non_boolean_publish_upload_is_refused_naming_key_and_value(
+    tmp_path: Path, value: object, shown: str
+) -> None:
+    with pytest.raises(ConnectorSettingsError) as excinfo:
+        _parse(tmp_path, {"publish_upload": value})
+    assert excinfo.value.key == "publish_upload"
+    assert excinfo.value.message == (
+        f"publish_upload must be true or false, got {shown}"
+    )
+
+
+@pytest.mark.parametrize(("value", "shown"), _NOT_BOOLEANS)
+def test_a_non_boolean_publish_upload_in_a_settings_file_names_file_instance_and_key(
+    tmp_path: Path, value: object, shown: str
+) -> None:
+    settings_file = tmp_path / "fitdocs.toml"
+    with pytest.raises(ConnectorsSettingsError) as excinfo:
+        load_connectors_settings(
+            {"connectors": {"intervals": {"publish_upload": value}}},
+            settings_file=settings_file,
+            context=_context(tmp_path),
+        )
+    assert str(excinfo.value).startswith(
+        f"{settings_file}: [connectors.intervals] publish_upload: "
+    )
+    assert f"got {shown}" in str(excinfo.value)
+
+
+@pytest.mark.parametrize("value", [True, False])
+def test_a_boolean_publish_upload_loads_through_the_settings_loader(
+    tmp_path: Path, value: bool
+) -> None:
+    instances = load_connectors_settings(
+        {"connectors": {"intervals": {"publish_upload": value}}},
+        settings_file=tmp_path / "fitdocs.toml",
+        context=_context(tmp_path),
+    )
+    assert len(instances) == 1
+    assert instances[0].settings == IntervalsSettings(
+        sources=DEFAULT_SOURCES, publish_upload=value
+    )
+
+
 # --------------------------------------------------------------------------
 # The key check and the credential (task 3.2; Req 1.2, 1.3, 1.4, 5.7)
 # --------------------------------------------------------------------------
