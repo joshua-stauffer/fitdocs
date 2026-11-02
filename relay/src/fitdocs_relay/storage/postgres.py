@@ -15,6 +15,7 @@ from fitdocs_relay.storage.interface import (
     NewPrincipal,
     NewToken,
     Principal,
+    Publication,
     RateDecision,
     RevokeResult,
     SchemaChange,
@@ -52,6 +53,18 @@ _CONNECTION_COLUMNS = (
 )
 
 _Db = psycopg.Connection[tuple[object, ...]]
+
+
+def _publication_from_row(row: tuple[object, ...]) -> Publication:
+    return Publication(
+        target=str(row[0]),
+        publication_id=str(row[1]),
+        principal_id=str(row[2]),
+        sport=str(row[3]),
+        start_s=float(row[4]),  # type: ignore[arg-type]
+        elapsed_s=None if row[5] is None else float(row[5]),  # type: ignore[arg-type]
+        distance_m=None if row[6] is None else float(row[6]),  # type: ignore[arg-type]
+    )
 
 
 def _lease_live(lease_until: object, now: int) -> bool:
@@ -732,6 +745,64 @@ class PostgresBackend:
                 (now, row[0]),
             )
         return True
+
+    # --- PublicationStore ----------------------------------------------------
+
+    def put_publication(self, publication: Publication, *, now: int) -> bool:
+        self._check_open()
+
+        def work() -> bool:
+            with self._pool.connection() as db:
+                if (
+                    db.execute(
+                        "SELECT 1 FROM principals WHERE principal_id = %s FOR SHARE",
+                        (publication.principal_id,),
+                    ).fetchone()
+                    is None
+                ):
+                    raise UnknownPrincipal("the principal does not exist")
+                row = db.execute(
+                    "INSERT INTO target_publications (target, publication_id, "
+                    "principal_id, sport, start_s, elapsed_s, distance_m, "
+                    "created_at, updated_at) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                    "ON CONFLICT (target, publication_id) DO UPDATE SET "
+                    "sport = excluded.sport, start_s = excluded.start_s, "
+                    "elapsed_s = excluded.elapsed_s, "
+                    "distance_m = excluded.distance_m, "
+                    "updated_at = excluded.updated_at "
+                    "WHERE target_publications.principal_id = excluded.principal_id "
+                    "RETURNING 1",
+                    (
+                        publication.target,
+                        publication.publication_id,
+                        publication.principal_id,
+                        publication.sport,
+                        publication.start_s,
+                        publication.elapsed_s,
+                        publication.distance_m,
+                        now,
+                        now,
+                    ),
+                ).fetchone()
+                return row is not None
+
+        return _guarded(work)
+
+    def get_publication(self, target: str, publication_id: str) -> Publication | None:
+        self._check_open()
+
+        def work() -> tuple[object, ...] | None:
+            with self._pool.connection() as db:
+                return db.execute(
+                    "SELECT target, publication_id, principal_id, sport, start_s, "
+                    "elapsed_s, distance_m FROM target_publications "
+                    "WHERE target = %s AND publication_id = %s",
+                    (target, publication_id),
+                ).fetchone()
+
+        row = _guarded(work)
+        return _publication_from_row(row) if row else None
 
     # --- ServingStore --------------------------------------------------------
 

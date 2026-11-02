@@ -18,6 +18,8 @@ from fitdocs_relay.storage.interface import (
     NewToken,
     Principal,
     PrincipalStore,
+    Publication,
+    PublicationStore,
     RateDecision,
     RateLimitStore,
     RecordStore,
@@ -68,6 +70,7 @@ EXPECTED_MEMBERS: dict[str, set[str]] = {
         "delete_connection",
         "delete_connection_by_account",
     },
+    "PublicationStore": {"put_publication", "get_publication"},
 }
 
 AREAS = {
@@ -78,6 +81,7 @@ AREAS = {
     "SchemaStore": SchemaStore,
     "ServingStore": ServingStore,
     "TargetConnectionStore": TargetConnectionStore,
+    "PublicationStore": PublicationStore,
 }
 
 
@@ -109,6 +113,7 @@ def test_every_area_is_based_on_storage_base_and_composed_into_storage() -> None
         SchemaStore,
         ServingStore,
         TargetConnectionStore,
+        PublicationStore,
         Protocol,
     )
     assert _declared(Storage) == set()
@@ -316,6 +321,28 @@ DESIGNED: dict[str, dict[str, list[str]]] = {
             "*, now: int) -> bool",
         ],
     },
+    "Publication": {
+        "decorators": ["dataclass(frozen=True)"],
+        "bases": [],
+        "body": [
+            "target: str",
+            "publication_id: str",
+            "principal_id: str",
+            "sport: str",
+            "start_s: float",
+            "elapsed_s: float | None",
+            "distance_m: float | None",
+        ],
+    },
+    "PublicationStore": {
+        "decorators": [],
+        "bases": ["StorageBase", "Protocol"],
+        "body": [
+            "def put_publication(self, publication: Publication, *, now: int) -> bool",
+            "def get_publication(self, target: str, publication_id: str) -> "
+            "Publication | None",
+        ],
+    },
     "Storage": {
         "decorators": [],
         "bases": [
@@ -326,6 +353,7 @@ DESIGNED: dict[str, dict[str, list[str]]] = {
             "SchemaStore",
             "ServingStore",
             "TargetConnectionStore",
+            "PublicationStore",
             "Protocol",
         ],
         "body": [],
@@ -380,6 +408,7 @@ TAKES_NOW = {
         "delete_connection",
         "delete_connection_by_account",
     },
+    PublicationStore: {"put_publication"},
 }
 
 
@@ -456,6 +485,18 @@ def test_the_interface_module_imports_no_clock() -> None:
                 "token_id",
                 "created_at",
                 "updated_at",
+            ],
+        ),
+        (
+            Publication,
+            [
+                "target",
+                "publication_id",
+                "principal_id",
+                "sport",
+                "start_s",
+                "elapsed_s",
+                "distance_m",
             ],
         ),
     ],

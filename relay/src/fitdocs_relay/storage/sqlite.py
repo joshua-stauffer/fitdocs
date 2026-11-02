@@ -16,6 +16,7 @@ from fitdocs_relay.storage.interface import (
     NewPrincipal,
     NewToken,
     Principal,
+    Publication,
     RateDecision,
     RevokeResult,
     SchemaChange,
@@ -96,6 +97,18 @@ def _connection_from_row(row: tuple[Any, ...]) -> StoredConnection:
         token_id=row[9],
         created_at=row[10],
         updated_at=row[11],
+    )
+
+
+def _publication_from_row(row: tuple[Any, ...]) -> Publication:
+    return Publication(
+        target=row[0],
+        publication_id=row[1],
+        principal_id=row[2],
+        sport=row[3],
+        start_s=row[4],
+        elapsed_s=row[5],
+        distance_m=row[6],
     )
 
 
@@ -588,6 +601,52 @@ class SqliteBackend:
                 (now, rows[0][0]),
             )
         return True
+
+    # --- PublicationStore ----------------------------------------------------
+
+    def put_publication(self, publication: Publication, *, now: int) -> bool:
+        with self._write() as db:
+            if not _run(
+                db,
+                "SELECT 1 FROM principals WHERE principal_id = ?",
+                (publication.principal_id,),
+            ):
+                raise UnknownPrincipal("the principal does not exist")
+            rows = _run(
+                db,
+                "INSERT INTO target_publications (target, publication_id, "
+                "principal_id, sport, start_s, elapsed_s, distance_m, created_at, "
+                "updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT (target, publication_id) DO UPDATE SET "
+                "sport = excluded.sport, start_s = excluded.start_s, "
+                "elapsed_s = excluded.elapsed_s, distance_m = excluded.distance_m, "
+                "updated_at = excluded.updated_at "
+                "WHERE target_publications.principal_id = excluded.principal_id "
+                "RETURNING 1",
+                (
+                    publication.target,
+                    publication.publication_id,
+                    publication.principal_id,
+                    publication.sport,
+                    publication.start_s,
+                    publication.elapsed_s,
+                    publication.distance_m,
+                    now,
+                    now,
+                ),
+            )
+            return bool(rows)
+
+    def get_publication(self, target: str, publication_id: str) -> Publication | None:
+        with self._read() as db:
+            rows = _run(
+                db,
+                "SELECT target, publication_id, principal_id, sport, start_s, "
+                "elapsed_s, distance_m FROM target_publications "
+                "WHERE target = ? AND publication_id = ?",
+                (target, publication_id),
+            )
+        return _publication_from_row(rows[0]) if rows else None
 
     # --- ServingStore --------------------------------------------------------
 
