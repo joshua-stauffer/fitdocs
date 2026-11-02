@@ -82,6 +82,7 @@ import fitdocs.connectors
 CONNECTORS_MODULE_NAMES: Final[tuple[str, ...]] = (
     "fitdocs.connectors",
     "fitdocs.connectors._atomic",
+    "fitdocs.connectors.browser_connect",
     "fitdocs.connectors.connect",
     "fitdocs.connectors.credentials",
     "fitdocs.connectors.delivery",
@@ -295,6 +296,18 @@ _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
         }
     ),
     "fitdocs.connectors._atomic": frozenset(),
+    "fitdocs.connectors.browser_connect": frozenset(
+        {
+            "fitdocs.connectors.credentials",
+            "fitdocs.connectors.errors",
+            "fitdocs.connectors.http",
+            "fitdocs.connectors.protocol",
+            "fitdocs.connectors.relay",
+            "fitdocs.connectors.relay_codes",
+            "fitdocs.connectors.secrets",
+            "fitdocs.connectors.settings",
+        }
+    ),
     "fitdocs.connectors.connect": frozenset(
         {
             "fitdocs.connectors.credentials",
