@@ -357,8 +357,10 @@ a violation is a defect):
   `secrets` keep their existing positions.
 - relay side: `shared.*` → `contract` → `config` → `storage.interface` →
   `storage.sqlite` / `storage.postgres` / `storage.migrate` → `storage` →
-  `identity`, `ratelimit` → `seam` → `answers` → `routes` → `app` → `serve`
-  → `cli`. `logs` is a leaf that `app`, `serve` and `cli` import.
+  `identity`, `ratelimit` → `answers` → `seam` → `routes` → `app` → `serve`
+  → `cli`. `logs` is a leaf that `app`, `serve` and `cli` import. (Amended
+  2026-11-01, task 4.4 controller ruling: `answers` precedes `seam`, so the
+  seam's envelope helper reuses `answers.answer` instead of a second encoder.)
 
 ### Technology Stack
 
@@ -1521,8 +1523,11 @@ def create_app(config: RelayConfig, *, extensions: Sequence[RelayExtension] = ()
   - Exit codes: 0 ok; 1 operation failed (unknown id, unreachable, schema
     not current or ahead); 2 configuration error; 3 migrations pending
     (`--check`).
-  - Every command except `migrate` and `new-pepper` first requires
-    `schema_state().current == expected`.
+  - Every command except `migrate`, `new-pepper` and `serve` first requires
+    `schema_state().current == expected`. (Amended 2026-11-01, task 5.2
+    controller ruling: `serve` does not gate on the schema; the readiness
+    probe reports schema-behind/ahead while serving and the API answers
+    `unavailable` until the schema is current.)
   - Labels are at most 64 printable characters. Listings are tab-separated
     with ISO-8601 UTC times, ordered by `created_at` then id.
 
@@ -1717,9 +1722,13 @@ def create_app(config: RelayConfig, *, extensions: Sequence[RelayExtension] = ()
     "never deletes it or anything in it" reds the bullet pin.
   - The statement is general enough that strava-publish's `OAUTH_BROWSER`
     disconnect rows are covered without a further bump.
-- **SkillLine** (16.6): "Never run `fitdocs disconnect` either: it revokes
-  a relay token, which cannot be undone." beside the connect rule, pinned
-  next to the existing never-connect pins.
+- **SkillLine** (16.6): "Never run `fitdocs disconnect` either: it deletes
+  an instance's stored credentials, which only the athlete can restore by
+  connecting again, and for a relay instance it first revokes the token at
+  the relay, which cannot be undone." beside the connect rule, pinned next to
+  the existing never-connect pins. (Amended at 8.6: the earlier literal said
+  every disconnect revokes a relay token, false for API-key and login
+  instances and for `--local-only`.)
 - **Changelogs** (16.7):
   - Root `CHANGELOG.md` Unreleased, appended:
     - Added: the relay connector, `fitdocs connect --register`, and

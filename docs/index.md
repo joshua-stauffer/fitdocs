@@ -23,6 +23,7 @@ if you have not run fitdocs yet; otherwise jump straight to the page you need.
 | [Wellness](wellness.md) | Import daily wellness files, understand source definitions and precedence, and read the CSV series or analytics table. |
 | [Publishing](publishing.md) | Post each workout's title and description to the publish targets you configured: `fitdocs publish`, the `[publish]` templates, the placeholders, every outcome code, the ledger and the published region. |
 | [Recovery](recovery.md) | Generate the recovery page, understand its sections, source baselines and descriptive method, and use the reference-band chart kind. |
+| [The relay](relay.md) | Running a relay yourself: the self-hosting guide, the deploy contract (image, environment, probes, commands, one-replica and state rules), the operator commands, the envelope and its code table, and the wrapper seam. It is not a contract governed by the compatibility policy. |
 | [Contributing](../CONTRIBUTING.md) | The contributor path: environment setup, what must pass before a change is accepted, and the rule for third-party material. |
 
 ## Where things live

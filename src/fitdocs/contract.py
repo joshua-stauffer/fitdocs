@@ -377,7 +377,7 @@ neither region, so ``fitdocs publish`` does not publish it until
 ``fitdocs regen`` brings it current with both regions in their fresh form.
 """
 
-CONTRACT_VERSION: Final[str] = "18"
+CONTRACT_VERSION: Final[str] = "19"
 """The published ownership contract's version identifier (Req 2.8).
 
 A *string*, and deliberately not comparable with :data:`DOC_VERSION`: it
@@ -539,6 +539,18 @@ credentials file, as a credential-renewing ``fitdocs pull`` does. Run
 ``fitdocs regen`` once to bring existing pages current with both regions;
 ``fitdocs publish`` does not publish a page stamped with an older
 document-format version.
+
+Raised from ``18`` to ``19`` by relay-server (Req 14.8, 14.9) because the stated
+guarantee about the connector credentials store changed. The store sits outside
+the data root and is not owned by fitdocs; it was never deleted from, and now
+``fitdocs disconnect`` removes the named instance's own credentials file and
+nothing else, never the directory and never another instance's file.
+``fitdocs connect``, a credential-renewing ``fitdocs pull``, a
+credential-renewing ``fitdocs publish --yes`` and ``fitdocs disconnect`` are the
+only operations that write to or remove from the store, one instance's file at a
+time and never under the data root. Which paths fitdocs owns
+under the data root are unchanged. Run ``fitdocs sync`` or ``fitdocs regen`` once
+to refresh the in-tree ownership declarations.
 """
 
 # --- document vocabulary -----------------------------------------------------

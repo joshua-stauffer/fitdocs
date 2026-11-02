@@ -1125,6 +1125,7 @@ _REQUIRED_ENTRY_POINT_LINKS = [
     "wellness.md",
     "recovery.md",
     "publishing.md",
+    "relay.md",
 ]
 
 

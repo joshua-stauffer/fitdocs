@@ -17,6 +17,20 @@ recorded as one.
 
 ### Added
 
+- The `relay` connector, for a fitdocs relay: configure `[connectors.NAME]`
+  with `connector = "relay"` and an optional `url` (default
+  `https://api.fitdocs.ai`), then run `fitdocs connect NAME` and paste the
+  relay token, which is checked once and stored only if the relay accepts it.
+  `fitdocs connect NAME --register [--email ADDRESS]` registers an email
+  address with a relay that offers registration and stores the token it
+  issues. `fitdocs.toml` settings schema (additive): the `relay` connector's
+  optional `url` key. Action: to use a relay, add the instance table and run
+  `fitdocs connect NAME`.
+- `fitdocs disconnect NAME [--local-only]` forgets an instance's stored
+  credentials. For a relay it asks the relay to revoke the token first and
+  keeps the file if the relay cannot confirm; `--local-only` removes the file
+  without contacting the relay. Action: run `fitdocs disconnect NAME` to
+  retire a token you no longer want on this machine.
 - `fitdocs publish` turns workout pages into posts and sends them to the
   publish targets you configured as connectors; the `[publish]` settings
   table sets the title and description templates a post is composed from. A page
@@ -74,6 +88,25 @@ recorded as one.
   documents; page text is unchanged. Action: run `fitdocs regen` once to
   rewrite the chart files of an existing archive in the compact form. Later
   regens leave every chart file whose bytes are unchanged untouched.
+- The generated document and ownership contract advances from version 18 to
+  19 (contract version 19): the new `fitdocs disconnect` command removes the
+  named connector instance's own credentials file, and nothing else, from the
+  credentials store outside the data root; `connect`, a credential-renewing
+  `pull`, a credential-renewing `publish --yes` and `disconnect` are the only
+  operations that write to or remove from the store. Contract version 19 needs
+  nothing for existing documents. Action:
+  run `fitdocs sync` or `fitdocs regen` once to refresh the in-tree ownership
+  declarations to the new version.
+- A bare `fitdocs pull` (no instance names) now pulls only instances whose
+  connector fetches activities or wellness, so it skips a `relay` instance and
+  never contacts it. When instances are configured but none pulls, it prints
+  that nothing is to pull and exits `0`. Action: none; name the instance to
+  see why it is not pulled.
+- The credentials file's `auth_style` value set gains `relay-token`, written
+  for a relay token. Existing credentials files are unchanged. An older
+  fitdocs reports a file carrying `relay-token` as malformed. Action: none for
+  existing files; do not share one credentials directory with an older
+  fitdocs.
 
 ## [0.2.0] - 2026-10-19
 

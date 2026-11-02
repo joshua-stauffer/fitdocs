@@ -28,8 +28,8 @@ def _section(text: str, heading: str) -> str:
     return _flat(body.split("\n## ", 1)[0])
 
 
-def test_contract_version_is_eighteen() -> None:
-    assert CONTRACT_VERSION == "18"
+def test_contract_version_is_nineteen() -> None:
+    assert CONTRACT_VERSION == "19"
     head = _flat(DOC.read_text(encoding="utf-8")).split(" ## ", 1)[0]
     assert f"**Contract version:** `{CONTRACT_VERSION}`" in head
 

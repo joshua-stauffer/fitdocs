@@ -73,6 +73,11 @@ EXPECTED_ALL: tuple[str, ...] = (
     "PublishResult",
     "PublishCode",
     "TARGET_CODES",
+    "RelayTokenClient",
+    "RelayRefused",
+    "RelayCapabilities",
+    "RegistrationStarted",
+    "RegistrationPolled",
 )
 
 # The module design.md says defines each name (used only for the identity
@@ -136,12 +141,17 @@ _DEFINING_MODULE = {
     "PublishResult": protocol,
     "PublishCode": protocol,
     "TARGET_CODES": protocol,
+    "RelayTokenClient": protocol,
+    "RelayRefused": protocol,
+    "RelayCapabilities": protocol,
+    "RegistrationStarted": protocol,
+    "RegistrationPolled": protocol,
 }
 
 
-def test_expected_all_has_exactly_58_names_with_no_duplicates() -> None:
-    assert len(EXPECTED_ALL) == 58
-    assert len(set(EXPECTED_ALL)) == 58
+def test_expected_all_has_exactly_63_names_with_no_duplicates() -> None:
+    assert len(EXPECTED_ALL) == 63
+    assert len(set(EXPECTED_ALL)) == 63
 
 
 def test_expected_all_covers_every_name_this_test_checks_identity_for() -> None:
@@ -170,8 +180,8 @@ def test_every_published_name_is_identical_to_its_defining_modules_object() -> N
         )
 
 
-def test_import_fitdocs_connectors_exposes_exactly_58_names() -> None:
-    assert len(connectors_package.__all__) == 58
+def test_import_fitdocs_connectors_exposes_exactly_63_names() -> None:
+    assert len(connectors_package.__all__) == 63
     for name in connectors_package.__all__:
         # Every published name must actually resolve on the package -- an
         # __all__ entry with nothing behind it would raise here.

@@ -14,8 +14,9 @@ and whether this version of fitdocs actually drives it (five driven capabilities
 capability, and the framework accepts the declaration without requiring an
 operation for it or ever invoking it, Req 1.4).
 
-:class:`AuthStyle` is the fixed vocabulary of four ways a connector
-authenticates; ``OAUTH_BROWSER`` is reserved -- a connector may declare it,
+:class:`AuthStyle` is the fixed vocabulary of five ways a connector
+authenticates (``NONE``, ``API_KEY``, ``LOGIN``, ``OAUTH_BROWSER`` and
+``RELAY_TOKEN``); ``OAUTH_BROWSER`` is reserved -- a connector may declare it,
 but ``fitdocs connect`` (a later task) refuses it as unsupported by this
 version (Req 1.7).
 
@@ -38,6 +39,7 @@ from pathlib import Path
 from typing import Final, Protocol
 
 from fitdocs.connectors.http import HttpClient
+from fitdocs.connectors.relay_codes import RelayCode
 from fitdocs.connectors.secrets import Redactor, Secret
 from fitdocs.publish.outcomes import TARGET_CODES, PublishCode
 from fitdocs.publish.request import (
@@ -203,18 +205,20 @@ DRIVEN_CAPABILITIES: Final[frozenset[Capability]] = (
 
 
 class AuthStyle(StrEnum):
-    """The four ways a connector authenticates (Req 1.7). ``OAUTH_BROWSER``
+    """The ways a connector authenticates (Req 1.7). ``OAUTH_BROWSER``
     is reserved: a connector may declare it, but ``fitdocs connect`` refuses
-    it as unsupported by this version."""
+    it as unsupported by this version. ``RELAY_TOKEN`` (relay-server Req 11.3)
+    is appended: a token the fitdocs relay issued."""
 
     NONE = "none"
     API_KEY = "api-key"
     LOGIN = "login"
     OAUTH_BROWSER = "oauth-browser"  # reserved
+    RELAY_TOKEN = "relay-token"
 
 
 SUPPORTED_AUTH_STYLES: Final[frozenset[AuthStyle]] = frozenset(
-    {AuthStyle.NONE, AuthStyle.API_KEY, AuthStyle.LOGIN}
+    {AuthStyle.NONE, AuthStyle.API_KEY, AuthStyle.LOGIN, AuthStyle.RELAY_TOKEN}
 )
 
 
@@ -483,3 +487,67 @@ class PostPublisher(Protocol):
     def publish(
         self, session: ConnectorSession, request: PublishRequest
     ) -> PublishResult: ...
+
+
+@dataclass(frozen=True)
+class RelayRefused:
+    """A relay operation the relay (or the transport) refused. ``retry_after_s``
+    is ``None`` when the relay stated none (relay-server Req 11.3)."""
+
+    code: RelayCode
+    retry_after_s: int | None = None
+
+
+@dataclass(frozen=True)
+class RelayCapabilities:
+    """What a relay reports it offers (relay-server Req 11.3)."""
+
+    envelopes: tuple[int, ...]
+    registration: bool
+    targets: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class RegistrationStarted:
+    """A started registration: the code the user enters, the secret the client
+    polls with (registered with the session redactor), the poll interval, and
+    when it expires (``session.now()`` plus the relay's ``expires_in_s``)."""
+
+    user_code: str
+    poll_secret: Secret
+    interval_s: int
+    expires_at: datetime
+
+
+@dataclass(frozen=True)
+class RegistrationPolled:
+    """One registration poll's answer: ``code`` is ``REGISTRATION_PENDING``,
+    ``REGISTRATION_SLOW_DOWN`` or ``REGISTRATION_ISSUED``; ``token`` is set
+    exactly when it is ``REGISTRATION_ISSUED``."""
+
+    code: RelayCode
+    token: Secret | None
+
+
+class RelayTokenClient(Protocol):
+    """Required when :attr:`AuthStyle.RELAY_TOKEN` is declared."""
+
+    def check_token(
+        self, session: ConnectorSession, token: Secret
+    ) -> RelayRefused | None: ...
+
+    def read_capabilities(
+        self, session: ConnectorSession
+    ) -> RelayCapabilities | RelayRefused: ...
+
+    def start_registration(
+        self, session: ConnectorSession, email: str
+    ) -> RegistrationStarted | RelayRefused: ...
+
+    def poll_registration(
+        self, session: ConnectorSession, started: RegistrationStarted
+    ) -> RegistrationPolled | RelayRefused: ...
+
+    def revoke_token(
+        self, session: ConnectorSession, token: Secret
+    ) -> RelayRefused | None: ...

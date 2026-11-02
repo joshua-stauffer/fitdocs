@@ -1,19 +1,17 @@
 # fitdocs Ownership Contract
 
-**Contract version:** `18`
+**Contract version:** `19`
 
-**What changed at this version:** A workout page gains two regions and a key.
-It reserves a user-owned `post` region, the page's own post for publishing, and
-a fitdocs-owned `published` region that `fitdocs publish --yes` fills with
-links to the posted activities; the `publish` frontmatter key is user-owned,
-the target or targets you choose for the page. The publish ledgers, one file
-per target under `.fitdocs/publish/`, sit in the tool-owned state, and the
-settings file gains a `[publish]` table that fitdocs only reads.
-`fitdocs publish` writes only the publish ledgers and the `published` region
-of pages in the data root, never the `post` region or any other content of a page. A publish
-target that renews its credentials through its session also updates that
-instance's credentials file, outside the data root. Run
-`fitdocs regen` once to bring existing pages current with both regions.
+**What changed at this version:** The connector credentials store, which sits
+outside the data root and is not owned by fitdocs, is no longer something
+fitdocs never deletes from. The new `fitdocs disconnect` command removes the
+named connector instance's own credentials file, and nothing else. `connect`,
+a credential-renewing `fitdocs pull`, a credential-renewing
+`fitdocs publish --yes` and `disconnect` are now the only operations that write
+to or remove from the store, one instance's file at a time and never under the
+data root. Which paths fitdocs owns under the data root, and every other
+operation's writes, are unchanged. Run `fitdocs sync` or `fitdocs regen` once to
+refresh the in-tree ownership declarations to the new version.
 
 This document is the authoritative, published statement of what fitdocs owns
 in your data root, what you own, and the exact limits of every operation that
@@ -928,11 +926,14 @@ and each has a distinct contract:
   path, else `~/.config/fitdocs/credentials`); fitdocs refuses to read or write
   credentials in a resolved directory that is, or lies inside, the data
   root, stopping with a configuration error. It is **not owned by fitdocs**
-  in this contract's sense — fitdocs never deletes it or anything in it —
-  but fitdocs creates it, owner-only, when missing, and `fitdocs connect`,
-  a credential-renewing `fitdocs pull` and a credential-renewing
-  `fitdocs publish --yes` are the only operations that write to it, each one instance's file at a time, never touching another
-  instance's file or anything under the data root. See
+  in this contract's sense — `fitdocs disconnect` removes the named
+  instance's own credentials file and nothing else, never the directory and
+  never another instance's file — but fitdocs creates it, owner-only, when
+  missing, and `fitdocs connect`, a credential-renewing `fitdocs pull`, a
+  credential-renewing `fitdocs publish --yes` and `fitdocs disconnect` are the
+  only operations that write to or remove from it, each one instance's file at
+  a time, never touching another instance's file or anything under the data
+  root. See
   [Connectors](connectors.md) for where each field comes from and how to
   override it per connector.
 - **The plan-source directory** — your plan sources: the athlete's own
@@ -1220,6 +1221,20 @@ and each has a distinct contract:
   updates is that instance's own credentials file (and the credentials
   directory, created when missing), outside the data root
   (see [Shared and User-Owned Files](#shared-and-user-owned-files) below).
+- **`disconnect`** — removes one connector instance's own credentials file,
+  outside the data root, and nothing else: it never removes the credentials
+  directory or another instance's file, and writes nothing at all under the
+  data root. An instance whose authentication style revokes at a relay (a
+  relay instance, and any relay-bound instance a later version adds) first
+  makes one revocation request, and its file is removed only when the relay
+  answers that the token is revoked, was already revoked or is unknown;
+  `--local-only` removes the file without asking the relay. A personal-key or
+  login instance has its file removed with no request, and the credential
+  stays valid at the service that issued it. An instance that needs no
+  authentication, or has no credentials file, is left alone and nothing is
+  removed. A style this version does not support is refused as a
+  configuration error and nothing is removed (see
+  [Shared and User-Owned Files](#shared-and-user-owned-files) below).
 
 **No fitdocs operation discards user-owned region content**, with one
 precise exception worth stating plainly rather than glossing over: if a

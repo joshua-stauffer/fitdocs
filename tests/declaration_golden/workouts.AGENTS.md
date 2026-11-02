@@ -16,5 +16,5 @@ Never add a region marker to a document that does not already have one: a marker
 ## Ownership
 
 Owner: `fitdocs`.
-Ownership contract version: `18`.
+Ownership contract version: `19`.
 Published ownership contract: https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md

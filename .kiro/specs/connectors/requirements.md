@@ -411,3 +411,106 @@ connector package.
 Count pins: the relay-server spec also moves the `connectors` surface count (+5
 on its branch); whichever lands second recounts the pin. Existing criteria and
 approvals are preserved word-for-word; nothing is renumbered.
+
+## Amendment 7 (2026-11-01): the relay-token authentication style, relay connect and `fitdocs disconnect`, landed by relay-server
+
+relay-server adds a fifth authentication style, a relay connector built on
+it, and a third connector-request command, `fitdocs disconnect`. The changes
+below are recorded here; no criterion is renumbered, and the criteria keep
+their wording except as stated. Written as Amendment 6 on the relay-server
+branch; renumbered to 7 because publish-core landed its Amendment 6 first.
+
+- Requirement 1 criterion 7: "four authentication styles -- none, personal
+  key, login (credentials exchanged once for renewable tokens), and browser
+  consent" becomes five: those four and relay token (a token issued by a relay
+  server, checked and revoked through the relay protocol). Browser consent
+  stays reserved and refused by `fitdocs connect`. Pinned by
+  `tests/connectors/test_protocol.py::test_auth_style_has_exactly_five_members_with_the_designed_values`.
+- Requirement 2 criterion 3: "it declares no capability" is a rejection for
+  every style except relay token. A relay-token connector may declare no
+  capability, and for that style the validation requires the five relay
+  operations (`check_token`, `read_capabilities`, `start_registration`,
+  `poll_registration`, `revoke_token`) in addition to any operation a driven
+  capability it declares requires. Pinned by
+  `tests/connectors/test_registry.py::test_a_complete_relay_connector_with_no_capability_registers`,
+  `::test_every_non_relay_style_with_no_capability_is_still_rejected`,
+  `::test_a_relay_connector_lacking_one_operation_is_rejected_naming_it`,
+  `::test_a_relay_connector_may_also_declare_capabilities`,
+  `::test_a_relay_connector_declaring_a_driven_capability_still_needs_its_operations` and
+  `::test_relay_operations_follow_the_protocols_declared_method_order`.
+- Requirement 2 criterion 7: the published surface gains the five relay
+  protocol names (`RelayRefused`, `RelayCapabilities`, `RegistrationStarted`,
+  `RegistrationPolled`, `RelayTokenClient`) and rises by five (from 58,
+  after publish-core's Amendment 6, to 63).
+  Pinned by
+  `tests/connectors/test_surface.py::test_published_surface_equals_the_design_literal_list_exactly`,
+  `::test_expected_all_has_exactly_63_names_with_no_duplicates` and
+  `::test_import_fitdocs_connectors_exposes_exactly_63_names`. A later spec that
+  adds names re-counts these literals.
+- Requirement 4 criterion 5: the environment variable named for the instance
+  and a credential field also overrides the stored relay token, and satisfies
+  it when nothing is stored. Pinned by
+  `tests/connectors/test_credentials.py::test_relay_token_environment_beats_the_store`
+  and `::test_relay_token_environment_satisfies_the_token_with_nothing_stored`.
+- Requirement 5 criterion 6: for a relay instance, `fitdocs connect` does not
+  quote the service's message. It names the relay code and prints
+  fitdocs's own explanation and next step, with the token and every secret
+  removed, and stores nothing. Criterion 7: for a relay instance the single
+  attempt holds per request, within a registration sequence (a capabilities
+  read, one registration start, and one poll per stated interval), and no
+  request is repeated automatically. relay-server Requirements 12 and 13 own
+  the rest of relay connect. Pinned by
+  `tests/connectors/test_relay_connect.py::test_every_non_ok_code_stores_nothing_and_speaks_only_fitdocs_text`,
+  `::test_a_503_and_a_429_each_produce_exactly_one_transport_call` and
+  `tests/connectors/test_relay_register.py::test_a_503_and_a_429_each_produce_exactly_one_transport_call_per_request`.
+- Requirement 6 criterion 1: a bare `fitdocs pull` pulls from every
+  configured instance that declares a pulling capability (pull activities or
+  pull wellness), in instance-name order, not from every configured instance.
+  When instances are configured but none pulls, it prints "No configured
+  connector instance pulls activities or wellness; nothing to pull." and exits with the success code, making no
+  request. Named instances are unchanged. Pinned by
+  `tests/connectors/test_cli_relay_pull.py::test_bare_pull_pulls_the_folder_and_never_contacts_the_relay`,
+  `::test_bare_pull_with_only_a_relay_prints_the_distinct_line` and
+  `::test_bare_pull_skips_a_non_relay_connector_that_pulls_nothing`.
+- Requirement 9 criterion 4: the authentication requests also include the
+  relay calls (token check, registration start, registration poll and token
+  revocation); each request is sent exactly once, never repeated whatever the
+  response. Pinned by
+  `tests/connectors/test_relay.py::test_every_operation_makes_exactly_one_call_and_maps_unreachable`,
+  `tests/connectors/test_relay.py::test_an_operation_is_attempted_once_whatever_the_answer`
+  and
+  `tests/connectors/test_disconnect.py::test_a_503_and_a_429_each_produce_exactly_one_transport_call`.
+- Requirement 14 criteria 1 and 4: `disconnect` joins `connect` and `pull` as
+  a connector-request command (`index`, `query`, `sync` and the other
+  commands still make none), and every statement of where fitdocs touches the
+  network names `fitdocs disconnect` and the registration of `fitdocs
+  connect`. The other commands still make none, pinned by
+  `tests/connectors/test_e2e.py::test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded`.
+  The statements are pinned by
+  `tests/connectors/test_network_statements.py::test_every_rewritten_place_names_disconnect_and_the_registration`
+  and
+  `tests/connectors/test_network_statements.py::test_steering_publishes_the_relay_server_and_its_network_calls`.
+  The disconnect command itself is pinned in the next bullet.
+- New command: `fitdocs disconnect NAME [--local-only]`, specified by
+  relay-server Requirement 14. For a relay instance with a stored token it
+  makes one revocation request and removes the instance's credentials file on
+  success or on an already-unknown or already-revoked token; it keeps the file
+  and prints the relay code, its explanation and the next step otherwise;
+  `--local-only` makes no request; personal-key and login instances have
+  their file removed without a request; a no-authentication instance has
+  nothing to disconnect; an instance with no stored token has nothing to
+  disconnect, makes no request and exits with the success code, and only then
+  is a set environment override stated as not revoked and still set. It
+  removes nothing but the named instance's credentials file and writes
+  nothing under the data root, pinned by
+  `tests/connectors/test_relay_offline.py::test_disconnect_writes_nothing_under_the_data_root_and_removes_one_file`.
+  The command's behavior is pinned by
+  `tests/connectors/test_disconnect.py::test_ok_unknown_and_revoked_each_remove_the_file_after_one_revocation`,
+  `::test_every_other_code_keeps_the_file_and_speaks_only_fitdocs_text`,
+  `::test_every_authentication_style_has_a_pinned_outcome` and
+  `tests/connectors/test_cli_relay_disconnect.py::test_local_only_removes_the_file_with_no_request`,
+  `::test_an_environment_override_is_stated_as_not_revoked_and_still_set` and
+  `::test_the_command_is_registered_with_a_local_only_option`. The fitdocs
+  command count rises by one (from sixteen, after publish-core's `fitdocs
+  publish`, to seventeen), as the cli.py module docstring's count word pinned by
+  `tests/test_cli_skill.py::test_registered_command_count_matches_docstring_opening`.

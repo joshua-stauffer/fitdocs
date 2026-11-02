@@ -240,7 +240,7 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.2, 3.4, 3.9, 3.10, 4.2, 5.3, 6.1, 6.5, 6.6, 6.7, 6.8, 7.1, 7.8, 9.4_
   - _Depends: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6_
 
-- [ ] 3.2 Guard the publish path against service text
+- [x] 3.2 Guard the publish path against service text
   - Add the call-graph test: parse the intervals module, follow every
     module-level function a call reachable from the publish operation names,
     and assert that the two service-message helpers, the generic failure
@@ -255,7 +255,7 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
     from the listing helper.
   - _Requirements: 8.1_
 
-- [ ] 3.3 Publish through the CLI end to end
+- [x] 3.3 Publish through the CLI end to end
   - Over a synced temporary data root with an intervals instance, its key in
     the override variable and the CLI's connector transport patched to a
     scripted transport, run `fitdocs publish --yes` for a page that opts in.
@@ -411,3 +411,5 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
 - 2.5: "body never read" needs a per-status result assertion plus a wide tripwire bytes subclass; buffer-protocol reads cannot be intercepted on 3.11. Scripted 200s should carry a realistic non-empty body. 2.6 and 3.2 (sentinel) should reuse this.
 - 2.6 RULING (controller): the multipart boundary is re-chosen whenever `--<boundary>` occurs anywhere in the file (substring), a strict superset of the design's "delimiter line" condition. Kept as safer, still deterministic, and consistent with RFC 2046; pinned by test_the_boundary_collision_reaches_the_wire. `_Tripwire` is module-level in test_intervals_publish.py; reuse it for 3.2.
 - 3.1: the `_Flow` harness in test_intervals_publish.py never merges requests. `_publish` asserts per-(method, path) raw counts equal one logical request (simulated from http.MAX_DATA_ATTEMPTS / RETRYABLE_STATUSES, which test_http.py pins with literals), and asserts the exact credential header on every request. Reuse `_Flow`/`_publish` for 3.2. Becoming a publish target changed tests/connectors/test_e2e.py offline publish output (bare root: "No publish target is configured."). 3.3/5.1 may need the same.
+- 3.2: the AST walker `_reachable` follows module functions, `self.` methods and every module-level class a reachable body names, and records attribute names, so qualified calls count. The sentinel test checks result fields, stdout, stderr and caplog.
+- 3.3: the CLI e2e tests live in tests/connectors/test_intervals_publish_cli.py. A refusal test must first make the page due again (change the target title), or "nothing sent / byte-identical" holds before the run.

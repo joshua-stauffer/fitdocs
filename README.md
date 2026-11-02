@@ -67,7 +67,8 @@ is not yet shipped.
 
 Outdoor activities get a **Map** section drawn over real basemap tiles.
 Fetching those tiles, and the connector commands — `fitdocs connect`
-(authenticating once against a configured source) and `fitdocs pull`
+(authenticating once against a configured source, or registering with a
+relay), `fitdocs disconnect` (revoking a relay token) and `fitdocs pull`
 (fetching activities from it) — are the only times fitdocs touches the
 network. What leaves your machine and when, the persistent opt-out, choosing
 a provider, attribution, and the tile cache all now live in

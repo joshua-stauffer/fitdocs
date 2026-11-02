@@ -1,0 +1,693 @@
+{
+  "envelope": 1,
+  "note": "Recorded request/answer exchanges for envelope v1. Every token is the visibly fake all-a token. Each exchange names the relay state it was recorded against; the relay suite rebuilds that state and asserts status, headers and body byte for byte; the fitdocs suite decodes each answer. Bodies are the exact bytes as UTF-8 text (a request body may be a prefix, a repeated filler and a suffix).",
+  "exchanges": [
+    {
+      "name": "livez-ok",
+      "state": {
+        "profile": "default"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/livez",
+        "headers": {},
+        "body": ""
+      },
+      "answer": {
+        "status": 200,
+        "headers": {
+          "cache-control": "no-store",
+          "content-length": "36",
+          "content-type": "application/json"
+        },
+        "body": "{\"envelope\":1,\"code\":\"ok\",\"data\":{}}"
+      }
+    },
+    {
+      "name": "readyz-ok",
+      "state": {
+        "profile": "default"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/readyz",
+        "headers": {},
+        "body": ""
+      },
+      "answer": {
+        "status": 200,
+        "headers": {
+          "cache-control": "no-store",
+          "content-length": "71",
+          "content-type": "application/json"
+        },
+        "body": "{\"envelope\":1,\"code\":\"ok\",\"data\":{\"schema\":{\"current\":1,\"expected\":1}}}"
+      }
+    },
+    {
+      "name": "readyz-schema-behind",
+      "state": {
+        "profile": "schema-behind"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/readyz",
+        "headers": {},
+        "body": ""
+      },
+      "answer": {
+        "status": 503,
+        "headers": {
+          "cache-control": "no-store",
+          "content-length": "82",
+          "content-type": "application/json"
+        },
+        "body": "{\"envelope\":1,\"code\":\"schema-behind\",\"data\":{\"schema\":{\"current\":0,\"expected\":1}}}"
+      }
+    },
+    {
+      "name": "readyz-schema-ahead",
+      "state": {
+        "profile": "schema-ahead"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/readyz",
+        "headers": {},
+        "body": ""
+      },
+      "answer": {
+        "status": 503,
+        "headers": {
+          "cache-control": "no-store",
+          "content-length": "81",
+          "content-type": "application/json"
+        },
+        "body": "{\"envelope\":1,\"code\":\"schema-ahead\",\"data\":{\"schema\":{\"current\":2,\"expected\":1}}}"
+      }
+    },
+    {
+      "name": "readyz-storage-unreachable",
+      "state": {
+        "profile": "store-closed"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/readyz",
+        "headers": {},
+        "body": ""
+      },
+      "answer": {
+        "status": 503,
+        "headers": {
+          "cache-control": "no-store",
+          "content-length": "53",
+          "content-type": "application/json"
+        },
+        "body": "{\"envelope\":1,\"code\":\"storage-unreachable\",\"data\":{}}"
+      }
+    },
+    {
+      "name": "capabilities-without-registration",
+      "state": {
+        "profile": "no-provider"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/v1/capabilities",
+        "headers": {},
+        "body": ""
+      },
+      "answer": {
+        "status": 200,
+        "headers": {
+          "cache-control": "no-store",
+          "content-length": "85",
+          "content-type": "application/json"
+        },
+        "body": "{\"envelope\":1,\"code\":\"ok\",\"data\":{\"envelopes\":[1],\"registration\":false,\"targets\":[]}}"
+      }
+    },
+    {
+      "name": "capabilities-with-registration",
+      "state": {
+        "profile": "default"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/v1/capabilities",
+        "headers": {},
+        "body": ""
+      },
+      "answer": {
+        "status": 200,
+        "headers": {
+          "cache-control": "no-store",
+          "content-length": "84",
+          "content-type": "application/json"
+        },
+        "body": "{\"envelope\":1,\"code\":\"ok\",\"data\":{\"envelopes\":[1],\"registration\":true,\"targets\":[]}}"
+      }
+    },
+    {
+      "name": "capabilities-rate-limited",
+      "state": {
+        "profile": "client-limit-spent"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/v1/capabilities",
+        "headers": {},
+        "body": ""
+      },
+      "answer": {
+        "status": 429,
+        "headers": {
+          "cache-control": "no-store",
+          "content-length": "64",
+          "content-type": "application/json",
+          "retry-after": "60"
+        },
+        "body": "{\"envelope\":1,\"code\":\"rate-limited\",\"data\":{\"retry_after_s\":60}}"
+      }
+    },
+    {
+      "name": "capabilities-unavailable",
+      "state": {
+        "profile": "store-closed"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/v1/capabilities",
+        "headers": {},
+        "body": ""
+      },
+      "answer": {
+        "status": 503,
+        "headers": {
+          "cache-control": "no-store",
+          "content-length": "45",
+          "content-type": "application/json"
+        },
+        "body": "{\"envelope\":1,\"code\":\"unavailable\",\"data\":{}}"
+      }
+    },
+    {
+      "name": "token-check-ok",
+      "state": {
+        "profile": "default"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/v1/token",
+        "headers": {
+          "Authorization": "Bearer fdr1_aaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "body": ""
+      },
+      "answer": {
+        "status": 200,
+        "headers": {
+          "cache-control": "no-store",
+          "content-length": "36",
+          "content-type": "application/json"
+        },
+        "body": "{\"envelope\":1,\"code\":\"ok\",\"data\":{}}"
+      }
+    },
+    {
+      "name": "token-check-missing",
+      "state": {
+        "profile": "default"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/v1/token",
+        "headers": {},
+        "body": ""
+      },
+      "answer": {
+        "status": 401,
+        "headers": {
+          "cache-control": "no-store",
+          "content-length": "47",
+          "content-type": "application/json"
+        },
+        "body": "{\"envelope\":1,\"code\":\"token-missing\",\"data\":{}}"
+      }
+    },
+    {
+      "name": "token-check-unknown",
+      "state": {
+        "profile": "unseeded"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/v1/token",
+        "headers": {
+          "Authorization": "Bearer fdr1_aaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "body": ""
+      },
+      "answer": {
+        "status": 401,
+        "headers": {
+          "cache-control": "no-store",
+          "content-length": "47",
+          "content-type": "application/json"
+        },
+        "body": "{\"envelope\":1,\"code\":\"token-unknown\",\"data\":{}}"
+      }
+    },
+    {
+      "name": "token-check-revoked",
+      "state": {
+        "profile": "token-revoked"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/v1/token",
+        "headers": {
+          "Authorization": "Bearer fdr1_aaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "body": ""
+      },
+      "answer": {
+        "status": 401,
+        "headers": {
+          "cache-control": "no-store",
+          "content-length": "47",
+          "content-type": "application/json"
+        },
+        "body": "{\"envelope\":1,\"code\":\"token-revoked\",\"data\":{}}"
+      }
+    },
+    {
+      "name": "token-revoke-ok",
+      "state": {
+        "profile": "default"
+      },
+      "request": {
+        "method": "POST",
+        "path": "/v1/token/revoke",
+        "headers": {
+          "Authorization": "Bearer fdr1_aaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "Content-Type": "application/json"
+        },
+        "body": "{}"
+      },
+      "answer": {
+        "status": 200,
+        "headers": {
+          "cache-control": "no-store",
+          "content-length": "36",
+          "content-type": "application/json"
+        },
+        "body": "{\"envelope\":1,\"code\":\"ok\",\"data\":{}}"
+      }
+    },
+    {
+      "name": "registration-started",
+      "state": {
+        "profile": "default",
+        "provider": {
+          "start": "accepted",
+          "poll": "pending"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "path": "/v1/registrations",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"email\":\"someone@example.test\"}"
+      },
+      "answer": {
+        "status": 200,
+        "headers": {
+          "cache-control": "no-store",
+          "content-length": "176",
+          "content-type": "application/json"
+        },
+        "body": "{\"envelope\":1,\"code\":\"registration-started\",\"data\":{\"user_code\":\"BCDF-GHJK\",\"poll_secret\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"interval_s\":5,\"expires_in_s\":600}}"
+      }
+    },
+    {
+      "name": "registration-refused",
+      "state": {
+        "profile": "default",
+        "provider": {
+          "start": "refused",
+          "poll": "pending"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "path": "/v1/registrations",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"email\":\"someone@example.test\"}"
+      },
+      "answer": {
+        "status": 403,
+        "headers": {
+          "cache-control": "no-store",
+          "content-length": "54",
+          "content-type": "application/json"
+        },
+        "body": "{\"envelope\":1,\"code\":\"registration-refused\",\"data\":{}}"
+      }
+    },
+    {
+      "name": "registration-start-rate-limited",
+      "state": {
+        "profile": "default",
+        "provider": {
+          "start": "rate-limited",
+          "poll": "pending"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "path": "/v1/registrations",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"email\":\"someone@example.test\"}"
+      },
+      "answer": {
+        "status": 429,
+        "headers": {
+          "cache-control": "no-store",
+          "content-length": "63",
+          "content-type": "application/json",
+          "retry-after": "7"
+        },
+        "body": "{\"envelope\":1,\"code\":\"rate-limited\",\"data\":{\"retry_after_s\":7}}"
+      }
+    },
+    {
+      "name": "registration-start-malformed",
+      "state": {
+        "profile": "default"
+      },
+      "request": {
+        "method": "POST",
+        "path": "/v1/registrations",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "not json"
+      },
+      "answer": {
+        "status": 400,
+        "headers": {
+          "cache-control": "no-store",
+          "content-length": "51",
+          "content-type": "application/json"
+        },
+        "body": "{\"envelope\":1,\"code\":\"request-malformed\",\"data\":{}}"
+      }
+    },
+    {
+      "name": "registration-start-too-large",
+      "state": {
+        "profile": "default"
+      },
+      "request": {
+        "method": "POST",
+        "path": "/v1/registrations",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "prefix": "{\"email\":\"",
+          "fill": "a",
+          "count": 65536,
+          "suffix": "@example.test\"}"
+        }
+      },
+      "answer": {
+        "status": 413,
+        "headers": {
+          "cache-control": "no-store",
+          "content-length": "51",
+          "content-type": "application/json"
+        },
+        "body": "{\"envelope\":1,\"code\":\"request-too-large\",\"data\":{}}"
+      }
+    },
+    {
+      "name": "registration-start-failure",
+      "state": {
+        "profile": "default",
+        "provider": {
+          "start": "raises",
+          "poll": "pending"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "path": "/v1/registrations",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"email\":\"someone@example.test\"}"
+      },
+      "answer": {
+        "status": 500,
+        "headers": {
+          "cache-control": "no-store",
+          "content-length": "47",
+          "content-type": "application/json"
+        },
+        "body": "{\"envelope\":1,\"code\":\"relay-failure\",\"data\":{}}"
+      }
+    },
+    {
+      "name": "registration-start-not-offered",
+      "state": {
+        "profile": "no-provider"
+      },
+      "request": {
+        "method": "POST",
+        "path": "/v1/registrations",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"email\":\"someone@example.test\"}"
+      },
+      "answer": {
+        "status": 404,
+        "headers": {
+          "cache-control": "no-store",
+          "content-length": "45",
+          "content-type": "application/json"
+        },
+        "body": "{\"envelope\":1,\"code\":\"not-offered\",\"data\":{}}"
+      }
+    },
+    {
+      "name": "poll-pending",
+      "state": {
+        "profile": "default",
+        "provider": {
+          "start": "refused",
+          "poll": "pending"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "path": "/v1/registrations/poll",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"poll_secret\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}"
+      },
+      "answer": {
+        "status": 200,
+        "headers": {
+          "cache-control": "no-store",
+          "content-length": "54",
+          "content-type": "application/json"
+        },
+        "body": "{\"envelope\":1,\"code\":\"registration-pending\",\"data\":{}}"
+      }
+    },
+    {
+      "name": "poll-slow-down",
+      "state": {
+        "profile": "default",
+        "provider": {
+          "start": "refused",
+          "poll": "slow-down"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "path": "/v1/registrations/poll",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"poll_secret\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}"
+      },
+      "answer": {
+        "status": 200,
+        "headers": {
+          "cache-control": "no-store",
+          "content-length": "56",
+          "content-type": "application/json"
+        },
+        "body": "{\"envelope\":1,\"code\":\"registration-slow-down\",\"data\":{}}"
+      }
+    },
+    {
+      "name": "poll-issued",
+      "state": {
+        "profile": "default",
+        "provider": {
+          "start": "refused",
+          "poll": "issued"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "path": "/v1/registrations/poll",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"poll_secret\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}"
+      },
+      "answer": {
+        "status": 200,
+        "headers": {
+          "cache-control": "no-store",
+          "content-length": "137",
+          "content-type": "application/json"
+        },
+        "body": "{\"envelope\":1,\"code\":\"registration-issued\",\"data\":{\"token\":\"fdr1_aaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}"
+      }
+    },
+    {
+      "name": "poll-refused",
+      "state": {
+        "profile": "default",
+        "provider": {
+          "start": "refused",
+          "poll": "refused"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "path": "/v1/registrations/poll",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"poll_secret\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}"
+      },
+      "answer": {
+        "status": 403,
+        "headers": {
+          "cache-control": "no-store",
+          "content-length": "54",
+          "content-type": "application/json"
+        },
+        "body": "{\"envelope\":1,\"code\":\"registration-refused\",\"data\":{}}"
+      }
+    },
+    {
+      "name": "poll-expired",
+      "state": {
+        "profile": "default",
+        "provider": {
+          "start": "refused",
+          "poll": "expired"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "path": "/v1/registrations/poll",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"poll_secret\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}"
+      },
+      "answer": {
+        "status": 410,
+        "headers": {
+          "cache-control": "no-store",
+          "content-length": "54",
+          "content-type": "application/json"
+        },
+        "body": "{\"envelope\":1,\"code\":\"registration-expired\",\"data\":{}}"
+      }
+    },
+    {
+      "name": "poll-not-offered",
+      "state": {
+        "profile": "no-provider"
+      },
+      "request": {
+        "method": "POST",
+        "path": "/v1/registrations/poll",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": "{\"poll_secret\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}"
+      },
+      "answer": {
+        "status": 404,
+        "headers": {
+          "cache-control": "no-store",
+          "content-length": "45",
+          "content-type": "application/json"
+        },
+        "body": "{\"envelope\":1,\"code\":\"not-offered\",\"data\":{}}"
+      }
+    },
+    {
+      "name": "envelope-unsupported",
+      "state": {
+        "profile": "default"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/v2/capabilities",
+        "headers": {},
+        "body": ""
+      },
+      "answer": {
+        "status": 400,
+        "headers": {
+          "cache-control": "no-store",
+          "content-length": "69",
+          "content-type": "application/json"
+        },
+        "body": "{\"envelope\":1,\"code\":\"envelope-unsupported\",\"data\":{\"envelopes\":[1]}}"
+      }
+    },
+    {
+      "name": "unmatched-not-offered",
+      "state": {
+        "profile": "default"
+      },
+      "request": {
+        "method": "GET",
+        "path": "/v1/nothing-here",
+        "headers": {},
+        "body": ""
+      },
+      "answer": {
+        "status": 404,
+        "headers": {
+          "cache-control": "no-store",
+          "content-length": "45",
+          "content-type": "application/json"
+        },
+        "body": "{\"envelope\":1,\"code\":\"not-offered\",\"data\":{}}"
+      }
+    }
+  ]
+}

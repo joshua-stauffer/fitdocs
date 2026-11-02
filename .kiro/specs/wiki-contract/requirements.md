@@ -361,6 +361,7 @@ that I can rely on the boundary instead of inferring it from behavior.
 22. _(added by Amendment 13)_ The ownership contract shall state that regeneration leaves a workout chart asset untouched when its regenerated content is identical to the file on disk, and replaces a changed asset without ever exposing partial content, and shall advance its version by one with a statement of what changed.
 23. _(added by Amendment 14)_ The ownership contract shall name the `post` region as user-owned, the `published` region as fitdocs-owned and refreshed by `fitdocs publish --yes` from the publish ledger (replacing hand edits), the `publish` frontmatter key as user-owned, the publish ledger directory `.fitdocs/publish/` as fitdocs-owned tool state, and the `[publish]` table of the settings file.
 24. _(added by Amendment 14)_ The ownership contract shall describe `fitdocs publish` among the operations that write: it writes only the publish ledgers and the `published` region of pages it considers under `--yes`, never the `post` region or any other content, may update a target's own credentials file outside the data root when the target renews its credentials, and writes nothing in a dry run; and shall advance its version by one with a statement of what changed.
+25. _(added by Amendment 15)_ The ownership contract shall state that `fitdocs disconnect` removes the named connector instance's own credentials file and nothing else, that `fitdocs connect`, a credential-renewing `fitdocs pull`, a credential-renewing `fitdocs publish --yes` and `fitdocs disconnect` are the only operations that write to or remove from the credentials store, one instance's file at a time and never under the data root, shall carry a `disconnect` entry in its overwrite semantics of every writing operation, and shall advance its version by one with a statement of what changed.
 
 
 ### Requirement 3: In-Tree Ownership Declaration
@@ -577,3 +578,32 @@ by an appended tag (its text is unchanged): a malformed `publish` value is not
 a `fitdocs check` finding, because `fitdocs publish` reports it. No existing
 criterion or amendment is renumbered, reworded or withdrawn, and every approval
 is preserved.
+
+## Amendment 15 (2026-11-01): `fitdocs disconnect` removes one credentials file, landed by relay-server
+
+`relay-server` adds `fitdocs disconnect NAME`, which until now would have
+contradicted the published contract's statement that fitdocs never deletes
+anything in a connector's credentials store. The command removes the named
+instance's own credentials file and nothing else: never another instance's
+file, never the store's directory, never anything under the data root.
+`fitdocs connect`, a credential-renewing `fitdocs pull`, a credential-renewing
+`fitdocs publish --yes` (Amendment 14) and `fitdocs disconnect` are the only
+operations that write to or remove from the store,
+one instance's file at a time and never under the data root. It makes no
+change to what is written under the data root.
+
+Requirement 2 gains criterion 2.25, stating that in the published contract,
+with a `disconnect` entry in the contract's "Overwrite Semantics of Every
+Writing Operation".
+`CONTRACT_VERSION` advances from `"18"` to `"19"` (one more than its value at
+landing: publish-core landed first and took `"18"` under Amendment 14), with
+append-only history and a new current-change paragraph, as criterion 2.8
+requires; relay-server task 8.8 raises the constant. This amendment was written
+as Amendment 14 with criterion 2.23 on the relay-server branch and renumbered
+to 15 and 2.25 when publish-core landed first. The in-tree ownership declarations
+restate the new version, so the action for a user is to run `fitdocs sync` or
+`fitdocs regen` once. Pinned by the (heading, phrase) pins for the rewritten
+credentials-store bullet and the `disconnect` entry that task 8.8 adds to
+`tests/test_ownership_contract.py`, and by
+`tests/test_ownership_contract.py::test_contract_version_matches_code`. No
+existing criterion or amendment is renumbered.
