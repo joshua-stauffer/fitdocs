@@ -36,7 +36,7 @@ command and no runtime dependency, so no version or command-count pin
 moves. Nothing under `website/content/` is edited (R9); the site copy is
 `.kiro/queue/2026-10-31-intervals-publish-site-copy.md`.
 
-- [ ] 1. Foundation: the update method and the upload switch
+- [x] 1. Foundation: the update method and the upload switch
 
 - [x] 1.1 (P) Add the update method to the connector transport
   - Admit the update method in the request value and add the client's update
@@ -72,7 +72,7 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
   - _Requirements: 1.5, 2.1, 2.3_
   - _Boundary: IntervalsDeclaration_
 
-- [ ] 2. Core: finding the activity and writing to it
+- [x] 2. Core: finding the activity and writing to it
 
 - [x] 2.1 Map intervals.icu's answers into publish codes
   - Add the three request kinds (a read, a write safe to repeat, a write that
@@ -204,7 +204,7 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
   - _Requirements: 6.2, 6.3, 6.4, 6.7, 9.5_
   - _Boundary: ActivityWrites_
 
-- [ ] 3. Integration: the publish operation and the target
+- [x] 3. Integration: the publish operation and the target
 
 - [x] 3.1 Answer publish requests and declare the publish target
   - Implement the publish operation in the design's order: the recorded
@@ -278,7 +278,7 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
   - _Requirements: 1.3, 2.3, 5.3, 6.5, 9.1, 9.6_
   - _Depends: 3.1_
 
-- [ ] 4. Documentation, network statements and records
+- [x] 4. Documentation, network statements and records
 
 - [x] 4.1 Document publishing in the intervals.icu section
   - Rewrite the section's opening (pulls and publishes; writes only an
@@ -365,7 +365,7 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
   - _Boundary: Records_
   - _Depends: 3.1_
 
-- [ ] 5. Validation
+- [x] 5. Validation
 
 - [x] 5.1 Prove the privacy and offline guarantees
   - Through the CLI with an intervals instance configured: `fitdocs publish`
@@ -416,3 +416,4 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
 - 4.3: amendments taken: connectors 8, intervals-connector 2, distribution 8 (in-place tags on the criteria they change). The CHANGELOG Changed bullet claims the network statements name `fitdocs publish --yes`, which is true only after 4.2. Changelog pins read through `read_unreleased_since(_, V0_2_0)` so they survive the next cut.
 - 4.1: the docs codes notes were rewritten from the complete list of what `publish()` returns; each claim is observed by a `_Flow` scenario. Pins in tests/connectors/test_intervals_docs.py bind the answer table to ANSWER_CODES, success statuses to SUCCESS_STATUSES, and the window, file name and fields to their constants. Three review rounds found missing members of exception lists; when the flow changes, re-derive the notes rather than patch them.
 - 4.2: tests/connectors/test_network_statements.py has `_names_publish_command` (shared name with strava-publish) and position pins for tech.md and docs/connectors.md (`_tech_position_ok`, `_connectors_position_ok`), because a presence-only pin passed when `--yes` moved into the no-request list. The connectors page names intervals.icu only by host plus a section pointer, per its preamble.
+- Validation: wellness-pull Req 7.1 ("pull-activities and pull-wellness and no other") was also falsified by 3.1, though Req 11.5 does not list it, so wellness-pull Amendment 1 records it. The 4.3 changelog test docstring held the literal release version, which tests/test_version_identity.py forbids; branch CI missed it because it was already red from the UTC-zone test.

@@ -3,7 +3,7 @@
 The entry postdates the last release, so it is read through
 ``unreleased_since`` anchored at ``V0_2_0``: it must sit in the standing
 ``[Unreleased]`` section before the cut and in the next release after it,
-never in 0.2.0 or an older section.
+never in that release or an older section.
 """
 
 from __future__ import annotations

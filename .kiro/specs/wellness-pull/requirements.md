@@ -174,7 +174,7 @@ Terms used below:
 **Objective:** As an athlete whose wellness reaches intervals.icu, I want the intervals.icu connector to list and package my wellness records faithfully, so that months of wellness arrive with one command and nothing of intervals.icu's own model is mistaken for a measurement.
 
 #### Acceptance Criteria
-1. The intervals.icu connector shall declare the pull-activities and pull-wellness capabilities and no other.
+1. The intervals.icu connector shall declare the pull-activities and pull-wellness capabilities and no other. *(amended by Amendment 1: the three publish capabilities are also declared, beside pull-activities and pull-wellness)*
 2. When the intervals.icu connector lists wellness, it shall request the key's own athlete's wellness records over date windows of at most one year that together cover the earliest date through the day after the pull's date in UTC, shall list each date at most once, and shall take each day's date from the record's `id` and its revision from the record's `updated` time.
 3. While no earliest date is given, the intervals.icu connector shall list wellness from 2010-01-01, so that the first wellness pull covers the account's whole history.
 4. Where a record carries no `updated` time as text, the intervals.icu connector shall give the day a revision derived from the record's whole content, so that the day is delivered again only when its record changes.
@@ -252,3 +252,16 @@ Terms used below:
 3. The same listing, settings and ledger shall always produce the same wellness deliveries and the same ledger bytes, with no run date, run time or machine-specific value in either.
 4. The wellness pull's tests shall run with no network access, against synthesized responses that contain no personal data.
 5. No wellness value, date or identifier from a real account shall be committed to the repository.
+
+## Amendment 1 (2026-11-02): the intervals.icu connector also publishes, landed by intervals-publish
+
+Landed by intervals-publish. Existing criteria and approvals are preserved
+word-for-word; nothing is renumbered.
+
+- Requirement 7 criterion 1 (tagged in place): the intervals.icu connector
+  also declares the three publish capabilities (push activity, annotate
+  remote activity and resolve remote activity) beside pull-activities and
+  pull-wellness, and a link label. The pin in
+  `tests/connectors/test_intervals_wellness.py` names all five.
+- Nothing in the wellness listing, packaging or ledger changes; the publish
+  behavior is intervals-publish Requirements 3-8.

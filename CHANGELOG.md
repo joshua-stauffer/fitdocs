@@ -37,7 +37,9 @@ recorded as one.
   post's. When no activity matches, the page is not posted to that instance
   unless you set `publish_upload = true` in the instance's
   `[connectors.NAME]` table, in which case fitdocs uploads the page's base
-  `.fit` file and then sets the name and description. A posted page's
+  `.fit` file and then sets the name and description (never when the
+  instance's ledger cannot be read, a Strava import starts at the same time,
+  or the base file is missing or altered). A posted page's
   `published` region carries a link that goes straight to the activity.
   `fitdocs.toml` settings schema (additive): the `intervals` connector's
   optional `publish_upload` key, default `false`. Action: none; add the key
