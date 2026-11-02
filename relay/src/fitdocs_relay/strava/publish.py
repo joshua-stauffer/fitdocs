@@ -8,10 +8,23 @@ strict rule matches, updates its name and description once (repeated once,
 identically, after a server or network failure), and records the publication
 if the connection exists just before the write. A withdrawal after that check
 can still leave a record.
+
+The upload flow lists the same way. A match is updated exactly as in the publish
+flow. When nothing matches, it reserves its calls in one operation, uploads the
+file once (never repeated), and polls the upload's status a bounded number of
+times within its own deadline. The upload call's own failure is answered by the
+upload column. After a successful upload call, an unexpected exception, the
+deadline, a polls budget that ran out, a failed status poll, and a listing that
+fails while resolving again after Strava reported the upload failed all answer
+UNCONFIRMED. An update made after a failed upload is answered by the update
+column (not repeated), several matches are AMBIGUOUS, and a failed upload with no
+match is REJECTED.
 """
 
 from __future__ import annotations
 
+import logging
+import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
@@ -34,15 +47,25 @@ from fitdocs_relay.strava.resolve import LIST_PAGE_SIZE, Pick, list_window, pick
 
 __all__ = [
     "CALL_TIMEOUT_S",
+    "MAX_UPLOAD_POLLS",
     "PUBLISH_DEADLINE_S",
     "STEP_OUTCOMES",
+    "UPLOAD_DEADLINE_S",
+    "UPLOAD_FOLLOW_UPS",
+    "UPLOAD_POLL_INTERVAL_S",
     "Landed",
     "StravaPublisher",
     "activity_page",
 ]
 
 PUBLISH_DEADLINE_S: Final = 20.0
+UPLOAD_DEADLINE_S: Final = 25.0
 CALL_TIMEOUT_S: Final = 8.0
+UPLOAD_POLL_INTERVAL_S: Final = 2.0
+MAX_UPLOAD_POLLS: Final = 8
+UPLOAD_FOLLOW_UPS: Final = 2
+
+_LOGGER: Final = logging.getLogger("fitdocs_relay.strava.publish")
 
 _P = PublishCode
 _F = Failure
@@ -145,6 +168,7 @@ class StravaPublisher:
         *,
         clock: Callable[[], int],
         monotonic: Callable[[], float],
+        sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self._storage = storage
         self._custody = custody
@@ -153,6 +177,7 @@ class StravaPublisher:
         self._web_url = config.web_url
         self._clock = clock
         self._monotonic = monotonic
+        self._sleep = sleep
 
     def publish(self, principal_id: str, facts: PublishFacts) -> PublishCode | Landed:
         deadline = self._monotonic() + PUBLISH_DEADLINE_S
@@ -165,7 +190,142 @@ class StravaPublisher:
         found = self._find(principal_id, access.access, facts, deadline)
         if not isinstance(found, Candidate):
             return found
-        failure = self._update(principal_id, access.access, found, facts, deadline)
+        return self._post(principal_id, access.access, found, facts, deadline)
+
+    def upload(
+        self, principal_id: str, facts: PublishFacts, fit: bytes
+    ) -> PublishCode | Landed:
+        """Update the matching activity, or upload the file once when none exists.
+
+        Everything before the upload call ends the request with its own code, or
+        lets an unreadable-state error through for the caller to answer. The upload
+        call's own failure is answered by the upload column; after it succeeded, an
+        unexpected exception or a deadline answers UNCONFIRMED, as do a failed
+        status poll and a listing failure while resolving again. An update made
+        after a failed upload is answered by the update column, and a failed upload
+        with no match is REJECTED.
+        """
+        deadline = self._monotonic() + UPLOAD_DEADLINE_S
+        refused = self._common_start(principal_id, facts)
+        if refused is not None:
+            return refused
+        access = self._custody.access_token(principal_id, deadline=deadline)
+        if not isinstance(access, Usable):
+            return access
+        found = self._find(principal_id, access.access, facts, deadline)
+        if isinstance(found, Candidate):
+            return self._post(principal_id, access.access, found, facts, deadline)
+        if found is not _P.NOT_FOUND:
+            return found
+        if self._timeout(deadline) is None:
+            return _P.UNAVAILABLE
+        reserved = self._budget.reserve_upload(
+            principal_id, reads=MAX_UPLOAD_POLLS + UPLOAD_FOLLOW_UPS
+        )
+        if not reserved.allowed:
+            return STEP_OUTCOMES[(_S.UPLOAD, _F.LIMITED)]
+        timeout = self._timeout(deadline)  # the reservation took time of its own
+        if timeout is None:
+            return _P.UNAVAILABLE
+        try:
+            return self._uploaded(
+                principal_id, access.access, facts, fit, deadline, timeout
+            )
+        except Exception as error:
+            _LOGGER.error(
+                "an upload request ended after the upload call: %s",
+                type(error).__name__,
+            )
+            return _P.UNCONFIRMED
+
+    # --- the upload, once called -----------------------------------------------
+
+    def _uploaded(
+        self,
+        principal_id: str,
+        access: str,
+        facts: PublishFacts,
+        fit: bytes,
+        deadline: float,
+        timeout: float,
+    ) -> PublishCode | Landed:
+        sent = self._api.create_upload(
+            access,
+            fit=fit,
+            name=facts.title,
+            description=facts.description,
+            external_id=facts.publication_id,
+            timeout=timeout,
+        )
+        if isinstance(sent, StravaFailure):
+            return self._failed(sent)
+        for _ in range(MAX_UPLOAD_POLLS):
+            if deadline - self._monotonic() <= UPLOAD_POLL_INTERVAL_S:
+                return _P.UNCONFIRMED
+            self._sleep(UPLOAD_POLL_INTERVAL_S)
+            left = self._timeout(deadline)
+            if left is None:
+                return _P.UNCONFIRMED
+            state = self._api.upload_state(access, sent, timeout=left)
+            if isinstance(state, StravaFailure):
+                return self._failed(state)
+            if state.failed:
+                return self._resolved_again(principal_id, access, facts, deadline)
+            if state.activity_id is not None:
+                self._record(principal_id, facts)
+                return Landed(
+                    _P.UPLOADED, activity_page(self._web_url, state.activity_id)
+                )
+        return _P.UNCONFIRMED
+
+    def _resolved_again(
+        self, principal_id: str, access: str, facts: PublishFacts, deadline: float
+    ) -> PublishCode | Landed:
+        """After Strava reported the upload failed: list and pick again, on the
+        calls the upload's reservation already holds. One match is updated once
+        (POSTED), several are AMBIGUOUS, none is REJECTED; a listing that cannot
+        be read, or a deadline, leaves the upload's result unknown."""
+        found = self._find(principal_id, access, facts, deadline, charge=False)
+        if found is _P.NOT_FOUND:
+            return _P.REJECTED
+        if not isinstance(found, Candidate):
+            return _P.AMBIGUOUS if found is _P.AMBIGUOUS else _P.UNCONFIRMED
+        timeout = self._timeout(deadline)
+        if timeout is None:
+            return _P.UNCONFIRMED
+        return self._post(
+            principal_id,
+            access,
+            found,
+            facts,
+            deadline,
+            repeat=False,
+            charge=False,
+            first_timeout=timeout,
+        )
+
+    def _post(
+        self,
+        principal_id: str,
+        access: str,
+        found: Candidate,
+        facts: PublishFacts,
+        deadline: float,
+        *,
+        repeat: bool = True,
+        charge: bool = True,
+        first_timeout: float | None = None,
+    ) -> PublishCode | Landed:
+        failure = self._update(
+            principal_id,
+            access,
+            found,
+            facts,
+            deadline,
+            repeat=repeat,
+            charge=charge,
+            first_timeout=first_timeout,
+        )
         if failure is not None:
             return failure
         self._record(principal_id, facts)
@@ -190,12 +350,18 @@ class StravaPublisher:
         return left if left > 0 else None
 
     def _find(
-        self, principal_id: str, access: str, facts: PublishFacts, deadline: float
+        self,
+        principal_id: str,
+        access: str,
+        facts: PublishFacts,
+        deadline: float,
+        *,
+        charge: bool = True,
     ) -> Candidate | PublishCode:
         timeout = self._timeout(deadline)
         if timeout is None:
             return _P.UNAVAILABLE
-        if not self._budget.spend(principal_id).allowed:
+        if charge and not self._budget.spend(principal_id).allowed:
             return STEP_OUTCOMES[(_S.LIST, _F.LIMITED)]
         after, before = list_window(facts.start)
         listing = self._api.list_activities(
@@ -217,13 +383,24 @@ class StravaPublisher:
         found: Candidate,
         facts: PublishFacts,
         deadline: float,
+        *,
+        repeat: bool = True,
+        charge: bool = True,
+        first_timeout: float | None = None,
     ) -> PublishCode | None:
-        """None once the activity is updated, else the code that ends the request."""
+        """None once the activity is updated, else the code that ends the request.
+
+        `first_timeout`, when given, is the first attempt's timeout, already
+        checked against the deadline by the caller."""
         for attempt in (1, 2):
-            timeout = self._timeout(deadline)
+            timeout = (
+                first_timeout
+                if attempt == 1 and first_timeout is not None
+                else self._timeout(deadline)
+            )
             if timeout is None:
                 return _P.UNAVAILABLE
-            if not self._budget.spend(principal_id).allowed:
+            if charge and not self._budget.spend(principal_id).allowed:
                 return STEP_OUTCOMES[(_S.UPDATE, _F.LIMITED)]
             answer = self._api.update_activity(
                 access,
@@ -234,7 +411,7 @@ class StravaPublisher:
             )
             if answer is None:
                 return None
-            repeatable = answer.failure in (_F.SERVER, _F.NETWORK)
+            repeatable = repeat and answer.failure in (_F.SERVER, _F.NETWORK)
             if attempt == 2 or not repeatable:
                 return self._failed(answer)
         raise AssertionError("unreachable")  # pragma: no cover
