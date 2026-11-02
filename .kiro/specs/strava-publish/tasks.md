@@ -77,7 +77,7 @@ Rules for every task:
     imports only the standard library, and both named mutations red it.
   - _Requirements: 6.3, 15.2_
 
-- [ ] 1.2 Add the shared Strava wire module
+- [x] 1.2 Add the shared Strava wire module
   - The target route builder, the connect-page and link paths, the link
     field, the
     publication-id and sport formats, the title, description, file and
@@ -722,3 +722,5 @@ Rules for every task:
 - 1.1: the strict tier keeps main's 1e-9 relative slack in `within`, so exact-tolerance table rows cannot see a `<`-for-`<=` flip; inclusivity is pinned only by `test_within_is_inclusive`. Controller downgrade: the round-1 rejection was one false docstring sentence in `tests/identity/test_strict.py`; the controller deleted it and re-ran the file instead of a second review round.
 - 1.3: controller rulings. (a) `relay_connect._NEXT_STEPS` covers the whole vocabulary, a file design.md's file list omits: the five connect codes take the `REGISTRATION_*` text ("Run {connect} again; if this repeats, tell the relay's operator."), because to the relay connector they are another route's answers. (b) `RelayClient`'s token operations keep refusing all five connect codes (`_SUCCESS_SHAPED` unchanged; refusal literal 19). **Task 4.4 must delete both `_CONNECT_CODES_RECORDED_BY_4_4` exemption sets** (tests/connectors/test_relay_wire_examples.py, relay/tests/test_envelope_replay.py) when it records the connect exchanges. Controller downgrade: round 2's only finding was one false comment sentence in tests/connectors/test_relay.py; the controller rewrote it and re-ran the file.
 - Local relay runs need `uv sync --directory relay --extra postgres` (without it, relay mypy shows 26 psycopg errors and the PostgreSQL cases cannot import).
+- 1.2: `relay_targets` imports only `relay_envelope` (design.md's allowed-dependency line also names `relay_codes`; the exact-equality boundary table pins `{relay_envelope}`). `target_route`, `connect_page_path` and `link_path` refuse malformed parts with `EnvelopeError` (design is silent; every design-described caller passes valid parts). Control characters are Unicode category Cc only (Cf such as ZWJ in emoji, and U+2028, are accepted). Numbers parse to float; a too-large int is refused, not an OverflowError. No test yet shows the largest valid upload body fits `MAX_UPLOAD_REQUEST_BYTES` (literal pin only): the consumer of that bound (4.1 route limits / 5.5 client bound) should pin it. Controller downgrade: round 3 (test-only, from the round-2 reviewer's exhaustive 55-mutation list) was verified by the controller re-running that harness: every non-equivalent mutation reds; survivors R, AR, BF are equivalent.
+- Mutation harness trap: a copied tree's `.venv` editable install still imports the ORIGINAL tree's `src`; force `PYTHONPATH=<copy>/src` or every mutation reads green.
