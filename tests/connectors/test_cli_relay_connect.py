@@ -352,7 +352,7 @@ def test_register_or_email_on_a_non_relay_instance_exits_2(
     connector = _non_relay_connectors()[index]
     connector_registry.register(connector)  # type: ignore[arg-type]
     styles = [c.auth_style for c in _non_relay_connectors()]  # type: ignore[attr-defined]
-    assert len(set(styles)) == 4  # api-key, login, none, reserved
+    assert len(set(styles)) == 4  # api-key, login, none, browser-consent
     session = _setup(tmp_path, monkeypatch, [])
     (tmp_path / "fitdocs.toml").write_text(
         f'[connectors.{_NAME}]\nconnector = "{connector.connector_id}"\n'  # type: ignore[attr-defined]
