@@ -12,6 +12,7 @@ as a target error).
 
 from __future__ import annotations
 
+import base64
 import json
 from collections.abc import Iterator
 from datetime import UTC
@@ -350,3 +351,213 @@ def test_a_non_boolean_publish_upload_exits_2_and_changes_nothing(rig: Rig) -> N
     assert "publish_upload" in message
     assert "'yes'" in message
     assert _snapshot(rig) == snapshot
+
+
+# ---------------------------------------------------------------------------
+# Task 5.1: the privacy and offline guarantees (Req 8.1, 9.1, 9.2, 9.6)
+# ---------------------------------------------------------------------------
+
+SENTINEL = "SNTLq7x9k2"
+TITLE_TOKEN = "Titletok9"
+_TOKEN = base64.b64encode(f"API_KEY:{API_KEY}".encode()).decode()
+SENTINEL_HEADERS = {"X-Echo": f"echo-{SENTINEL}", "Set-Cookie": f"s={SENTINEL}"}
+NEAR_MISS = "i4100009"
+STRANGER_SHA = "0" * 64
+
+
+def _sentinel_response(status: int, payload: object) -> HttpResponse:
+    """A scripted answer whose body and headers both carry the sentinel."""
+    body = json.dumps(payload).encode()
+    assert SENTINEL.encode() in body
+    return HttpResponse(status=status, headers=dict(SENTINEL_HEADERS), body=body)
+
+
+def _sentinel_listing(rig: Rig, *entries: dict[str, object]) -> HttpResponse:
+    """A listing whose entries each carry the sentinel in free-text fields."""
+    return _sentinel_response(
+        200,
+        [
+            {**entry, "name": f"{SENTINEL} name", "description": f"{SENTINEL} text"}
+            for entry in entries
+        ],
+    )
+
+
+_NON_MATCHING: dict[str, object] = {
+    "id": NEAR_MISS,
+    "source": "GARMIN_CONNECT",
+    "start_date": "2001-01-01T00:00:00Z",
+    "start_date_local": "2001-01-01T00:00:00",
+    "distance": 1.0,
+    "elapsed_time": 1,
+    "external_id": None,
+}
+
+
+def _stranger_pull_record(rig: Rig) -> None:
+    """A pull ledger that exists and names an activity, but not this page's
+    files, so no tier of the record selects it."""
+    save_ledger(
+        rig.root,
+        INSTANCE,
+        Ledger(
+            connector_id="intervals",
+            watermark=None,
+            entries=(
+                LedgerEntry(
+                    remote_id=NEAR_MISS,
+                    outcome=Outcome.DELIVERED,
+                    sha256=STRANGER_SHA,
+                    detail=None,
+                ),
+            ),
+        ),
+    )
+    assert STRANGER_SHA not in rig.subject().source_shas
+
+
+def _every_file_under(root: Path) -> dict[Path, bytes]:
+    files = {path: path.read_bytes() for path in root.rglob("*") if path.is_file()}
+    assert files, "the walk is looking at the wrong directory"
+    return files
+
+
+def _assert_sentinel_nowhere(rig: Rig, result: Result) -> None:
+    assert SENTINEL not in result.stdout
+    assert SENTINEL not in result.stderr
+    # The page and both ledgers exist and hold content, so absence means
+    # something; then every file under the data root is searched as well.
+    for path in (rig.page, rig.publish_ledger, rig.pull_ledger):
+        assert path.read_bytes(), path
+    for path, data in _every_file_under(rig.root).items():
+        assert SENTINEL.encode() not in data, path
+
+
+def _titled(rig: Rig, upload: str) -> None:
+    rig.settings(upload)
+    with (rig.root / "fitdocs.toml").open("a", encoding="utf-8") as handle:
+        handle.write(
+            f'\n[publish.targets.{INSTANCE}]\ntitle = "{TITLE_TOKEN} {{title}}"\n'
+        )
+
+
+def _assert_no_secret_in_any_address(transport: FakeTransport) -> None:
+    assert transport.requests
+    for request in transport.requests:
+        assert API_KEY not in request.url
+        assert _TOKEN not in request.url
+        assert TITLE_TOKEN not in request.url
+
+
+def _without_yes(rig: Rig, *args: str) -> Result:
+    return runner.invoke(
+        app, ["publish", "--format", "json", *args, "--out", str(rig.root)]
+    )
+
+
+def test_a_dry_run_of_a_due_page_sends_and_writes_nothing(rig: Rig) -> None:
+    _published_once(rig)
+    _due_again(rig, "true")
+    before = _snapshot(rig)
+    assert all(before.values())
+    tree = _every_file_under(rig.root)
+    transport = rig.script()
+
+    result = _without_yes(rig)
+
+    assert transport.requests == []
+    assert result.exit_code == 0, result.output
+    # The page is due: the same state under --yes sends the update (see
+    # test_a_due_page_is_updated_again_when_publish_upload_is_valid).
+    assert _row(result)["code"] == "would_update"
+    assert _snapshot(rig) == before
+    assert _every_file_under(rig.root) == tree
+
+
+def test_listing_the_targets_sends_and_writes_nothing(rig: Rig) -> None:
+    _published_once(rig)
+    _due_again(rig, "true")
+    before = _snapshot(rig)
+    assert all(before.values())
+    tree = _every_file_under(rig.root)
+    transport = rig.script()
+
+    result = _without_yes(rig, "--targets")
+
+    assert transport.requests == []
+    assert result.exit_code == 0, result.output
+    assert INSTANCE in result.stdout
+    assert API_KEY not in result.stdout + result.stderr
+    assert _snapshot(rig) == before
+    assert _every_file_under(rig.root) == tree
+
+
+def test_a_posting_run_keeps_every_scripted_sentinel_out_of_everything(
+    rig: Rig,
+) -> None:
+    _titled(rig, "true")
+    _stranger_pull_record(rig)
+    transport = rig.script(
+        _sentinel_listing(rig, _NON_MATCHING),
+        _sentinel_response(201, {"activities": [{"id": UPLOADED}], "n": SENTINEL}),
+        _sentinel_response(200, {"id": UPLOADED, "name": SENTINEL}),
+    )
+
+    result = rig.publish()
+
+    assert result.exit_code == 0, result.output
+    assert _methods(transport) == ["GET", "POST", "PUT"]
+    _assert_sentinel_nowhere(rig, result)
+    assert _row(result)["code"] == "uploaded"
+    assert _published(rig) == f"Published: [{LINK_LABEL}]({LINK_BASE + UPLOADED})"
+    _assert_no_secret_in_any_address(transport)
+    put_body = transport.requests[2].body
+    assert put_body is not None and TITLE_TOKEN.encode() in put_body
+    credential = f"Basic {_TOKEN}"
+    assert [
+        request.secret_headers["Authorization"].reveal()
+        for request in transport.requests
+    ] == [credential] * 3
+
+
+def test_a_listing_identifier_carrying_the_sentinel_and_a_hyphen_reaches_nothing(
+    rig: Rig,
+) -> None:
+    _titled(rig, "true")
+    _stranger_pull_record(rig)
+    hostile = rig.listing_entry(f"{SENTINEL}-x1")
+    transport = rig.script(
+        _sentinel_listing(rig, hostile),
+        _sentinel_response(200, {"id": f"{SENTINEL}-x1", "name": SENTINEL}),
+    )
+
+    result = rig.publish()
+
+    assert _methods(transport) == ["GET"]
+    assert result.exit_code == 1, result.output
+    assert _row(result)["link"] is None
+    assert _published(rig) == ""
+    _assert_no_secret_in_any_address(transport)
+    _assert_sentinel_nowhere(rig, result)
+
+
+def test_an_upload_answer_naming_the_sentinel_and_a_hyphen_reaches_nothing(
+    rig: Rig,
+) -> None:
+    _titled(rig, "true")
+    _stranger_pull_record(rig)
+    hostile = f"{SENTINEL}-x2"
+    transport = rig.script(
+        _sentinel_listing(rig, _NON_MATCHING),
+        _sentinel_response(201, {"activities": [{"id": hostile}]}),
+        _sentinel_response(200, {"id": hostile, "name": SENTINEL}),
+    )
+
+    result = rig.publish()
+
+    assert _methods(transport) == ["GET", "POST"]
+    assert result.exit_code == 1, result.output
+    assert _row(result)["link"] is None
+    assert _published(rig) == ""
+    _assert_no_secret_in_any_address(transport)
+    _assert_sentinel_nowhere(rig, result)

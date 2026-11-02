@@ -367,7 +367,7 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
 
 - [ ] 5. Validation
 
-- [ ] 5.1 Prove the privacy and offline guarantees
+- [x] 5.1 Prove the privacy and offline guarantees
   - Through the CLI with an intervals instance configured: `fitdocs publish`
     without `--yes` and `fitdocs publish --targets` against an empty script
     (any request fails the test); a posting run whose every scripted body and
