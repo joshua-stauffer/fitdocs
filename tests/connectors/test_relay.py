@@ -61,6 +61,7 @@ from fitdocs.connectors.relay_envelope import (
     encode_answer,
     encode_request,
 )
+from fitdocs.connectors.relay_targets import MAX_UPLOAD_REQUEST_BYTES
 from fitdocs.connectors.secrets import REDACTED, Redactor, Secret
 from fitdocs.connectors.settings import (
     ConnectorsSettingsError,
@@ -227,10 +228,12 @@ def test_the_default_url_is_the_maintainers_relay() -> None:
 # docstrings stripped and every function body replaced by `...`, against a
 # literal built from the design's text, so a decorator, base, attribute, alias,
 # async method or extra method added to a class changes it.
-# Two departures, both needed by mypy: the connector's `capabilities` carries
-# an annotation to type an empty frozenset, and `parse_settings` is annotated
-# `table: Mapping[str, object], context: SettingsContext` where the design
-# sketch leaves its parameters bare.
+# Three departures. Two are needed by mypy: the connector's `capabilities`
+# carries an annotation to type an empty frozenset, and `parse_settings` is
+# annotated `table: Mapping[str, object], context: SettingsContext` where the
+# design sketch leaves its parameters bare. The third is `RelayClient.post`'s
+# keyword-only `max_request_bytes`, a relay-server amendment carried by
+# strava-publish (its design's R13.3).
 _DESIGN_CONSTANTS = (
     "RELAY_CONNECTOR_ID: Final = 'relay'",
     "DEFAULT_RELAY_URL: Final = 'https://api.fitdocs.ai'",
@@ -254,8 +257,8 @@ _DESIGN_SIGNATURES = {
     ),
     ("RelayClient", "get"): "def get(self, route: str) -> RelayReply:\n    ...",
     ("RelayClient", "post"): (
-        "def post(self, route: str, fields: Mapping[str, object])"
-        " -> RelayReply:\n    ..."
+        "def post(self, route: str, fields: Mapping[str, object], *,"
+        " max_request_bytes: int | None=None) -> RelayReply:\n    ..."
     ),
     ("RelayConnector", "parse_settings"): (
         "def parse_settings(self, table: Mapping[str, object],"
@@ -374,9 +377,12 @@ def test_the_client_and_connector_classes_match_the_design_block_whole() -> None
         assert _whole_rendering(name) == expected, name
 
 
-def test_post_carries_no_per_request_attempt_flag() -> None:
-    parameters = list(inspect.signature(RelayClient.post).parameters)
-    assert parameters == ["self", "route", "fields"]
+def test_post_takes_an_optional_keyword_only_request_bound() -> None:
+    parameters = inspect.signature(RelayClient.post).parameters
+    assert list(parameters) == ["self", "route", "fields", "max_request_bytes"]
+    bound = parameters["max_request_bytes"]
+    assert bound.kind is inspect.Parameter.KEYWORD_ONLY
+    assert bound.default is None
 
 
 # --------------------------------------------------------------------------
@@ -606,10 +612,11 @@ def _client(
     url: str = _BASE,
     token: str | None = None,
     redactor: Redactor | None = None,
+    mode: CallMode = CallMode.AUTH,
 ) -> RelayClient:
     return RelayClient(
         settings=RelaySettings(url=url),
-        http=_http(transport, redactor if redactor is not None else Redactor()),
+        http=_http(transport, redactor if redactor is not None else Redactor(), mode),
         token=Secret(token) if token is not None else None,
     )
 
@@ -647,6 +654,106 @@ def test_a_request_the_codec_cannot_encode_raises_and_sends_nothing() -> None:
     transport = FakeTransport([])
     with pytest.raises(EnvelopeError):
         _client(transport).post("/v1/registrations", {"email": "a" * 70_000})
+    assert transport.requests == []
+
+
+def test_a_data_mode_get_503_sees_one_transport_call() -> None:
+    transport = FakeTransport([_plain(503, b"<html>")] * 3)
+    client = _client(transport, mode=CallMode.DATA)
+    reply = client.get("/v1/capabilities")
+    assert reply.code is RelayCode.UNAVAILABLE
+    assert len(transport.requests) == 1
+    assert transport.requests[0].single_attempt is True
+
+
+def test_a_data_mode_post_503_sees_one_transport_call() -> None:
+    transport = FakeTransport([_plain(503, b"<html>")] * 3)
+    client = _client(transport, mode=CallMode.DATA)
+    reply = client.post("/v1/targets/strava/publish", {"a": 1})
+    assert reply.code is RelayCode.UNAVAILABLE
+    assert len(transport.requests) == 1
+    assert transport.requests[0].single_attempt is True
+
+
+def test_a_data_mode_transport_failure_is_not_repeated() -> None:
+    failure = TransportError("network failure")
+    transport = FakeTransport([failure] * 3)
+    client = _client(transport, mode=CallMode.DATA)
+    assert client.get("/v1/capabilities").code is RelayCode.RELAY_UNREACHABLE
+    assert client.post("/v1/x", {}).code is RelayCode.RELAY_UNREACHABLE
+    assert len(transport.requests) == 2
+
+
+def test_the_same_503_over_a_plain_data_mode_request_is_retried() -> None:
+    transport = FakeTransport([_plain(503, b"<html>")] * 3)
+    http = _http(transport, Redactor(), CallMode.DATA)
+    response = http.get(_BASE + "/v1/x")
+    assert response.status == 503
+    assert len(transport.requests) == 3
+
+
+_BOUND_FIELDS = {"k": "x" * 30}
+
+
+def test_a_body_exactly_at_the_bound_is_sent() -> None:
+    size = len(encode_request(_BOUND_FIELDS))
+    assert size == 38
+    transport = FakeTransport([_envelope(RelayCode.OK)])
+    reply = _client(transport).post("/v1/x", _BOUND_FIELDS, max_request_bytes=size)
+    assert reply.code is RelayCode.OK
+    assert len(transport.requests) == 1
+
+
+def test_a_body_one_byte_over_the_bound_is_refused_before_any_request() -> None:
+    size = len(encode_request(_BOUND_FIELDS))
+    transport = FakeTransport([])
+    with pytest.raises(EnvelopeError):
+        _client(transport, mode=CallMode.DATA).post(
+            "/v1/x", _BOUND_FIELDS, max_request_bytes=size - 1
+        )
+    assert transport.requests == []
+
+
+def test_a_bound_of_zero_refuses_any_body_before_any_request() -> None:
+    transport = FakeTransport([])
+    with pytest.raises(EnvelopeError):
+        _client(transport, mode=CallMode.DATA).post("/v1/x", {}, max_request_bytes=0)
+    assert transport.requests == []
+
+
+def test_an_absent_bound_keeps_the_envelope_default() -> None:
+    shell = len(encode_request({"k": ""}))
+    transport = FakeTransport([_envelope(RelayCode.OK)])
+    _client(transport).post("/v1/x", {"k": "x" * (65_536 - shell)})
+    assert len(transport.requests) == 1
+    assert len(transport.requests[0].body or b"") == 65_536
+    refused = FakeTransport([])
+    with pytest.raises(EnvelopeError):
+        _client(refused).post("/v1/x", {"k": "x" * (65_537 - shell)})
+    assert refused.requests == []
+
+
+def test_the_upload_bound_sends_a_body_over_the_envelope_default() -> None:
+    shell = len(encode_request({"k": ""}))
+    fields = {"k": "x" * (100_000 - shell)}
+    transport = FakeTransport([_envelope(RelayCode.OK)])
+    reply = _client(transport, mode=CallMode.DATA).post(
+        "/v1/targets/strava/publish", fields, max_request_bytes=MAX_UPLOAD_REQUEST_BYTES
+    )
+    assert reply.code is RelayCode.OK
+    assert len(transport.requests) == 1
+    assert len(transport.requests[0].body or b"") == 100_000
+
+
+def test_the_upload_bound_refuses_one_byte_over_it_before_any_request() -> None:
+    shell = len(encode_request({"k": ""}))
+    transport = FakeTransport([])
+    with pytest.raises(EnvelopeError):
+        _client(transport).post(
+            "/v1/x",
+            {"k": "x" * (MAX_UPLOAD_REQUEST_BYTES + 1 - shell)},
+            max_request_bytes=MAX_UPLOAD_REQUEST_BYTES,
+        )
     assert transport.requests == []
 
 

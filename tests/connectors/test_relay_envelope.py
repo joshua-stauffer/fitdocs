@@ -562,6 +562,48 @@ class TestRequests:
         with pytest.raises(EnvelopeError):
             encode_request({"email": "x" * (65_537 - shell)})
 
+    def test_an_explicit_larger_bound_governs_decode_on_both_sides(self) -> None:
+        bound = 100_000
+        shell = len(b'{"email":""}')
+        fits = ('{"email":"%s"}' % ("x" * (bound - shell))).encode()
+        over = ('{"email":"%s"}' % ("x" * (bound + 1 - shell))).encode()
+        assert len(fits) == bound and len(over) == bound + 1
+        got = decode_request(
+            fits, required=_EMAIL_FIELDS, allowed=_EMAIL_FIELDS, max_bytes=bound
+        )
+        assert len(got["email"]) == bound - shell  # type: ignore[arg-type]
+        with pytest.raises(EnvelopeError):
+            decode_request(
+                over, required=_EMAIL_FIELDS, allowed=_EMAIL_FIELDS, max_bytes=bound
+            )
+
+    def test_an_explicit_larger_bound_governs_encode_on_both_sides(self) -> None:
+        bound = 100_000
+        shell = len(encode_request({"email": ""}))
+        fits = encode_request({"email": "x" * (bound - shell)}, max_bytes=bound)
+        assert len(fits) == bound
+        with pytest.raises(EnvelopeError):
+            encode_request({"email": "x" * (bound + 1 - shell)}, max_bytes=bound)
+
+    def test_an_explicit_smaller_bound_also_governs(self) -> None:
+        shell = len(encode_request({"email": ""}))
+        assert len(encode_request({"email": "x" * (50 - shell)}, max_bytes=50)) == 50
+        with pytest.raises(EnvelopeError):
+            encode_request({"email": "x" * (51 - shell)}, max_bytes=50)
+
+    def test_an_explicit_smaller_bound_also_governs_decode(self) -> None:
+        shell = len(b'{"email":""}')
+        fits = ('{"email":"%s"}' % ("x" * (50 - shell))).encode()
+        over = ('{"email":"%s"}' % ("x" * (51 - shell))).encode()
+        assert len(fits) == 50 and len(over) == 51
+        decode_request(
+            fits, required=_EMAIL_FIELDS, allowed=_EMAIL_FIELDS, max_bytes=50
+        )
+        with pytest.raises(EnvelopeError):
+            decode_request(
+                over, required=_EMAIL_FIELDS, allowed=_EMAIL_FIELDS, max_bytes=50
+            )
+
     def test_deep_nesting_within_the_size_limit_is_refused(self) -> None:
         raw = b'{"email":' + b"[" * 30000 + b"]" * 30000 + b"}"
         assert len(raw) < 65_536, "the size rule would refuse it before parsing"
