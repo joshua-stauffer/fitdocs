@@ -280,7 +280,7 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
 
 - [ ] 4. Documentation, network statements and records
 
-- [ ] 4.1 Document publishing in the intervals.icu section
+- [x] 4.1 Document publishing in the intervals.icu section
   - Rewrite the section's opening (pulls and publishes; writes only an
     activity's name and description, and the base file while uploads are
     on), remove "It never writes to the account.", add the switch to
@@ -414,3 +414,4 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
 - 3.2: the AST walker `_reachable` follows module functions, `self.` methods and every module-level class a reachable body names, and records attribute names, so qualified calls count. The sentinel test checks result fields, stdout, stderr and caplog.
 - 3.3: the CLI e2e tests live in tests/connectors/test_intervals_publish_cli.py. A refusal test must first make the page due again (change the target title), or "nothing sent / byte-identical" holds before the run.
 - 4.3: amendments taken: connectors 8, intervals-connector 2, distribution 8 (in-place tags on the criteria they change). The CHANGELOG Changed bullet claims the network statements name `fitdocs publish --yes`, which is true only after 4.2. Changelog pins read through `read_unreleased_since(_, V0_2_0)` so they survive the next cut.
+- 4.1: the docs codes notes were rewritten from the complete list of what `publish()` returns; each claim is observed by a `_Flow` scenario. Pins in tests/connectors/test_intervals_docs.py bind the answer table to ANSWER_CODES, success statuses to SUCCESS_STATUSES, and the window, file name and fields to their constants. Three review rounds found missing members of exception lists; when the flow changes, re-derive the notes rather than patch them.
