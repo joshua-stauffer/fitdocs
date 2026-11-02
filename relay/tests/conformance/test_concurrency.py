@@ -312,3 +312,128 @@ def test_concurrent_issuance_leaves_exactly_one_unrevoked_connection_token(
         if before.token_id is not None:
             old = storages[0].find_token(before.token_id)
             assert old is not None and old.revoked_at == T2
+
+
+@pytest.mark.covers(
+    "TargetConnectionStore.claim_refresh", "TargetConnectionStore.get_connection"
+)
+@pytest.mark.parametrize(
+    "held_before", [False, True], ids=["no-lease", "expired-lease"]
+)
+def test_twenty_claims_of_one_generation_leave_one_holder(
+    held_before: bool, storages: list[Storage]
+) -> None:
+    storages[0].create_principal(NewPrincipal("ann", None), now=T1)
+    storages[0].put_connection(
+        NewConnection("ann", "strava", "acct", SealedTokens("sealed", None, None)),
+        now=T1,
+    )
+    if held_before:
+        assert storages[0].claim_refresh(
+            "ann", "strava", generation=1, lease_id="old", lease_until=T2, now=T1
+        )
+
+    def claim(i: int) -> object:
+        return storages[i].claim_refresh(
+            "ann",
+            "strava",
+            generation=1,
+            lease_id=f"lease-{i:02d}",
+            lease_until=T3 + 60,
+            now=T3,
+        )
+
+    results = race(THREADS, claim)
+    assert [r for r in results if r is not True and r is not False] == []
+    winners = [i for i, r in enumerate(results) if r is True]
+    assert len(winners) == 1, results
+    connection = storages[0].get_connection("ann", "strava")
+    assert connection is not None
+    assert connection.lease_id == f"lease-{winners[0]:02d}"
+    assert connection.lease_until == T3 + 60
+    assert connection.generation == 1
+
+
+@pytest.mark.covers(
+    "TargetConnectionStore.swap_tokens", "TargetConnectionStore.get_connection"
+)
+def test_twenty_swaps_of_one_generation_land_once(storages: list[Storage]) -> None:
+    storages[0].create_principal(NewPrincipal("ann", None), now=T1)
+    storages[0].put_connection(
+        NewConnection("ann", "strava", "acct", SealedTokens("sealed", None, None)),
+        now=T1,
+    )
+
+    def swap(i: int) -> object:
+        return storages[i].swap_tokens(
+            "ann",
+            "strava",
+            generation=1,
+            lease_id=None,
+            tokens=SealedTokens(f"access-{i:02d}", f"refresh-{i:02d}", T3),
+            now=T2,
+        )
+
+    results = race(THREADS, swap)
+    winners = [i for i, r in enumerate(results) if r is True]
+    assert len(winners) == 1, results
+    assert [r for i, r in enumerate(results) if i != winners[0]] == [False] * (
+        THREADS - 1
+    )
+    connection = storages[0].get_connection("ann", "strava")
+    assert connection is not None
+    assert connection.generation == 2
+    assert connection.tokens == SealedTokens(
+        f"access-{winners[0]:02d}", f"refresh-{winners[0]:02d}", T3
+    )
+
+
+@pytest.mark.covers(
+    "TargetConnectionStore.claim_refresh",
+    "TargetConnectionStore.swap_tokens",
+    "TargetConnectionStore.get_connection",
+)
+def test_claims_racing_a_swap_never_leave_a_lease_on_a_passed_generation(
+    storages: list[Storage],
+) -> None:
+    storages[0].create_principal(NewPrincipal("ann", None), now=T1)
+    storages[0].put_connection(
+        NewConnection("ann", "strava", "acct", SealedTokens("sealed", None, None)),
+        now=T1,
+    )
+
+    def work(i: int) -> object:
+        if i == 0:
+            return storages[0].swap_tokens(
+                "ann",
+                "strava",
+                generation=1,
+                lease_id=None,
+                tokens=SealedTokens("swapped", None, None),
+                now=T2,
+            )
+        return storages[i].claim_refresh(
+            "ann",
+            "strava",
+            generation=1,
+            lease_id=f"lease-{i:02d}",
+            lease_until=T3 + 60,
+            now=T2,
+        )
+
+    results = race(THREADS, work)
+    connection = storages[0].get_connection("ann", "strava")
+    assert connection is not None
+    claimed = [i for i, r in enumerate(results) if i and r is True]
+    assert len(claimed) <= 1, results
+    if results[0] is True:
+        # The swap came first: the claims then name a passed generation.
+        assert not claimed
+        assert connection.generation == 2 and connection.lease_id is None
+        assert connection.tokens.access == "swapped"
+    else:
+        # A claim came first: its live lease refuses the swap that names none.
+        assert claimed
+        assert connection.generation == 1
+        assert connection.lease_id == f"lease-{claimed[0]:02d}"
+        assert connection.tokens.access == "sealed"

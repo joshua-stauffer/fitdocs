@@ -99,6 +99,11 @@ def _connection_from_row(row: tuple[Any, ...]) -> StoredConnection:
     )
 
 
+def _lease_live(lease_until: int | None, now: int) -> bool:
+    """A lease is live while its end is after `now`; an absent end is no lease."""
+    return lease_until is not None and lease_until > now
+
+
 def _run(
     connection: sqlite3.Connection, sql: str, params: tuple[object, ...] = ()
 ) -> list[tuple[Any, ...]]:
@@ -410,6 +415,83 @@ class SqliteBackend:
         with self._read() as db:
             rows = _run(db, sql + " ORDER BY target, principal_id", params)
         return tuple(_connection_from_row(row) for row in rows)
+
+    def claim_refresh(
+        self,
+        principal_id: str,
+        target: str,
+        *,
+        generation: int,
+        lease_id: str,
+        lease_until: int,
+        now: int,
+    ) -> bool:
+        with self._write() as db:
+            rows = _run(
+                db,
+                "SELECT generation, lease_until FROM target_connections "
+                "WHERE principal_id = ? AND target = ?",
+                (principal_id, target),
+            )
+            if not rows or rows[0][0] != generation or _lease_live(rows[0][1], now):
+                return False
+            _run(
+                db,
+                "UPDATE target_connections SET lease_id = ?, lease_until = ? "
+                "WHERE principal_id = ? AND target = ?",
+                (lease_id, lease_until, principal_id, target),
+            )
+            return True
+
+    def swap_tokens(
+        self,
+        principal_id: str,
+        target: str,
+        *,
+        generation: int,
+        lease_id: str | None,
+        tokens: SealedTokens,
+        now: int,
+    ) -> bool:
+        with self._write() as db:
+            rows = _run(
+                db,
+                "SELECT generation, lease_id, lease_until FROM target_connections "
+                "WHERE principal_id = ? AND target = ?",
+                (principal_id, target),
+            )
+            if not rows or rows[0][0] != generation:
+                return False
+            if lease_id is None:
+                if _lease_live(rows[0][2], now):
+                    return False
+            elif rows[0][1] != lease_id:
+                return False
+            _run(
+                db,
+                "UPDATE target_connections SET access_sealed = ?, refresh_sealed = ?, "
+                "access_expires_at = ?, generation = generation + 1, "
+                "lease_id = NULL, lease_until = NULL, updated_at = ? "
+                "WHERE principal_id = ? AND target = ?",
+                (
+                    tokens.access,
+                    tokens.refresh,
+                    tokens.access_expires_at,
+                    now,
+                    principal_id,
+                    target,
+                ),
+            )
+            return True
+
+    def release_refresh(self, principal_id: str, target: str, *, lease_id: str) -> None:
+        with self._write() as db:
+            _run(
+                db,
+                "UPDATE target_connections SET lease_id = NULL, lease_until = NULL "
+                "WHERE principal_id = ? AND target = ? AND lease_id = ?",
+                (principal_id, target, lease_id),
+            )
 
     def issue_connection_token(
         self, principal_id: str, target: str, token: NewToken, *, now: int

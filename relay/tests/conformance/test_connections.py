@@ -468,6 +468,9 @@ def test_deleting_a_principal_removes_its_connections_and_only_its_own(
     "TargetConnectionStore.put_connection",
     "TargetConnectionStore.get_connection",
     "TargetConnectionStore.list_connections",
+    "TargetConnectionStore.claim_refresh",
+    "TargetConnectionStore.swap_tokens",
+    "TargetConnectionStore.release_refresh",
     "TargetConnectionStore.issue_connection_token",
     "TargetConnectionStore.delete_connection",
     "TargetConnectionStore.delete_connection_by_account",
@@ -482,6 +485,21 @@ def test_every_connection_operation_on_a_closed_store_is_unreachable(
         store.get_connection("ann", STRAVA)
     with pytest.raises(StorageUnreachable):
         store.list_connections(None)
+    with pytest.raises(StorageUnreachable):
+        store.claim_refresh(
+            "ann", STRAVA, generation=1, lease_id="L", lease_until=T3, now=T2
+        )
+    with pytest.raises(StorageUnreachable):
+        store.swap_tokens(
+            "ann",
+            STRAVA,
+            generation=1,
+            lease_id=None,
+            tokens=SealedTokens("a", None, None),
+            now=T2,
+        )
+    with pytest.raises(StorageUnreachable):
+        store.release_refresh("ann", STRAVA, lease_id="L")
     with pytest.raises(StorageUnreachable):
         store.issue_connection_token("ann", STRAVA, NewToken("t", "v", None), now=T2)
     with pytest.raises(StorageUnreachable):
@@ -681,6 +699,284 @@ def test_deleting_a_connection_revokes_the_token_issuance_recorded(
     assert store.delete_connection_by_account(STRAVA, "acct-B", now=T6)
     assert revoked_at(store, "bea-1") == T6
     assert issue(store, "ann", "ann-3", now=T6) is None  # the connection is gone
+
+
+def claim(
+    store: Storage,
+    principal_id: str,
+    lease_id: str,
+    *,
+    generation: int = 1,
+    until: int,
+    now: int,
+    target: str = STRAVA,
+) -> bool:
+    return store.claim_refresh(
+        principal_id,
+        target,
+        generation=generation,
+        lease_id=lease_id,
+        lease_until=until,
+        now=now,
+    )
+
+
+NEW_TOKENS = SealedTokens(access="new-access", refresh=None, access_expires_at=None)
+
+
+def swap(
+    store: Storage,
+    principal_id: str,
+    *,
+    generation: int = 1,
+    lease: str | None,
+    now: int,
+    tokens: SealedTokens = NEW_TOKENS,
+    target: str = STRAVA,
+) -> bool:
+    return store.swap_tokens(
+        principal_id,
+        target,
+        generation=generation,
+        lease_id=lease,
+        tokens=tokens,
+        now=now,
+    )
+
+
+def lease_of(store: Storage, principal_id: str) -> tuple[str | None, int | None]:
+    found = must_get(store, principal_id)
+    return found.lease_id, found.lease_until
+
+
+@pytest.mark.covers("TargetConnectionStore.claim_refresh")
+def test_a_claim_needs_the_generation_and_names_the_holder_and_the_lease_end(
+    store: Storage,
+) -> None:
+    principals(store, "ann", "bea")
+    store.put_connection(connection("ann", "acct-A"), now=T1)
+    store.put_connection(connection("bea", "acct-B"), now=T1)
+    before = must_get(store, "ann")
+    assert lease_of(store, "ann") == (None, None)
+
+    for wrong in (0, 2):
+        assert (
+            claim(store, "ann", "L-wrong", generation=wrong, until=T5, now=T2) is False
+        )
+    assert claim(store, "cat", "L-nobody", until=T5, now=T2) is False
+    assert claim(store, "ann", "L-other", until=T5, now=T2, target=OTHER) is False
+    assert lease_of(store, "ann") == (None, None)
+
+    assert claim(store, "ann", "L-1", until=T5, now=T2) is True
+    after = must_get(store, "ann")
+    assert (after.lease_id, after.lease_until) == ("L-1", T5)
+    assert after.generation == 1
+    assert after.tokens == before.tokens
+    assert after.updated_at == before.updated_at
+    assert lease_of(store, "bea") == (None, None)
+
+
+@pytest.mark.covers("TargetConnectionStore.claim_refresh")
+def test_a_live_lease_refuses_every_claim_and_the_end_second_frees_it(
+    store: Storage,
+) -> None:
+    principals(store, "ann")
+    store.put_connection(connection("ann", "acct-A"), now=T1)
+    assert claim(store, "ann", "L-1", until=T4, now=T2)
+
+    assert claim(store, "ann", "L-2", until=T6, now=T2) is False
+    assert claim(store, "ann", "L-1", until=T6, now=T3) is False  # not even its holder
+    assert claim(store, "ann", "L-2", until=T6, now=T4 - 1) is False
+    assert lease_of(store, "ann") == ("L-1", T4)
+
+    # `lease_until <= now` frees the lease: at the end second, not a second later.
+    assert claim(store, "ann", "L-2", until=T6, now=T4) is True
+    assert lease_of(store, "ann") == ("L-2", T6)
+    assert claim(store, "ann", "L-3", until=T6 + 9, now=T6 + 1) is True  # long past
+    assert lease_of(store, "ann") == ("L-3", T6 + 9)
+
+
+@pytest.mark.covers(
+    "TargetConnectionStore.swap_tokens", "TargetConnectionStore.claim_refresh"
+)
+def test_a_swap_by_the_holder_writes_the_tokens_advances_and_clears_the_lease(
+    store: Storage,
+) -> None:
+    principals(store, "ann", "bea")
+    store.put_connection(connection("ann", "acct-A"), now=T1)
+    store.put_connection(connection("bea", "acct-B"), now=T1)
+    before = must_get(store, "ann")
+    bea_before = must_get(store, "bea")
+    assert before.tokens != NEW_TOKENS and before.tokens.refresh is not None
+    assert claim(store, "ann", "L-1", until=T5, now=T2)
+
+    assert swap(store, "ann", lease="L-1", now=T3) is True
+
+    after = must_get(store, "ann")
+    assert after.tokens == NEW_TOKENS  # a missing refresh token and expiry too
+    assert after.generation == 2
+    assert (after.lease_id, after.lease_until) == (None, None)
+    assert after.updated_at == T3
+    assert (after.account_key, after.created_at, after.token_id) == (
+        before.account_key,
+        before.created_at,
+        before.token_id,
+    )
+    assert must_get(store, "bea") == bea_before
+    # The generation moved, so the same claim cannot be made twice.
+    assert claim(store, "ann", "L-2", generation=1, until=T6, now=T3) is False
+    assert claim(store, "ann", "L-2", generation=2, until=T6, now=T3) is True
+
+
+@pytest.mark.covers(
+    "TargetConnectionStore.swap_tokens", "TargetConnectionStore.claim_refresh"
+)
+def test_a_stale_swap_is_refused_and_leaves_the_connection_unchanged(
+    store: Storage,
+) -> None:
+    principals(store, "ann")
+    store.put_connection(connection("ann", "acct-A"), now=T1)
+    assert claim(store, "ann", "L-1", until=T4, now=T2)
+    assert swap(store, "ann", lease="L-1", now=T2)  # generation 2
+    assert claim(store, "ann", "L-2", generation=2, until=T6, now=T3)
+    before = must_get(store, "ann")
+    assert before.generation == 2 and before.lease_id == "L-2"
+    other = SealedTokens("stale-access", "stale-refresh", T6)
+
+    # The lease is held and named correctly; only the generation is stale.
+    assert swap(store, "ann", generation=1, lease="L-2", now=T3, tokens=other) is False
+    assert swap(store, "ann", generation=3, lease="L-2", now=T3, tokens=other) is False
+    assert must_get(store, "ann") == before
+
+    # Without a lease, a stale generation is refused as well.
+    assert claim(store, "ann", "L-3", generation=2, until=T6, now=T6) is True
+    assert (
+        swap(store, "ann", generation=1, lease=None, now=T6 + 1, tokens=other) is False
+    )
+    assert must_get(store, "ann").tokens == before.tokens
+
+
+@pytest.mark.covers(
+    "TargetConnectionStore.swap_tokens", "TargetConnectionStore.claim_refresh"
+)
+def test_a_swap_names_the_holder_unless_it_names_none_while_no_lease_is_live(
+    store: Storage,
+) -> None:
+    principals(store, "ann", "bea")
+    store.put_connection(connection("ann", "acct-A"), now=T1)
+    store.put_connection(connection("bea", "acct-B"), now=T1)
+    assert claim(store, "ann", "L-1", until=T4, now=T2)
+    held = must_get(store, "ann")
+
+    # A live lease: another holder's id, no id, and the id of bea's lease fail.
+    assert claim(store, "bea", "L-bea", until=T5, now=T2)
+    assert swap(store, "ann", lease="L-bea", now=T3) is False
+    assert swap(store, "ann", lease=None, now=T3) is False
+    assert swap(store, "ann", lease=None, now=T4 - 1) is False
+    assert must_get(store, "ann") == held
+
+    # The lease's end frees a swap that names no holder, at the end second.
+    assert swap(store, "ann", lease=None, now=T4) is True
+    assert must_get(store, "ann").generation == 2
+    assert must_get(store, "ann").lease_id is None
+
+    # bea: a swap naming a lease nobody holds is refused; after the release a
+    # swap naming the released id is refused, and one naming none works.
+    assert swap(store, "bea", lease="L-ghost", generation=1, now=T3) is False
+    release(store, "bea", "L-bea")
+    assert swap(store, "bea", lease="L-bea", now=T3) is False  # released, so gone
+    assert swap(store, "bea", lease=None, now=T3) is True
+    assert must_get(store, "bea").generation == 2
+
+
+@pytest.mark.covers("TargetConnectionStore.swap_tokens")
+def test_a_swap_by_the_holder_of_an_expired_lease_still_lands(store: Storage) -> None:
+    principals(store, "ann")
+    store.put_connection(connection("ann", "acct-A"), now=T1)
+    assert claim(store, "ann", "L-1", until=T3, now=T2)
+    assert swap(store, "ann", lease="L-1", now=T5) is True
+    assert must_get(store, "ann").generation == 2
+
+
+@pytest.mark.covers("TargetConnectionStore.swap_tokens")
+def test_a_swap_on_a_missing_connection_is_false(store: Storage) -> None:
+    principals(store, "ann")
+    store.put_connection(connection("ann", "acct-A"), now=T1)
+    assert swap(store, "bea", lease=None, now=T2) is False
+    assert swap(store, "ann", lease=None, now=T2, target=OTHER) is False
+    assert must_get(store, "ann").generation == 1
+
+
+def release(store: Storage, principal_id: str, lease_id: str) -> None:
+    return store.release_refresh(principal_id, STRAVA, lease_id=lease_id)
+
+
+@pytest.mark.covers(
+    "TargetConnectionStore.release_refresh", "TargetConnectionStore.claim_refresh"
+)
+def test_a_release_clears_only_the_holders_lease_and_frees_the_generation(
+    store: Storage,
+) -> None:
+    principals(store, "ann", "bea")
+    store.put_connection(connection("ann", "acct-A"), now=T1)
+    store.put_connection(connection("bea", "acct-B"), now=T1)
+    assert claim(store, "ann", "L-1", until=T6, now=T2)
+    assert claim(store, "bea", "L-1", until=T6, now=T2)  # the same id, another row
+    held = must_get(store, "ann")
+
+    release(store, "ann", "L-other")  # not the holder
+    release(store, "cat", "L-1")  # no such connection
+    assert must_get(store, "ann") == held
+
+    release(store, "ann", "L-1")
+    freed = must_get(store, "ann")
+    assert (freed.lease_id, freed.lease_until) == (None, None)
+    assert (freed.generation, freed.tokens, freed.updated_at) == (
+        held.generation,
+        held.tokens,
+        held.updated_at,
+    )
+    assert lease_of(store, "bea") == ("L-1", T6)  # bea's lease stands
+    assert claim(store, "ann", "L-2", until=T6, now=T3) is True  # before L-1's end
+
+
+@pytest.mark.covers(
+    "TargetConnectionStore.release_refresh", "TargetConnectionStore.claim_refresh"
+)
+def test_a_late_release_does_not_clear_a_newer_holders_lease(store: Storage) -> None:
+    principals(store, "ann")
+    store.put_connection(connection("ann", "acct-A"), now=T1)
+    assert claim(store, "ann", "L-1", until=T3, now=T2)
+    assert claim(store, "ann", "L-2", until=T6, now=T4)  # L-1 ran out
+    release(store, "ann", "L-1")
+    assert lease_of(store, "ann") == ("L-2", T6)
+
+
+@pytest.mark.covers(
+    "TargetConnectionStore.delete_connection",
+    "TargetConnectionStore.swap_tokens",
+    "TargetConnectionStore.claim_refresh",
+)
+def test_a_delete_with_a_generation_a_swap_has_passed_changes_nothing(
+    database_target: Target, store: Storage
+) -> None:
+    principals(store, "ann")
+    mint(store, "tok-ann", "ann")
+    store.put_connection(connection("ann", "acct-A"), now=T1)
+    attach_token(database_target, "ann", "tok-ann")
+    add_publication(database_target, "pub-a", "ann")
+    assert claim(store, "ann", "L-1", until=T5, now=T2)
+    assert swap(store, "ann", lease="L-1", now=T3)  # generation 2
+    assert claim(store, "ann", "L-2", generation=2, until=T6, now=T3)
+    before = must_get(store, "ann")
+
+    assert store.delete_connection("ann", STRAVA, generation=1, now=T4) is False
+
+    assert must_get(store, "ann") == before
+    assert publications(database_target) == [(STRAVA, "pub-a", "ann")]
+    assert revoked_at(store, "tok-ann") is None
+    assert store.delete_connection("ann", STRAVA, generation=2, now=T4) is True
+    assert revoked_at(store, "tok-ann") == T4
 
 
 def test_a_sealed_token_never_appears_in_a_repr() -> None:

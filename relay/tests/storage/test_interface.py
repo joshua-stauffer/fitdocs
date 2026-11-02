@@ -61,6 +61,9 @@ EXPECTED_MEMBERS: dict[str, set[str]] = {
         "put_connection",
         "get_connection",
         "list_connections",
+        "claim_refresh",
+        "swap_tokens",
+        "release_refresh",
         "issue_connection_token",
         "delete_connection",
         "delete_connection_by_account",
@@ -298,6 +301,13 @@ DESIGNED: dict[str, dict[str, list[str]]] = {
             "StoredConnection | None",
             "def list_connections(self, target: str | None) -> "
             "tuple[StoredConnection, ...]",
+            "def claim_refresh(self, principal_id: str, target: str, *, "
+            "generation: int, lease_id: str, lease_until: int, now: int) -> bool",
+            "def swap_tokens(self, principal_id: str, target: str, *, "
+            "generation: int, lease_id: str | None, tokens: SealedTokens, "
+            "now: int) -> bool",
+            "def release_refresh(self, principal_id: str, target: str, *, "
+            "lease_id: str) -> None",
             "def issue_connection_token(self, principal_id: str, target: str, "
             "token: NewToken, *, now: int) -> TokenRecord | None",
             "def delete_connection(self, principal_id: str, target: str, *, "
@@ -364,6 +374,8 @@ TAKES_NOW = {
     SchemaStore: {"apply_schema_change"},
     TargetConnectionStore: {
         "put_connection",
+        "claim_refresh",
+        "swap_tokens",
         "issue_connection_token",
         "delete_connection",
         "delete_connection_by_account",

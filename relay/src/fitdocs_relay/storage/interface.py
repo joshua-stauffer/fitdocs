@@ -233,6 +233,45 @@ class TargetConnectionStore(StorageBase, Protocol):
         """By target, then principal id; every target when `target` is None."""
         ...
 
+    def claim_refresh(
+        self,
+        principal_id: str,
+        target: str,
+        *,
+        generation: int,
+        lease_id: str,
+        lease_until: int,
+        now: int,
+    ) -> bool:
+        """Take the refresh lease; True for the one caller that gets it.
+
+        Succeeds only when the connection's generation is `generation` and no
+        lease is live (`lease_until` absent or `<= now`).
+        """
+        ...
+
+    def swap_tokens(
+        self,
+        principal_id: str,
+        target: str,
+        *,
+        generation: int,
+        lease_id: str | None,
+        tokens: SealedTokens,
+        now: int,
+    ) -> bool:
+        """Replace the tokens, advance the generation by one and clear the lease.
+
+        Succeeds only when the generation matches and either `lease_id` is the
+        stored lease or, with `lease_id=None`, no lease is live (`lease_until`
+        absent or `<= now`). Otherwise nothing changes.
+        """
+        ...
+
+    def release_refresh(self, principal_id: str, target: str, *, lease_id: str) -> None:
+        """Clear the lease when `lease_id` holds it; otherwise change nothing."""
+        ...
+
     def issue_connection_token(
         self, principal_id: str, target: str, token: NewToken, *, now: int
     ) -> TokenRecord | None:

@@ -54,6 +54,11 @@ _CONNECTION_COLUMNS = (
 _Db = psycopg.Connection[tuple[object, ...]]
 
 
+def _lease_live(lease_until: object, now: int) -> bool:
+    """A lease is live while its end is after `now`; an absent end is no lease."""
+    return lease_until is not None and lease_until > now  # type: ignore[operator]
+
+
 def _connection_from_row(row: tuple[object, ...]) -> StoredConnection:
     return StoredConnection(
         principal_id=row[0],  # type: ignore[arg-type]
@@ -528,6 +533,97 @@ class PostgresBackend:
                 return db.execute(sql, params).fetchall()
 
         return tuple(_connection_from_row(row) for row in _guarded(work))
+
+    def claim_refresh(
+        self,
+        principal_id: str,
+        target: str,
+        *,
+        generation: int,
+        lease_id: str,
+        lease_until: int,
+        now: int,
+    ) -> bool:
+        self._check_open()
+
+        def work() -> bool:
+            with self._pool.connection() as db:
+                # FOR UPDATE: claimants take turns, so only the first sees no
+                # live lease.
+                row = db.execute(
+                    "SELECT generation, lease_until FROM target_connections "
+                    "WHERE principal_id = %s AND target = %s FOR UPDATE",
+                    (principal_id, target),
+                ).fetchone()
+                if row is None or row[0] != generation or _lease_live(row[1], now):
+                    return False
+                db.execute(
+                    "UPDATE target_connections SET lease_id = %s, lease_until = %s "
+                    "WHERE principal_id = %s AND target = %s",
+                    (lease_id, lease_until, principal_id, target),
+                )
+                return True
+
+        return _guarded(work)
+
+    def swap_tokens(
+        self,
+        principal_id: str,
+        target: str,
+        *,
+        generation: int,
+        lease_id: str | None,
+        tokens: SealedTokens,
+        now: int,
+    ) -> bool:
+        self._check_open()
+
+        def work() -> bool:
+            with self._pool.connection() as db:
+                row = db.execute(
+                    "SELECT generation, lease_id, lease_until FROM target_connections "
+                    "WHERE principal_id = %s AND target = %s FOR UPDATE",
+                    (principal_id, target),
+                ).fetchone()
+                if row is None or row[0] != generation:
+                    return False
+                if lease_id is None:
+                    if _lease_live(row[2], now):
+                        return False
+                elif row[1] != lease_id:
+                    return False
+                db.execute(
+                    "UPDATE target_connections SET access_sealed = %s, "
+                    "refresh_sealed = %s, access_expires_at = %s, "
+                    "generation = generation + 1, lease_id = NULL, "
+                    "lease_until = NULL, updated_at = %s "
+                    "WHERE principal_id = %s AND target = %s",
+                    (
+                        tokens.access,
+                        tokens.refresh,
+                        tokens.access_expires_at,
+                        now,
+                        principal_id,
+                        target,
+                    ),
+                )
+                return True
+
+        return _guarded(work)
+
+    def release_refresh(self, principal_id: str, target: str, *, lease_id: str) -> None:
+        self._check_open()
+
+        def work() -> None:
+            with self._pool.connection() as db:
+                db.execute(
+                    "UPDATE target_connections SET lease_id = NULL, "
+                    "lease_until = NULL WHERE principal_id = %s AND target = %s "
+                    "AND lease_id = %s",
+                    (principal_id, target, lease_id),
+                )
+
+        _guarded(work)
 
     def issue_connection_token(
         self, principal_id: str, target: str, token: NewToken, *, now: int
