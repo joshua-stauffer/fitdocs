@@ -613,7 +613,7 @@ Rules for every task:
 
 - [ ] 7. Documentation, gates, steering and amendments
 
-- [ ] 7.1 Document the Strava connector
+- [x] 7.1 Document the Strava connector
   - The Strava section of the connectors page with the four subsections of
     design.md, "Compatible with Strava", the settings table, the relay
     instance and public-address prerequisites, both mapping tables, what
@@ -626,7 +626,7 @@ Rules for every task:
     against the mapping tables.
   - _Requirements: 5.10, 16.4, 16.5, 17.1, 17.7_
 
-- [ ] 7.2 Document the Strava target for operators
+- [x] 7.2 Document the Strava target for operators
   - The relay page's Strava sections of design.md, including the
     `required_with` rendering, the link setting and the relay instance URL
     matching the public address, and the policy summary bound to the policy sections by
@@ -636,7 +636,7 @@ Rules for every task:
     provider.
   - _Requirements: 4.9, 13.6, 16.1, 16.5, 16.6, 17.2, 17.7_
 
-- [ ] 7.3 Make every network statement name `fitdocs publish --yes` and the Strava host
+- [x] 7.3 Make every network statement name `fitdocs publish --yes` and the Strava host
   - Written to hold in either landing order with `intervals-publish`; each
     step is skipped where an earlier target already made it:
     - every statement that lists the network-touching commands names
@@ -656,7 +656,7 @@ Rules for every task:
     place reds its pin.
   - _Requirements: 17.3_
 
-- [ ] 7.4 Add the steering sentences
+- [x] 7.4 Add the steering sentences
   - `tech.md` "Network and Credentials" gains the Strava sentence of
     design.md; `structure.md` gains the strict-module sentence; each is
     line-disjoint from other specs' edits.
@@ -664,7 +664,7 @@ Rules for every task:
     design.md.
   - _Requirements: 17.4_
 
-- [ ] 7.5 Record the changelog entries
+- [x] 7.5 Record the changelog entries
   - Root Unreleased (pinned through `unreleased_since(text, V0_2_0)`): the
     Strava connector described as compatible with Strava, `fitdocs connect
     --no-browser`, Strava disconnect, and browser consent supported. The
@@ -676,7 +676,7 @@ Rules for every task:
     other than "Compatible with Strava".
   - _Requirements: 16.5, 17.5_
 
-- [ ] 7.6 Record the amendments in the affected specifications
+- [x] 7.6 Record the amendments in the affected specifications
   - connectors, relay-server and activity-identity, each with the items of
     design.md's Amendments Carried, worded like the earlier landed
     amendments and naming the pin that enforces each; distribution's Req
@@ -779,3 +779,8 @@ Rules for every task:
 - 5.9 controller downgrade: test-only task accepted on the implementer's 9-mutation table plus a controller re-run (poll-granted token mutation reds its case), without an independent review round. Mapping rows other than NOT_OFFERED stay pinned only by test_strava_publish.py (recordings are all ok answers).
 - 6.2 controller downgrade: test-only task accepted on the implementer's 11-mutation table plus a controller re-run (plaintext athlete-id account key reds both link settings), without an independent review round. Logs are checked via caplog (before the redacting filter) — stricter than production.
 - 6.1 controller downgrade: round-1 finding (three now-false docstrings in test_e2e.py) fixed by the controller. **Merge hazard: main's intervals-publish rewrote the same publish block in tests/connectors/test_e2e.py — reconcile to an exact two-row --targets literal (strava-src then wellness-src) and recompute the dry-run literal; don't adopt main's startswith.**
+- 7.1 controller downgrade: round-1 findings (two false sentences: relay-token override at connect, 'the answer carries a link' under relay; one who-runs phrase; weak 'connected.' pin; loopback sentence grammar) fixed by the controller; pins re-run (connected-line and loopback mutations red).
+- 7.3: every publish --yes step was already landed by intervals-publish (pins in test_network_statements.py); this spec adds only the Strava line + its pin. Controller downgrade: accepted on the implementer's two red mutations plus a controller read of the sentence, without an independent review round.
+- 7.2: two review rounds (round 1: eight false sentences — operator name only on the privacy page, token revoked not deleted, connection ends only on a refused renewal, upload updates a match first, Envelope v1 outcome/routes/'every answer'); round 2 APPROVED.
+- 7.5: relay changelog section headed `## Unreleased` (controller ruling: relay/pyproject.toml is 0.1.0; no version invented — whether Strava ships in relay 0.1.0 is a release-cut call). Round-1 findings (Strava --local-only consequence omitted 'or access is revoked in Strava's settings' and the token-unknown/revoked removal rows; 'an unconfigured relay is unchanged' ignored that every relay must apply migration 0002) fixed by the controller; new 'revoked' pin reds alone when the clause is dropped.
+- 7.6: connectors Amendment 9, relay-server Amendment 1, activity-identity Amendment 3; distribution skipped (Amendment 8 by intervals-publish already records Req 10.4); design.md gains an Amendment note (2026-11-02) carrying the 5.4, 3.5 and 4.1 rulings. Also fixed (17.3): tech.md and the cli.py module docstring now name the Strava connect/disconnect requests. Three review rounds; the round-3 one-line finding (5.4 parenthetical overclaimed the malformed set) fixed by the controller.
