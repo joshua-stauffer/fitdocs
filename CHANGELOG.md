@@ -31,6 +31,17 @@ recorded as one.
   keeps the file if the relay cannot confirm; `--local-only` removes the file
   without contacting the relay. Action: run `fitdocs disconnect NAME` to
   retire a token you no longer want on this machine.
+- Publishing to intervals.icu. A page whose `publish` key names an `intervals`
+  connector instance has that instance's matching activity updated by
+  `fitdocs publish --yes`: the activity's name and description become the
+  post's. When no activity matches, the page is not posted to that instance
+  unless you set `publish_upload = true` in the instance's
+  `[connectors.NAME]` table, in which case fitdocs uploads the page's base
+  `.fit` file and then sets the name and description. A posted page's
+  `published` region carries a link that goes straight to the activity.
+  `fitdocs.toml` settings schema (additive): the `intervals` connector's
+  optional `publish_upload` key, default `false`. Action: none; add the key
+  only to enable the upload.
 - `fitdocs publish` turns workout pages into posts and sends them to the
   publish targets you configured as connectors; the `[publish]` settings
   table sets the title and description templates a post is composed from. A page
@@ -107,6 +118,12 @@ recorded as one.
   fitdocs reports a file carrying `relay-token` as malformed. Action: none for
   existing files; do not share one credentials directory with an older
   fitdocs.
+- The `intervals` connector now writes to the account for pages that opt in
+  (`fitdocs publish --yes` updates an activity and, with `publish_upload`, uploads
+  one); `fitdocs connect` and `fitdocs pull` still only read. Every statement of
+  where fitdocs touches the network, in the documentation and the code, now
+  names `fitdocs publish --yes` among the commands that make connector
+  requests. The change advances no contract version. Action: none.
 
 ## [0.2.0] - 2026-10-19
 

@@ -231,7 +231,7 @@ decision; the bytes are always archived first).
 #### Acceptance Criteria
 1. The connector framework shall send with every request an explicit fitdocs User-Agent naming the installed fitdocs version and the project, and never the HTTP library's default agent.
 2. The connector framework shall bound every request with a timeout.
-3. When a listing or fetch request fails with a rate-limit response, a server error, or a network failure, the connector framework shall repeat it at most a bounded number of times with increasing waits, honoring a wait the service states when it is within a bounded maximum, and shall then report the failure.
+3. When a listing or fetch request fails with a rate-limit response, a server error, or a network failure, the connector framework shall repeat it at most a bounded number of times with increasing waits, honoring a wait the service states when it is within a bounded maximum, and shall then report the failure. *(amended by Amendment 8: the bounded retries also cover an update request that is safe to repeat)*
 4. The connector framework shall send each authentication request — a key check, a login, or a token renewal — exactly once, never repeating it whatever the response.
 5. The connector framework shall never repeat a request the service answered as unauthorized or forbidden.
 6. The connector framework shall not send a credential header to a host a response redirects the request to.
@@ -288,7 +288,7 @@ decision; the bytes are always archived first).
 **Objective:** As a privacy-conscious athlete, I want network access limited to explicit connector commands and the existing map tiles, and every statement about the network to be true, so that I know exactly when fitdocs talks to the outside world.
 
 #### Acceptance Criteria
-1. The fitdocs CLI shall make connector requests only during `fitdocs connect` and `fitdocs pull`; `index`, `query`, `sync`, `regen`, `load`, `dashboard`, `check`, `history`, `plan`, `derive-benchmarks`, and rendering shall make none, whether or not connectors are configured, and shall keep their existing map-tile behavior unchanged.
+1. The fitdocs CLI shall make connector requests only during `fitdocs connect` and `fitdocs pull`; `index`, `query`, `sync`, `regen`, `load`, `dashboard`, `check`, `history`, `plan`, `derive-benchmarks`, and rendering shall make none, whether or not connectors are configured, and shall keep their existing map-tile behavior unchanged. *(amended by Amendment 8: the connector-request commands are `fitdocs connect`, `fitdocs disconnect` (Amendment 7), `fitdocs pull` and `fitdocs publish --yes`; `fitdocs publish` without `--yes` and `fitdocs publish --targets` make none)*
 2. The fitdocs source shall hold network-capable code in exactly two places — the map-tile fetch and the connector transport — and an automated guard shall fail when any other module reaches for the network.
 3. The connector package shall not depend on rendering, training load, metrics, `.fit` ingestion, or the sync engine, and an automated guard shall enforce it.
 4. Every statement in the shipped code, the README, and the documentation that describes where fitdocs touches the network shall name both the map tiles and the connector commands, and none shall claim the map tiles are the only network access.
@@ -514,3 +514,31 @@ branch; renumbered to 7 because publish-core landed its Amendment 6 first.
   command count rises by one (from sixteen, after publish-core's `fitdocs
   publish`, to seventeen), as the cli.py module docstring's count word pinned by
   `tests/test_cli_skill.py::test_registered_command_count_matches_docstring_opening`.
+
+## Amendment 8 (2026-11-02): an update is retried, publish joins Req 14.1, and the intervals module reads the pull record and the match rule, landed by intervals-publish
+
+`intervals-publish` is the first publish target that makes requests. The
+changes below are recorded here; no criterion is renumbered, and the criteria
+keep their wording except as stated. Existing criteria and approvals are
+preserved word-for-word.
+
+- Requirement 9 criterion 3: the bounded retries cover an update that is safe
+  to repeat. An unmarked update request (`put`, beside `get` and `post`) is
+  repeated at most the bounded number of times like a listing or fetch
+  request; a request marked single-attempt (criterion 9) is still sent
+  exactly once. The transport offers the update method as `put` on the
+  HTTP client, with the same `single_attempt` mark as `post`.
+- Requirement 14 criterion 1: the fitdocs CLI makes connector requests during
+  `fitdocs connect`, `fitdocs disconnect`, `fitdocs pull` and `fitdocs publish --yes`.
+  `fitdocs publish` without `--yes` (the dry run) and `fitdocs publish
+  --targets` make none. The other commands still make none.
+- Allowed Dependencies (design): in the intervals module alone,
+  `fitdocs.connectors.ledger` (the reader of the instance's own pull record,
+  `load_ledger`) and, imported inside the listing-match helper only,
+  `fitdocs.identity.matching` (the activity-identity match rule) are admitted,
+  so importing `fitdocs.connectors` still loads no identity module. Both are
+  listed for `fitdocs.connectors.intervals` in `tests/connectors/test_boundary.py`.
+- Publish codes: a connector target names `PublishCode` and `TARGET_CODES`
+  only through `fitdocs.connectors.protocol`'s re-export (controller ruling
+  R11), never by importing `fitdocs.publish`. The intervals module imports
+  nothing from `fitdocs.publish`.
