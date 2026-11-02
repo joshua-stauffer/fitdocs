@@ -30,6 +30,9 @@ from fitdocs_relay.config import ConfigError, PostgresTarget, RelayConfig, load_
 from fitdocs_relay.contract import (
     ENV_DATABASE_PASSWORD,
     ENV_DATABASE_URL,
+    ENV_ENCRYPTION_KEYS,
+    ENV_STRAVA_CLIENT_SECRET,
+    ENV_STRAVA_WEBHOOK_TOKEN,
     ENV_TOKEN_PEPPER,
 )
 from fitdocs_relay.crypto import Keyring
@@ -37,7 +40,7 @@ from fitdocs_relay.identity import TokenService
 from fitdocs_relay.logs import SecretRedactor
 from fitdocs_relay.outbound import urllib_outbound
 from fitdocs_relay.seam import SeamError
-from fitdocs_relay.serve import database_secrets, run_server
+from fitdocs_relay.serve import database_secrets, run_server, target_secrets
 from fitdocs_relay.storage import MissingPostgresSupport, open_storage
 from fitdocs_relay.storage.interface import (
     RevokeResult,
@@ -106,8 +109,24 @@ def _err_raw(text: str) -> None:
     sys.stderr.write(text)
 
 
+def _environment_target_secrets() -> tuple[str, ...]:
+    """The target secrets as the environment holds them, unvalidated: the client
+    secret, the webhook token, and each `id:key` entry with its key text. This
+    never raises."""
+    found = [
+        os.environ.get(ENV_STRAVA_CLIENT_SECRET, ""),
+        os.environ.get(ENV_STRAVA_WEBHOOK_TOKEN, ""),
+    ]
+    for entry in os.environ.get(ENV_ENCRYPTION_KEYS, "").split(","):
+        entry = entry.strip()
+        if ":" in entry:
+            found += [entry, entry.partition(":")[2]]
+    return tuple(secret for secret in found if secret)
+
+
 def _environment_redactor() -> SecretRedactor:
-    """The token format and the raw pepper and password values, unvalidated.
+    """The token format and the raw pepper, password and target secret values,
+    unvalidated.
 
     A password embedded in the raw database URL is included; a URL that cannot
     be read contributes nothing, and this builder never raises.
@@ -123,7 +142,12 @@ def _environment_redactor() -> SecretRedactor:
             )
     except Exception:  # noqa: BLE001 - a malformed URL must not break error output
         extra = ()
-    return SecretRedactor(os.environ.get(ENV_TOKEN_PEPPER), password, *extra)
+    return SecretRedactor(
+        os.environ.get(ENV_TOKEN_PEPPER),
+        password,
+        *extra,
+        *_environment_target_secrets(),
+    )
 
 
 def _label(text: str) -> str:
@@ -198,7 +222,9 @@ class _Session:
 
 
 def _redactor(config: RelayConfig) -> SecretRedactor:
-    return SecretRedactor(config.pepper, *database_secrets(config))
+    return SecretRedactor(
+        config.pepper, *database_secrets(config), *target_secrets(config)
+    )
 
 
 def _fail(redact: SecretRedactor, message: str, code: int = EXIT_FAILED) -> int:

@@ -17,6 +17,7 @@ from typing import Final
 from fitdocs_relay.strava.api import MAX_ATHLETE_ID
 from fitdocs_relay.strava.custody import Custody
 
+WEBHOOK_PATH: Final = "/strava/webhook"
 MAX_EVENT_BYTES: Final = 64 * 1024
 SUBSCRIBE_MODE: Final = "subscribe"
 CHALLENGE_KEY: Final = "hub.challenge"

@@ -24,6 +24,8 @@ from urllib.parse import quote
 
 import pytest
 from tests.test_cli_strava import STRAVA_COMMANDS
+from tests.test_config_strava import KEY_ONE, TOKEN
+from tests.test_config_strava import env as strava_env
 
 from fitdocs_relay import cli, contract, identity
 from fitdocs_relay.config import PostgresTarget, SqliteTarget
@@ -46,6 +48,8 @@ from fitdocs_relay.storage.migrate import migrate, schema_changes
 
 PEPPER = "planted-pepper-" + "p" * 30
 PASSWORD = "planted-Passw0rd!"
+TARGET_SECRET = "planted-client-secret-" + "s" * 20
+TARGET_TOKEN = TOKEN
 EXPECTED = len(schema_changes("sqlite"))
 TOKEN_LINE = re.compile(r"fdr1_[a-z2-7]{16}_[a-z2-7]{52}\n")
 PRINCIPAL_ID = re.compile(r"prn_[a-z2-7]{16}")
@@ -722,6 +726,49 @@ def test_every_command_but_new_pepper_reports_a_configuration_error_with_exit_tw
         assert run(*argv) == Result(
             2, "", "FITDOCS_RELAY_DATABASE_URL: is required\n"
         ), argv
+
+
+def configured_targets(db_path: Path, monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """The target secrets in the environment: the client secret planted, the
+    rest from the test configuration. Returned as the forms to look for."""
+    for name, value in strava_env(
+        {"FITDOCS_RELAY_STRAVA_CLIENT_SECRET": TARGET_SECRET}
+    ).items():
+        if name not in (ENV_DATABASE_URL, ENV_TOKEN_PEPPER):
+            monkeypatch.setenv(name, value)
+    key_text = KEY_ONE.partition(":")[2]
+    return [TARGET_SECRET, TARGET_TOKEN, KEY_ONE, key_text]
+
+
+def test_a_failing_operator_command_does_not_print_a_target_secret(
+    db_path: Path, run: Callable[..., Result], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    migrated(db_path)
+    secrets = configured_targets(db_path, monkeypatch)
+    assert len(set(secrets)) == 4
+    for secret in secrets:
+        result = run("principal", "delete", secret)
+        assert result.code == 1 and result.out == ""
+        assert result.err.endswith(": [redacted]\n"), result.err
+        assert secret not in result.err
+
+
+def test_a_usage_error_does_not_echo_a_pasted_target_secret(
+    db_path: Path, run: Callable[..., Result], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    secrets = configured_targets(db_path, monkeypatch)
+    for secret in secrets:
+        result = run("principal", "delete", "x", secret)
+        assert result.code == 2 and result.out == ""
+        assert "unrecognized arguments: [redacted]" in result.err
+        assert secret not in result.err
+    # A key list that is not valid still hides what it holds, and a value
+    # that holds no key leaves the output alone.
+    monkeypatch.setenv("FITDOCS_RELAY_ENCRYPTION_KEYS", "k9:not-a-key, x")
+    result = run("principal", "delete", "x", "k9:not-a-key")
+    assert "unrecognized arguments: [redacted]" in result.err
+    result = run("principal", "delete", "x", "x")
+    assert "unrecognized arguments: x" in result.err
 
 
 def test_configuration_errors_name_the_variable_and_never_print_its_value(

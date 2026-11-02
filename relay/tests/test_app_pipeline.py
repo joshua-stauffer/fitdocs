@@ -208,8 +208,8 @@ def test_the_canonical_bytes_of_each_pipeline_answer() -> None:
     assert bytes(answer(RelayCode.OK, {"x": [1, "é"]}).body) == (
         '{"envelope":1,"code":"ok","data":{"x":[1,"é"]}}'.encode()
     )
-    assert bytes(answer(RelayCode.REGISTRATION_STARTED, outcome="sent").body) == (
-        b'{"envelope":1,"code":"registration-started","data":{},"outcome":"sent"}'
+    assert bytes(answer(RelayCode.REGISTRATION_STARTED, outcome="posted").body) == (
+        b'{"envelope":1,"code":"registration-started","data":{},"outcome":"posted"}'
     )
 
 
@@ -525,8 +525,8 @@ def config_for(path: Path) -> RelayConfig:
 
 
 def test_the_route_table_has_the_design_constants() -> None:
-    assert routes.OFFERED_TARGETS == ()
-    assert routes.RESERVED_PREFIXES == ("/v", "/livez", "/readyz", "/x/")
+    assert routes.OFFERED_TARGETS == ("strava",)
+    assert routes.RESERVED_PREFIXES[:4] == ("/v", "/livez", "/readyz", "/x/")
 
 
 def test_startup_computes_readiness_and_shutdown_closes_storage(

@@ -21,11 +21,11 @@ from fitdocs_relay.strava.api import (
 )
 from fitdocs_relay.strava.config import StravaConfig, TargetsConfig
 from fitdocs_relay.strava.custody import Custody
+from fitdocs_relay.strava.webhook import WEBHOOK_PATH
 
 EXIT_OK: Final = 0
 EXIT_FAILED: Final = 1
 
-WEBHOOK_PATH: Final = "/strava/webhook"
 WEBHOOK_TIMEOUT_S: Final = 30.0
 
 MSG_NOT_CONFIGURED: Final = "the Strava target is not configured"

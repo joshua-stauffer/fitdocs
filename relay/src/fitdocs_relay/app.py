@@ -18,7 +18,7 @@ import time
 import uuid
 from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Final
 
 from starlette.applications import Starlette
@@ -29,16 +29,20 @@ from starlette.routing import BaseRoute, Match
 from starlette.types import Message, Receive, Scope, Send
 
 from fitdocs_relay.answers import (
+    SCOPE_BODY_LIMIT,
     SCOPE_CODE,
     SCOPE_FAILURE,
+    SCOPE_OUTCOME,
     SCOPE_TOKEN_ID,
     answer,
 )
 from fitdocs_relay.config import RelayConfig
+from fitdocs_relay.crypto import Keyring
 from fitdocs_relay.identity import TokenService
 from fitdocs_relay.logs import failure_fields, log_event
+from fitdocs_relay.outbound import Outbound, urllib_outbound
 from fitdocs_relay.ratelimit import RateLimiter
-from fitdocs_relay.routes import core_routes, readiness
+from fitdocs_relay.routes import OFFERED_TARGETS, body_limit, core_routes, readiness
 from fitdocs_relay.seam import (
     EXTENSION_ROUTE_PREFIX,
     SEAM_VERSION,
@@ -51,12 +55,21 @@ from fitdocs_relay.seam import (
 )
 from fitdocs_relay.shared.relay_codes import RelayCode
 from fitdocs_relay.shared.relay_envelope import MAX_REQUEST_BYTES, SERVED_ENVELOPES
+from fitdocs_relay.shared.relay_targets import STRAVA
 from fitdocs_relay.storage import open_storage
 from fitdocs_relay.storage.interface import (
     RevokeResult,
     Storage,
     StorageUnreachable,
 )
+from fitdocs_relay.strava.api import StravaApi
+from fitdocs_relay.strava.budget import StravaBudget
+from fitdocs_relay.strava.config import StravaConfig
+from fitdocs_relay.strava.connect import ConnectFlow
+from fitdocs_relay.strava.custody import Custody
+from fitdocs_relay.strava.pages import Operator
+from fitdocs_relay.strava.publish import StravaPublisher
+from fitdocs_relay.strava.webhook import Webhook
 
 _LOGGER = logging.getLogger("fitdocs_relay.app")
 _VERSION_PREFIX: Final = re.compile(r"/v([0-9]+)(?:/|$)")
@@ -84,6 +97,20 @@ _MSG_VERSION: Final = (
 )
 
 
+@dataclass(frozen=True)
+class StravaServices:
+    """The Strava target's parts, built when its configuration is present."""
+
+    config: StravaConfig = field(repr=False)
+    api: StravaApi
+    budget: StravaBudget
+    custody: Custody
+    publisher: StravaPublisher
+    connect: ConnectFlow
+    webhook: Webhook
+    operator: Operator
+
+
 @dataclass
 class RelayServices:
     storage: Storage
@@ -92,6 +119,8 @@ class RelayServices:
     clock: Callable[[], int]
     registration: RegistrationProvider | None
     ready: bool
+    targets: tuple[str, ...] = ()
+    strava: StravaServices | None = None
 
 
 class _TokenIssuance:
@@ -228,14 +257,19 @@ def _relay_failure(request: Request, exc: Exception) -> Response:
     return answer(RelayCode.RELAY_FAILURE)
 
 
-async def _admit(scope: Scope, receive: Receive) -> Response | Receive:
+async def _admit(
+    scope: Scope, receive: Receive, *, per_route_limits: bool
+) -> Response | Receive:
     """The body limit, then the version prefix: the answer to send, or a
-    `receive` that replays the body already read."""
+    `receive` that replays the body already read. The limit is the route's
+    when the target routes are served, else the default; it is left in the
+    scope for the request reader."""
+    limit = body_limit(scope["path"]) if per_route_limits else MAX_REQUEST_BYTES
+    scope[SCOPE_BODY_LIMIT] = limit
     declared = dict(scope["headers"]).get(b"content-length", b"")
     digits = declared.lstrip(b"0")
     if declared.isdigit() and (
-        len(digits) > len(str(MAX_REQUEST_BYTES))
-        or int(digits or b"0") > MAX_REQUEST_BYTES
+        len(digits) > len(str(limit)) or int(digits or b"0") > limit
     ):
         return answer(RelayCode.REQUEST_TOO_LARGE)
     chunks: list[bytes] = []
@@ -246,7 +280,7 @@ async def _admit(scope: Scope, receive: Receive) -> Response | Receive:
             return answer(RelayCode.REQUEST_MALFORMED)  # the client went away
         chunk: bytes = message.get("body", b"")
         size += len(chunk)
-        if size > MAX_REQUEST_BYTES:
+        if size > limit:
             return answer(RelayCode.REQUEST_TOO_LARGE)
         chunks.append(chunk)
         if not message.get("more_body", False):
@@ -274,6 +308,8 @@ class RelayApp(Starlette):
 
     # Whether the store is ready to serve; the factory points it at the services.
     is_ready: Callable[[], bool] = staticmethod(lambda: False)
+    # Whether `ROUTE_BODY_LIMITS` applies (the target routes are served).
+    per_route_limits: bool = False
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -290,7 +326,9 @@ class RelayApp(Starlette):
             await send(message)
 
         try:
-            admitted = await _admit(scope, receive)
+            admitted = await _admit(
+                scope, receive, per_route_limits=self.per_route_limits
+            )
             if isinstance(admitted, Response):
                 await admitted(scope, receive, watched_send)
             elif (
@@ -338,6 +376,8 @@ class RelayApp(Starlette):
         }
         if SCOPE_TOKEN_ID in scope:
             fields["token_id"] = scope[SCOPE_TOKEN_ID]
+        if SCOPE_OUTCOME in scope:
+            fields["outcome"] = scope[SCOPE_OUTCOME]
         failure = scope.get(SCOPE_FAILURE)
         if failure is not None:
             fields.update(failure)
@@ -369,11 +409,112 @@ def build_app(services: RelayServices, routes: Sequence[BaseRoute]) -> RelayApp:
     )
     app.router.redirect_slashes = False
     app.is_ready = lambda: services.ready
+    app.per_route_limits = services.strava is not None
     return app
 
 
 def _wall_clock() -> int:
     return int(time.time())
+
+
+def _build_strava(
+    config: RelayConfig,
+    store: Storage,
+    tokens: TokenService,
+    *,
+    clock: Callable[[], int],
+    outbound: Outbound,
+    monotonic: Callable[[], float],
+    sleep: Callable[[float], None],
+) -> StravaServices | None:
+    targets, strava = config.targets, config.strava
+    if targets is None or strava is None:
+        return None
+    api = StravaApi(strava, outbound=outbound)
+    budget = StravaBudget(store, strava.limits, clock=clock)
+    custody = Custody(
+        store,
+        Keyring(targets.keys),
+        api,
+        budget,
+        pepper=config.pepper,
+        clock=clock,
+        monotonic=monotonic,
+        sleep=sleep,
+    )
+    return StravaServices(
+        config=strava,
+        api=api,
+        budget=budget,
+        custody=custody,
+        publisher=StravaPublisher(
+            store,
+            custody,
+            api,
+            budget,
+            strava,
+            clock=clock,
+            monotonic=monotonic,
+            sleep=sleep,
+        ),
+        connect=ConnectFlow(
+            store,
+            tokens,
+            custody,
+            api,
+            budget,
+            public_url=targets.public_url,
+            clock=clock,
+        ),
+        webhook=Webhook(custody, secret=strava.webhook_token),
+        operator=Operator(
+            name=targets.operator_name,
+            support_contact=targets.support_contact,
+            policy_url=targets.privacy_policy_url,
+        ),
+    )
+
+
+def make_services(
+    config: RelayConfig,
+    store: Storage,
+    *,
+    clock: Callable[[], int],
+    outbound: Outbound | None = None,
+    monotonic: Callable[[], float] | None = None,
+    sleep: Callable[[float], None] | None = None,
+) -> RelayServices:
+    """The services of one app: the core ones, and the Strava ones when the
+    target is configured (`targets` then lists it)."""
+    tokens = TokenService(store, pepper=config.pepper, clock=clock)
+    strava = _build_strava(
+        config,
+        store,
+        tokens,
+        clock=clock,
+        outbound=urllib_outbound if outbound is None else outbound,
+        monotonic=time.monotonic if monotonic is None else monotonic,
+        sleep=time.sleep if sleep is None else sleep,
+    )
+    configured = {STRAVA: strava is not None}
+    return RelayServices(
+        storage=store,
+        tokens=tokens,
+        limiter=RateLimiter(
+            store,
+            pepper=config.pepper,
+            clock=clock,
+            token_limit=config.token_limit_per_minute,
+            client_limit=config.client_limit_per_minute,
+        ),
+        clock=clock,
+        registration=None,
+        ready=False,
+        targets=tuple(
+            target for target in OFFERED_TARGETS if configured.get(target, False)
+        ),
+        strava=strava,
+    )
 
 
 def create_app(
@@ -382,24 +523,21 @@ def create_app(
     extensions: Sequence[RelayExtension] = (),
     storage: Storage | None = None,
     clock: Callable[[], int] | None = None,
+    outbound: Outbound | None = None,
+    monotonic: Callable[[], float] | None = None,
+    sleep: Callable[[float], None] | None = None,
 ) -> Starlette:
     store = open_storage(config.database) if storage is None else storage
     now = _wall_clock if clock is None else clock
-    services = RelayServices(
-        storage=store,
-        tokens=TokenService(store, pepper=config.pepper, clock=now),
-        limiter=RateLimiter(
-            store,
-            pepper=config.pepper,
-            clock=now,
-            token_limit=config.token_limit_per_minute,
-            client_limit=config.client_limit_per_minute,
-        ),
-        clock=now,
-        registration=None,
-        ready=False,
-    )
     try:
+        services = make_services(
+            config,
+            store,
+            clock=now,
+            outbound=outbound,
+            monotonic=monotonic,
+            sleep=sleep,
+        )
         extension_routes = _install_extensions(services, extensions)
     except BaseException:
         if storage is None:

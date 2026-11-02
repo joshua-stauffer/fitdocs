@@ -18,8 +18,8 @@ from typing import Any
 import pytest
 from starlette.testclient import TestClient
 from tests.conformance.state_support import Target, raw
+from tests.test_config_strava import env as strava_env
 
-from fitdocs_relay import routes as routes_module
 from fitdocs_relay.app import create_app
 from fitdocs_relay.config import RelayConfig, load_config
 from fitdocs_relay.identity import MintedToken, TokenService
@@ -123,17 +123,22 @@ def make_relay(
     database_target: Target, open_full_storage: Callable[[], Storage]
 ) -> Callable[..., Relay]:
     def make(
-        *, token_limit: int | None = None, client_limit: int | None = None
+        *,
+        token_limit: int | None = None,
+        client_limit: int | None = None,
+        strava: bool = False,
     ) -> Relay:
         store = open_full_storage()
         clock = Clock()
         # The limits not named here are the ones load_config defaults to.
-        loaded = load_config(
-            {
-                "FITDOCS_RELAY_DATABASE_URL": "sqlite:///unused.db",
-                "FITDOCS_RELAY_TOKEN_PEPPER": PEPPER,
-            }
-        )
+        environ = {
+            "FITDOCS_RELAY_DATABASE_URL": "sqlite:///unused.db",
+            "FITDOCS_RELAY_TOKEN_PEPPER": PEPPER,
+        }
+        if strava:
+            environ |= strava_env()
+            environ["FITDOCS_RELAY_TOKEN_PEPPER"] = PEPPER
+        loaded = load_config(environ)
         config = replace(
             loaded,
             database=database_target,
@@ -174,14 +179,14 @@ def test_capabilities_with_no_target_and_registration_false(relay: Relay) -> Non
 
 
 def test_capabilities_round_trip_through_the_shared_parser(
-    relay: Relay, monkeypatch: pytest.MonkeyPatch
+    make_relay: Callable[..., Relay],
 ) -> None:
-    monkeypatch.setattr(routes_module, "OFFERED_TARGETS", ("zeta", "alpha-2"))
+    relay = make_relay(token_limit=HIGH, client_limit=HIGH, strava=True)
     with relay.client() as client:
         sent = client.get("/v1/capabilities")
     decoded = decode_answer(sent.content)
     assert parse_capabilities(decoded.data) == CapabilitiesData(
-        envelopes=SERVED_ENVELOPES, registration=False, targets=("zeta", "alpha-2")
+        envelopes=SERVED_ENVELOPES, registration=False, targets=("strava",)
     )
 
 

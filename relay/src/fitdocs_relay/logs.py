@@ -41,9 +41,10 @@ REQUEST_FIELDS: Final[tuple[str, ...]] = (
     "code",
     "duration_ms",
     "token_id",
+    "outcome",
 )
 _STRING_FIELDS: Final = frozenset(
-    {"event", "request_id", "method", "route", "code", "token_id"}
+    {"event", "request_id", "method", "route", "code", "token_id", "outcome"}
 )
 FAILURE_FIELDS: Final[tuple[str, ...]] = ("error_type", "frames")
 

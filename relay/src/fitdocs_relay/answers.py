@@ -16,6 +16,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import Receive, Scope, Send
 
+from .shared.outcomes import PublishCode
 from .shared.relay_codes import RELAY_CODES, RelayCode
 from .shared.relay_envelope import (
     MAX_REQUEST_BYTES,
@@ -31,9 +32,16 @@ from .shared.relay_envelope import (
 SCOPE_CODE: Final = "fitdocs_relay.code"
 SCOPE_TOKEN_ID: Final = "fitdocs_relay.token_id"
 SCOPE_FAILURE: Final = "fitdocs_relay.failure"
+# The outcome an answer carried, for the request log; and the body bound the
+# pipeline admitted this request under, which the reader applies to the codec.
+SCOPE_OUTCOME: Final = "fitdocs_relay.outcome"
+SCOPE_BODY_LIMIT: Final = "fitdocs_relay.body_limit"
+
+OUTCOMES: Final = frozenset(code.value for code in PublishCode)
 
 _BEARER: Final = "bearer"
 _MSG_NO_STATUS: Final = "The code has no HTTP status."
+_MSG_OUTCOME: Final = "An outcome is a member of the pinned publish vocabulary."
 _MSG_WAIT: Final = "A retry wait is a non-negative count on a rate-limited answer."
 
 
@@ -43,13 +51,21 @@ class EnvelopeResponse(Response):
     media_type = "application/json"
 
     def __init__(
-        self, code: RelayCode, body: bytes, status: int, headers: Mapping[str, str]
+        self,
+        code: RelayCode,
+        body: bytes,
+        status: int,
+        headers: Mapping[str, str],
+        outcome: str | None = None,
     ) -> None:
         super().__init__(content=body, status_code=status, headers=dict(headers))
         self.code = code
+        self.outcome = outcome
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         scope[SCOPE_CODE] = self.code.value
+        if self.outcome is not None:
+            scope[SCOPE_OUTCOME] = self.outcome
         await super().__call__(scope, receive, send)
 
 
@@ -61,7 +77,10 @@ def answer(
     retry_after_s: int | None = None,
 ) -> Response:
     """The envelope answer for `code`: its status, `no-store`, and for
-    `rate-limited` the wait, in the data and in `Retry-After`."""
+    `rate-limited` the wait, in the data and in `Retry-After`. An outcome that
+    is not a member of the pinned publish vocabulary raises `ValueError`."""
+    if outcome is not None and outcome not in OUTCOMES:
+        raise ValueError(_MSG_OUTCOME)
     fields: dict[str, object] = {} if data is None else dict(data)
     headers = {"Cache-Control": "no-store"}
     if "retry_after_s" in fields:
@@ -80,7 +99,7 @@ def answer(
     status = RELAY_CODES[code].http_status
     if status is None:
         raise EnvelopeError(_MSG_NO_STATUS)
-    return EnvelopeResponse(code, body, status, headers)
+    return EnvelopeResponse(code, body, status, headers, outcome)
 
 
 def note_token_id(request: Request, token_id: str) -> None:
@@ -112,13 +131,15 @@ async def read_request(
 ) -> dict[str, object] | Response:
     """The request's fields, or the answer to send instead.
 
-    A body over the limit is `request-too-large`; anything the strict codec
-    refuses is `request-malformed`. Nothing is read from the fields here.
+    A body over the route's limit (the bound the pipeline admitted the request
+    under) is `request-too-large`; anything the strict codec refuses is
+    `request-malformed`. Nothing is read from the fields here.
     """
+    limit: int = request.scope.get(SCOPE_BODY_LIMIT, MAX_REQUEST_BYTES)
     raw = await request.body()
-    if len(raw) > MAX_REQUEST_BYTES:
+    if len(raw) > limit:
         return answer(RelayCode.REQUEST_TOO_LARGE)
     try:
-        return decode_request(raw, required=required, allowed=allowed)
+        return decode_request(raw, required=required, allowed=allowed, max_bytes=limit)
     except EnvelopeError:
         return answer(RelayCode.REQUEST_MALFORMED)

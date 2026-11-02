@@ -14,11 +14,13 @@ test. Subprocess tests must build their environment without them.
 
 from __future__ import annotations
 
+import ipaddress
 import os
+import socket
 import uuid
 from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 import pytest
 
@@ -82,6 +84,106 @@ def _isolate_relay_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     """No `FITDOCS_RELAY_*` name reaches a test, so `load_config` sees only its own."""
     for name in [n for n in os.environ if n.startswith(ENV_PREFIX)]:
         monkeypatch.delenv(name)
+
+
+class NetworkRefused(AssertionError):
+    """A test tried to reach a host that is not this machine."""
+
+
+def _is_local_host(host: object) -> bool:
+    if host is None or host == "localhost":
+        return True
+    if isinstance(host, bytes):
+        host = host.decode("ascii", "replace")
+    if not isinstance(host, str):
+        return False
+    try:
+        return ipaddress.ip_address(host.split("%", 1)[0]).is_loopback
+    except ValueError:
+        return False
+
+
+def _is_local_address(address: object) -> bool:
+    """A Unix-socket path, or a (host, port, ...) tuple for a loopback host."""
+    if isinstance(address, str | bytes):
+        return True
+    return isinstance(address, tuple) and bool(address) and _is_local_host(address[0])
+
+
+@pytest.fixture(autouse=True)
+def network_attempts(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[str]]:
+    """Refuse a connection or name lookup that is not local.
+
+    Patched: `socket.create_connection`, `socket.socket.connect` and
+    `connect_ex` (an address that is not loopback is refused there, whether
+    given by name or by address), and the lookups `socket.getaddrinfo`,
+    `gethostbyname`, `gethostbyname_ex` and `getnameinfo` (a host that is not
+    loopback is refused there). A C client library such as libpq does not pass
+    through them. Each refusal is recorded; a test that provokes one on
+    purpose must clear the list, and any other test fails at teardown even
+    when the code under test swallowed the exception.
+    """
+    attempts: list[str] = []
+
+    def refuse(what: str) -> NetworkRefused:
+        attempts.append(what)
+        return NetworkRefused(f"the test suite may not reach a non-local host: {what}")
+
+    real_create = socket.create_connection
+    real_connect = socket.socket.connect
+    real_connect_ex = socket.socket.connect_ex
+    real_getaddrinfo = socket.getaddrinfo
+    real_gethostbyname = socket.gethostbyname
+    real_gethostbyname_ex = socket.gethostbyname_ex
+    real_getnameinfo = socket.getnameinfo
+
+    def create_connection(address: Any, *args: Any, **kwargs: Any) -> Any:
+        if not _is_local_address(address):
+            raise refuse("create_connection")
+        return real_create(address, *args, **kwargs)
+
+    def connect(self: socket.socket, address: Any) -> Any:
+        if not _is_local_address(address):
+            raise refuse("connect")
+        return real_connect(self, address)
+
+    def connect_ex(self: socket.socket, address: Any) -> Any:
+        if not _is_local_address(address):
+            raise refuse("connect_ex")
+        return real_connect_ex(self, address)
+
+    def getaddrinfo(host: Any, *args: Any, **kwargs: Any) -> Any:
+        if isinstance(host, str) and host.lower().rstrip(".").endswith(".invalid"):
+            # Reserved never to resolve: answer as a resolver would, off-machine.
+            raise socket.gaierror(socket.EAI_NONAME, "name not known")
+        if not _is_local_host(host):
+            raise refuse("getaddrinfo")
+        return real_getaddrinfo(host, *args, **kwargs)
+
+    def gethostbyname(host: str) -> Any:
+        if not _is_local_host(host):
+            raise refuse("gethostbyname")
+        return real_gethostbyname(host)
+
+    def gethostbyname_ex(host: str) -> Any:
+        if not _is_local_host(host):
+            raise refuse("gethostbyname_ex")
+        return real_gethostbyname_ex(host)
+
+    def getnameinfo(sockaddr: Any, flags: int) -> Any:
+        if not _is_local_address(sockaddr):
+            raise refuse("getnameinfo")
+        return real_getnameinfo(sockaddr, flags)
+
+    monkeypatch.setattr(socket, "create_connection", create_connection)
+    monkeypatch.setattr(socket.socket, "connect", connect)
+    monkeypatch.setattr(socket.socket, "connect_ex", connect_ex)
+    monkeypatch.setattr(socket, "getaddrinfo", getaddrinfo)
+    monkeypatch.setattr(socket, "gethostbyname", gethostbyname)
+    monkeypatch.setattr(socket, "gethostbyname_ex", gethostbyname_ex)
+    monkeypatch.setattr(socket, "getnameinfo", getnameinfo)
+    yield attempts
+    assert attempts == [], f"the code under test reached for the network: {attempts}"
 
 
 @pytest.fixture

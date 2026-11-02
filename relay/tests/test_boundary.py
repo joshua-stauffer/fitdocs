@@ -18,7 +18,9 @@ THIRD_PARTY_PLACEMENT: dict[str, frozenset[str]] = {
     "sqlite3": frozenset({"storage.sqlite"}),
     "psycopg": frozenset({"storage.postgres"}),
     "psycopg_pool": frozenset({"storage.postgres"}),
-    "starlette": frozenset({"answers", "routes", "app", "seam", "serve"}),
+    "starlette": frozenset(
+        {"answers", "routes", "app", "seam", "serve", "strava.routes"}
+    ),
     "uvicorn": frozenset({"serve"}),
     "cryptography": frozenset({"crypto"}),
 }
@@ -310,6 +312,7 @@ def test_pages_and_policy_are_standard_library_leaves_at_run_time() -> None:
             "storage.sqlite:1 imports starlette",
         ),
         ("app.py", "import uvicorn\n", "app:1 imports uvicorn"),
+        ("strava/api.py", "import starlette\n", "strava.api:1 imports starlette"),
         ("identity.py", "import cryptography\n", "identity:1 imports cryptography"),
         (
             "storage/sqlite.py",
@@ -352,6 +355,7 @@ def test_placement_rules_reject_a_forbidden_import(
         ("app.py", "from starlette.applications import Starlette\n"),
         ("seam.py", "import starlette\n"),
         ("serve.py", "import starlette\nimport uvicorn\n"),
+        ("strava/routes.py", "from starlette.routing import Route\n"),
         ("crypto.py", "from cryptography.exceptions import InvalidTag\n"),
         (
             "identity.py",
@@ -418,7 +422,9 @@ def test_the_third_party_table_names_exactly_the_design_placements() -> None:
         "sqlite3": frozenset({"storage.sqlite"}),
         "psycopg": frozenset({"storage.postgres"}),
         "psycopg_pool": frozenset({"storage.postgres"}),
-        "starlette": frozenset({"answers", "routes", "app", "seam", "serve"}),
+        "starlette": frozenset(
+            {"answers", "routes", "app", "seam", "serve", "strava.routes"}
+        ),
         "uvicorn": frozenset({"serve"}),
         "cryptography": frozenset({"crypto"}),
     }

@@ -243,6 +243,8 @@ DESIGNED_APP: list[tuple[str, Any]] = [
                 "clock: Callable[[], int]",
                 "registration: RegistrationProvider | None",
                 "ready: bool",
+                "targets: tuple[str, ...] = ()",
+                "strava: StravaServices | None = None",
             ],
         },
     ),
@@ -250,7 +252,10 @@ DESIGNED_APP: list[tuple[str, Any]] = [
         "create_app",
         "def create_app(config: RelayConfig, *,"
         " extensions: Sequence[RelayExtension]=(),"
-        " storage: Storage | None=None, clock: Callable[[], int] | None=None)"
+        " storage: Storage | None=None, clock: Callable[[], int] | None=None,"
+        " outbound: Outbound | None=None,"
+        " monotonic: Callable[[], float] | None=None,"
+        " sleep: Callable[[float], None] | None=None)"
         " -> Starlette",
     ),
 ]

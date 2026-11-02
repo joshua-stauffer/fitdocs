@@ -36,6 +36,7 @@ from fitdocs_relay.seam import (
 )
 from fitdocs_relay.shared.relay_codes import RelayCode
 from fitdocs_relay.shared.relay_envelope import (
+    MAX_REQUEST_BYTES,
     ROUTE_CAPABILITIES,
     ROUTE_LIVEZ,
     ROUTE_READYZ,
@@ -50,6 +51,12 @@ from fitdocs_relay.shared.relay_envelope import (
     parse_retry_after,
     parse_started,
 )
+from fitdocs_relay.shared.relay_targets import (
+    ACTION_UPLOAD,
+    MAX_UPLOAD_REQUEST_BYTES,
+    STRAVA,
+    target_route,
+)
 from fitdocs_relay.storage.interface import (
     RateDecision,
     RevokeResult,
@@ -60,8 +67,29 @@ from fitdocs_relay.storage.interface import (
 if TYPE_CHECKING:
     from fitdocs_relay.app import RelayServices
 
-OFFERED_TARGETS: tuple[str, ...] = ()  # later specs append target ids here
-RESERVED_PREFIXES: Final = ("/v", "/livez", "/readyz", "/x/")
+# The targets this build can serve; `RelayServices.targets` is those whose
+# configuration is present, and only those are listed or routed.
+OFFERED_TARGETS: Final[tuple[str, ...]] = (STRAVA,)
+RESERVED_PREFIXES: Final = (
+    "/v",
+    "/livez",
+    "/readyz",
+    "/x/",
+    "/connect/",
+    "/strava/",
+    "/go/",
+    "/privacy",
+    "/robots.txt",
+)
+# A route absent from this table is read under `MAX_REQUEST_BYTES`.
+ROUTE_BODY_LIMITS: Final[dict[str, int]] = {
+    target_route(STRAVA, ACTION_UPLOAD): MAX_UPLOAD_REQUEST_BYTES
+}
+
+
+def body_limit(path: str) -> int:
+    """The most bytes a request body to `path` may carry."""
+    return ROUTE_BODY_LIMITS.get(path, MAX_REQUEST_BYTES)
 
 
 def readiness(storage: Storage) -> Response:
@@ -203,7 +231,7 @@ def core_routes(services: RelayServices) -> list[BaseRoute]:
             {
                 "envelopes": list(SERVED_ENVELOPES),
                 "registration": services.registration is not None,
-                "targets": list(OFFERED_TARGETS),
+                "targets": list(services.targets),
             },
         )
 

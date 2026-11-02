@@ -8,6 +8,7 @@ uvicorn is imported here and nowhere else in the relay.
 
 from __future__ import annotations
 
+import base64
 import logging
 import signal
 from collections.abc import Sequence
@@ -79,6 +80,20 @@ def database_secrets(config: RelayConfig) -> tuple[str, ...]:
     return tuple(dict.fromkeys(forms))
 
 
+def target_secrets(config: RelayConfig) -> tuple[str, ...]:
+    """The configured target's secrets the log filter must redact: the client
+    secret, the webhook secret, and each encryption key as its unpadded
+    base64url text and as the `id:key` entry it was configured as."""
+    found: list[str] = []
+    if config.strava is not None:
+        found += [config.strava.client_secret, config.strava.webhook_token]
+    if config.targets is not None:
+        for key in config.targets.keys:
+            text = base64.urlsafe_b64encode(key.material).decode("ascii").rstrip("=")
+            found += [text, f"{key.key_id}:{text}"]
+    return tuple(dict.fromkeys(found))
+
+
 def run_server(
     config: RelayConfig, extensions: Sequence[RelayExtension] | None = None
 ) -> int:
@@ -91,7 +106,7 @@ def run_server(
     configure_logging(
         pepper=config.pepper,
         password=None,
-        extra_secrets=secrets,
+        extra_secrets=(*secrets, *target_secrets(config)),
         level=config.log_level.upper(),
     )
 
