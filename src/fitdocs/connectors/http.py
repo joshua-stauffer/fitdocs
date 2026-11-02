@@ -20,6 +20,9 @@ body -- where ``target`` names only the scheme, host and path (Req 10.4),
 never the query string, any fragment, or userinfo, and is replaced by a
 fixed marker entirely when the request's URL is itself secret.
 
+A request's method is one of three: ``GET`` (a read), ``POST`` (a create or
+other non-idempotent write) and ``PUT`` (an idempotent update).
+
 :class:`HttpClient` is the seam every connector calls through. It always
 composes and sends the one fitdocs User-Agent (:func:`fitdocs.version.user_agent`),
 overriding whatever the caller supplied -- case-insensitively -- (Req 9.1),
@@ -98,7 +101,7 @@ class HttpRequest:
     the transport exactly once, in either mode, whatever the status or
     network failure (publish-core Req 10.1, 10.2)."""
 
-    method: Literal["GET", "POST"]
+    method: Literal["GET", "POST", "PUT"]
     url: str
     headers: Mapping[str, str] = field(default_factory=dict)
     secret_headers: Mapping[str, Secret] = field(default_factory=dict)
@@ -350,6 +353,26 @@ class HttpClient:
         return self.send(
             HttpRequest(
                 method="POST",
+                url=url,
+                headers=headers or {},
+                secret_headers=secret_headers or {},
+                body=body,
+                single_attempt=single_attempt,
+            )
+        )
+
+    def put(
+        self,
+        url: str,
+        *,
+        body: bytes,
+        headers: Mapping[str, str] | None = None,
+        secret_headers: Mapping[str, Secret] | None = None,
+        single_attempt: bool = False,
+    ) -> HttpResponse:
+        return self.send(
+            HttpRequest(
+                method="PUT",
                 url=url,
                 headers=headers or {},
                 secret_headers=secret_headers or {},
