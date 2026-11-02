@@ -33,7 +33,8 @@ dependencies and is never part of the `fitdocs` release. It keeps one
 database, SQLite by default and PostgreSQL through an extra; the `fitdocs` CLI
 never imports it. The two sides share only the standard-library-only modules
 listed in `SHARED_MODULES` in `scripts/sync_relay_shared.py` (today
-`relay_codes` and `relay_envelope`), which the relay carries as pinned copies
+`relay_codes`, `relay_envelope`, `publish.outcomes`, `relay_targets` and
+`identity.strict`), which the relay carries as pinned copies
 under `relay/src/fitdocs_relay/shared/` that a cross-check test keeps
 identical to their originals in the `fitdocs` package. The relay's deploy
 contract, wire envelope (client-facing) and wrapper seam are versioned; the
@@ -80,7 +81,11 @@ a time); every other command — `sync`, `regen`,
 rendering — makes no connector request, whether or not connectors are
 configured, and keeps its existing map-tile behavior (rendering a map may fetch missing
 basemap tiles unless tile requests are disabled). `fitdocs publish` without
-`--yes` and `fitdocs publish --targets` make none. Both of the package's
+`--yes` and `fitdocs publish --targets` make none. For a Strava instance,
+`fitdocs connect` makes one connect-start request and one poll per stated
+interval to its bound relay, `fitdocs disconnect` makes one disconnect
+request, and `fitdocs publish --yes` makes at most two requests per page; no
+fitdocs command contacts Strava. Both of the package's
 network paths go through the standard library's `urllib` only, sending the one composed
 fitdocs User-Agent; connectors add no runtime dependency (beyond the
 standard library they use only the already-required `tomli_w`). `fitdocs

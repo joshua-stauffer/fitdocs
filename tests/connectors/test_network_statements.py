@@ -930,7 +930,8 @@ def test_steering_publishes_the_relay_server_and_its_network_calls() -> None:
     assert "the `fitdocs` CLI never imports it." in flat_architecture
     assert (
         "listed in `SHARED_MODULES` in `scripts/sync_relay_shared.py` (today "
-        "`relay_codes` and `relay_envelope`), which the relay carries as pinned "
+        "`relay_codes`, `relay_envelope`, `publish.outcomes`, `relay_targets` "
+        "and `identity.strict`), which the relay carries as pinned "
         "copies under `relay/src/fitdocs_relay/shared/` that a cross-check test "
         "keeps identical to their originals in the `fitdocs` package."
     ) in flat_architecture
@@ -948,6 +949,13 @@ def test_steering_publishes_the_relay_server_and_its_network_calls() -> None:
         "Network-capable code in the `fitdocs` package lives in exactly two places"
     ) in flat_network
     assert "Both of the package's network paths go through" in flat_network
+    assert (
+        "For a Strava instance, `fitdocs connect` makes one connect-start "
+        "request and one poll per stated interval to its bound relay, "
+        "`fitdocs disconnect` makes one disconnect request, and `fitdocs "
+        "publish --yes` makes at most two requests per page; no fitdocs "
+        "command contacts Strava."
+    ) in flat_network
     assert (
         "`fitdocs connect` (one authentication call per attempt; for a "
         "registering relay instance, a capabilities read, a registration start "
@@ -979,9 +987,16 @@ def test_steering_publishes_the_relay_server_and_its_network_calls() -> None:
     ) in flat_structure
     assert (
         "listed in `SHARED_MODULES` in `scripts/sync_relay_shared.py` (today "
-        "`relay_codes` and `relay_envelope`) import nothing else from the "
-        "package: `relay_codes` imports only the standard library, and "
-        "`relay_envelope` only the standard library and `relay_codes`."
+        "`relay_codes`, `relay_envelope`, `publish.outcomes`, `relay_targets` "
+        "and `identity.strict`) import nothing else from the package: "
+        "`relay_codes`, `publish.outcomes` and `identity.strict` import only "
+        "the standard library, `relay_envelope` only the standard library and "
+        "`relay_codes`, and `relay_targets` only the standard library and "
+        "`relay_envelope`."
+    ) in flat_structure
+    assert (
+        "`identity.strict` (the strict tier of the match rule) imports only the "
+        "standard library, and the relay runs a pinned copy of it."
     ) in flat_structure
 
 

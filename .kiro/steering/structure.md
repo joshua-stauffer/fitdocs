@@ -92,9 +92,13 @@ markdown; fixture `.fit` files under `tests/fixtures/`.
   `publish.request`; no other `connectors` module imports `publish`. And
   `publish.targets` joins `cli` among what imports `connectors`. The shared
   modules listed in `SHARED_MODULES` in `scripts/sync_relay_shared.py`
-  (today `relay_codes` and `relay_envelope`) import nothing else from the
-  package: `relay_codes` imports only the standard library, and
-  `relay_envelope` only the standard library and `relay_codes`.
+  (today `relay_codes`, `relay_envelope`, `publish.outcomes`,
+  `relay_targets` and `identity.strict`) import nothing else from the
+  package: `relay_codes`, `publish.outcomes` and `identity.strict` import only
+  the standard library, `relay_envelope` only the standard library and
+  `relay_codes`, and `relay_targets` only the standard library and
+  `relay_envelope`. `identity.strict` (the strict tier of the match rule)
+  imports only the standard library, and the relay runs a pinned copy of it.
   The intervals connector (`connectors.intervals`) also imports
   activity-identity's match rule (`identity.matching`) on its publish path only,
   inside its listing-match helper, and names publish codes only through the
