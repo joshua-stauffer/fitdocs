@@ -808,7 +808,7 @@ def _script_everything(
         (422, Failure.INVALID),
         (429, Failure.LIMITED),
         (503, Failure.SERVER),
-        (302, Failure.INVALID),
+        (302, Failure.SERVER),  # a redirect is transient (3.5 ruling B)
     ],
 )
 def test_every_call_maps_status_through_classify(
