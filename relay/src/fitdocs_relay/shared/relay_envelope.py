@@ -255,14 +255,20 @@ def decode_answer(raw: bytes) -> Answer:
 # --------------------------------------------------------------------------- #
 
 
-def encode_request(fields: Mapping[str, object]) -> bytes:
-    return _dump(dict(fields), MAX_REQUEST_BYTES)
+def encode_request(
+    fields: Mapping[str, object], *, max_bytes: int = MAX_REQUEST_BYTES
+) -> bytes:
+    return _dump(dict(fields), max_bytes)
 
 
 def decode_request(
-    raw: bytes, *, required: frozenset[str], allowed: frozenset[str]
+    raw: bytes,
+    *,
+    required: frozenset[str],
+    allowed: frozenset[str],
+    max_bytes: int = MAX_REQUEST_BYTES,
 ) -> dict[str, object]:
-    body = _load_object(raw, MAX_REQUEST_BYTES)
+    body = _load_object(raw, max_bytes)
     keys = body.keys()
     if not required <= keys or not keys <= allowed:
         raise EnvelopeError(_MSG_REQUEST)

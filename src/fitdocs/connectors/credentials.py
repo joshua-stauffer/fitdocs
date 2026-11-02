@@ -24,8 +24,9 @@ prompt, log the clock, or interpret a connector's own field names.
 uses: it builds a :class:`ResolvedCredentials` (a
 :class:`fitdocs.connectors.protocol.CredentialAccess`) for one instance,
 applying the auth-style rules design.md states -- ``NONE`` has no values,
-``API_KEY`` (and ``RELAY_TOKEN``, resolved identically) prefers a non-empty
-environment variable over the stored value per field and reports which field
+``API_KEY`` (and ``RELAY_TOKEN`` and ``OAUTH_BROWSER``, resolved
+identically) prefers a non-empty environment variable over the stored
+value per field and reports which field
 and variable are missing when neither is set, ``LOGIN`` reads only the store
 (an environment override could not be written back for a rotating token) and
 its :meth:`~ResolvedCredentials.replace` persists a new token set before
@@ -412,9 +413,10 @@ def resolve_credentials(
     field, a non-empty environment variable wins over the stored value; a
     field with neither raises :class:`NotConnectedError` naming
     ``fitdocs connect <instance_name>`` and every missing variable.
-    ``RELAY_TOKEN`` -> resolved exactly like ``API_KEY``: the same per-field
-    environment override (``FITDOCS_CONNECTOR_<INSTANCE>_TOKEN`` for its
-    ``token`` field), the same store fallback and the same errors.
+    ``RELAY_TOKEN`` and ``OAUTH_BROWSER`` -> resolved exactly like ``API_KEY``:
+    the same per-field environment override
+    (``FITDOCS_CONNECTOR_<INSTANCE>_TOKEN`` for its ``token`` field), the same
+    store fallback and the same errors.
     ``LOGIN`` -> stored values only, no environment override. Each of these styles
     raises :class:`NotConnectedError` when the stored credentials were
     issued for a different connector (Req 4.9). Every value returned is
@@ -425,7 +427,11 @@ def resolve_credentials(
     if auth_style is AuthStyle.NONE:
         return _NoAuthCredentials()
 
-    if auth_style is AuthStyle.API_KEY or auth_style is AuthStyle.RELAY_TOKEN:
+    if auth_style in (
+        AuthStyle.API_KEY,
+        AuthStyle.RELAY_TOKEN,
+        AuthStyle.OAUTH_BROWSER,
+    ):
         stored = store.load(instance_name) if store is not None else None
         if stored is not None and stored.connector_id != connector.connector_id:
             raise NotConnectedError(

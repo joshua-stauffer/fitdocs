@@ -82,6 +82,7 @@ import fitdocs.connectors
 CONNECTORS_MODULE_NAMES: Final[tuple[str, ...]] = (
     "fitdocs.connectors",
     "fitdocs.connectors._atomic",
+    "fitdocs.connectors.browser_connect",
     "fitdocs.connectors.connect",
     "fitdocs.connectors.credentials",
     "fitdocs.connectors.delivery",
@@ -101,6 +102,7 @@ CONNECTORS_MODULE_NAMES: Final[tuple[str, ...]] = (
     "fitdocs.connectors.relay_targets",
     "fitdocs.connectors.secrets",
     "fitdocs.connectors.settings",
+    "fitdocs.connectors.strava",
 )
 
 
@@ -290,9 +292,22 @@ _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
             "fitdocs.connectors.registry",
             "fitdocs.connectors.relay",
             "fitdocs.connectors.secrets",
+            "fitdocs.connectors.strava",
         }
     ),
     "fitdocs.connectors._atomic": frozenset(),
+    "fitdocs.connectors.browser_connect": frozenset(
+        {
+            "fitdocs.connectors.credentials",
+            "fitdocs.connectors.errors",
+            "fitdocs.connectors.http",
+            "fitdocs.connectors.protocol",
+            "fitdocs.connectors.relay",
+            "fitdocs.connectors.relay_codes",
+            "fitdocs.connectors.secrets",
+            "fitdocs.connectors.settings",
+        }
+    ),
     "fitdocs.connectors.connect": frozenset(
         {
             "fitdocs.connectors.credentials",
@@ -425,6 +440,17 @@ _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
             "fitdocs.settings",
         }
     ),
+    "fitdocs.connectors.strava": frozenset(
+        {
+            "fitdocs.connectors.errors",
+            "fitdocs.connectors.protocol",
+            "fitdocs.connectors.relay",
+            "fitdocs.connectors.relay_codes",
+            "fitdocs.connectors.relay_envelope",
+            "fitdocs.connectors.relay_targets",
+            "fitdocs.connectors.secrets",
+        }
+    ),
 }
 
 
@@ -450,6 +476,22 @@ class TestImportClosure:
         assert scanned == len(CONNECTORS_MODULE_NAMES), (
             "the walk is looking at the wrong set"
         )
+
+    def test_strava_imports_nothing_from_the_publish_package(self) -> None:
+        targets = _import_targets("fitdocs.connectors.strava")
+        assert "fitdocs.connectors.protocol" in targets, (
+            "the walk is looking at the wrong module"
+        )
+        assert sorted(t for t in targets if t.startswith("fitdocs.publish")) == []
+
+    def test_positive_control_a_publish_import_is_seen_by_the_strava_walk(
+        self,
+    ) -> None:
+        tree = ast.parse("from fitdocs.publish.outcomes import PublishCode\n")
+        found = _import_targets_of_tree(tree, "fitdocs.connectors.strava")
+        assert [t for t in found if t.startswith("fitdocs.publish")] == [
+            "fitdocs.publish.outcomes"
+        ]
 
     def test_tomli_w_appears_only_in_ledger_and_credentials(self) -> None:
         users = {

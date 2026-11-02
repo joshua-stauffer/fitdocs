@@ -691,7 +691,9 @@ def test_preamble_connector_list_is_the_registry_built_ins() -> None:
     assert match, "the preamble no longer lists the connectors fitdocs ships"
     listed = re.findall(r"`([a-z]+)`", match.group(2))
     built_in = [c.connector_id for c in registry.available()]
-    assert built_in[:3] == ["folder", "intervals", "relay"], "not the built-in set"
+    assert built_in[:4] == ["folder", "intervals", "relay", "strava"], (
+        "not the built-in set"
+    )
     assert listed == built_in
     assert match.group(1) == _NUMBER_WORDS[len(built_in)]
 

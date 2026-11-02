@@ -274,7 +274,17 @@ def test_image_constants() -> None:
 
 
 def test_command_list() -> None:
-    assert contract.COMMANDS == ("serve", "migrate", "principal", "token", "new-pepper")
+    assert contract.COMMANDS == (
+        "serve",
+        "migrate",
+        "principal",
+        "token",
+        "new-pepper",
+        "strava",
+        "reencrypt",
+        "new-encryption-key",
+    )
+    assert contract.DEPLOY_CONTRACT_VERSION == 1
 
 
 # ---- the changelog tie (Requirement 9.12) ----

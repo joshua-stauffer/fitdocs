@@ -24,7 +24,12 @@ from typing import Final
 from urllib.parse import urlsplit
 
 from fitdocs.connectors.errors import ConnectorError, ConnectorSettingsError
-from fitdocs.connectors.http import HttpClient, HttpResponse, TransportError
+from fitdocs.connectors.http import (
+    HttpClient,
+    HttpRequest,
+    HttpResponse,
+    TransportError,
+)
 from fitdocs.connectors.protocol import (
     AuthStyle,
     Capability,
@@ -189,23 +194,38 @@ class RelayClient:
 
     def get(self, route: str) -> RelayReply:
         try:
-            response = self._http.get(
-                self._base + route,
-                headers={"Accept": _JSON},
-                secret_headers=self._secret_headers,
+            response = self._http.send(
+                HttpRequest(
+                    method="GET",
+                    url=self._base + route,
+                    headers={"Accept": _JSON},
+                    secret_headers=self._secret_headers,
+                    single_attempt=True,
+                )
             )
         except TransportError:
             return RelayReply(RelayCode.RELAY_UNREACHABLE, {}, None, None)
         return _reply_from(response)
 
-    def post(self, route: str, fields: Mapping[str, object]) -> RelayReply:
-        body = encode_request(fields)  # an unencodable request is the caller's defect
+    def post(
+        self,
+        route: str,
+        fields: Mapping[str, object],
+        *,
+        max_request_bytes: int | None = None,
+    ) -> RelayReply:
+        # an unencodable or over-bound request is the caller's defect
+        if max_request_bytes is None:
+            body = encode_request(fields)
+        else:
+            body = encode_request(fields, max_bytes=max_request_bytes)
         try:
             response = self._http.post(
                 self._base + route,
                 body=body,
                 headers={"Accept": _JSON, "Content-Type": _JSON},
                 secret_headers=self._secret_headers,
+                single_attempt=True,
             )
         except TransportError:
             return RelayReply(RelayCode.RELAY_UNREACHABLE, {}, None, None)

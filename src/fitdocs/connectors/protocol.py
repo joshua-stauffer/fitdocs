@@ -16,9 +16,8 @@ operation for it or ever invoking it, Req 1.4).
 
 :class:`AuthStyle` is the fixed vocabulary of five ways a connector
 authenticates (``NONE``, ``API_KEY``, ``LOGIN``, ``OAUTH_BROWSER`` and
-``RELAY_TOKEN``); ``OAUTH_BROWSER`` is reserved -- a connector may declare it,
-but ``fitdocs connect`` (a later task) refuses it as unsupported by this
-version (Req 1.7).
+``RELAY_TOKEN``); every one is supported -- ``OAUTH_BROWSER`` is consent given
+in a browser at the instance's bound relay (Req 1.7).
 
 :class:`Connector` is the shape every connector implements: an id, a display
 name, one auth style, its capabilities, and its credential fields, plus
@@ -36,7 +35,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Final, Protocol
+from typing import Final, Protocol, runtime_checkable
 
 from fitdocs.connectors.http import HttpClient
 from fitdocs.connectors.relay_codes import RelayCode
@@ -57,11 +56,14 @@ __all__ = [
     "TARGET_CODES",
     "ActivityPuller",
     "AuthStyle",
+    "BrowserConsentClient",
     "Capability",
     "CapabilityInfo",
     "CompletedActivity",
     "Connector",
     "ConnectorSession",
+    "ConsentPolled",
+    "ConsentStarted",
     "CredentialAccess",
     "CredentialField",
     "Declined",
@@ -77,6 +79,7 @@ __all__ = [
     "PublishCode",
     "PublishRequest",
     "PublishResult",
+    "RelayBound",
     "RemoteActivity",
     "SettingsContext",
     "TokenIssuer",
@@ -205,20 +208,26 @@ DRIVEN_CAPABILITIES: Final[frozenset[Capability]] = (
 
 
 class AuthStyle(StrEnum):
-    """The ways a connector authenticates (Req 1.7). ``OAUTH_BROWSER``
-    is reserved: a connector may declare it, but ``fitdocs connect`` refuses
-    it as unsupported by this version. ``RELAY_TOKEN`` (relay-server Req 11.3)
-    is appended: a token the fitdocs relay issued."""
+    """The ways a connector authenticates (Req 1.7). ``OAUTH_BROWSER`` is
+    consent given in a browser at the instance's bound relay; the connector
+    provides :class:`BrowserConsentClient`. ``RELAY_TOKEN`` (relay-server
+    Req 11.3) is appended: a token the fitdocs relay issued."""
 
     NONE = "none"
     API_KEY = "api-key"
     LOGIN = "login"
-    OAUTH_BROWSER = "oauth-browser"  # reserved
+    OAUTH_BROWSER = "oauth-browser"
     RELAY_TOKEN = "relay-token"
 
 
 SUPPORTED_AUTH_STYLES: Final[frozenset[AuthStyle]] = frozenset(
-    {AuthStyle.NONE, AuthStyle.API_KEY, AuthStyle.LOGIN, AuthStyle.RELAY_TOKEN}
+    {
+        AuthStyle.NONE,
+        AuthStyle.API_KEY,
+        AuthStyle.LOGIN,
+        AuthStyle.RELAY_TOKEN,
+        AuthStyle.OAUTH_BROWSER,
+    }
 )
 
 
@@ -549,5 +558,61 @@ class RelayTokenClient(Protocol):
     ) -> RegistrationPolled | RelayRefused: ...
 
     def revoke_token(
+        self, session: ConnectorSession, token: Secret
+    ) -> RelayRefused | None: ...
+
+
+@dataclass(frozen=True)
+class ConsentStarted:
+    """A started browser consent: the code shown in the terminal and on the
+    consent page, the address of that page (composed by fitdocs from the bound
+    relay's URL), the secret the client polls with (registered with the
+    session redactor), the poll interval, and when the attempt expires
+    (``session.now()`` plus the relay's ``expires_in_s``)."""
+
+    user_code: str
+    page_url: str
+    poll_secret: Secret
+    interval_s: int
+    expires_at: datetime
+
+
+@dataclass(frozen=True)
+class ConsentPolled:
+    """One consent poll's answer: ``code`` is ``CONNECT_PENDING`` or
+    ``CONNECT_GRANTED``; ``token`` is set exactly when it is
+    ``CONNECT_GRANTED``."""
+
+    code: RelayCode
+    token: Secret | None
+
+
+@runtime_checkable
+class RelayBound(Protocol):
+    """Settings of a connector that reaches its service through a relay
+    instance. ``bound`` returns the settings with that relay instance's own
+    settings applied and raises ``ConnectorSettingsError`` when they cannot be."""
+
+    @property
+    def relay_instance(self) -> str: ...
+
+    def bound(self, relay_settings: object) -> object: ...
+
+
+class BrowserConsentClient(Protocol):
+    """Required when :attr:`AuthStyle.OAUTH_BROWSER` is declared."""
+
+    def start_consent(
+        self, session: ConnectorSession, relay_token: Secret
+    ) -> ConsentStarted | RelayRefused: ...
+
+    def poll_consent(
+        self,
+        session: ConnectorSession,
+        started: ConsentStarted,
+        relay_token: Secret,
+    ) -> ConsentPolled | RelayRefused: ...
+
+    def withdraw_consent(
         self, session: ConnectorSession, token: Secret
     ) -> RelayRefused | None: ...

@@ -280,6 +280,9 @@ answers `unavailable` (503). Probe `/readyz` from your orchestrator.
 | `principal` | `create`, `list` and `delete` principals. |
 | `token` | `mint`, `list` and `revoke` relay tokens. |
 | `new-pepper` | Prints a fresh token-hashing secret. Needs no configuration. |
+| `strava` | `webhook show`, `webhook create` and `webhook delete` manage the Strava webhook subscription. Needs the Strava target configured. |
+| `reencrypt` | Re-encrypts the stored Strava tokens under the current encryption key. Needs the Strava target configured. |
+| `new-encryption-key` | Prints a fresh `<id>:<key>` encryption key. Needs no configuration. |
 
 The subcommands, their output and their exit codes are under
 [Operator commands](#operator-commands).
@@ -405,6 +408,11 @@ token's hash, the pepper or the database password.
 | `token list [--principal ID]` | One line per token: identifier, principal, label, created, `active` or `revoked`, and the revocation time (empty when active). |
 | `token revoke TOKEN_ID` | `revoked TOKEN_ID`, or `already revoked TOKEN_ID`. |
 | `new-pepper` | A fresh pepper. |
+| `strava webhook show` | `subscribed`, `subscribed elsewhere` (another callback) or `not subscribed`. |
+| `strava webhook create` | `subscribed` or `already subscribed`. When another callback is subscribed it creates nothing and prints `subscribed elsewhere` on standard error, exiting 1. |
+| `strava webhook delete` | `deleted` or `not subscribed`. |
+| `reencrypt` | `re-encrypted <n>, unreadable <m>`; exits 1 when `m` is above zero. |
+| `new-encryption-key` | A fresh `<id>:<key>`. |
 
 Labels are 1 to 64 printable characters. `--principal-label` names a principal
 the command creates, so it needs `--new-principal`; with `--principal` the
@@ -423,10 +431,13 @@ error; 3 migrations are pending (`migrate --check` only).
 | `the database schema is not current (found <n>, expected <m>); run 'fitdocs-relay migrate'` | 1 |
 | `the database schema is newer than this build (found <n>, expected <m>)` | 1 |
 | `the server could not start` | 1 |
+| `strava failure: <class>` (`auth`, `forbidden`, `missing`, `limited`, `invalid`, `server`, `network` or `unreadable`) | 1 |
+| `the Strava target is not configured` | 2 |
 | `unexpected failure: <type>` | 1 |
 
-Every command except `migrate`, `new-pepper` and `serve` first requires the
-schema to be current, and changes nothing otherwise. `serve` exits 0 after a
+Every command except `migrate`, `new-pepper`, `new-encryption-key`, `serve` and
+`strava` first requires the schema to be current, and changes nothing otherwise
+(`strava` never opens the database). `serve` exits 0 after a
 clean stop, 1 when another instance holds the database or it cannot start, and
 2 on a configuration or wrapper error.
 

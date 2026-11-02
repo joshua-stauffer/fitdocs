@@ -628,15 +628,20 @@ def test_none_style_access_raises_for_any_field(tmp_path: Path) -> None:
     assert access.expires_at is None
 
 
-def test_reserved_oauth_browser_style_is_not_connected_not_no_auth(
+def test_oauth_browser_style_with_nothing_stored_is_not_connected_not_no_auth(
     tmp_path: Path,
 ) -> None:
-    # (Controller ruling) OAUTH_BROWSER is reserved: resolving it must raise
-    # NotConnectedError, never silently resolve like NONE (which has no
-    # values at all but is a *supported*, intentional style).
-    connector = _FakeConnector(connector_id="fake", auth_style=AuthStyle.OAUTH_BROWSER)
-    with pytest.raises(NotConnectedError):
+    # OAUTH_BROWSER resolves like a relay token: with neither a stored value
+    # nor the variable it raises NotConnectedError, never silently resolves
+    # like NONE (which has no values at all).
+    connector = _FakeConnector(
+        connector_id="fake",
+        auth_style=AuthStyle.OAUTH_BROWSER,
+        credential_fields=(CredentialField("token", "Token", secret=True),),
+    )
+    with pytest.raises(NotConnectedError) as excinfo:
         resolve_credentials("inst", connector, None, {}, Redactor())
+    assert "FITDOCS_CONNECTOR_INST_TOKEN" in str(excinfo.value)
 
 
 def test_api_key_environment_beats_store_when_both_set_and_differ(
@@ -1217,3 +1222,66 @@ def test_remove_of_the_only_file_leaves_the_directory_in_place(tmp_path: Path) -
     assert list(directory.iterdir()) == []
     assert stat.S_IMODE(directory.stat().st_mode) == directory_mode
     assert directory.stat().st_ino == directory_inode
+
+
+# ---------------------------------------------------------------------------
+# The browser-consent style resolves exactly like a relay token
+# (strava-publish Req 1.5).
+# ---------------------------------------------------------------------------
+
+
+def _consent_connector() -> _FakeConnector:
+    return _FakeConnector(
+        connector_id="consent",
+        auth_style=AuthStyle.OAUTH_BROWSER,
+        credential_fields=(CredentialField("token", "Token", secret=True),),
+    )
+
+
+def test_browser_consent_token_resolves_from_the_store(tmp_path: Path) -> None:
+    store = CredentialStore(tmp_path / "creds")
+    store.save(
+        "inst",
+        _stored(
+            connector_id="consent",
+            auth_style=AuthStyle.OAUTH_BROWSER,
+            values={"token": "stored-token"},
+        ),
+    )
+    redactor = Redactor()
+    access = resolve_credentials("inst", _consent_connector(), store, {}, redactor)
+    assert access.value("token").reveal() == "stored-token"
+    assert "stored-token" not in redactor.redact("saw stored-token here")
+
+
+def test_browser_consent_environment_beats_the_store(tmp_path: Path) -> None:
+    store = CredentialStore(tmp_path / "creds")
+    store.save(
+        "inst",
+        _stored(
+            connector_id="consent",
+            auth_style=AuthStyle.OAUTH_BROWSER,
+            values={"token": "stored-token"},
+        ),
+    )
+    environ = {"FITDOCS_CONNECTOR_INST_TOKEN": "env-token"}
+    access = resolve_credentials(
+        "inst", _consent_connector(), store, environ, Redactor()
+    )
+    assert access.value("token").reveal() == "env-token"
+
+
+def test_browser_consent_token_issued_for_a_different_connector_is_not_connected(
+    tmp_path: Path,
+) -> None:
+    store = CredentialStore(tmp_path / "creds")
+    store.save(
+        "inst",
+        _stored(
+            connector_id="other",
+            auth_style=AuthStyle.OAUTH_BROWSER,
+            values={"token": "stored-token"},
+        ),
+    )
+    with pytest.raises(NotConnectedError, match="'other'"):
+        resolve_credentials("inst", _consent_connector(), store, {}, Redactor())

@@ -99,7 +99,7 @@ def test_the_registry_returns_the_connector_and_its_gate_accepts_it() -> None:
     assert validate_connector(connector) is None
 
 
-def test_a_fresh_import_registers_folder_intervals_then_relay() -> None:
+def test_a_fresh_import_registers_folder_intervals_relay_then_strava() -> None:
     probe = (
         "import fitdocs.connectors as c; "
         "print(','.join(x.connector_id for x in c.available()))"
@@ -107,7 +107,7 @@ def test_a_fresh_import_registers_folder_intervals_then_relay() -> None:
     done = subprocess.run(
         [sys.executable, "-c", probe], capture_output=True, text=True, check=True
     )
-    assert done.stdout.strip() == "folder,intervals,relay"
+    assert done.stdout.strip() == "folder,intervals,relay,strava"
 
 
 def test_the_declaration_is_a_personal_key_pull_only_connector() -> None:
