@@ -10,11 +10,13 @@ sync`, or `pull --sync`) picks it up exactly as it would a file you dropped
 there yourself.
 
 This page documents the connector *framework*: the commands, the settings
-keys, the credential rules, and the two connectors fitdocs ships: `folder`,
-which needs no service at all, and `intervals`, for an intervals.icu account
-([its section](#intervalsicu) below). Outside that section, the framework
-sections of this page describe no online service and no network protocol;
-the one service they mention, intervals.icu, is named only to point to it.
+keys, the credential rules, and the three connectors fitdocs ships: `folder`,
+which needs no service at all; `intervals`, for an intervals.icu account
+([its section](#intervalsicu) below); and `relay`, for a fitdocs relay
+([its section](#the-relay-connector) below). Outside those two sections, the
+framework sections of this page describe no online service and no network
+protocol; the services they mention, intervals.icu and the relay, are named
+only to point to their sections.
 
 ## Configuring an instance
 
@@ -298,7 +300,8 @@ fitdocs pull [NAMES...] [--since YYYY-MM-DD] [--dry-run] [--sync] [--no-prompt]
 ```
 
 - `NAMES`: pull only the named instances; omit to pull every configured
-  instance.
+  instance whose connector pulls activities or wellness (see
+  [Pulling a relay instance](#pulling-a-relay-instance)).
 - `--since`: list only activities from the start of that local day onward
   (a connector that cannot filter by time lists everything regardless). It
   also starts the wellness listing on that date.
@@ -446,10 +449,12 @@ keep their existing format until wellness records are first written.
 ## What leaves your machine
 
 The only requests any connector instance makes are the ones `fitdocs
-connect <name>` and `fitdocs pull` make for that instance, while you are
-running one of those two commands — carrying the one fitdocs User-Agent and
-whatever credentials that instance needs. No other fitdocs command ever
-makes a connector request, configured or not.
+connect <name>` (including a relay instance's registration), `fitdocs
+disconnect <name>` (a relay revocation, unless `--local-only`) and `fitdocs
+pull` make for that instance, while you are running one of those three
+commands — carrying the one fitdocs User-Agent and whatever credentials that
+instance needs (and, when a relay registration starts, your email address). No other fitdocs command ever makes a connector request,
+configured or not.
 
 The only other network access anywhere in fitdocs is fetching basemap map
 tiles for an outdoor activity's Map section — see
@@ -460,14 +465,17 @@ network request fitdocs ever makes.
 To stop an instance from ever being contacted again, delete its
 `[connectors.<name>]` table from `fitdocs.toml`. There is no separate
 opt-out switch to find — an instance with no table simply isn't there for
-either command to use.
+any of those commands to use.
 
 ## The terms-first policy
 
 fitdocs ships a connector for a given service only when that service's own
-terms of use permit this kind of automated, personal access. The one service
-connector fitdocs ships is the [intervals.icu](#intervalsicu) one, and the
-only web address of an online service this page gives is intervals.icu's.
+terms of use permit this kind of automated, personal access. The one
+third-party service connector fitdocs ships is the [intervals.icu](#intervalsicu)
+one. The [relay](#the-relay-connector) connector talks to a fitdocs relay (the
+maintainer's, or one you or another operator run), not to a third-party
+service's API. The only web addresses of online services this page gives are
+intervals.icu's and the relay's.
 
 ## Regenerating before a first pull
 
@@ -499,3 +507,140 @@ A `cron` line running that once an hour, with the data root set the same way
 ```
 0 * * * * FITDOCS_DATA=/path/to/data-root /path/to/fitdocs pull --sync --no-prompt
 ```
+
+## The relay connector
+
+`relay` is the connector for a fitdocs relay: a small service that issues a
+token and answers a few requests about it. It pulls nothing — it has no
+activities or wellness to fetch — so `fitdocs pull` never contacts it
+([Pulling a relay instance](#pulling-a-relay-instance) below). What it adds today is a token you connect once,
+check, and can later revoke.
+
+### The relay and its address
+
+Add the instance to `<data-root>/fitdocs.toml`. The table can be empty,
+because its one key is optional:
+
+```toml
+[connectors.relay]
+url = "https://api.fitdocs.ai"   # optional; this is the default
+```
+
+`url` defaults to the maintainer's relay (https://api.fitdocs.ai). It must be
+an absolute `https` address with no query, fragment, or user information; a
+trailing slash is dropped. Plain `http` is accepted only for exactly
+`localhost`, `127.0.0.1` and `::1`, which is for testing a relay you run
+yourself. A refused `url` is reported by name; the message
+never repeats the value, because an address may carry a password.
+
+To use more than one relay, name each instance and set `connector = "relay"`
+in its table, as for any other connector.
+
+### The token
+
+A relay token is a value the relay's operator issues, or that registration
+issues to you (below). `fitdocs connect` stores it in the credentials store
+described under [Credentials](#credentials), as `relay-token` style
+credentials: one file per instance, outside your data root, readable only by
+you.
+
+A set, non-empty `FITDOCS_CONNECTOR_RELAY_TOKEN` (the instance's name,
+upper-cased, then `TOKEN`) overrides the stored token wherever fitdocs
+resolves the instance's credentials, as a personal key's variable does (see
+[Credentials](#credentials)). It is how an unattended command supplies a
+token: without a terminal, `fitdocs connect` exits `2` and names the variable,
+except with `--register --email ADDRESS`. `fitdocs connect` prints the
+variable's name when it is set. `fitdocs disconnect` revokes only the stored
+token, never the variable; only when nothing is stored does it say the
+variable is not revoked and remains set.
+
+### Connecting by paste
+
+```
+fitdocs connect relay
+```
+
+At a terminal, fitdocs prompts `Relay token:` without echo, then makes one
+request to check the token. The token is stored only when the relay accepts
+it; on success fitdocs prints where, and the relay's address. A pasted value
+that is not shaped like a relay token is refused before any request, with a
+message that does not repeat it. A refusal or an unreachable relay prints the
+relay's reason in fitdocs's own words and a next step, stores nothing, and
+exits `1`. Connecting again replaces the stored token and revokes nothing.
+
+### Connecting by registration
+
+```
+fitdocs connect relay --register [--email ADDRESS]
+```
+
+For a relay that offers registration, `--register` replaces the paste.
+fitdocs prompts `Email address:` unless `--email` gave it, checks the
+address's shape, and only then asks the relay whether it offers registration;
+a relay that does not is reported as such, with a next step to ask its
+operator for a token. Otherwise registration starts and fitdocs prints a
+code:
+
+```
+Registering ADDRESS.
+Your code: CODE
+```
+
+Confirm the registration at the relay's confirmation page **only if it shows
+the same code**; that match is what stops someone else's registration from
+being confirmed as yours. fitdocs polls the relay until the registration is
+confirmed, refused, or expired (it prints how long that takes, and `fitdocs
+connect relay --register` starts a new one), then stores the issued token.
+Press Ctrl-C to stop waiting; nothing is stored.
+
+`--register` and `--email` apply only to a relay instance, and `--email`
+needs `--register`; either mistake exits `2` before any request. With
+`--register --email ADDRESS` the command needs no terminal.
+
+### Disconnecting
+
+```
+fitdocs disconnect relay
+fitdocs disconnect relay --local-only
+```
+
+`fitdocs disconnect relay` asks the relay to revoke the stored token, then
+removes the instance's credentials file. A token the relay reports as already
+revoked or unknown is treated as revoked, and the file is removed. If the
+relay cannot confirm the revocation, the file is kept exactly as it was and
+the command prints the relay code, fitdocs's explanation and a next step (run
+it again, or add `--local-only`), exiting `1`.
+
+`--local-only` removes the file without contacting the relay and without
+reading it, so it also removes a file fitdocs cannot read. It prints that the
+token stays valid at the relay until its operator revokes it. Without a stored
+file, the command says there is nothing to disconnect and exits `0`.
+
+Disconnecting never removes anything else: not the credentials directory, not
+another instance's file, nothing under your data root.
+
+### What each command sends
+
+Requests carry the one fitdocs User-Agent and go only to the instance's `url`.
+
+- `fitdocs connect relay` (paste): one request carrying the pasted token as a
+  bearer credential, to check it.
+- `fitdocs connect relay --register`: a request asking what the relay offers,
+  then your email address when registration starts, then repeated requests
+  carrying a secret that identifies this registration until it ends. The
+  issued token is received, never sent in those requests.
+- `fitdocs disconnect relay`: one request carrying the stored token, to
+  revoke it. The environment variable is never used here.
+- `fitdocs disconnect relay --local-only`: nothing leaves your machine.
+
+### Pulling a relay instance
+
+A bare `fitdocs pull` (no names) pulls only the instances whose connector
+fetches activities or wellness, so it skips a relay instance and never
+contacts it. When instances are configured but none of them is such a
+connector, it prints "No configured connector instance pulls activities or
+wellness; nothing to pull." and exits `0`. With no connectors configured at
+all, it still prints that none are configured. Naming an instance
+(`fitdocs pull relay`) selects it and reports that it is not connected, or
+that it does not pull activities or wellness, and exits `1`; it makes no
+request either way.

@@ -1,7 +1,7 @@
 ---
 id: 2026-11-01-publish-core-relay-server-second-lander
 title: "relay-server must reconcile with publish-core when it lands second"
-status: open
+status: done
 importance: high
 importance_why: The two branches collide on shared contract text, version numbers, pins and amendment numbers; a naive rebase leaves contradictory contract prose or a red suite.
 effort: M
@@ -62,3 +62,6 @@ diff main`.
 1. Read the agent-log WARN and the relay-server diff against main.
 2. Rebase relay-server onto main and resolve (a)-(d) above.
 3. Run the full suite; every pin named in (a) must pass on the merged text.
+
+## Resolution (2026-11-02)
+Done in the relay-server landing merge (main merged into impl/relay-server once): one four-writer credentials-store list (connect, renewing pull, renewing `publish --yes`, disconnect) in docs/ownership-contract.md, contract.py history and both pin files; CONTRACT_VERSION "19"; CLI 17; connectors surface 63; test_boundary protocol entry unchanged ({http, secrets, relay_codes, publish.outcomes, publish.request}); relay-server's amendments renumbered to connectors 7, distribution 7, wiki-contract 15 / criterion 2.25; CHANGELOG keeps relay-server's Added bullets ahead of publish-core's so publish-core's no-service scan stays scoped to its own entry. Reviewed with in-memory mutations (all killed).

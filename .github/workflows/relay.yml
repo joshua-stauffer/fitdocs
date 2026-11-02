@@ -1,0 +1,83 @@
+# The relay's own CI (relay-server task 1.5; design.md "RelayImage and
+# RelayWorkflow"; Requirements 1.5, 7.6).
+#
+# Separate from ci.yml and specs.yml on purpose: it has no path filter, so it
+# runs on every push and pull request, and it holds no secret. The relay job
+# runs the relay's tests against a PostgreSQL 17 service container pinned by
+# digest, with the require flag set so an unreachable server fails the run
+# instead of skipping the PostgreSQL cases, then the relay's lint, format and
+# type gates. Last, it builds the relay image (nothing is pushed) and smoke-runs
+# it three times with relay/scripts/image_smoke.sh: on SQLite, on a throwaway
+# PostgreSQL, and as a derived image carrying the smoke wrapper.
+#
+# Publishes nothing: no login to any remote store, no upload, no credential, no
+# identity grant. The database password is a throwaway for a
+# container that lives for this job only.
+#
+# The service image digest is the multi-platform index digest of
+# `postgres:17`, read with `docker buildx imagetools inspect postgres:17`
+# on 2026-11-01. Re-pin by repeating that command.
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  TERM: dumb
+  NO_COLOR: "1"
+
+jobs:
+  relay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17@sha256:31ba9c94a03ada9988f2bb493a22a75eef3a185884533e5cdbcd498ea835b08f
+        env:
+          POSTGRES_PASSWORD: relay-ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.1.0
+
+      - name: Install Python 3.11
+        run: uv python install 3.11
+
+      - name: Sync the relay dependencies
+        run: uv sync --directory relay --locked --extra postgres
+
+      - name: Run the relay tests on both backends
+        env:
+          FITDOCS_RELAY_TEST_POSTGRES_URL: postgresql://postgres:relay-ci@127.0.0.1:5432/postgres
+          FITDOCS_RELAY_REQUIRE_POSTGRES: "1"
+        run: uv run --directory relay pytest
+
+      - name: Lint and check formatting
+        run: uv run --directory relay ruff check . && uv run --directory relay ruff format --check .
+
+      - name: Run the strict type check
+        run: uv run --directory relay mypy
+
+      - name: Build the relay image
+        run: docker build -t fitdocs-relay:ci relay
+
+      - name: Smoke-run the image on SQLite
+        run: relay/scripts/image_smoke.sh sqlite
+
+      - name: Smoke-run the image on PostgreSQL
+        run: relay/scripts/image_smoke.sh postgres
+
+      - name: Smoke-run a derived image with the smoke wrapper
+        run: relay/scripts/image_smoke.sh derived

@@ -1,7 +1,9 @@
 """Published statements of publishing in the ownership contract (publish-core 8.1).
 
-The contract's version advances from 17 to 18 with an appended history
-paragraph (Req 13.1), and the published contract states the ``post`` region as
+The contract's version advanced from 17 to 18 with an appended history
+paragraph (Req 13.1); relay-server, landing second, raised it to 19 and replaced
+the version head, so the publishing change is pinned in the history, and the
+published contract states the ``post`` region as
 user-owned, the ``published`` region as fitdocs-owned and refreshed by
 ``fitdocs publish --yes``, the ``publish`` key, the ledger's place in the
 tool-owned state, the ``[publish]`` table, and that ``fitdocs publish`` writes
@@ -43,29 +45,8 @@ def _history() -> str:
 
 
 def test_the_versions_are_the_landed_literals() -> None:
-    assert contract.CONTRACT_VERSION == "18"
+    assert contract.CONTRACT_VERSION == "19"
     assert contract.DOC_VERSION == 12
-
-
-def test_the_version_head_states_the_version_and_the_publishing_change() -> None:
-    head = _flat(_doc()).split(" ## ", 1)[0]
-    assert "**Contract version:** `18`" in head
-    for phrase in (
-        "**What changed at this version:**",
-        "A workout page gains two regions",
-        "a user-owned `post` region",
-        "a fitdocs-owned `published` region that `fitdocs publish --yes` fills",
-        "the `publish` frontmatter key is user-owned",
-        "The publish ledgers, one file per target under `.fitdocs/publish/`",
-        "the settings file gains a `[publish]` table",
-        "`fitdocs publish` writes only the publish ledgers and the `published` "
-        "region of pages",
-        "never the `post` region or any other content of a page",
-        "A publish target that renews its credentials through its session also "
-        "updates that instance's credentials file, outside the data root",
-        "Run `fitdocs regen` once to bring existing pages current",
-    ):
-        assert phrase in head, phrase
 
 
 @pytest.mark.parametrize(
@@ -155,9 +136,10 @@ def test_replaces_and_preserves_carries_the_published_region() -> None:
 def test_the_credentials_store_entry_names_the_publishing_writer() -> None:
     section = _section("Shared and User-Owned Files")
     assert (
-        "`fitdocs connect`, a credential-renewing `fitdocs pull` and a "
-        "credential-renewing `fitdocs publish --yes` are the only operations that "
-        "write to it, each one instance's file at a time"
+        "`fitdocs connect`, a credential-renewing `fitdocs pull`, a "
+        "credential-renewing `fitdocs publish --yes` and `fitdocs disconnect` are "
+        "the only operations that write to or remove from it, each one "
+        "instance's file at a time"
     ) in section
 
 
@@ -231,7 +213,7 @@ def test_the_workouts_declaration_names_the_published_region() -> None:
         encoding="utf-8"
     )
     assert sentence in golden
-    assert "Ownership contract version: `18`." in golden
+    assert "Ownership contract version: `19`." in golden
 
 
 def test_no_other_declaration_names_the_published_region() -> None:

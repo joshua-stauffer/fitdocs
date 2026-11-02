@@ -301,7 +301,7 @@ private, or less predictable.
 1. The fitdocs tool shall add no new runtime dependency in order to become publishable, installable, or self-reporting.
 2. The installed tool shall behave identically to the revision that passed the release gates; no build step shall alter behavior between the tested revision and the published artifact.
 3. No published artifact shall contain personal fitness data, generated workout documents, or the contents of any data root.
-4. Running the installed tool shall require no network access beyond the map-tile requests and the explicit connector commands (`fitdocs connect`, `fitdocs pull`) the project already documents, and the release process shall not introduce any new runtime network access beyond those two paths. *(amended by Amendment 3: formerly "beyond the map-tile requests the project already documents" and "any new runtime network access")*
+4. Running the installed tool shall require no network access beyond the map-tile requests and the explicit connector commands (`fitdocs connect`, `fitdocs pull`) the project already documents, and the release process shall not introduce any new runtime network access beyond those two paths. *(amended by Amendment 3: formerly "beyond the map-tile requests the project already documents" and "any new runtime network access")* *(amended by Amendment 7: `fitdocs disconnect` joins the explicit connector commands)*
 5. Building the same tagged revision twice shall produce artifacts with identical contents.
 6. Reorganizing the project's documentation shall preserve every behavior statement the project publishes at the time of the reorganization — its own and its sibling features' — including data-root resolution order, the persistent tile opt-out, tile-provider attribution, the inbox never-delete guarantee, the statement that fitdocs performs no watching and no scheduling, and a pointer to the published ownership contract.
 7. Rewriting the readme shall preserve rather than replace the sections other features publish there — the ownership section, the inbox section, and the plugins section — either keeping each in place or relocating each into the documentation set with the readme linking to it.
@@ -458,3 +458,45 @@ publish-core; the compatibility policy, the network statements and criterion
 10.4 are not changed by this amendment, because publish-core ships no target
 that makes a request. Existing criteria and approvals are preserved
 word-for-word; nothing is renumbered.
+
+## Amendment 7 (2026-11-01): the relay is outside the release, the skill never disconnects, and no image is published, landed by relay-server
+
+`relay-server` adds a separately deployed relay package (`relay/`,
+`fitdocs_relay`) to this repository and a `fitdocs disconnect` command.
+Four guarantees here lean on statements that are now incomplete, recorded as
+amended by reading (and 10.4 also tagged in place), with no criterion
+renumbered. Written as Amendment 6 on the relay-server branch; renumbered to 7
+because publish-core landed its Amendment 6 first.
+
+- Requirements 1.6 and 5.4: the development-only material the artifacts must
+  not contain, and the files the artifact check forbids, include every file
+  of the relay package. The release policy's forbidden members gain `relay/*`
+  and `fitdocs_relay/*`, the built wheel and sdist contain none, and the
+  relay is absent from the sdist's include list. The client side of the relay
+  (`src/fitdocs/connectors/relay.py`) ships and is not a forbidden member.
+  Pinned by
+  `tests/test_release_artifacts.py::test_relay_server_members_are_caught_by_their_own_pattern`,
+  `::test_sdist_allowlist_excludes_scripts_and_release`,
+  `::test_relay_server_leak_is_reported_in_an_sdist_and_a_wheel` and
+  `::test_relay_connector_client_module_is_not_a_forbidden_member`.
+- Requirement 8.2: the packaged `fitdocs-workouts` skill's commands section
+  tells the agent never to run `fitdocs disconnect` either, beside the
+  never-run-`fitdocs connect` rule: it deletes an instance's stored
+  credentials, which only the athlete can restore by connecting again, and for
+  a relay instance it first revokes the token at the relay, which cannot be
+  undone. The wording is the `SkillLine` literal in relay-server's design.md,
+  amended at its task 8.6. Pinned by
+  `tests/test_agent_skill.py::test_inbox_commands_section_states_never_run_disconnect_beside_connect`.
+- Requirement 5 (and the unchanged Requirement 1.4): no container image of
+  the relay is published by this repository. The relay workflow
+  (`relay.yml`) builds the image for its smoke test and publishes nothing,
+  and the release workflow (`release.yml`) has no image step; a deployment
+  builds the image from a pinned commit. Pinned by
+  `tests/test_relay_workflow.py::test_the_build_step_pushes_nothing_and_no_registry_action_is_used`
+  and `::test_no_run_step_publishes_logs_in_pushes_or_uploads`; the release
+  workflow's lack of an image step is not separately pinned.
+- Requirement 10.4: the explicit connector commands the installed tool may
+  reach the network through are `fitdocs connect`, `fitdocs disconnect` and
+  `fitdocs pull`; nothing else is added, and the relay is a separate package
+  that the installed tool never runs. Pinned with connectors Amendment 7 by
+  `tests/connectors/test_network_statements.py::test_steering_publishes_the_relay_server_and_its_network_calls`.

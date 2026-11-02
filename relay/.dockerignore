@@ -1,0 +1,17 @@
+# The image build context is relay/. The Dockerfile copies only
+# pyproject.toml, uv.lock, README.md, LICENSE, src/ and scripts/; this keeps everything
+# else, and any local database, out of the context.
+.venv
+.git
+.mypy_cache
+.pytest_cache
+.ruff_cache
+**/__pycache__
+**/*.pyc
+tests
+contract
+conftest.py
+*.db
+*.db-wal
+*.db-shm
+*.serve-lock

@@ -1026,3 +1026,194 @@ def test_absent_scopes_in_resolved_credentials_stay_absent(tmp_path: Path) -> No
     )
     access = resolve_credentials("inst", connector, store, {}, Redactor())
     assert access.scopes is None
+
+
+# ---------------------------------------------------------------------------
+# The relay-token style resolves exactly like a personal key (relay-server
+# Req 11.4, 14.7), and the store can remove one instance's file.
+# ---------------------------------------------------------------------------
+
+
+def _relay_connector() -> _FakeConnector:
+    return _FakeConnector(
+        connector_id="relay",
+        auth_style=AuthStyle.RELAY_TOKEN,
+        credential_fields=(CredentialField("token", "Relay token", secret=True),),
+    )
+
+
+def test_relay_token_resolves_from_the_store(tmp_path: Path) -> None:
+    store = CredentialStore(tmp_path / "creds")
+    store.save(
+        "inst",
+        _stored(
+            connector_id="relay",
+            auth_style=AuthStyle.RELAY_TOKEN,
+            values={"token": "stored-token"},
+        ),
+    )
+    access = resolve_credentials("inst", _relay_connector(), store, {}, Redactor())
+    assert access.value("token").reveal() == "stored-token"
+
+
+def test_relay_token_environment_beats_the_store(tmp_path: Path) -> None:
+    store = CredentialStore(tmp_path / "creds")
+    store.save(
+        "inst",
+        _stored(
+            connector_id="relay",
+            auth_style=AuthStyle.RELAY_TOKEN,
+            values={"token": "stored-token"},
+        ),
+    )
+    environ = {"FITDOCS_CONNECTOR_INST_TOKEN": "env-token"}
+    access = resolve_credentials("inst", _relay_connector(), store, environ, Redactor())
+    assert access.value("token").reveal() == "env-token"
+
+
+def test_relay_token_environment_satisfies_the_token_with_nothing_stored() -> None:
+    environ = {"FITDOCS_CONNECTOR_INST_TOKEN": "env-only"}
+    redactor = Redactor()
+    access = resolve_credentials("inst", _relay_connector(), None, environ, redactor)
+    assert access.value("token").reveal() == "env-only"
+    assert "env-only" not in redactor.redact("leak: env-only")
+
+
+def test_relay_token_empty_environment_value_falls_back_to_the_store(
+    tmp_path: Path,
+) -> None:
+    store = CredentialStore(tmp_path / "creds")
+    store.save(
+        "inst",
+        _stored(
+            connector_id="relay",
+            auth_style=AuthStyle.RELAY_TOKEN,
+            values={"token": "stored-token"},
+        ),
+    )
+    environ = {"FITDOCS_CONNECTOR_INST_TOKEN": ""}
+    access = resolve_credentials("inst", _relay_connector(), store, environ, Redactor())
+    assert access.value("token").reveal() == "stored-token"
+
+
+def test_relay_token_with_neither_source_is_not_connected_naming_the_variable() -> None:
+    with pytest.raises(NotConnectedError) as excinfo:
+        resolve_credentials("inst", _relay_connector(), None, {}, Redactor())
+    message = str(excinfo.value)
+    assert "fitdocs connect inst" in message
+    assert "FITDOCS_CONNECTOR_INST_TOKEN" in message
+
+
+def test_relay_token_issued_for_a_different_connector_is_not_connected(
+    tmp_path: Path,
+) -> None:
+    store = CredentialStore(tmp_path / "creds")
+    store.save(
+        "inst",
+        _stored(
+            connector_id="other",
+            auth_style=AuthStyle.RELAY_TOKEN,
+            values={"token": "stored-token"},
+        ),
+    )
+    with pytest.raises(NotConnectedError, match="'other'"):
+        resolve_credentials("inst", _relay_connector(), store, {}, Redactor())
+
+
+def test_relay_token_stored_value_is_registered_with_the_redactor(
+    tmp_path: Path,
+) -> None:
+    store = CredentialStore(tmp_path / "creds")
+    store.save(
+        "inst",
+        _stored(
+            connector_id="relay",
+            auth_style=AuthStyle.RELAY_TOKEN,
+            values={"token": "stored-token"},
+        ),
+    )
+    redactor = Redactor()
+    resolve_credentials("inst", _relay_connector(), store, {}, redactor)
+    assert "stored-token" not in redactor.redact("saw stored-token here")
+
+
+def test_relay_token_stored_file_round_trips_its_auth_style(tmp_path: Path) -> None:
+    store = CredentialStore(tmp_path / "creds")
+    store.save(
+        "inst",
+        _stored(
+            connector_id="relay",
+            auth_style=AuthStyle.RELAY_TOKEN,
+            values={"token": "t"},
+        ),
+    )
+    loaded = store.load("inst")
+    assert loaded is not None
+    assert loaded.auth_style is AuthStyle.RELAY_TOKEN
+    assert tomllib.loads(store.path_for("inst").read_text())["auth_style"] == (
+        "relay-token"
+    )
+
+
+def test_remove_unlinks_only_the_named_file_and_reports_it_existed(
+    tmp_path: Path,
+) -> None:
+    store = CredentialStore(tmp_path / "creds")
+    store.save("target", _stored(values={"api_key": "target-secret"}))
+    store.save("sibling", _stored(values={"api_key": "sibling-secret"}))
+    sibling = store.path_for("sibling")
+    sibling_bytes = sibling.read_bytes()
+    sibling_stat = sibling.stat()
+    directory_mode = stat.S_IMODE((tmp_path / "creds").stat().st_mode)
+    assert store.path_for("target").exists()
+
+    assert store.remove("target") is True
+
+    assert not store.path_for("target").exists()
+    assert store.load("target") is None
+    assert sorted(p.name for p in (tmp_path / "creds").iterdir()) == ["sibling.toml"]
+    assert sibling.read_bytes() == sibling_bytes
+    assert sibling.stat().st_mtime_ns == sibling_stat.st_mtime_ns
+    assert sibling.stat().st_ino == sibling_stat.st_ino
+    assert stat.S_IMODE((tmp_path / "creds").stat().st_mode) == directory_mode
+    assert store.load("sibling") is not None
+
+
+def test_remove_of_an_absent_file_returns_false_and_changes_nothing(
+    tmp_path: Path,
+) -> None:
+    store = CredentialStore(tmp_path / "creds")
+    store.save("sibling", _stored(values={"api_key": "sibling-secret"}))
+    sibling = store.path_for("sibling")
+    before = (sibling.read_bytes(), sibling.stat().st_mtime_ns)
+    assert not store.path_for("ghost").exists()
+
+    assert store.remove("ghost") is False
+
+    assert (sibling.read_bytes(), sibling.stat().st_mtime_ns) == before
+    assert [p.name for p in (tmp_path / "creds").iterdir()] == ["sibling.toml"]
+
+
+def test_remove_with_no_credentials_directory_returns_false_and_creates_none(
+    tmp_path: Path,
+) -> None:
+    store = CredentialStore(tmp_path / "creds")
+    assert not (tmp_path / "creds").exists()
+    assert store.remove("ghost") is False
+    assert not (tmp_path / "creds").exists()
+
+
+def test_remove_of_the_only_file_leaves_the_directory_in_place(tmp_path: Path) -> None:
+    store = CredentialStore(tmp_path / "creds")
+    store.save("only", _stored(values={"api_key": "only-secret"}))
+    directory = tmp_path / "creds"
+    directory_mode = stat.S_IMODE(directory.stat().st_mode)
+    directory_inode = directory.stat().st_ino
+    assert [p.name for p in directory.iterdir()] == ["only.toml"]
+
+    assert store.remove("only") is True
+
+    assert directory.is_dir()
+    assert list(directory.iterdir()) == []
+    assert stat.S_IMODE(directory.stat().st_mode) == directory_mode
+    assert directory.stat().st_ino == directory_inode

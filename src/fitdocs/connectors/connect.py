@@ -117,12 +117,13 @@ def _env_override(
 ) -> tuple[str, ...]:
     """The variables that will override the stored values during a pull.
 
-    Only a personal-key (``API_KEY``) connector's fields are ever overridden
+    Only a personal-key (``API_KEY``) or relay-token (``RELAY_TOKEN``)
+    connector's fields are ever overridden
     by the environment (``connectors/credentials.py``'s ``resolve_credentials``);
     a login-style connector's ``resolve_credentials`` reads only the store.
     """
 
-    if instance.connector.auth_style is not AuthStyle.API_KEY:
+    if instance.connector.auth_style not in (AuthStyle.API_KEY, AuthStyle.RELAY_TOKEN):
         return ()
     overridden: list[str] = []
     for field in instance.connector.credential_fields:

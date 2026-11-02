@@ -44,6 +44,12 @@
       "requirement": "1.4, 1.9, 2.3, 2.7 amended in place (appended tags only); 1.10 and 9.9 added -- Amendment 6, landed by publish-core task 8.5",
       "reason": "publish-core drives push activity, annotate remote activity and resolve remote activity through one publish operation (five capabilities driven, four reserved), validates the publish operation and link label at registration, adds the single-attempt request mode so a non-idempotent request is sent exactly once, and grows the pinned connectors surface from 50 to 58 names.",
       "also": "requirements.md gains Amendment 6; design.md gains a dated note admitting fitdocs.publish.request and fitdocs.publish.outcomes in connectors.protocol and fitdocs.publish.request in connectors.registry, and naming fitdocs.publish.targets beside fitdocs.cli as an importer. The relay-server spec also moves the surface count and may take an amendment number here; whichever lands second renumbers and recounts."
+    },
+    {
+      "date": "2026-11-01",
+      "requirement": "1.7, 2.3, 2.7, 4.5, 5.6, 5.7, 6.1, 9.4, 14.1 and 14.4 amended; the disconnect command added",
+      "reason": "relay-server adds the relay-token authentication style, the relay connector, relay connect with registration, a pulling-instances-only bare pull, and `fitdocs disconnect` as a third connector-request command.",
+      "also": "requirements.md gains Amendment 7 (2026-11-01; written as Amendment 6 and renumbered because publish-core landed first); nothing renumbered. Pinned by tests/connectors/test_protocol.py, test_registry.py, test_surface.py (63 names), test_credentials.py, test_relay_connect.py, test_relay_register.py, test_cli_relay_pull.py, test_relay.py, test_disconnect.py, test_cli_relay_disconnect.py, test_relay_offline.py, test_e2e.py and test_network_statements.py, and tests/test_cli_skill.py, each named in the amendment."
     }
   ]
 }

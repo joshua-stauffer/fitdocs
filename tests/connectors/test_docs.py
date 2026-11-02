@@ -51,7 +51,9 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import pytest
+from typer.testing import CliRunner
 
+from fitdocs.cli import app as cli_app
 from fitdocs.config import DATA_ROOT_ENV
 from fitdocs.connectors import registry
 from fitdocs.connectors.credentials import (
@@ -68,6 +70,7 @@ from fitdocs.connectors.protocol import (
     CredentialField,
     SettingsContext,
 )
+from fitdocs.connectors.relay import DEFAULT_RELAY_URL
 from fitdocs.connectors.settings import (
     _CONNECTOR_KEY,
     _RESERVED_KEYS,
@@ -76,6 +79,7 @@ from fitdocs.connectors.settings import (
     load_connectors_settings,
 )
 from fitdocs.layout import connector_ledger_path
+from tests._changelog_view import V0_2_0, read_unreleased_since
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _CONNECTORS_DOC = _REPO_ROOT / "docs" / "connectors.md"
@@ -119,6 +123,14 @@ _EXPECTED_HEADINGS = [
     "## The terms-first policy",
     "## Regenerating before a first pull",
     "## Running on a schedule",
+    "## The relay connector",
+    "### The relay and its address",
+    "### The token",
+    "### Connecting by paste",
+    "### Connecting by registration",
+    "### Disconnecting",
+    "### What each command sends",
+    "### Pulling a relay instance",
 ]
 
 
@@ -181,6 +193,9 @@ _DOCUMENTED_ENV_VAR_EXAMPLES: list[tuple[str, str]] = [
     # The `## intervals.icu` section's override variable (its own pin lives in
     # tests/connectors/test_intervals_docs.py).
     ("intervals", "api_key"),
+    # The relay section's override variable (pinned in the relay section tests
+    # below).
+    ("relay", "token"),
 ]
 
 
@@ -652,6 +667,214 @@ def test_inbox_page_carve_out_paragraph_is_additive_not_in_place_of_the_pin() ->
 
 
 # --------------------------------------------------------------------------
+# Relay documentation (relay-server task 8.4; Req 16.3, 16.7)
+# --------------------------------------------------------------------------
+
+
+def _preamble_text() -> str:
+    return re.split(r"(?m)^## ", _connectors_doc_text(), maxsplit=1)[0]
+
+
+_NUMBER_WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five"}
+
+
+def test_preamble_connector_list_is_the_registry_built_ins() -> None:
+    """The preamble's "the N connectors fitdocs ships: `a`, ..." list is the
+    registry's built-in connector ids, in registration order, and N is their
+    count.
+
+    Mutation: deleting ``relay`` from the preamble reds this.
+    """
+    match = re.search(
+        r"the (\w+) connectors fitdocs ships:(.*?)\. Outside", _preamble_text(), re.S
+    )
+    assert match, "the preamble no longer lists the connectors fitdocs ships"
+    listed = re.findall(r"`([a-z]+)`", match.group(2))
+    built_in = [c.connector_id for c in registry.available()]
+    assert built_in[:3] == ["folder", "intervals", "relay"], "not the built-in set"
+    assert listed == built_in
+    assert match.group(1) == _NUMBER_WORDS[len(built_in)]
+
+
+def test_preamble_treats_relay_like_intervals() -> None:
+    """The framework sections describe no online service outside the
+    intervals and relay sections, and the preamble links both.
+
+    Mutation: dropping either link, or restoring the one-section sentence,
+    reds this.
+    """
+    preamble = " ".join(_preamble_text().split())
+    assert "Outside those two sections, the framework sections" in preamble
+    assert "([its section](#intervalsicu) below)" in preamble
+    assert "([its section](#the-relay-connector) below)" in preamble
+    assert "Outside that section" not in preamble
+
+
+def _relay_section() -> str:
+    return _section_text("The relay connector")
+
+
+def test_relay_section_states_the_default_url_and_the_override_variable() -> None:
+    """Mutation: changing the stated address, or the stated variable, reds."""
+    section = _relay_section()
+    assert f"defaults to the maintainer's relay ({DEFAULT_RELAY_URL})" in section
+    assert f'url = "{DEFAULT_RELAY_URL}"' in section
+    assert f"`{env_var_name('relay', 'token')}`" in section
+
+
+def test_relay_section_names_every_relay_command_form() -> None:
+    """Each command form stands as its own whole line of a fenced block.
+
+    Whole-line matching matters: ``fitdocs connect relay`` is a prefix of the
+    registration form, and ``fitdocs disconnect relay`` of the local-only one.
+    Mutation: deleting any one of these lines reds this.
+    """
+    section = _relay_section()
+    for line in (
+        "fitdocs connect relay",
+        "fitdocs connect relay --register [--email ADDRESS]",
+        "fitdocs disconnect relay",
+        "fitdocs disconnect relay --local-only",
+    ):
+        found = re.findall(rf"^{re.escape(line)}$", section, re.M)
+        assert len(found) == 1, line
+
+
+def test_relay_section_pull_sentence_is_what_the_cli_prints(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The line the section quotes for a relay-only bare pull is the line a
+    relay-only bare pull prints.
+
+    Mutation: rewording the CLI's line, or the section's quote, reds this.
+    """
+    quoted = re.findall(
+        r'prints "(No configured[^"]*)"', " ".join(_relay_section().split())
+    )
+    assert len(quoted) == 1
+    (tmp_path / "fitdocs.toml").write_text(
+        '[connectors.my-relay]\nconnector = "relay"\n'
+    )
+    result = CliRunner().invoke(cli_app, ["pull", "--out", str(tmp_path)])
+    assert result.exit_code == 0, result.output
+    assert quoted[0] in " ".join(result.output.split())
+
+
+def test_relay_section_states_what_leaves_for_each_command() -> None:
+    """The "What each command sends" subsection names the request each
+    command makes, so a deleted row reds."""
+    match = re.search(
+        r"^### What each command sends\n(.*?)(?=\n### |\Z)",
+        _relay_section(),
+        re.S | re.M,
+    )
+    assert match, "no 'What each command sends' subsection"
+    body = " ".join(match.group(1).split())
+    for phrase in (
+        "pasted token",
+        "email address",
+        "stored token",
+        "nothing leaves your machine",
+    ):
+        assert phrase in body, phrase
+
+
+def _added_and_changed() -> tuple[str, str]:
+    view = read_unreleased_since(_REPO_ROOT / "CHANGELOG.md", V0_2_0)
+    unreleased = view.split("## [Unreleased]", 1)[1].split("\n## [", 1)[0]
+    added = unreleased.split("### Added", 1)[1].split("\n### ", 1)[0]
+    changed = unreleased.split("### Changed", 1)[1].split("\n### ", 1)[0]
+    return " ".join(added.split()), " ".join(changed.split())
+
+
+def _bullet(text: str, start: str) -> str:
+    """The one bullet of *text* (whitespace-collapsed) that begins with *start*."""
+    bullets = [
+        b
+        for b in re.split(r"(?= - )", " " + text)
+        if b.strip().startswith(f"- {start}")
+    ]
+    assert len(bullets) == 1, start
+    return bullets[0]
+
+
+def test_changelog_added_names_connector_register_and_disconnect() -> None:
+    """Each Added entry names the action. Mutation: deleting the connector
+    entry, `--register`, the disconnect entry, `--local-only`, or either
+    action sentence reds."""
+    added, _ = _added_and_changed()
+    connector = _bullet(added, "The `relay` connector, for a fitdocs relay")
+    assert "fitdocs connect NAME --register" in connector
+    assert (
+        "Action: to use a relay, add the instance table and run "
+        "`fitdocs connect NAME`." in connector
+    )
+    disconnect = _bullet(added, "`fitdocs disconnect NAME [--local-only]`")
+    assert "`--local-only` removes the file without contacting the relay" in disconnect
+    assert (
+        "Action: run `fitdocs disconnect NAME` to retire a token you no longer "
+        "want on this machine." in disconnect
+    )
+
+
+def test_changelog_changed_names_bare_pull_and_credentials_style() -> None:
+    """Each Changed entry names the action, and the two are adjacent, the bare
+    pull then the `auth_style` value (later landers may append after them).
+    Mutation: deleting either entry or action sentence, or separating or
+    swapping the two entries, reds."""
+    _, changed = _added_and_changed()
+    bare = _bullet(changed, "A bare `fitdocs pull`")
+    assert "Action: none; name the instance to see why it is not pulled." in bare
+    style = _bullet(changed, "The credentials file's `auth_style` value set")
+    assert f"gains `{AuthStyle.RELAY_TOKEN.value}`" in style
+    assert (
+        "Action: none for existing files; do not share one credentials "
+        "directory with an older fitdocs." in style
+    )
+    bullets = [b.strip() for b in re.split(r"(?= - )", " " + changed) if b.strip()]
+    position = bullets.index(bare.strip())
+    assert bullets[position + 1] == style.strip()
+
+
+def test_relay_section_registration_order_and_token_rules() -> None:
+    """Registration order and the override rules, as literal sentences.
+    Mutation: reverting any of these sentences reds."""
+    flat = " ".join(_relay_section().split())
+    assert (
+        "checks the address's shape, and only then asks the relay whether it "
+        "offers registration" in flat
+    )
+    assert "to ask its operator for a token" in flat
+    assert "revokes only the stored token, never the variable" in flat
+    assert (
+        "overrides the stored token wherever fitdocs resolves the instance's "
+        "credentials" in flat
+    )
+    assert "`fitdocs connect` prints the variable's name when it is set" in flat
+    assert (
+        "only when nothing is stored does it say the variable is not revoked "
+        "and remains set" in flat
+    )
+    assert "exits `2` and names the variable, except with `--register --email" in flat
+    assert "exactly `localhost`, `127.0.0.1` and `::1`" in flat
+
+
+def test_framework_pulling_bullet_and_terms_paragraph_cover_the_relay() -> None:
+    """Mutation: reverting either edit reds."""
+    text = " ".join(_connectors_doc_text().split())
+    assert (
+        "omit to pull every configured instance whose connector pulls "
+        "activities or wellness (see [Pulling a relay instance]"
+        "(#pulling-a-relay-instance))" in text
+    )
+    assert (
+        "talks to a fitdocs relay (the maintainer's, or one you or another "
+        "operator run), not to a third-party service's API" in text
+    )
+    assert "([Pulling a relay instance](#pulling-a-relay-instance) below)" in text
+
+
+# --------------------------------------------------------------------------
 # NeutralScan (design.md "NeutralScan", Req 14.6)
 # --------------------------------------------------------------------------
 
@@ -668,6 +891,13 @@ NEUTRAL_SCAN_EXEMPTIONS: dict[str, frozenset[str]] = {
             "tests/connectors/test_intervals_publish_cli.py",
             "tests/connectors/test_intervals_docs.py",
             "docs/connectors.md#intervals.icu",
+        }
+    ),
+    "api.fitdocs.ai": frozenset(
+        {
+            "src/fitdocs/connectors/relay.py",
+            "tests/connectors/test_relay.py",
+            "docs/connectors.md#The relay connector",
         }
     ),
 }
@@ -950,6 +1180,24 @@ def test_the_scan_finds_the_intervals_host_in_the_connectors_own_module() -> Non
     sources = _real_sources()
     assert "intervals.icu" in _extract_hosts(
         sources["src/fitdocs/connectors/intervals.py"]
+    )
+
+
+def test_the_scan_finds_the_relay_host_in_the_relay_docs_section() -> None:
+    """The exemption entry's section key is exercised: the section really
+    names the host, so the key is not a dead string."""
+    sources = _real_sources()
+    assert "api.fitdocs.ai" in _extract_hosts(
+        sources["docs/connectors.md#The relay connector"]
+    )
+
+
+def test_the_scan_finds_the_relay_host_in_the_connectors_own_module() -> None:
+    """The generic control above is satisfied by any admitted file; this one
+    pins that ``relay.py`` itself still names the host."""
+    sources = _real_sources()
+    assert "api.fitdocs.ai" in _extract_hosts(
+        sources["src/fitdocs/connectors/relay.py"]
     )
 
 

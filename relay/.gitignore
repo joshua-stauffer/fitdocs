@@ -1,0 +1,5 @@
+# Local relay state: SQLite databases, their WAL files and the serve claim.
+*.db
+*.db-wal
+*.db-shm
+*.serve-lock

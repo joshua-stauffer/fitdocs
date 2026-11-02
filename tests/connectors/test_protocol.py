@@ -26,6 +26,7 @@ otherwise imported by anything.
 
 from __future__ import annotations
 
+import ast
 import dataclasses
 import inspect
 import re
@@ -55,11 +56,17 @@ from fitdocs.connectors.protocol import (
     KeyVerifier,
     Listing,
     ListingDeferral,
+    RegistrationPolled,
+    RegistrationStarted,
+    RelayCapabilities,
+    RelayRefused,
+    RelayTokenClient,
     RemoteActivity,
     SettingsContext,
     TokenIssuer,
     TokenSet,
 )
+from fitdocs.connectors.relay_codes import RelayCode
 from fitdocs.connectors.secrets import Redactor, Secret
 from tests.connectors.conftest import FakeTransport
 
@@ -227,14 +234,24 @@ def test_auth_style_is_a_str_enum() -> None:
     assert str(AuthStyle.API_KEY) == "api-key"
 
 
-def test_auth_style_has_exactly_four_members_with_the_designed_values() -> None:
+def test_auth_style_has_exactly_five_members_with_the_designed_values() -> None:
     assert {member.value for member in AuthStyle} == {
         "none",
         "api-key",
         "login",
         "oauth-browser",
+        "relay-token",
     }
-    assert len(AuthStyle) == 4
+    assert len(AuthStyle) == 5
+    assert AuthStyle.RELAY_TOKEN.value == "relay-token"
+    # appended: the relay style is the last member, earlier order untouched
+    assert list(AuthStyle)[-1] is AuthStyle.RELAY_TOKEN
+    assert list(AuthStyle)[:4] == [
+        AuthStyle.NONE,
+        AuthStyle.API_KEY,
+        AuthStyle.LOGIN,
+        AuthStyle.OAUTH_BROWSER,
+    ]
 
 
 def test_exactly_oauth_browser_is_reserved() -> None:
@@ -244,6 +261,7 @@ def test_exactly_oauth_browser_is_reserved() -> None:
         AuthStyle.NONE,
         AuthStyle.API_KEY,
         AuthStyle.LOGIN,
+        AuthStyle.RELAY_TOKEN,
     } == SUPPORTED_AUTH_STYLES
 
 
@@ -482,6 +500,58 @@ def test_settings_context_shape() -> None:
     )
 
 
+def test_relay_refused_shape() -> None:
+    _fields_and_defaults(
+        RelayRefused,
+        (
+            ("code", "RelayCode"),
+            ("retry_after_s", "int | None"),
+        ),
+        frozen=True,
+        defaulted=frozenset({"retry_after_s"}),
+    )
+    assert RelayRefused(RelayCode.RATE_LIMITED).retry_after_s is None
+
+
+def test_relay_capabilities_shape() -> None:
+    _fields_and_defaults(
+        RelayCapabilities,
+        (
+            ("envelopes", "tuple[int, ...]"),
+            ("registration", "bool"),
+            ("targets", "tuple[str, ...]"),
+        ),
+        frozen=True,
+        defaulted=frozenset(),
+    )
+
+
+def test_registration_started_shape() -> None:
+    _fields_and_defaults(
+        RegistrationStarted,
+        (
+            ("user_code", "str"),
+            ("poll_secret", "Secret"),
+            ("interval_s", "int"),
+            ("expires_at", "datetime"),
+        ),
+        frozen=True,
+        defaulted=frozenset(),
+    )
+
+
+def test_registration_polled_shape() -> None:
+    _fields_and_defaults(
+        RegistrationPolled,
+        (
+            ("code", "RelayCode"),
+            ("token", "Secret | None"),
+        ),
+        frozen=True,
+        defaulted=frozenset(),
+    )
+
+
 def test_connector_session_shape() -> None:
     _fields_and_defaults(
         ConnectorSession,
@@ -573,6 +643,32 @@ def test_token_issuer_signatures() -> None:
     )
 
 
+def test_relay_token_client_signatures() -> None:
+    expected = {
+        "check_token": (
+            "(self, session: 'ConnectorSession', token: 'Secret')"
+            " -> 'RelayRefused | None'"
+        ),
+        "read_capabilities": (
+            "(self, session: 'ConnectorSession') -> 'RelayCapabilities | RelayRefused'"
+        ),
+        "start_registration": (
+            "(self, session: 'ConnectorSession', email: 'str')"
+            " -> 'RegistrationStarted | RelayRefused'"
+        ),
+        "poll_registration": (
+            "(self, session: 'ConnectorSession', started: 'RegistrationStarted')"
+            " -> 'RegistrationPolled | RelayRefused'"
+        ),
+        "revoke_token": (
+            "(self, session: 'ConnectorSession', token: 'Secret')"
+            " -> 'RelayRefused | None'"
+        ),
+    }
+    for name, signature in expected.items():
+        assert str(inspect.signature(getattr(RelayTokenClient, name))) == signature
+
+
 def test_activity_puller_signatures() -> None:
     assert (
         str(inspect.signature(ActivityPuller.list_activities))
@@ -612,6 +708,16 @@ def test_key_verifier_member_set() -> None:
 
 def test_token_issuer_member_set() -> None:
     assert _public_names(TokenIssuer) == {"login", "refresh"}
+
+
+def test_relay_token_client_member_set() -> None:
+    assert _public_names(RelayTokenClient) == {
+        "check_token",
+        "read_capabilities",
+        "start_registration",
+        "poll_registration",
+        "revoke_token",
+    }
 
 
 def test_connector_member_set() -> None:
@@ -756,6 +862,102 @@ def test_minimal_stub_satisfies_connector_and_activitypuller_at_runtime() -> Non
         RemoteActivity(remote_id="x", original_available=False),
     )
     assert isinstance(result, Declined)
+
+
+# ---------------------------------------------------------------------------
+# The relay types' design block, pinned whole. Each literal is the AST
+# rendering (docstrings stripped) of the class as design.md's
+# "ProtocolAmendment, RegistryAmendment, CredentialsAmendment" code block
+# gives it, so a decorator, base class, field or signature added or dropped
+# anywhere in the class changes the rendering.
+# ---------------------------------------------------------------------------
+
+_RELAY_DESIGN_RENDERINGS = {
+    "RelayRefused": (
+        "@dataclass(frozen=True)\n"
+        "class RelayRefused:\n"
+        "    code: RelayCode\n"
+        "    retry_after_s: int | None = None"
+    ),
+    "RelayCapabilities": (
+        "@dataclass(frozen=True)\n"
+        "class RelayCapabilities:\n"
+        "    envelopes: tuple[int, ...]\n"
+        "    registration: bool\n"
+        "    targets: tuple[str, ...]"
+    ),
+    "RegistrationStarted": (
+        "@dataclass(frozen=True)\n"
+        "class RegistrationStarted:\n"
+        "    user_code: str\n"
+        "    poll_secret: Secret\n"
+        "    interval_s: int\n"
+        "    expires_at: datetime"
+    ),
+    "RegistrationPolled": (
+        "@dataclass(frozen=True)\n"
+        "class RegistrationPolled:\n"
+        "    code: RelayCode\n"
+        "    token: Secret | None"
+    ),
+    "RelayTokenClient": (
+        "class RelayTokenClient(Protocol):\n"
+        "\n"
+        "    def check_token(self, session: ConnectorSession, token: Secret)"
+        " -> RelayRefused | None:\n"
+        "        ...\n"
+        "\n"
+        "    def read_capabilities(self, session: ConnectorSession)"
+        " -> RelayCapabilities | RelayRefused:\n"
+        "        ...\n"
+        "\n"
+        "    def start_registration(self, session: ConnectorSession, email: str)"
+        " -> RegistrationStarted | RelayRefused:\n"
+        "        ...\n"
+        "\n"
+        "    def poll_registration(self, session: ConnectorSession,"
+        " started: RegistrationStarted) -> RegistrationPolled | RelayRefused:\n"
+        "        ...\n"
+        "\n"
+        "    def revoke_token(self, session: ConnectorSession, token: Secret)"
+        " -> RelayRefused | None:\n"
+        "        ..."
+    ),
+}
+
+
+def _render_class_without_docstrings(name: str) -> str:
+    import fitdocs.connectors.protocol as protocol_module
+
+    tree = ast.parse(inspect.getsource(protocol_module))
+    matches = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == name
+    ]
+    assert len(matches) == 1, f"{name} must be defined exactly once"
+    for node in ast.walk(matches[0]):
+        if isinstance(node, ast.ClassDef | ast.FunctionDef):
+            first = node.body[0]
+            if (
+                isinstance(first, ast.Expr)
+                and isinstance(first.value, ast.Constant)
+                and isinstance(first.value.value, str)
+            ):
+                node.body = node.body[1:] or [ast.Expr(ast.Constant(...))]
+    return ast.unparse(matches[0])
+
+
+def test_the_five_relay_types_match_the_design_block_whole() -> None:
+    assert set(_RELAY_DESIGN_RENDERINGS) == {
+        "RelayRefused",
+        "RelayCapabilities",
+        "RegistrationStarted",
+        "RegistrationPolled",
+        "RelayTokenClient",
+    }
+    for name, expected in _RELAY_DESIGN_RENDERINGS.items():
+        assert _render_class_without_docstrings(name) == expected, name
 
 
 # ---------------------------------------------------------------------------

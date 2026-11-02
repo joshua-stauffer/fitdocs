@@ -44,10 +44,18 @@ from fitdocs import Modality
 from fitdocs.cli import app
 from fitdocs.connectors import registry as connector_registry
 from fitdocs.connectors.credentials import env_var_name
-from fitdocs.connectors.protocol import Capability, Fetched, Listing, RemoteActivity
+from fitdocs.connectors.protocol import (
+    Capability,
+    Fetched,
+    Listing,
+    RemoteActivity,
+    SettingsContext,
+)
+from fitdocs.connectors.relay import RelaySettings
+from fitdocs.connectors.settings import load_connectors_settings
 from fitdocs.index.location import resolve_index_location
 from fitdocs.index.store import open_index, read_bookkeeping
-from fitdocs.layout import archive_path, recovery_doc_path
+from fitdocs.layout import archive_path, recovery_doc_path, settings_path
 from fitdocs.load import registry as load_registry
 from fitdocs.load.docedit import apply_frontmatter_load, replace_load_region
 from fitdocs.load.types import (
@@ -61,6 +69,7 @@ from fitdocs.load.types import (
 )
 from fitdocs.metrics.types import DerivedMetrics
 from fitdocs.model import Activity
+from fitdocs.settings import load_settings_document
 from fitdocs.wellness import Metric, read_series
 from tests.connectors.conftest import ScriptedPersonalKeyConnector
 from tests.dashboards._helpers import write_page
@@ -70,6 +79,7 @@ from tests.wellness.builders_intervals import intervals_delivery_bytes, interval
 runner = CliRunner()
 
 _STUB_CALCULATOR_ID = "stub-analytics-index-parity"
+_RELAY_TOKEN = "fdr1_" + "e" * 16 + "_" + "e" * 52
 
 
 class _FieldFreeIndexParityCalculator:
@@ -301,7 +311,7 @@ def _fresh_synced_root(
     stage_wellness: bool = False,
 ) -> Path:
     """A freshly synced data root with one workout document, optionally
-    carrying a `[connectors]` table naming the built-in folder connector,
+    carrying a `[connectors]` table naming the built-in folder and relay connectors,
     the scripted personal-key connector, and wellness-enabled intervals.
     Recovery can additionally stage an intervals delivery through the inbox drain."""
     source = tmp_path / f"{name}-src"
@@ -316,6 +326,8 @@ def _fresh_synced_root(
             'path = "unused-folder"\n\n'
             '[connectors.key-src]\nconnector = "personal-key"\n\n'
             '[connectors.wellness-src]\nconnector = "intervals"\nwellness = true\n'
+            '[connectors.relay-src]\nconnector = "relay"\n'
+            'url = "https://relay.example.com"\n'
         )
     if tiles_disabled:
         settings += "\n[tiles]\nenabled = false\n"
@@ -392,6 +404,7 @@ def test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded(
     connector_registry.register(key_connector)
     monkeypatch.setenv(env_var_name("key-src", "api_key"), "s3cr3t-api-key")
     monkeypatch.setenv(env_var_name("wellness-src", "api_key"), "ik-synthetic-7Q2x9")
+    monkeypatch.setenv(env_var_name("relay-src", "token"), _RELAY_TOKEN)
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "fallback-xdg-cache"))
     is_query = command == "query"
     is_dashboard = command == "dashboard"
@@ -411,6 +424,19 @@ def test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded(
         with_connectors=True,
         tiles_disabled=needs_index,
         **wellness_options,
+    )
+    wired_instances = load_connectors_settings(
+        load_settings_document(wired_root),
+        settings_file=settings_path(wired_root),
+        context=SettingsContext(data_root=wired_root, inbox=wired_root / "inbox"),
+    )
+    relay_instances = [i for i in wired_instances if i.name == "relay-src"]
+    assert len(relay_instances) == 1
+    assert relay_instances[0].settings == RelaySettings(url="https://relay.example.com")
+    assert not load_connectors_settings(
+        load_settings_document(bare_root),
+        settings_file=settings_path(bare_root),
+        context=SettingsContext(data_root=bare_root, inbox=bare_root / "inbox"),
     )
     for root in (bare_root, wired_root):
         series = read_series(root)
@@ -444,7 +470,9 @@ def test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded(
         attempts.append(args)
         raise RuntimeError("tests/connectors must not open a real network socket")
 
-    monkeypatch.setattr(socket, "socket", _record_and_refuse)
+    # Name resolution precedes socket.socket, so guard all three entry points.
+    for entry_point in ("socket", "getaddrinfo", "create_connection"):
+        monkeypatch.setattr(socket, entry_point, _record_and_refuse)
 
     bare_root_before = _data_root_snapshot(bare_root)
     wired_root_before = _data_root_snapshot(wired_root)

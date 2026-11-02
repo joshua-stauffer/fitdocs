@@ -22,17 +22,18 @@ inside the listing-match helper of ``connectors/intervals.py``), and -- in
 module here reads the system clock directly; ``now`` and ``sleep`` are always
 passed in by the caller.
 
-The published surface (``__all__``) is 58 names: the 50 that design.md's
+The published surface (``__all__``) is 63 names: the 50 that design.md's
 "PackageInit" section and wellness-pull's "PackageSurface" list together, plus
-publish-core's eight publish names (pinned by
+publish-core's eight publish names, plus relay-server's five relay names (pinned by
 ``tests/connectors/test_surface.py``): the protocol layer's types and
 vocabularies, the transport layer, the typed failures, the secret and its
 redactor, and the registration operations. The built-in
-connectors (``FolderConnector``, and ``IntervalsConnector`` for an
-intervals.icu account) are deliberately not published here -- internal, like
+connectors (``FolderConnector``, ``IntervalsConnector`` for an
+intervals.icu account, and ``RelayConnector`` for a fitdocs relay) are
+deliberately not published here -- internal, like
 ``fitdocs.load``'s ``ThresholdCalculator`` -- but each is registered under its
-id at import time, below, so ``get("folder")`` and ``get("intervals")`` answer
-without any settings file naming them.
+id at import time, below, so ``get("folder")``, ``get("intervals")`` and
+``get("relay")`` answer without any settings file naming them.
 """
 
 from __future__ import annotations
@@ -83,6 +84,11 @@ from fitdocs.connectors.protocol import (
     PublishCode,
     PublishRequest,
     PublishResult,
+    RegistrationPolled,
+    RegistrationStarted,
+    RelayCapabilities,
+    RelayRefused,
+    RelayTokenClient,
     RemoteActivity,
     SettingsContext,
     TokenIssuer,
@@ -102,6 +108,7 @@ from fitdocs.connectors.registry import (
     unregister,
     validate_connector,
 )
+from fitdocs.connectors.relay import RelayConnector
 from fitdocs.connectors.secrets import REDACTED, Redactor, Secret
 
 __all__ = [
@@ -163,11 +170,17 @@ __all__ = [
     "PublishResult",
     "PublishCode",
     "TARGET_CODES",
+    "RelayTokenClient",
+    "RelayRefused",
+    "RelayCapabilities",
+    "RegistrationStarted",
+    "RegistrationPolled",
 ]
 
 # The built-in connectors: registered at import time so `get("folder")` and
-# `get("intervals")` answer whether or not any settings file names them.
-# Neither `FolderConnector` nor `IntervalsConnector` is in `__all__` above
-# (internal, like `ThresholdCalculator`).
+# `get("intervals")` (and `get("relay")`) answer whether or not any settings
+# file names them. None of `FolderConnector`, `IntervalsConnector` and
+# `RelayConnector` is in `__all__` above (internal, like `ThresholdCalculator`).
 register(FolderConnector())
 register(IntervalsConnector())
+register(RelayConnector())

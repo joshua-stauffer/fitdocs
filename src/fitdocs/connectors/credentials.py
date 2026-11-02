@@ -24,12 +24,13 @@ prompt, log the clock, or interpret a connector's own field names.
 uses: it builds a :class:`ResolvedCredentials` (a
 :class:`fitdocs.connectors.protocol.CredentialAccess`) for one instance,
 applying the auth-style rules design.md states -- ``NONE`` has no values,
-``API_KEY`` prefers a non-empty environment variable over the stored value
-per field and reports which field and variable are missing when neither is
-set, ``LOGIN`` reads only the store (an environment override could not be
-written back for a rotating token) and its :meth:`~ResolvedCredentials.replace`
-persists a new token set before returning -- and refuses an instance whose
-stored credentials were issued for a different connector (Req 4.6-4.9).
+``API_KEY`` (and ``RELAY_TOKEN``, resolved identically) prefers a non-empty
+environment variable over the stored value per field and reports which field
+and variable are missing when neither is set, ``LOGIN`` reads only the store
+(an environment override could not be written back for a rotating token) and
+its :meth:`~ResolvedCredentials.replace` persists a new token set before
+returning -- and refuses an instance whose stored credentials were issued for a
+different connector (Req 4.6-4.9).
 Every value :func:`resolve_credentials` hands back is registered with the
 caller's :class:`~fitdocs.connectors.secrets.Redactor` before it is
 returned.
@@ -202,6 +203,16 @@ class CredentialStore:
         payload = tomli_w.dumps(document).encode("utf-8")
         write_atomic(path, payload, prefix=instance)
         return path
+
+    def remove(self, instance: str) -> bool:
+        """Unlink ``instance``'s file; ``True`` when it existed, ``False`` when
+        it was already absent. Touches nothing else: not the directory, not
+        any other instance's file."""
+        try:
+            self.path_for(instance).unlink()
+        except FileNotFoundError:
+            return False
+        return True
 
 
 def _tz_violation(expires_at: datetime | None) -> str | None:
@@ -401,7 +412,10 @@ def resolve_credentials(
     field, a non-empty environment variable wins over the stored value; a
     field with neither raises :class:`NotConnectedError` naming
     ``fitdocs connect <instance_name>`` and every missing variable.
-    ``LOGIN`` -> stored values only, no environment override. Either style
+    ``RELAY_TOKEN`` -> resolved exactly like ``API_KEY``: the same per-field
+    environment override (``FITDOCS_CONNECTOR_<INSTANCE>_TOKEN`` for its
+    ``token`` field), the same store fallback and the same errors.
+    ``LOGIN`` -> stored values only, no environment override. Each of these styles
     raises :class:`NotConnectedError` when the stored credentials were
     issued for a different connector (Req 4.9). Every value returned is
     registered with ``redactor`` (Req 10).
@@ -411,7 +425,7 @@ def resolve_credentials(
     if auth_style is AuthStyle.NONE:
         return _NoAuthCredentials()
 
-    if auth_style is AuthStyle.API_KEY:
+    if auth_style is AuthStyle.API_KEY or auth_style is AuthStyle.RELAY_TOKEN:
         stored = store.load(instance_name) if store is not None else None
         if stored is not None and stored.connector_id != connector.connector_id:
             raise NotConnectedError(

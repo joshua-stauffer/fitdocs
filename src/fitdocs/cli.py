@@ -2,7 +2,7 @@
 
 A thin typer shell (design: CliApp, ``src/fitdocs/cli.py``): it parses flags,
 resolves configuration, calls the engine, and reports -- it contains no
-rendering or file-pipeline logic of its own. Sixteen commands are registered
+rendering or file-pipeline logic of its own. Seventeen commands are registered
 on top of the baseline ``--version`` / ``--help`` shell. The tree-processing
 commands documented here are:
 
@@ -72,6 +72,12 @@ interactively for each field the connector declares, reading any field
 marked secret through a no-echo prompt; when standard input is not an
 interactive terminal it prompts for nothing and fails loudly instead
 (connectors Req 5.4).
+
+``fitdocs disconnect NAME [--local-only] [--out PATH]`` forgets the named
+instance's stored credentials, asking a relay to revoke its token first unless
+``--local-only`` is given (relay-server Req 14); it writes nothing under the
+data root. A bare ``fitdocs pull`` skips instances whose connector pulls
+neither activities nor wellness, such as a relay (relay-server Req 11.5).
 
 ``fitdocs pull [NAMES...] [--out PATH] [--since DATE] [--dry-run] [--sync]
 [--no-prompt]`` fetches new activities from the connectors configured under
@@ -184,10 +190,12 @@ Network-capable code lives in exactly two modules (Req 14.2): :mod:`fitdocs.tile
 which fetches missing basemap tiles during ``sync``/``regen`` map rendering
 and only while tile requests are enabled (Req 4.2), and :mod:`fitdocs.connectors.http`,
 the connector transport the connector commands -- ``fitdocs connect``
-(one authentication attempt against a configured source) and ``fitdocs pull``
-(fetching activities from a configured connector) -- send every request
-through. Every other operation -- and the entire ``load`` command -- stays
-fully offline; a warm tile cache makes even map rendering network-free.
+(one authentication attempt against a configured source, or the registration
+of a relay instance), ``fitdocs disconnect`` (one revocation call for a relay
+instance, none otherwise) and ``fitdocs pull`` (fetching activities from a
+configured connector) -- send every request through. Every other operation --
+and the entire ``load`` command -- stays fully offline; a warm tile cache makes
+even map rendering network-free.
 
 Requirements 1.3, 1.4, 1.5, 2.1, 3.5, 8.1, 8.2, 8.3, 8.4, 8.6, 14.1, 14.2, 14.4.
 """
@@ -222,14 +230,23 @@ from fitdocs.connectors.connect import Connected, ConnectFailed, run_connect
 from fitdocs.connectors.credentials import (
     CredentialsLocationError,
     CredentialStore,
+    CredentialStoreError,
     check_outside_data_root,
     env_var_name,
     resolve_credentials_dir,
+)
+from fitdocs.connectors.disconnect import (
+    Disconnected,
+    DisconnectFailed,
+    NothingToDisconnect,
+    UnsupportedDisconnect,
+    run_disconnect,
 )
 from fitdocs.connectors.http import Transport, urllib_transport
 from fitdocs.connectors.protocol import (
     SUPPORTED_AUTH_STYLES,
     AuthStyle,
+    Capability,
     SettingsContext,
 )
 from fitdocs.connectors.pull import (
@@ -240,8 +257,18 @@ from fitdocs.connectors.pull import (
     PullReport,
     run_pull,
 )
+from fitdocs.connectors.relay import RelaySettings
+from fitdocs.connectors.relay_connect import (
+    RegistrationEmailError,
+    RegistrationShown,
+    RelayConnected,
+    RelayConnectFailed,
+    RelayTokenFormatError,
+    run_relay_connect,
+    run_relay_registration,
+)
 from fitdocs.connectors.secrets import Redactor
-from fitdocs.connectors.settings import load_connectors_settings
+from fitdocs.connectors.settings import ConnectorInstance, load_connectors_settings
 from fitdocs.history.engine import HistoryReport, run_history
 from fitdocs.hr_benchmarks import (
     HrStageReport,
@@ -513,6 +540,28 @@ _CONNECT_NAME_ARGUMENT = typer.Argument(
     help=(
         "The name of a configured connector instance (a table under the "
         "connectors table in fitdocs.toml)."
+    ),
+)
+_CONNECT_REGISTER_OPTION = typer.Option(
+    False,
+    "--register",
+    help=(
+        "Relay instances only: register an email address with the relay "
+        "and wait for it to issue a token, instead of pasting one."
+    ),
+)
+_CONNECT_EMAIL_OPTION = typer.Option(
+    None,
+    "--email",
+    help="Relay instances only, with --register: the address to register.",
+)
+_DISCONNECT_LOCAL_ONLY_OPTION = typer.Option(
+    False,
+    "--local-only",
+    help=(
+        "Relay instances only: forget the stored token without asking the "
+        "relay to revoke it (the token stays valid until its operator "
+        "revokes it)."
     ),
 )
 _PULL_NAMES_ARGUMENT = typer.Argument(
@@ -1315,10 +1364,118 @@ def _ask_value(prompt: str) -> str:
     return str(typer.prompt(prompt))
 
 
+def _say(line: str) -> None:
+    """Print one plain line to standard output, never wrapped or interpreted."""
+    Console().print(line, markup=False, highlight=False, emoji=False, soft_wrap=True)
+
+
+def _connect_relay(
+    instance: ConnectorInstance,
+    store: CredentialStore,
+    *,
+    register: bool,
+    email: str | None,
+) -> NoReturn:
+    """Connect a relay instance (relay-server design: CliRelay; Req 12.1,
+    12.5, 13.2, 13.11, 15.1).
+
+    Always exits: ``0`` connected, ``1`` the relay (or the network) said no,
+    ``2`` before any request, ``130`` on an interrupt. Nothing is stored
+    unless the engine reports success.
+    """
+    name = instance.name
+    token_variable = env_var_name(name, "token")
+    if not _stdin_is_interactive() and not (register and email is not None):
+        if register:
+            _config_error(
+                f"{name}: standard input is not an interactive terminal; "
+                f"pass --email ADDRESS, or an unattended command can use "
+                f"{token_variable} instead."
+            )
+        _config_error(
+            f"{name}: standard input is not an interactive terminal; "
+            f"an unattended command can use {token_variable} instead."
+        )
+
+    redactor = Redactor()
+
+    def on_started(shown: RegistrationShown) -> None:
+        minutes = shown.expires_in_s // 60
+        remaining = (
+            "less than a minute"
+            if minutes == 0
+            else f"{minutes} minute{'' if minutes == 1 else 's'}"
+        )
+        _say(f"Registering {shown.email}.")
+        _say(f"Your code: {shown.user_code}")
+        _say(
+            "Confirm the registration only if the relay's confirmation page "
+            "shows the same code."
+        )
+        _say(f"This registration expires in {remaining}.")
+
+    try:
+        if register:
+            address = email if email is not None else _ask_value("Email address: ")
+            outcome = run_relay_registration(
+                instance,
+                address,
+                store=store,
+                transport=_connector_transport(),
+                environ=os.environ,
+                now=lambda: datetime.now(UTC),
+                sleep=time.sleep,
+                redactor=redactor,
+                on_started=on_started,
+            )
+        else:
+            outcome = run_relay_connect(
+                instance,
+                _ask_secret("Relay token: "),
+                store=store,
+                transport=_connector_transport(),
+                environ=os.environ,
+                now=lambda: datetime.now(UTC),
+                sleep=time.sleep,
+                redactor=redactor,
+            )
+    except (KeyboardInterrupt, typer.Abort):
+        # typer.prompt turns Ctrl-C and end-of-input into typer.Abort.
+        _say(f"{name}: interrupted; nothing was stored.")
+        raise typer.Exit(code=_EXIT_INTERRUPTED) from None
+    except (RelayTokenFormatError, RegistrationEmailError) as exc:
+        # Fixed text that never repeats the value: not passed through the
+        # redactor, which would mangle it once a short value is registered.
+        _config_error(str(exc))
+    except Exception as exc:  # noqa: BLE001 - mapped to a redacted, typed line
+        _say(f"{type(exc).__name__}: {redactor.redact(str(exc))}")
+        raise typer.Exit(code=_EXIT_FILE_FAILURES) from None
+
+    if isinstance(outcome, RelayConnected):
+        _say(f"{name}: connected.")
+        _say(f"Credentials: {outcome.path}")
+        settings = instance.settings
+        assert isinstance(settings, RelaySettings)
+        _say(f"Relay: {settings.url}")
+        if outcome.env_override:
+            _say(
+                "Overriding environment variables (used instead of the "
+                f"stored values during a pull): {', '.join(outcome.env_override)}"
+            )
+        raise typer.Exit(code=_EXIT_SUCCESS)
+
+    assert isinstance(outcome, RelayConnectFailed)
+    _say(f"{name}: {outcome.code.value}: {outcome.explanation}")
+    _say(outcome.next_step)
+    raise typer.Exit(code=_EXIT_FILE_FAILURES)
+
+
 @app.command("connect")
 def connect_command(
     name: str = _CONNECT_NAME_ARGUMENT,
     out: Path | None = _OUT_OPTION,
+    register: bool = _CONNECT_REGISTER_OPTION,
+    email: str | None = _CONNECT_EMAIL_OPTION,
 ) -> None:
     """Authenticate one configured connector instance once and store its
     credentials only on success.
@@ -1365,6 +1522,12 @@ def connect_command(
     unredacted secret). Nothing is written under the data root either way
     (Req 5.9); this command never touches the inbox, a ledger, or a
     delivery.
+
+    A relay instance (relay-server Req 12, 13, 15.1) is connected by
+    :func:`_connect_relay` instead: a pasted token, or ``--register`` with an
+    address from ``--email`` or a prompt. ``--register`` and ``--email`` on
+    any other instance, and ``--email`` without ``--register``, exit with the
+    configuration-error code before any request.
     """
     data_root = _resolved_data_root(out)
     try:
@@ -1391,6 +1554,11 @@ def connect_command(
         )
 
     connector = instance.connector
+    is_relay = connector.auth_style is AuthStyle.RELAY_TOKEN
+    if (register or email is not None) and not is_relay:
+        _config_error(f"{name}: --register and --email apply only to a relay instance.")
+    if email is not None and not register:
+        _config_error(f"{name}: --email needs --register.")
     if connector.auth_style is AuthStyle.NONE:
         Console().print(
             f"{name}: this connector requires no authentication; nothing to connect.",
@@ -1411,6 +1579,11 @@ def connect_command(
         check_outside_data_root(credentials_dir, data_root)
     except CredentialsLocationError as exc:
         _config_error(str(exc))
+
+    if is_relay:
+        _connect_relay(
+            instance, CredentialStore(credentials_dir), register=register, email=email
+        )
 
     if not _stdin_is_interactive():
         if connector.auth_style is AuthStyle.API_KEY:
@@ -1501,6 +1674,117 @@ def connect_command(
     raise typer.Exit(code=_EXIT_FILE_FAILURES)
 
 
+def _environment_variables_line(variables: tuple[str, ...]) -> str:
+    """Req 14.4's statement about an instance's environment override."""
+    if len(variables) == 1:
+        return f"Environment variable {variables[0]} is not revoked and remains set."
+    return (
+        f"Environment variables {', '.join(variables)} are not revoked and remain set."
+    )
+
+
+@app.command("disconnect")
+def disconnect_command(
+    name: str = _CONNECT_NAME_ARGUMENT,
+    out: Path | None = _OUT_OPTION,
+    local_only: bool = _DISCONNECT_LOCAL_ONLY_OPTION,
+) -> None:
+    """Forget one connector instance's stored credentials, revoking a relay
+    token at the relay first.
+
+    (relay-server design: CliRelay, DisconnectEngine; Req 14.1-14.7, 15.1.)
+
+    Takes connect's preflight: the data root, the settings document, the
+    configured inbox (validated, never created), the connectors table, NAME
+    matched against the configured instances (an unknown name exits ``2``
+    naming every configured instance), and the credentials directory checked
+    to lie outside the data root. Nothing is written under the data root.
+    The work is :func:`~fitdocs.connectors.disconnect.run_disconnect`; a relay
+    instance with a stored token makes exactly one revocation request unless
+    ``--local-only`` is given.
+
+    Exit codes: ``0`` credentials removed, or none to remove; ``1`` the relay
+    (or the network) did not confirm the revocation, and the stored file is
+    kept; ``2`` a configuration error -- including a reserved authentication
+    style and a credentials file that cannot be read, which
+    ``--local-only`` removes without reading.
+    """
+    data_root = _resolved_data_root(out)
+    try:
+        document = load_settings_document(data_root)
+        inbox_settings = load_inbox_settings(document, data_root=data_root)
+        validated_inbox = validate_inbox_paths(data_root, inbox_settings)
+        instances = load_connectors_settings(
+            document,
+            settings_file=settings_path(data_root),
+            context=SettingsContext(
+                data_root=data_root, inbox=validated_inbox.inbox_resolved
+            ),
+        )
+    except SettingsError as exc:
+        _config_error(str(exc))
+
+    by_name = {instance.name: instance for instance in instances}
+    instance = by_name.get(name)
+    if instance is None:
+        configured = ", ".join(sorted(by_name)) or "none"
+        _config_error(
+            f"{name!r} is not a configured connector instance; "
+            f"configured instances: {configured}"
+        )
+
+    try:
+        credentials_dir = resolve_credentials_dir(os.environ, Path.home())
+        check_outside_data_root(credentials_dir, data_root)
+    except CredentialsLocationError as exc:
+        _config_error(str(exc))
+
+    redactor = Redactor()
+    try:
+        outcome = run_disconnect(
+            instance,
+            local_only=local_only,
+            store=CredentialStore(credentials_dir),
+            transport=_connector_transport(),
+            environ=os.environ,
+            now=lambda: datetime.now(UTC),
+            sleep=time.sleep,
+            redactor=redactor,
+        )
+    except UnsupportedDisconnect as exc:
+        _config_error(f"{name}: {exc}")
+    except CredentialStoreError as exc:
+        message = redactor.redact(str(exc))
+        hint = f"fitdocs disconnect {name} --local-only"
+        lines = [message]
+        if not message.endswith(hint):
+            lines.append(f"To forget it without asking the relay, run: {hint}")
+        _config_error("\n".join(lines))
+    except Exception as exc:  # noqa: BLE001 - mapped to a redacted, typed line
+        _say(f"{type(exc).__name__}: {redactor.redact(str(exc))}")
+        raise typer.Exit(code=_EXIT_FILE_FAILURES) from None
+
+    if isinstance(outcome, Disconnected):
+        _say(f"{name}: disconnected.")
+        _say(f"Credentials removed: {outcome.path}")
+        if outcome.code is not None:
+            _say(f"Relay code: {outcome.code.value}")
+        if outcome.note is not None:
+            _say(f"Note: {outcome.note}.")
+        raise typer.Exit(code=_EXIT_SUCCESS)
+
+    if isinstance(outcome, NothingToDisconnect):
+        _say(f"{name}: nothing to disconnect.")
+        if outcome.env_override:
+            _say(_environment_variables_line(outcome.env_override))
+        raise typer.Exit(code=_EXIT_SUCCESS)
+
+    assert isinstance(outcome, DisconnectFailed)
+    _say(f"{name}: {outcome.code.value}: {outcome.explanation}")
+    _say(outcome.next_step)
+    raise typer.Exit(code=_EXIT_FILE_FAILURES)
+
+
 def _parse_since(value: str) -> datetime:
     """Parse ``--since``'s ``YYYY-MM-DD`` value as local midnight, in UTC
     (design: CliCommands pull preflight, Req 6.4).
@@ -1542,6 +1826,14 @@ def pull_command(
 
     (connectors design: CliCommands "``fitdocs pull``"; Req 3.9, 4.2, 6.1-6.3,
     6.9, 8.4, 11.1-11.5.)
+
+    Without NAMES, only instances whose connector declares ``PULL_ACTIVITIES``
+    or ``PULL_WELLNESS`` are selected (relay-server Req 11.5): a relay
+    instance, or any connector that pulls neither, is skipped and never
+    contacted. When instances are configured but none is selected, this prints
+    "No configured connector instance pulls activities or wellness; nothing to
+    pull." and completes with the success code (Req 11.6). Named instances are
+    unchanged.
 
     Every preflight check runs, in design.md's order, before any request or
     write: the data root (Req 3.9); ``--sync`` combined with ``--dry-run``
@@ -1622,7 +1914,14 @@ def pull_command(
             instance for instance in all_instances if instance.name in wanted
         )
     else:
-        selected = all_instances
+        # A bare pull selects only the instances that pull something; a relay
+        # instance never does (relay-server Req 11.5).
+        selected = tuple(
+            instance
+            for instance in all_instances
+            if instance.connector.capabilities
+            & {Capability.PULL_ACTIVITIES, Capability.PULL_WELLNESS}
+        )
 
     store: CredentialStore | None = None
     if any(
@@ -1663,7 +1962,10 @@ def pull_command(
 
     if not selected:
         Console().print(
-            "No connectors are configured; nothing to pull.",
+            "No connectors are configured; nothing to pull."
+            if not all_instances
+            else "No configured connector instance pulls activities or wellness; "
+            "nothing to pull.",
             markup=False,
             highlight=False,
             soft_wrap=True,
@@ -2511,7 +2813,6 @@ def publish_command(
     # tests/publish/test_cli_publish.py).
     import secrets
 
-    from fitdocs.connectors.settings import ConnectorInstance
     from fitdocs.publish.engine import PublishPlan, run_publish
     from fitdocs.publish.ledger import PublishLedgerError, load_ledgers
     from fitdocs.publish.outcomes import PublishCode
