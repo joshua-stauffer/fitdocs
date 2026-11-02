@@ -71,6 +71,8 @@ def test_discovery_reads_contiguous_numbered_changes_from_package_data(
     )
     assert changes[0].sql == on_disk.read_text(encoding="utf-8")
     assert "CREATE TABLE tokens" in changes[0].sql
+    assert changes[1].name == "0002_target_custody"
+    assert "CREATE TABLE target_connections" in changes[1].sql
 
 
 def _directory(root: Path, *file_names: str) -> Path:

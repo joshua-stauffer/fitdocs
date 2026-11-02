@@ -11,6 +11,7 @@ import psycopg_pool
 from fitdocs_relay.config import PostgresTarget
 from fitdocs_relay.storage.interface import (
     DuplicateIdentifier,
+    NewConnection,
     NewPrincipal,
     NewToken,
     Principal,
@@ -18,9 +19,11 @@ from fitdocs_relay.storage.interface import (
     RevokeResult,
     SchemaChange,
     SchemaState,
+    SealedTokens,
     ServingClaim,
     StorageError,
     StorageUnreachable,
+    StoredConnection,
     TokenRecord,
     TokenSummary,
     UnknownPrincipal,
@@ -41,6 +44,33 @@ _UNREACHABLE = "the PostgreSQL database cannot be reached"
 _FAILED = "the PostgreSQL database reported an error"
 
 _T = TypeVar("_T")
+
+_CONNECTION_COLUMNS = (
+    "principal_id, target, account_key, access_sealed, refresh_sealed, "
+    "access_expires_at, generation, lease_id, lease_until, token_id, "
+    "created_at, updated_at"
+)
+
+_Db = psycopg.Connection[tuple[object, ...]]
+
+
+def _connection_from_row(row: tuple[object, ...]) -> StoredConnection:
+    return StoredConnection(
+        principal_id=row[0],  # type: ignore[arg-type]
+        target=row[1],  # type: ignore[arg-type]
+        account_key=row[2],  # type: ignore[arg-type]
+        tokens=SealedTokens(
+            access=row[3],  # type: ignore[arg-type]
+            refresh=row[4],  # type: ignore[arg-type]
+            access_expires_at=row[5],  # type: ignore[arg-type]
+        ),
+        generation=row[6],  # type: ignore[arg-type]
+        lease_id=row[7],  # type: ignore[arg-type]
+        lease_until=row[8],  # type: ignore[arg-type]
+        token_id=row[9],  # type: ignore[arg-type]
+        created_at=row[10],  # type: ignore[arg-type]
+        updated_at=row[11],  # type: ignore[arg-type]
+    )
 
 
 # SQLSTATEs that mean the server could not be reached or refused the session:
@@ -394,6 +424,170 @@ class PostgresBackend:
                 )
 
         return _guarded(work)
+
+    # --- TargetConnectionStore -----------------------------------------------
+
+    def put_connection(self, connection: NewConnection, *, now: int) -> None:
+        self._check_open()
+        owner, target, account = (
+            connection.principal_id,
+            connection.target,
+            connection.account_key,
+        )
+        tokens = connection.tokens
+
+        def work() -> None:
+            with self._pool.connection() as db:
+                # One writer per target: two principals putting one account
+                # cannot both pass the rival check and then collide on the
+                # (target, account_key) unique constraint.
+                db.execute(
+                    "SELECT pg_advisory_xact_lock(hashtext(%s))",
+                    ("fitdocs-relay:target-connections:" + target,),
+                )
+                # FOR SHARE keeps the principal's row from being deleted until
+                # this transaction ends.
+                if (
+                    db.execute(
+                        "SELECT 1 FROM principals WHERE principal_id = %s FOR SHARE",
+                        (owner,),
+                    ).fetchone()
+                    is None
+                ):
+                    raise UnknownPrincipal("the principal does not exist")
+                rival = db.execute(
+                    "SELECT principal_id FROM target_connections "
+                    "WHERE target = %s AND account_key = %s AND principal_id <> %s",
+                    (target, account, owner),
+                ).fetchone()
+                if rival is not None:
+                    self._remove_connection(db, str(rival[0]), target, now)
+                own = db.execute(
+                    "SELECT account_key FROM target_connections "
+                    "WHERE principal_id = %s AND target = %s FOR UPDATE",
+                    (owner, target),
+                ).fetchone()
+                if own is not None and own[0] != account:
+                    db.execute(
+                        "DELETE FROM target_publications "
+                        "WHERE principal_id = %s AND target = %s",
+                        (owner, target),
+                    )
+                db.execute(
+                    "INSERT INTO target_connections (principal_id, target, "
+                    "account_key, access_sealed, refresh_sealed, "
+                    "access_expires_at, generation, lease_id, lease_until, "
+                    "token_id, created_at, updated_at) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, 1, NULL, NULL, NULL, %s, %s) "
+                    "ON CONFLICT (principal_id, target) DO UPDATE SET "
+                    "account_key = excluded.account_key, "
+                    "access_sealed = excluded.access_sealed, "
+                    "refresh_sealed = excluded.refresh_sealed, "
+                    "access_expires_at = excluded.access_expires_at, "
+                    "generation = 1, lease_id = NULL, lease_until = NULL, "
+                    "updated_at = excluded.updated_at",
+                    (
+                        owner,
+                        target,
+                        account,
+                        tokens.access,
+                        tokens.refresh,
+                        tokens.access_expires_at,
+                        now,
+                        now,
+                    ),
+                )
+
+        _guarded(work)
+
+    def get_connection(self, principal_id: str, target: str) -> StoredConnection | None:
+        self._check_open()
+
+        def work() -> tuple[object, ...] | None:
+            with self._pool.connection() as db:
+                return db.execute(
+                    f"SELECT {_CONNECTION_COLUMNS} FROM target_connections "
+                    "WHERE principal_id = %s AND target = %s",
+                    (principal_id, target),
+                ).fetchone()
+
+        row = _guarded(work)
+        return _connection_from_row(row) if row else None
+
+    def list_connections(self, target: str | None) -> tuple[StoredConnection, ...]:
+        self._check_open()
+        sql = f"SELECT {_CONNECTION_COLUMNS} FROM target_connections"
+        params: tuple[object, ...] = ()
+        if target is not None:
+            sql += " WHERE target = %s"
+            params = (target,)
+        sql += ' ORDER BY target COLLATE "C", principal_id COLLATE "C"'
+
+        def work() -> list[tuple[object, ...]]:
+            with self._pool.connection() as db:
+                return db.execute(sql, params).fetchall()
+
+        return tuple(_connection_from_row(row) for row in _guarded(work))
+
+    def delete_connection(
+        self, principal_id: str, target: str, *, generation: int | None, now: int
+    ) -> bool:
+        self._check_open()
+
+        def work() -> bool:
+            with self._pool.connection() as db:
+                if generation is not None and (
+                    db.execute(
+                        "SELECT 1 FROM target_connections WHERE principal_id = %s "
+                        "AND target = %s AND generation = %s FOR UPDATE",
+                        (principal_id, target, generation),
+                    ).fetchone()
+                    is None
+                ):
+                    return False
+                return self._remove_connection(db, principal_id, target, now)
+
+        return _guarded(work)
+
+    def delete_connection_by_account(
+        self, target: str, account_key: str, *, now: int
+    ) -> bool:
+        self._check_open()
+
+        def work() -> bool:
+            with self._pool.connection() as db:
+                row = db.execute(
+                    "SELECT principal_id FROM target_connections "
+                    "WHERE target = %s AND account_key = %s FOR UPDATE",
+                    (target, account_key),
+                ).fetchone()
+                if row is None:
+                    return False
+                return self._remove_connection(db, str(row[0]), target, now)
+
+        return _guarded(work)
+
+    @staticmethod
+    def _remove_connection(db: _Db, principal_id: str, target: str, now: int) -> bool:
+        """Delete a connection and its publications; revoke its token."""
+        row = db.execute(
+            "DELETE FROM target_connections WHERE principal_id = %s AND target = %s "
+            "RETURNING token_id",
+            (principal_id, target),
+        ).fetchone()
+        if row is None:
+            return False
+        db.execute(
+            "DELETE FROM target_publications WHERE principal_id = %s AND target = %s",
+            (principal_id, target),
+        )
+        if row[0] is not None:
+            db.execute(
+                "UPDATE tokens SET revoked_at = %s "
+                "WHERE token_id = %s AND revoked_at IS NULL",
+                (now, row[0]),
+            )
+        return True
 
     # --- ServingStore --------------------------------------------------------
 

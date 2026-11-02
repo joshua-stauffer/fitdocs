@@ -13,6 +13,7 @@ import pytest
 from fitdocs_relay.storage import interface
 from fitdocs_relay.storage.interface import (
     DuplicateIdentifier,
+    NewConnection,
     NewPrincipal,
     NewToken,
     Principal,
@@ -25,11 +26,14 @@ from fitdocs_relay.storage.interface import (
     SchemaChange,
     SchemaState,
     SchemaStore,
+    SealedTokens,
     ServingStore,
     Storage,
     StorageBase,
     StorageError,
     StorageUnreachable,
+    StoredConnection,
+    TargetConnectionStore,
     TokenRecord,
     TokenStore,
     TokenSummary,
@@ -53,6 +57,13 @@ EXPECTED_MEMBERS: dict[str, set[str]] = {
     "RecordStore": {"put_record", "get_record", "take_record", "delete_record"},
     "SchemaStore": {"schema_state", "apply_schema_change"},
     "ServingStore": {"claim_serving"},
+    "TargetConnectionStore": {
+        "put_connection",
+        "get_connection",
+        "list_connections",
+        "delete_connection",
+        "delete_connection_by_account",
+    },
 }
 
 AREAS = {
@@ -62,6 +73,7 @@ AREAS = {
     "RecordStore": RecordStore,
     "SchemaStore": SchemaStore,
     "ServingStore": ServingStore,
+    "TargetConnectionStore": TargetConnectionStore,
 }
 
 
@@ -92,6 +104,7 @@ def test_every_area_is_based_on_storage_base_and_composed_into_storage() -> None
         RecordStore,
         SchemaStore,
         ServingStore,
+        TargetConnectionStore,
         Protocol,
     )
     assert _declared(Storage) == set()
@@ -240,6 +253,56 @@ DESIGNED: dict[str, dict[str, list[str]]] = {
         "bases": ["StorageBase", "Protocol"],
         "body": ["def claim_serving(self) -> ServingClaim | None"],
     },
+    "SealedTokens": {
+        "decorators": ["dataclass(frozen=True)"],
+        "bases": [],
+        "body": [
+            "access: str = field(repr=False)",
+            "refresh: str | None = field(repr=False)",
+            "access_expires_at: int | None",
+        ],
+    },
+    "NewConnection": {
+        "decorators": ["dataclass(frozen=True)"],
+        "bases": [],
+        "body": [
+            "principal_id: str",
+            "target: str",
+            "account_key: str",
+            "tokens: SealedTokens",
+        ],
+    },
+    "StoredConnection": {
+        "decorators": ["dataclass(frozen=True)"],
+        "bases": [],
+        "body": [
+            "principal_id: str",
+            "target: str",
+            "account_key: str",
+            "tokens: SealedTokens",
+            "generation: int",
+            "lease_id: str | None",
+            "lease_until: int | None",
+            "token_id: str | None",
+            "created_at: int",
+            "updated_at: int",
+        ],
+    },
+    "TargetConnectionStore": {
+        "decorators": [],
+        "bases": ["StorageBase", "Protocol"],
+        "body": [
+            "def put_connection(self, connection: NewConnection, *, now: int) -> None",
+            "def get_connection(self, principal_id: str, target: str) -> "
+            "StoredConnection | None",
+            "def list_connections(self, target: str | None) -> "
+            "tuple[StoredConnection, ...]",
+            "def delete_connection(self, principal_id: str, target: str, *, "
+            "generation: int | None, now: int) -> bool",
+            "def delete_connection_by_account(self, target: str, account_key: str, "
+            "*, now: int) -> bool",
+        ],
+    },
     "Storage": {
         "decorators": [],
         "bases": [
@@ -249,6 +312,7 @@ DESIGNED: dict[str, dict[str, list[str]]] = {
             "RecordStore",
             "SchemaStore",
             "ServingStore",
+            "TargetConnectionStore",
             "Protocol",
         ],
         "body": [],
@@ -295,6 +359,11 @@ TAKES_NOW = {
     RateLimitStore: {"count_request"},
     RecordStore: {"put_record", "get_record", "take_record"},
     SchemaStore: {"apply_schema_change"},
+    TargetConnectionStore: {
+        "put_connection",
+        "delete_connection",
+        "delete_connection_by_account",
+    },
 }
 
 
@@ -356,6 +425,23 @@ def test_the_interface_module_imports_no_clock() -> None:
         (RateDecision, ["allowed", "count", "retry_after_s"]),
         (SchemaState, ["current", "expected"]),
         (SchemaChange, ["version", "name", "sql"]),
+        (SealedTokens, ["access", "refresh", "access_expires_at"]),
+        (NewConnection, ["principal_id", "target", "account_key", "tokens"]),
+        (
+            StoredConnection,
+            [
+                "principal_id",
+                "target",
+                "account_key",
+                "tokens",
+                "generation",
+                "lease_id",
+                "lease_until",
+                "token_id",
+                "created_at",
+                "updated_at",
+            ],
+        ),
     ],
 )
 def test_value_types_are_frozen_with_the_designed_fields(

@@ -10,10 +10,12 @@ from tests.conformance.state_support import Target, raw
 
 from fitdocs_relay.storage.interface import (
     DuplicateIdentifier,
+    NewConnection,
     NewPrincipal,
     NewToken,
     RateDecision,
     RevokeResult,
+    SealedTokens,
     Storage,
     TokenRecord,
 )
@@ -226,3 +228,46 @@ def test_a_lookup_that_starts_after_a_revocation_returned_never_sees_an_active_t
         assert record is not None
         if after:
             assert record.revoked_at == T2, "an active token after the revoke"
+
+
+@pytest.mark.covers(
+    "TargetConnectionStore.put_connection", "TargetConnectionStore.list_connections"
+)
+@pytest.mark.parametrize("contenders", [2, THREADS])
+def test_principals_putting_one_account_at_once_leave_one_connection(
+    contenders: int, database_target: Target, storages: list[Storage]
+) -> None:
+    owners = [f"p{i:02d}" for i in range(contenders)]
+    for owner in owners:
+        storages[0].create_principal(NewPrincipal(owner, None), now=T1)
+    for round_number in range(5):
+        account = f"acct-{round_number}"
+        assert storages[0].list_connections("strava") == ()
+
+        def put(i: int, account: str = account) -> object:
+            storages[i].put_connection(
+                NewConnection(
+                    owners[i],
+                    "strava",
+                    account,
+                    SealedTokens(f"sealed-{i}", None, None),
+                ),
+                now=T2,
+            )
+            return "put"
+
+        results = race(contenders, put)
+        assert results == ["put"] * contenders, results
+        held = [
+            c
+            for c in storages[0].list_connections("strava")
+            if c.account_key == account
+        ]
+        assert len(held) == 1
+        assert held[0].tokens.access == f"sealed-{owners.index(held[0].principal_id)}"
+        assert raw(
+            database_target,
+            "SELECT count(*) FROM target_connections WHERE account_key = ?",
+            (account,),
+        ) == [(1,)]
+        assert storages[0].delete_connection_by_account("strava", account, now=T3)

@@ -182,6 +182,71 @@ class ServingStore(StorageBase, Protocol):
         ...
 
 
+@dataclass(frozen=True)
+class SealedTokens:
+    """A connection's tokens as the keyring sealed them; storage keeps them opaque."""
+
+    access: str = field(repr=False)
+    refresh: str | None = field(repr=False)
+    access_expires_at: int | None  # None: no stated expiry, so no time-based refresh
+
+
+@dataclass(frozen=True)
+class NewConnection:
+    principal_id: str
+    target: str
+    account_key: str
+    tokens: SealedTokens
+
+
+@dataclass(frozen=True)
+class StoredConnection:
+    principal_id: str
+    target: str
+    account_key: str
+    tokens: SealedTokens
+    generation: int
+    lease_id: str | None
+    lease_until: int | None
+    token_id: str | None
+    created_at: int
+    updated_at: int
+
+
+class TargetConnectionStore(StorageBase, Protocol):
+    def put_connection(self, connection: NewConnection, *, now: int) -> None:
+        """Store the principal's connection to `connection.target`.
+
+        Upserts by (principal, target) with generation 1 and no lease. Another
+        principal's connection to the same (target, account) is deleted with
+        its publications and its connection token revoked; when this
+        principal's own account changes, its publications for the target are
+        deleted. Raises `UnknownPrincipal` for a principal that does not exist.
+        """
+        ...
+
+    def get_connection(
+        self, principal_id: str, target: str
+    ) -> StoredConnection | None: ...
+
+    def list_connections(self, target: str | None) -> tuple[StoredConnection, ...]:
+        """By target, then principal id; every target when `target` is None."""
+        ...
+
+    def delete_connection(
+        self, principal_id: str, target: str, *, generation: int | None, now: int
+    ) -> bool:
+        """Delete the connection (when `generation` is given, only if it matches),
+        its publications, and revoke its connection token."""
+        ...
+
+    def delete_connection_by_account(
+        self, target: str, account_key: str, *, now: int
+    ) -> bool:
+        """As `delete_connection`, for the connection to the account."""
+        ...
+
+
 class Storage(
     PrincipalStore,
     TokenStore,
@@ -189,6 +254,7 @@ class Storage(
     RecordStore,
     SchemaStore,
     ServingStore,
+    TargetConnectionStore,
     Protocol,
 ):
     """All state; `backend`, `ping` and `close` come from `StorageBase`."""

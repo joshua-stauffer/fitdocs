@@ -12,6 +12,7 @@ from typing import Any, Literal
 from fitdocs_relay.config import SqliteTarget
 from fitdocs_relay.storage.interface import (
     DuplicateIdentifier,
+    NewConnection,
     NewPrincipal,
     NewToken,
     Principal,
@@ -19,9 +20,11 @@ from fitdocs_relay.storage.interface import (
     RevokeResult,
     SchemaChange,
     SchemaState,
+    SealedTokens,
     ServingClaim,
     StorageError,
     StorageUnreachable,
+    StoredConnection,
     TokenRecord,
     TokenSummary,
     UnknownPrincipal,
@@ -72,6 +75,28 @@ class _SqliteClaim:
         descriptor, self._descriptor = self._descriptor, None
         if descriptor is not None:
             os.close(descriptor)
+
+
+_CONNECTION_COLUMNS = (
+    "principal_id, target, account_key, access_sealed, refresh_sealed, "
+    "access_expires_at, generation, lease_id, lease_until, token_id, "
+    "created_at, updated_at"
+)
+
+
+def _connection_from_row(row: tuple[Any, ...]) -> StoredConnection:
+    return StoredConnection(
+        principal_id=row[0],
+        target=row[1],
+        account_key=row[2],
+        tokens=SealedTokens(access=row[3], refresh=row[4], access_expires_at=row[5]),
+        generation=row[6],
+        lease_id=row[7],
+        lease_until=row[8],
+        token_id=row[9],
+        created_at=row[10],
+        updated_at=row[11],
+    )
 
 
 def _run(
@@ -305,6 +330,140 @@ class SqliteBackend:
                 (namespace, key),
             )
         return bool(rows)
+
+    # --- TargetConnectionStore -----------------------------------------------
+
+    def put_connection(self, connection: NewConnection, *, now: int) -> None:
+        owner, target, account = (
+            connection.principal_id,
+            connection.target,
+            connection.account_key,
+        )
+        with self._write() as db:
+            if not _run(
+                db, "SELECT 1 FROM principals WHERE principal_id = ?", (owner,)
+            ):
+                raise UnknownPrincipal("the principal does not exist")
+            rival = _run(
+                db,
+                "SELECT principal_id FROM target_connections "
+                "WHERE target = ? AND account_key = ? AND principal_id <> ?",
+                (target, account, owner),
+            )
+            if rival:
+                self._remove_connection(db, str(rival[0][0]), target, now)
+            own = _run(
+                db,
+                "SELECT account_key FROM target_connections "
+                "WHERE principal_id = ? AND target = ?",
+                (owner, target),
+            )
+            if own and own[0][0] != account:
+                _run(
+                    db,
+                    "DELETE FROM target_publications "
+                    "WHERE principal_id = ? AND target = ?",
+                    (owner, target),
+                )
+            tokens = connection.tokens
+            _run(
+                db,
+                "INSERT INTO target_connections (principal_id, target, account_key, "
+                "access_sealed, refresh_sealed, access_expires_at, generation, "
+                "lease_id, lease_until, token_id, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, 1, NULL, NULL, NULL, ?, ?) "
+                "ON CONFLICT (principal_id, target) DO UPDATE SET "
+                "account_key = excluded.account_key, "
+                "access_sealed = excluded.access_sealed, "
+                "refresh_sealed = excluded.refresh_sealed, "
+                "access_expires_at = excluded.access_expires_at, "
+                "generation = 1, lease_id = NULL, lease_until = NULL, "
+                "updated_at = excluded.updated_at",
+                (
+                    owner,
+                    target,
+                    account,
+                    tokens.access,
+                    tokens.refresh,
+                    tokens.access_expires_at,
+                    now,
+                    now,
+                ),
+            )
+
+    def get_connection(self, principal_id: str, target: str) -> StoredConnection | None:
+        with self._read() as db:
+            rows = _run(
+                db,
+                f"SELECT {_CONNECTION_COLUMNS} FROM target_connections "
+                "WHERE principal_id = ? AND target = ?",
+                (principal_id, target),
+            )
+        return _connection_from_row(rows[0]) if rows else None
+
+    def list_connections(self, target: str | None) -> tuple[StoredConnection, ...]:
+        sql = f"SELECT {_CONNECTION_COLUMNS} FROM target_connections"
+        params: tuple[object, ...] = ()
+        if target is not None:
+            sql += " WHERE target = ?"
+            params = (target,)
+        with self._read() as db:
+            rows = _run(db, sql + " ORDER BY target, principal_id", params)
+        return tuple(_connection_from_row(row) for row in rows)
+
+    def delete_connection(
+        self, principal_id: str, target: str, *, generation: int | None, now: int
+    ) -> bool:
+        with self._write() as db:
+            if generation is not None and not _run(
+                db,
+                "SELECT 1 FROM target_connections "
+                "WHERE principal_id = ? AND target = ? AND generation = ?",
+                (principal_id, target, generation),
+            ):
+                return False
+            return self._remove_connection(db, principal_id, target, now)
+
+    def delete_connection_by_account(
+        self, target: str, account_key: str, *, now: int
+    ) -> bool:
+        with self._write() as db:
+            rows = _run(
+                db,
+                "SELECT principal_id FROM target_connections "
+                "WHERE target = ? AND account_key = ?",
+                (target, account_key),
+            )
+            if not rows:
+                return False
+            return self._remove_connection(db, str(rows[0][0]), target, now)
+
+    @staticmethod
+    def _remove_connection(
+        db: sqlite3.Connection, principal_id: str, target: str, now: int
+    ) -> bool:
+        """Delete a connection, its publications; revoke its token. Inside a write."""
+        rows = _run(
+            db,
+            "DELETE FROM target_connections WHERE principal_id = ? AND target = ? "
+            "RETURNING token_id",
+            (principal_id, target),
+        )
+        if not rows:
+            return False
+        _run(
+            db,
+            "DELETE FROM target_publications WHERE principal_id = ? AND target = ?",
+            (principal_id, target),
+        )
+        if rows[0][0] is not None:
+            _run(
+                db,
+                "UPDATE tokens SET revoked_at = ? "
+                "WHERE token_id = ? AND revoked_at IS NULL",
+                (now, rows[0][0]),
+            )
+        return True
 
     # --- ServingStore --------------------------------------------------------
 

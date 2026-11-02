@@ -33,11 +33,16 @@ EXPECTED = {
     "SchemaStore.schema_state",
     "SchemaStore.apply_schema_change",
     "ServingStore.claim_serving",
+    "TargetConnectionStore.put_connection",
+    "TargetConnectionStore.get_connection",
+    "TargetConnectionStore.list_connections",
+    "TargetConnectionStore.delete_connection",
+    "TargetConnectionStore.delete_connection_by_account",
 }
 
 
 def test_the_member_enumeration_is_the_designed_set(storage_members: set[str]) -> None:
-    assert len(EXPECTED) == 19
+    assert len(EXPECTED) == 24
     assert storage_members == EXPECTED
 
 

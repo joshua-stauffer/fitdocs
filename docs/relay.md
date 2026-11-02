@@ -41,7 +41,7 @@ uv run fitdocs-relay migrate
 uv run fitdocs-relay serve
 ```
 
-`migrate` prints `schema 0 -> 1` the first time. `serve` listens on
+`migrate` prints `schema 0 -> 2` the first time. `serve` listens on
 `127.0.0.1` port `8080` and logs JSON lines to standard output. In another
 terminal:
 
@@ -396,7 +396,7 @@ token's hash, the pepper or the database password.
 
 | Invocation | What it prints |
 | --- | --- |
-| `migrate` | `schema <found> -> <left>`, for example `schema 0 -> 1`. |
+| `migrate` | `schema <found> -> <left>`, for example `schema 0 -> 2`. |
 | `migrate --check` | `schema <current> -> <expected>`, changing nothing. When changes are pending it also prints `migrations are pending` on standard error and exits 3. |
 | `principal create [--label L]` | The new principal's identifier. |
 | `principal list` | One line per principal: identifier, label, created. |

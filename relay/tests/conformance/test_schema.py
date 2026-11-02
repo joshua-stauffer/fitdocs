@@ -379,10 +379,26 @@ def test_ping_succeeds_while_open_and_raises_unreachable_once_closed(
 # identity, generation, and on PostgreSQL the collation), constraints, indexes,
 # foreign keys, relation kinds and persistence, triggers and custom collations.
 # A change to any of those reds here; anything else is not pinned.
-DESIGNED_TABLES = ["principals", "rate_counts", "records", "relay_schema", "tokens"]
+DESIGNED_TABLES = [
+    "budget_counts",
+    "principals",
+    "rate_counts",
+    "records",
+    "relay_schema",
+    "target_connections",
+    "target_publications",
+    "tokens",
+]
 
 # PRAGMA table_xinfo: (cid, name, type, notnull, dflt_value, pk, hidden)
 SQLITE_COLUMNS = {
+    "budget_counts": [
+        (0, "key", "TEXT", 1, None, 1, 0),
+        (1, "window_start", "INTEGER", 1, None, 2, 0),
+        (2, "count", "INTEGER", 1, None, 0, 0),
+        (3, "window_end", "INTEGER", 1, None, 0, 0),
+        (4, "principal_id", "TEXT", 0, None, 0, 0),
+    ],
     "principals": [
         (0, "principal_id", "TEXT", 1, None, 1, 0),
         (1, "label", "TEXT", 0, None, 0, 0),
@@ -405,6 +421,31 @@ SQLITE_COLUMNS = {
         (1, "name", "TEXT", 1, None, 0, 0),
         (2, "applied_at", "INTEGER", 1, None, 0, 0),
     ],
+    "target_connections": [
+        (0, "principal_id", "TEXT", 1, None, 1, 0),
+        (1, "target", "TEXT", 1, None, 2, 0),
+        (2, "account_key", "TEXT", 1, None, 0, 0),
+        (3, "access_sealed", "TEXT", 1, None, 0, 0),
+        (4, "refresh_sealed", "TEXT", 0, None, 0, 0),
+        (5, "access_expires_at", "INTEGER", 0, None, 0, 0),
+        (6, "generation", "INTEGER", 1, None, 0, 0),
+        (7, "lease_id", "TEXT", 0, None, 0, 0),
+        (8, "lease_until", "INTEGER", 0, None, 0, 0),
+        (9, "token_id", "TEXT", 0, None, 0, 0),
+        (10, "created_at", "INTEGER", 1, None, 0, 0),
+        (11, "updated_at", "INTEGER", 1, None, 0, 0),
+    ],
+    "target_publications": [
+        (0, "target", "TEXT", 1, None, 1, 0),
+        (1, "publication_id", "TEXT", 1, None, 2, 0),
+        (2, "principal_id", "TEXT", 1, None, 0, 0),
+        (3, "sport", "TEXT", 1, None, 0, 0),
+        (4, "start_s", "REAL", 1, None, 0, 0),
+        (5, "elapsed_s", "REAL", 0, None, 0, 0),
+        (6, "distance_m", "REAL", 0, None, 0, 0),
+        (7, "created_at", "INTEGER", 1, None, 0, 0),
+        (8, "updated_at", "INTEGER", 1, None, 0, 0),
+    ],
     "tokens": [
         (0, "token_id", "TEXT", 1, None, 1, 0),
         (1, "principal_id", "TEXT", 1, None, 0, 0),
@@ -416,6 +457,10 @@ SQLITE_COLUMNS = {
 }
 # PRAGMA index_list: (name, unique, origin, partial), by name
 SQLITE_INDEXES = {
+    "budget_counts": [
+        ("budget_counts_window_end_idx", 0, "c", 0),
+        ("sqlite_autoindex_budget_counts_1", 1, "pk", 0),
+    ],
     "principals": [("sqlite_autoindex_principals_1", 1, "pk", 0)],
     "rate_counts": [
         ("rate_counts_window_end_idx", 0, "c", 0),
@@ -426,6 +471,14 @@ SQLITE_INDEXES = {
         ("sqlite_autoindex_records_1", 1, "pk", 0),
     ],
     "relay_schema": [],
+    "target_connections": [
+        ("sqlite_autoindex_target_connections_1", 1, "pk", 0),
+        ("sqlite_autoindex_target_connections_2", 1, "u", 0),
+    ],
+    "target_publications": [
+        ("sqlite_autoindex_target_publications_1", 1, "pk", 0),
+        ("target_publications_principal_idx", 0, "c", 0),
+    ],
     "tokens": [
         ("sqlite_autoindex_tokens_1", 1, "pk", 0),
         ("tokens_principal_id_idx", 0, "c", 0),
@@ -433,6 +486,12 @@ SQLITE_INDEXES = {
 }
 # PRAGMA index_info columns, per index
 SQLITE_INDEX_COLUMNS = {
+    "budget_counts_window_end_idx": ["window_end"],
+    "sqlite_autoindex_budget_counts_1": ["key", "window_start"],
+    "sqlite_autoindex_target_connections_1": ["principal_id", "target"],
+    "sqlite_autoindex_target_connections_2": ["target", "account_key"],
+    "sqlite_autoindex_target_publications_1": ["target", "publication_id"],
+    "target_publications_principal_idx": ["principal_id", "target"],
     "sqlite_autoindex_principals_1": ["principal_id"],
     "rate_counts_window_end_idx": ["window_end"],
     "sqlite_autoindex_rate_counts_1": ["key", "window_start"],
@@ -442,7 +501,20 @@ SQLITE_INDEX_COLUMNS = {
     "tokens_principal_id_idx": ["principal_id"],
 }
 # PRAGMA foreign_key_list: (id, seq, table, from, to, on_update, on_delete, match)
+_CASCADE_TO_PRINCIPALS = (
+    0,
+    0,
+    "principals",
+    "principal_id",
+    "principal_id",
+    "NO ACTION",
+    "CASCADE",
+    "NONE",
+)
 SQLITE_FOREIGN_KEYS = {
+    "budget_counts": [_CASCADE_TO_PRINCIPALS],
+    "target_connections": [_CASCADE_TO_PRINCIPALS],
+    "target_publications": [_CASCADE_TO_PRINCIPALS],
     "tokens": [
         (
             0,
@@ -454,7 +526,7 @@ SQLITE_FOREIGN_KEYS = {
             "CASCADE",
             "NONE",
         )
-    ]
+    ],
 }
 # Clauses the pragmas do not show; none may appear in any stored definition.
 SQLITE_FORBIDDEN_CLAUSES = (
@@ -467,12 +539,19 @@ SQLITE_FORBIDDEN_CLAUSES = (
     "DEFERR",
     "WITHOUT ROWID",
     "STRICT",
-    "UNIQUE",
 )
+# The one table definition that may say UNIQUE; its index is pinned above
+# (origin "u"), and no other definition may carry the clause.
+SQLITE_UNIQUE_ALLOWED_IN = ("target_connections",)
 
 # information_schema.columns:
 # (table, column, type, nullable, default, identity, generated)
 POSTGRES_COLUMNS = [
+    ("budget_counts", "key", "text", "NO", None, "NO", "NEVER"),
+    ("budget_counts", "window_start", "bigint", "NO", None, "NO", "NEVER"),
+    ("budget_counts", "count", "bigint", "NO", None, "NO", "NEVER"),
+    ("budget_counts", "window_end", "bigint", "NO", None, "NO", "NEVER"),
+    ("budget_counts", "principal_id", "text", "YES", None, "NO", "NEVER"),
     ("principals", "principal_id", "text", "NO", None, "NO", "NEVER"),
     ("principals", "label", "text", "YES", None, "NO", "NEVER"),
     ("principals", "created_at", "bigint", "NO", None, "NO", "NEVER"),
@@ -487,6 +566,43 @@ POSTGRES_COLUMNS = [
     ("relay_schema", "version", "integer", "NO", None, "NO", "NEVER"),
     ("relay_schema", "name", "text", "NO", None, "NO", "NEVER"),
     ("relay_schema", "applied_at", "bigint", "NO", None, "NO", "NEVER"),
+    ("target_connections", "principal_id", "text", "NO", None, "NO", "NEVER"),
+    ("target_connections", "target", "text", "NO", None, "NO", "NEVER"),
+    ("target_connections", "account_key", "text", "NO", None, "NO", "NEVER"),
+    ("target_connections", "access_sealed", "text", "NO", None, "NO", "NEVER"),
+    ("target_connections", "refresh_sealed", "text", "YES", None, "NO", "NEVER"),
+    ("target_connections", "access_expires_at", "bigint", "YES", None, "NO", "NEVER"),
+    ("target_connections", "generation", "bigint", "NO", None, "NO", "NEVER"),
+    ("target_connections", "lease_id", "text", "YES", None, "NO", "NEVER"),
+    ("target_connections", "lease_until", "bigint", "YES", None, "NO", "NEVER"),
+    ("target_connections", "token_id", "text", "YES", None, "NO", "NEVER"),
+    ("target_connections", "created_at", "bigint", "NO", None, "NO", "NEVER"),
+    ("target_connections", "updated_at", "bigint", "NO", None, "NO", "NEVER"),
+    ("target_publications", "target", "text", "NO", None, "NO", "NEVER"),
+    ("target_publications", "publication_id", "text", "NO", None, "NO", "NEVER"),
+    ("target_publications", "principal_id", "text", "NO", None, "NO", "NEVER"),
+    ("target_publications", "sport", "text", "NO", None, "NO", "NEVER"),
+    ("target_publications", "start_s", "double precision", "NO", None, "NO", "NEVER"),
+    (
+        "target_publications",
+        "elapsed_s",
+        "double precision",
+        "YES",
+        None,
+        "NO",
+        "NEVER",
+    ),
+    (
+        "target_publications",
+        "distance_m",
+        "double precision",
+        "YES",
+        None,
+        "NO",
+        "NEVER",
+    ),
+    ("target_publications", "created_at", "bigint", "NO", None, "NO", "NEVER"),
+    ("target_publications", "updated_at", "bigint", "NO", None, "NO", "NEVER"),
     ("tokens", "token_id", "text", "NO", None, "NO", "NEVER"),
     ("tokens", "principal_id", "text", "NO", None, "NO", "NEVER"),
     ("tokens", "verifier", "text", "NO", None, "NO", "NEVER"),
@@ -496,11 +612,21 @@ POSTGRES_COLUMNS = [
 ]
 # pg_constraint, every kind (not-null rows excluded: PostgreSQL 18 lists them):
 # (table, contype, pg_get_constraintdef)
+_PG_CASCADE = (
+    "FOREIGN KEY (principal_id) REFERENCES principals(principal_id) ON DELETE CASCADE"
+)
 POSTGRES_CONSTRAINTS = [
+    ("budget_counts", "f", _PG_CASCADE),
+    ("budget_counts", "p", "PRIMARY KEY (key, window_start)"),
     ("principals", "p", "PRIMARY KEY (principal_id)"),
     ("rate_counts", "p", "PRIMARY KEY (key, window_start)"),
     ("records", "p", "PRIMARY KEY (namespace, key)"),
     ("relay_schema", "p", "PRIMARY KEY (version)"),
+    ("target_connections", "f", _PG_CASCADE),
+    ("target_connections", "p", "PRIMARY KEY (principal_id, target)"),
+    ("target_connections", "u", "UNIQUE (target, account_key)"),
+    ("target_publications", "f", _PG_CASCADE),
+    ("target_publications", "p", "PRIMARY KEY (target, publication_id)"),
     (
         "tokens",
         "f",
@@ -512,6 +638,18 @@ POSTGRES_CONSTRAINTS = [
 # pg_index: (table, index, unique, primary, first column, no predicate,
 #            column count, no expression, access method)
 POSTGRES_INDEXES = [
+    ("budget_counts", "budget_counts_pkey", True, True, "key", True, 2, True, "btree"),
+    (
+        "budget_counts",
+        "budget_counts_window_end_idx",
+        False,
+        False,
+        "window_end",
+        True,
+        1,
+        True,
+        "btree",
+    ),
     (
         "principals",
         "principals_pkey",
@@ -558,6 +696,50 @@ POSTGRES_INDEXES = [
         True,
         "btree",
     ),
+    (
+        "target_connections",
+        "target_connections_pkey",
+        True,
+        True,
+        "principal_id",
+        True,
+        2,
+        True,
+        "btree",
+    ),
+    (
+        "target_connections",
+        "target_connections_target_account_key_key",
+        True,
+        False,
+        "target",
+        True,
+        2,
+        True,
+        "btree",
+    ),
+    (
+        "target_publications",
+        "target_publications_pkey",
+        True,
+        True,
+        "target",
+        True,
+        2,
+        True,
+        "btree",
+    ),
+    (
+        "target_publications",
+        "target_publications_principal_idx",
+        False,
+        False,
+        "principal_id",
+        True,
+        2,
+        True,
+        "btree",
+    ),
     ("tokens", "tokens_pkey", True, True, "token_id", True, 1, True, "btree"),
     (
         "tokens",
@@ -572,6 +754,9 @@ POSTGRES_INDEXES = [
     ),
 ]
 POSTGRES_RELATIONS = [
+    ("budget_counts", "r"),
+    ("budget_counts_pkey", "i"),
+    ("budget_counts_window_end_idx", "i"),
     ("principals", "r"),
     ("principals_pkey", "i"),
     ("rate_counts", "r"),
@@ -582,6 +767,12 @@ POSTGRES_RELATIONS = [
     ("records_pkey", "i"),
     ("relay_schema", "r"),
     ("relay_schema_pkey", "i"),
+    ("target_connections", "r"),
+    ("target_connections_pkey", "i"),
+    ("target_connections_target_account_key_key", "i"),
+    ("target_publications", "r"),
+    ("target_publications_pkey", "i"),
+    ("target_publications_principal_idx", "i"),
     ("tokens", "r"),
     ("tokens_pkey", "i"),
     ("tokens_principal_id_idx", "i"),
@@ -625,10 +816,11 @@ def _check_sqlite_model(target: SqliteTarget) -> None:
     definitions = raw(
         target, "SELECT name, sql FROM sqlite_master WHERE sql IS NOT NULL"
     )
-    assert len(definitions) == 8  # 5 tables and 3 created indexes carry text
+    assert len(definitions) == 13  # 8 tables and 5 created indexes carry text
     for name, text in definitions:
         for clause in SQLITE_FORBIDDEN_CLAUSES:
             assert clause not in text.upper(), (name, clause)
+        assert ("UNIQUE" in text.upper()) == (name in SQLITE_UNIQUE_ALLOWED_IN), name
 
 
 def _check_postgres_model(target: PostgresTarget) -> None:

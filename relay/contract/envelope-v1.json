@@ -41,7 +41,7 @@
           "content-length": "71",
           "content-type": "application/json"
         },
-        "body": "{\"envelope\":1,\"code\":\"ok\",\"data\":{\"schema\":{\"current\":1,\"expected\":1}}}"
+        "body": "{\"envelope\":1,\"code\":\"ok\",\"data\":{\"schema\":{\"current\":2,\"expected\":2}}}"
       }
     },
     {
@@ -62,7 +62,7 @@
           "content-length": "82",
           "content-type": "application/json"
         },
-        "body": "{\"envelope\":1,\"code\":\"schema-behind\",\"data\":{\"schema\":{\"current\":0,\"expected\":1}}}"
+        "body": "{\"envelope\":1,\"code\":\"schema-behind\",\"data\":{\"schema\":{\"current\":0,\"expected\":2}}}"
       }
     },
     {
@@ -83,7 +83,7 @@
           "content-length": "81",
           "content-type": "application/json"
         },
-        "body": "{\"envelope\":1,\"code\":\"schema-ahead\",\"data\":{\"schema\":{\"current\":2,\"expected\":1}}}"
+        "body": "{\"envelope\":1,\"code\":\"schema-ahead\",\"data\":{\"schema\":{\"current\":3,\"expected\":2}}}"
       }
     },
     {
