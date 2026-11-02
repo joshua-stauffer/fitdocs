@@ -30,10 +30,6 @@ from tests.connectors.conftest import (
     ScriptedPersonalKeyConnector,
     ScriptedPuller,
 )
-from tests.connectors.test_cli_connectors import (
-    RESERVED_RELAY_TABLE,
-    _ReservedConnector,
-)
 from tests.connectors.test_relay_connect import _TOKEN, _envelope
 
 runner = CliRunner()
@@ -41,6 +37,8 @@ runner = CliRunner()
 _NAME = "my-relay"
 _URL = "https://relay.example.com"
 _TOKEN_VARIABLE = "FITDOCS_CONNECTOR_MY_RELAY_TOKEN"
+_STRAVA = "strava"
+_STRAVA_VARIABLE = "FITDOCS_CONNECTOR_STRAVA_TOKEN"
 _OVERRIDE_TOKEN = "fdr1_" + "c" * 16 + "_" + "c" * 52
 _LOCAL_NOTE = "Note: the token stays valid at the relay until its operator revokes it."
 _SERVICE_NOTE = "Note: the credential remains valid at the service."
@@ -244,25 +242,100 @@ def test_no_authentication_style_has_nothing_to_disconnect(
     assert transport.requests == []
 
 
-def test_reserved_style_exits_2_naming_it_unsupported(
+_STRAVA_SETTINGS = (
+    f'[connectors.{_STRAVA}]\nconnector = "strava"\nrelay = "home"\n'
+    f'\n[connectors.home]\nconnector = "relay"\nurl = "{_URL}"\n'
+)
+_STRAVA_UNKNOWN_NOTE = (
+    "Note: the relay no longer knows this token; a remaining Strava connection "
+    "can be revoked in Strava's settings."
+)
+_STRAVA_LOCAL_NOTE = (
+    "Note: the Strava connection stays at the relay until this instance is "
+    "connected and disconnected again, or access is revoked in Strava's settings."
+)
+
+
+@pytest.mark.parametrize(
+    ("code", "note_lines"),
+    [
+        (RelayCode.OK, []),
+        (RelayCode.TOKEN_UNKNOWN, [_STRAVA_UNKNOWN_NOTE]),
+        (RelayCode.TOKEN_REVOKED, [_STRAVA_UNKNOWN_NOTE]),
+    ],
+    ids=["ok", "token-unknown", "token-revoked"],
+)
+def test_a_strava_instance_withdraws_with_the_stored_token_and_forgets_it(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    code: RelayCode,
+    note_lines: list[str],
+) -> None:
+    transport = _setup(
+        tmp_path, monkeypatch, [_envelope(code)], settings=_STRAVA_SETTINGS
+    )
+    path = _seed(_STRAVA, style=AuthStyle.OAUTH_BROWSER)
+    monkeypatch.setenv(_STRAVA_VARIABLE, _OVERRIDE_TOKEN)
+    exit_code, lines = _run(tmp_path, _STRAVA)
+    assert exit_code == 0
+    assert lines == [
+        f"{_STRAVA}: disconnected.",
+        f"Credentials removed: {path}",
+        f"Relay code: {code.value}",
+        *note_lines,
+    ]
+    assert not path.exists()
+    [request] = transport.requests
+    assert request.url == _URL + "/v1/targets/strava/disconnect"
+    assert request.secret_headers["Authorization"].reveal() == "Bearer " + _TOKEN
+    assert _OVERRIDE_TOKEN not in repr(request.headers) + str(request.body)
+
+
+def test_a_strava_instance_that_the_relay_cannot_answer_keeps_its_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    connector_registry.register(_ReservedConnector())
     transport = _setup(
         tmp_path,
         monkeypatch,
-        [],
-        settings='[connectors.res]\nconnector = "reserved-style"\n'
-        + RESERVED_RELAY_TABLE,
+        [_envelope(RelayCode.RELAY_FAILURE)],
+        settings=_STRAVA_SETTINGS,
     )
-    path = _seed("res", style=AuthStyle.OAUTH_BROWSER)
-    exit_code, lines = _run(tmp_path, "res")
-    assert exit_code == 2
+    path = _seed(_STRAVA, style=AuthStyle.OAUTH_BROWSER)
+    before = path.read_bytes()
+    exit_code, lines = _run(tmp_path, _STRAVA)
+    assert exit_code == 1
     assert lines == [
-        "res: the oauth-browser authentication style is not supported by "
-        "this version of fitdocs"
+        f"{_STRAVA}: relay-failure: The relay failed while handling the request.",
+        f"Run `fitdocs disconnect {_STRAVA}` again to retry, or add "
+        "`--local-only` to forget the stored token without asking the relay.",
     ]
-    assert path.exists()
+    assert path.read_bytes() == before
+    assert len(transport.requests) == 1
+
+
+def test_a_strava_instance_local_only_removes_the_file_with_no_request(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    transport = _setup(tmp_path, monkeypatch, [], settings=_STRAVA_SETTINGS)
+    path = _seed(_STRAVA, style=AuthStyle.OAUTH_BROWSER)
+    exit_code, lines = _run(tmp_path, _STRAVA, "--local-only")
+    assert exit_code == 0
+    assert lines == [
+        f"{_STRAVA}: disconnected.",
+        f"Credentials removed: {path}",
+        _STRAVA_LOCAL_NOTE,
+    ]
+    assert not path.exists()
+    assert transport.requests == []
+
+
+def test_a_strava_instance_without_a_stored_token_has_nothing_to_disconnect(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    transport = _setup(tmp_path, monkeypatch, [], settings=_STRAVA_SETTINGS)
+    exit_code, lines = _run(tmp_path, _STRAVA)
+    assert exit_code == 0
+    assert lines == [f"{_STRAVA}: nothing to disconnect."]
     assert transport.requests == []
 
 
