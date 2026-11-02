@@ -542,3 +542,72 @@ preserved word-for-word.
   only through `fitdocs.connectors.protocol`'s re-export (controller ruling
   R11), never by importing `fitdocs.publish`. The intervals module imports
   nothing from `fitdocs.publish`.
+
+## Amendment 9 (2026-11-02): browser consent is supported, a Strava connector is built in, and `connect`, `disconnect` and `publish --yes` make requests for it, landed by strava-publish
+
+`strava-publish` adds a fourth built-in connector (Strava, publish target,
+through a relay) and drives the browser-consent style that Amendment 7 left reserved.
+The changes below are recorded here; no criterion is renumbered, and the
+criteria keep their wording except as stated. Existing criteria and approvals
+are preserved word-for-word. Nothing here moves a version constant.
+
+- Requirement 1 criterion 7: the five styles are all supported; browser
+  consent is consent given in a browser at the instance's bound relay, and
+  `fitdocs connect` no longer refuses it as unsupported. Pinned by
+  `tests/connectors/test_protocol.py::test_every_auth_style_is_supported`.
+- Requirement 2 criterion 3: a browser-consent connector must provide
+  `start_consent`, `poll_consent` and `withdraw_consent`, and must parse
+  settings that bind a relay instance (the `RelayBound` protocol); it still
+  needs its credential fields, and a relay-token connector is not asked for
+  the consent operations. Pinned by
+  `tests/connectors/test_registry.py::test_the_browser_consent_style_requires_its_operations`,
+  `::test_a_complete_browser_consent_connector_registers`,
+  `::test_a_browser_consent_connector_lacking_one_operation_is_rejected_naming_it` and
+  `::test_consent_operations_are_not_required_of_a_relay_token_connector`.
+- Requirement 2 criterion 7: the published surface gains `BrowserConsentClient`,
+  `ConsentStarted`, `ConsentPolled` and `RelayBound` and rises by four (from
+  63, after relay-server's Amendment 7, to 67). Pinned by
+  `tests/connectors/test_surface.py::test_published_surface_equals_the_design_literal_list_exactly`,
+  `::test_expected_all_has_exactly_67_names_with_no_duplicates` and
+  `::test_import_fitdocs_connectors_exposes_exactly_67_names`.
+- Requirement 3, a new criterion: an instance whose settings bind a relay
+  instance must name a configured relay-token instance, checked across
+  instances before any request; a name that is unknown or is not a relay
+  instance (another browser-consent instance included) is a configuration
+  error listing the relay instances. Pinned by
+  `tests/connectors/test_settings_relay_binding.py::test_an_unknown_or_non_relay_name_is_refused_listing_the_relay_instances`,
+  `::test_a_second_browser_instance_is_checked_too` and
+  `::test_instances_that_are_not_browser_consent_take_no_part`.
+- Requirement 4 criterion 5: the environment variable named for the instance
+  and a credential field also overrides the stored browser-consent token. Pinned by
+  `tests/connectors/test_credentials.py::test_browser_consent_environment_beats_the_store`.
+- Requirement 5 criterion 3: no authentication style is reserved any more, so
+  the refusal for a reserved style has no member to apply to (the CLI branch is
+  kept for a future reserved style). Criteria 1 to 4 for a browser-consent
+  instance: `fitdocs connect` follows strava-publish Requirement 2, including
+  `--no-browser`, which is refused for any other style before any request.
+  Pinned by `tests/connectors/test_cli_strava.py::test_a_grant_prints_the_started_lines_opens_the_page_once_and_connects`,
+  `::test_no_browser_prints_the_same_lines_and_makes_no_browser_call` and
+  `::test_no_browser_on_another_style_exits_2_before_any_request`.
+- Requirement 14 criteria 1 and 4: for a Strava instance `fitdocs connect`
+  makes one connect-start request and one poll per stated interval to the
+  instance's bound relay, `fitdocs disconnect` makes one disconnect request,
+  and `fitdocs publish --yes` makes at most two requests per page; no fitdocs
+  command contacts Strava. Pinned by
+  `tests/connectors/test_network_statements.py::test_steering_publishes_the_relay_server_and_its_network_calls`
+  (the technology steering's own sentence) and
+  `::test_connectors_page_says_a_strava_instance_sends_to_its_bound_relay`.
+- New: the built-in Strava connector (strava-publish Requirement 1), a
+  browser-consent connector with the publish and upload capabilities, bound to
+  a relay instance; registered after the folder, intervals and relay
+  connectors. Disconnect of a browser-consent instance follows
+  strava-publish Requirement 11.1 to 11.4 and relay-server Requirement 14.5
+  now has no reserved style left to apply to; pinned by
+  `tests/connectors/test_disconnect.py::test_strava_ok_unknown_and_revoked_remove_the_file_after_one_request`,
+  `::test_strava_every_other_code_keeps_the_file_and_speaks_only_fitdocs_text` and
+  `::test_strava_local_only_removes_the_file_with_no_request_and_a_note`.
+- Relay client (relay-server's `RelayClient`, recorded in the relay-server
+  Amendment 1): every relay request is sent with `single_attempt=True`, and
+  `post` takes an optional keyword-only `max_request_bytes`. Pinned by
+  `tests/connectors/test_relay.py::test_a_data_mode_post_503_sees_one_transport_call`
+  and `::test_the_upload_bound_sends_a_body_over_the_envelope_default`.

@@ -322,3 +322,84 @@ Terms used below:
 7. The `fitdocs` changelog's unreleased section shall record the relay connector, the relay authentication style, `fitdocs connect --register`, `fitdocs disconnect` and the bare-pull selection change, each with the action a user must take, and shall record the ownership contract's version advance with its action; the relay package shall keep its own changelog recording the deploy contract, envelope and seam versions.
 8. Every new or changed document shall pass every existing documentation and network-statement guard, and no new document shall mention a hosting provider, an email provider or a deployment's infrastructure.
 9. Every repository statement that lists the commands which make network requests — in the README, the documentation and the source docstrings — shall name `fitdocs disconnect` and the registration of `fitdocs connect` beside the existing connector commands, and an automated test shall pin each such statement so that dropping either mention fails it.
+
+## Amendment 1 (2026-11-02): the Strava target extends the relay, landed by strava-publish
+
+`strava-publish` is the first target built on the relay. The changes below
+are recorded here; no criterion is renumbered, and the criteria keep their
+wording except as stated. Existing criteria and approvals are preserved
+word-for-word. `DEPLOY_CONTRACT_VERSION` stays 1 (the change is additive);
+`ENVELOPE_VERSION` and `SEAM_VERSION` do not move, and relay-server's own
+`CONTRACT_VERSION` advance for `fitdocs disconnect` (Requirement 14.9)
+already covers the disconnect rows of strava-publish, which Requirement 14.8's
+ownership-contract statement covers.
+
+- Requirement 4 criterion 3: the vocabulary gains five connect codes
+  (`connect-started`, `connect-pending`, `connect-granted`,
+  `connect-refused` and `connect-expired`, appended after the 22 earlier
+  codes; 27 in all). Pinned by
+  `tests/connectors/test_relay_codes.py::test_the_27_values_are_pinned_in_declaration_order`
+  and `::test_the_appended_names_follow_the_22_in_order`. The relay's token
+  operations still refuse the connect codes as answers.
+- Requirement 4 criterion 4: an answer's publish `outcome` must be a member of
+  the pinned `PublishCode`; a non-member cannot be built and answers relay
+  failure. Pinned by
+  `relay/tests/test_targets_pipeline.py::test_every_member_of_the_pinned_vocabulary_is_an_answerable_outcome`,
+  `::test_a_non_member_outcome_cannot_be_built` and
+  `::test_a_non_member_outcome_answers_relay_failure`.
+- Requirement 4 criterion 7: the body limit is per route; the Strava upload
+  route allows `MAX_UPLOAD_REQUEST_BYTES`, applied only while the Strava target
+  is configured, so an unconfigured relay keeps the default bound. The shared
+  envelope codec's `encode_request` and `decode_request` take a keyword-only
+  `max_bytes` (default `MAX_REQUEST_BYTES`), through which the relay copy of
+  `relay_envelope` is re-synced. Pinned by
+  `relay/tests/test_targets_pipeline.py::test_the_upload_route_reads_a_body_the_default_would_refuse`,
+  `::test_without_the_strava_target_the_upload_path_keeps_the_default_bound`,
+  `tests/connectors/test_relay_envelope.py::TestRequests::test_an_explicit_larger_bound_governs_decode_on_both_sides`
+  and `::test_an_explicit_larger_bound_governs_encode_on_both_sides`.
+- Requirement 5 criteria 4 and 5: the capabilities endpoint lists a target
+  only while it is configured (`OFFERED_TARGETS` is `("strava",)`); with none
+  configured it lists none. Pinned by
+  `relay/tests/test_targets_pipeline.py::test_capabilities_list_no_target_without_the_strava_configuration`,
+  `::test_capabilities_list_strava_with_the_strava_configuration` and
+  `relay/tests/test_strava_routes.py::test_an_unconfigured_relay_answers_not_offered_on_each_route`.
+- Requirement 7 criterion 1: the storage interface gains three areas
+  (target connections, target publications and budget counts, schema pair
+  `0002_target_custody`); criteria 7.5 to 7.7 apply to them, including the
+  conformance suite on both backends. `delete_connection` takes a keyword
+  `lease_id`: given one, it deletes only the connection whose lease is that
+  one, so a reconnect during a refresh (which clears the lease) is never
+  deleted by the earlier holder. Pinned by
+  `relay/tests/conformance/test_connections.py::test_a_delete_with_a_lease_id_deletes_only_the_connection_that_lease_holds`
+  and `relay/tests/conformance/test_coverage.py`.
+- Requirement 9 criterion 2: the variable table gains fourteen rows, and
+  `EnvVar` gains `required_with: tuple[str, ...] = ()` ("required when any
+  named variable is set"); the command list gains `strava`, `reencrypt` and
+  `new-encryption-key`. The recorded `/readyz` exchange and every schema-count
+  literal move with the schema change pair, by appended literals. Pinned by
+  `relay/tests/test_docs_relay.py::test_dropping_the_required_with_rendering_reds_the_binding`,
+  `::test_the_page_lists_the_commands_in_order` and
+  `relay/tests/test_config_strava.py`.
+- Requirement 9 criterion 8: logs never carry encryption keys, the Strava
+  client secret, the webhook secret, Strava tokens or anything Strava
+  returned; the relay command line's redactor also covers the target
+  secrets. Pinned by
+  `relay/tests/test_targets_pipeline.py::test_the_secrets_to_redact_are_the_configured_target_secrets`,
+  `relay/tests/test_cli.py::test_a_failing_operator_command_does_not_print_a_target_secret` and
+  `::test_a_usage_error_does_not_echo_a_pasted_target_secret`.
+- Requirement 14 criterion 5: relay-server's "where its style is reserved"
+  clause now applies to no style; a browser-consent instance follows
+  strava-publish Requirement 11.1 to 11.4. Pinned by
+  `tests/connectors/test_protocol.py::test_every_auth_style_is_supported` and
+  the `tests/connectors/test_disconnect.py::test_strava_*` tests.
+- Design, `TokenService`: `prepare(label)` generates a token without storing
+  it, for connection-token issuance. Pinned by
+  `relay/tests/test_identity.py::test_prepare_stores_nothing_and_its_token_authenticates_once_stored`.
+- Design, `RelayClient` (the fitdocs side): every request is marked
+  `single_attempt=True`, and `post` gains `max_request_bytes: int | None =
+  None`. Pinned by
+  `tests/connectors/test_relay.py::test_a_data_mode_post_503_sees_one_transport_call`
+  and `::test_the_upload_bound_sends_a_body_over_the_envelope_default`.
+- Shared surface: the pinned-copy table `SHARED_MODULES` has five pairs
+  (`relay_codes`, `relay_envelope`, `publish/outcomes`, `relay_targets`,
+  `identity/strict`), checked by `tests/test_relay_shared_copies.py`.

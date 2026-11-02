@@ -599,8 +599,9 @@ def test_registered_in_place_of_the_registration_reds_the_registration_pin(
         ),
         (
             "cli.py:98",
-            "(one authentication attempt against a configured source, or the "
-            "registration of a relay instance)",
+            "(one authentication attempt against a configured source, the "
+            "registration of a relay instance, or the consent requests of a "
+            "Strava instance to its bound relay)",
             "(one authentication attempt against a registered source)",
         ),
         (
@@ -719,6 +720,38 @@ def test_restoring_each_other_retired_phrase_reds_the_pin(label: str) -> None:
     # Sole failure: the clean text for the same file must not already be
     # flagged (otherwise the mutation added nothing observable).
     assert not _find_retired_phrases({Path(rel_path): text})
+
+
+_CLI_STRAVA_CONNECT = (
+    "(one authentication attempt against a configured source, the "
+    "registration of a relay instance, or the consent requests of a Strava "
+    "instance to its bound relay)"
+)
+_CLI_STRAVA_DISCONNECT = (
+    "(one revocation call for a relay instance, one disconnect request to its "
+    "bound relay for a Strava instance, none otherwise)"
+)
+
+
+def test_the_cli_docstring_names_the_strava_network_requests() -> None:
+    """Mutation: dropping either Strava clause from the cli.py network
+    docstring reds this pin (the second assertion block runs both drops)."""
+    text = _collapse((_REPO_ROOT / "src/fitdocs/cli.py").read_text(encoding="utf-8"))
+    assert _CLI_STRAVA_CONNECT in text
+    assert _CLI_STRAVA_DISCONNECT in text
+    for pinned, dropped in (
+        (
+            _CLI_STRAVA_CONNECT,
+            ", or the consent requests of a Strava instance to its bound relay",
+        ),
+        (
+            _CLI_STRAVA_DISCONNECT,
+            ", one disconnect request to its bound relay for a Strava instance",
+        ),
+    ):
+        mutated = text.replace(dropped, "")
+        assert mutated != text
+        assert pinned not in mutated
 
 
 def test_dropping_map_tiles_from_cli_reds_the_positive_pin() -> None:
@@ -960,7 +993,8 @@ def test_steering_publishes_the_relay_server_and_its_network_calls() -> None:
         "`fitdocs connect` (one authentication call per attempt; for a "
         "registering relay instance, a capabilities read, a registration start "
         "and one poll per stated interval), `fitdocs disconnect` (one "
-        "revocation call for a relay instance, none otherwise)"
+        "revocation call for a relay instance, one disconnect request to its "
+        "bound relay for a Strava instance, none otherwise)"
     ) in flat_network
     assert (
         "tokens, relay tokens included, are stored per user through the same "

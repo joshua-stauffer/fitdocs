@@ -72,7 +72,8 @@ map-tile fetch (`fitdocs.tiles`) and the connector transport
 `fitdocs connect` (one authentication call per attempt; for a registering
 relay instance, a capabilities read, a registration start and one poll per
 stated interval), `fitdocs disconnect` (one revocation call for a relay
-instance, none otherwise), `fitdocs pull`
+instance, one disconnect request to its bound relay for a Strava instance,
+none otherwise), `fitdocs pull`
 (a single-attempt token renewal when a login-style token is due, then
 bounded, retried data calls) and `fitdocs publish --yes` (for each page it
 sends to a target, any of a listing, an update and an upload request, one at

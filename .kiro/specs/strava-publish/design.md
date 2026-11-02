@@ -1983,3 +1983,48 @@ exchanges decoded by the fitdocs suite.
 - The relay's migration command applies `NNNN_target_custody`; a relay
   without the Strava variables behaves as before. Existing fitdocs
   configurations are unchanged; a Strava instance is opt-in.
+
+## Amendment note (2026-11-02): controller rulings made while implementing
+
+Recorded by task 7.6 from the rulings in `tasks.md` Implementation Notes under
+the task named. Approved text above is unchanged except where an item says
+which line it replaces; each item states what is now true of the landed code.
+
+- **StravaConnector, answers to the consent operations** (ruling 5.4;
+  replaces "anything else is `RelayRefused(code)`" and "`ok` gives `None`" in
+  the consent-operations bullet). Each operation reads only its own success
+  code. `withdraw_consent` returns `None` for `ok` without data; `ok` with
+  data is `RelayRefused(ANSWER_MALFORMED)`. A success code that belongs to
+  another route (`ok`, `registration-started`, `registration-pending`,
+  `registration-slow-down`, `registration-issued`, and whichever of
+  `connect-started`, `connect-pending` and `connect-granted` the operation
+  does not expect) is also `RelayRefused(ANSWER_MALFORMED)`; any
+  other code is `RelayRefused(code)` with its stated wait. A `connect-pending`
+  answer with data is `ANSWER_MALFORMED`. Pinned by
+  `tests/connectors/test_strava_consent.py::test_start_consent_reads_every_other_code_by_its_kind`,
+  `::test_withdraw_refusals` and `::test_a_pending_answer_with_data_is_malformed`.
+- **StravaApi, `classify`** (ruling 3.5 B; replaces "5xx `SERVER`" in the
+  `classify` bullet). Every status that is neither 2xx nor 4xx (any 1xx, any 3xx,
+  any 5xx and any status outside 100 to 599) is `SERVER` (transient), never
+  `INVALID`: a refused refresh deletes the connection
+  (Requirement 4.5), and a moved token endpoint must not delete every
+  connection. Pinned by
+  `relay/tests/strava/test_api_mapping.py::test_status_rows`,
+  `::test_a_redirect_is_never_a_success` and
+  `relay/tests/strava/test_custody.py::test_a_redirect_on_refresh_is_transient_and_keeps_the_connection`.
+- **Custody, refused refresh** (ruling 3.5 A; replaces
+  `delete_connection(generation=g)` in the `access_token` bullet). The
+  storage method `delete_connection(principal_id, target, *, generation, now,
+  lease_id=None)` gains the keyword `lease_id`; custody's delete after a
+  definitive refusal passes the holder's generation and its `lease_id`, so a
+  reconnection during the refresh (which resets the generation and clears the
+  lease) is not deleted by the earlier holder. Revocation deletes with
+  `generation=None` and no lease. Pinned by
+  `relay/tests/strava/test_custody.py::test_a_reconnection_during_the_refresh_is_not_deleted_by_a_refusal`
+  and `relay/tests/conformance/test_connections.py::test_a_delete_with_a_lease_id_deletes_only_the_connection_that_lease_holds`.
+- **RoutesAmendment and AppAmendment** (ruling 4.1). The larger upload body
+  bound applies only while the Strava target is configured
+  (`per_route_limits` is true only when `services.strava` is set), so an
+  unconfigured relay keeps the default bound. Pinned by
+  `relay/tests/test_targets_pipeline.py::test_without_the_strava_target_the_upload_path_keeps_the_default_bound`
+  and `::test_the_upload_route_refuses_a_body_over_its_own_bound`.

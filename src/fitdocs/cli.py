@@ -190,9 +190,11 @@ Network-capable code lives in exactly two modules (Req 14.2): :mod:`fitdocs.tile
 which fetches missing basemap tiles during ``sync``/``regen`` map rendering
 and only while tile requests are enabled (Req 4.2), and :mod:`fitdocs.connectors.http`,
 the connector transport the connector commands -- ``fitdocs connect``
-(one authentication attempt against a configured source, or the registration
-of a relay instance), ``fitdocs disconnect`` (one revocation call for a relay
-instance, none otherwise), ``fitdocs pull`` (fetching activities from a
+(one authentication attempt against a configured source, the registration
+of a relay instance, or the consent requests of a Strava instance to its bound
+relay), ``fitdocs disconnect`` (one revocation call for a relay
+instance, one disconnect request to its bound relay for a Strava instance,
+none otherwise), ``fitdocs pull`` (fetching activities from a
 configured connector) and ``fitdocs publish --yes`` (the requests of a publish
 target's connector) -- send every request through. Every other operation --
 the entire ``load`` command, and ``fitdocs publish`` without ``--yes`` and

@@ -332,3 +332,20 @@ happens to be that stem (for example, a user who renamed `<stem>-<8
 characters>.md` back to `<stem>.md` chose fitdocs's own name), and a
 hand-edited `start_time` makes the stems differ, so such a page is kept. Two pages of one local minute keep distinct names, under the
 collision suffix and settle pass of 6.6.
+
+## Amendment 3 (2026-11-02): the strict tier is a standard-library leaf shared with the relay, landed by strava-publish
+
+`strava-publish` needs the relay to apply the strict tier of the match rule
+(as Amendment 1 defines it; this amendment changes no result), so the tier moves to a module the
+relay can carry as a pinned copy. No criterion is renumbered or reworded, and
+no result changes. Existing criteria and approvals are preserved word-for-word.
+
+- A3.1 The strict tier shall live in `fitdocs.identity.strict`, which imports
+  only the standard library; `fitdocs.identity.matching` re-exports its
+  constants and calls it, and every result of the match rule is unchanged.
+  The relay runs a byte-identical pinned copy listed in `SHARED_MODULES`.
+  Pinned by `tests/identity/test_strict.py` (the tier's table and
+  `test_within_is_inclusive`), the pinned-copy check in
+  `tests/test_relay_shared_copies.py`, and the steering sentence pinned by
+  `tests/connectors/test_network_statements.py::test_steering_publishes_the_relay_server_and_its_network_calls`.
+- A3.2 This amendment moves no version constant.
