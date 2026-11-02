@@ -291,6 +291,7 @@ _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
             "fitdocs.connectors.registry",
             "fitdocs.connectors.relay",
             "fitdocs.connectors.secrets",
+            "fitdocs.connectors.strava",
         }
     ),
     "fitdocs.connectors._atomic": frozenset(),
@@ -462,6 +463,22 @@ class TestImportClosure:
         assert scanned == len(CONNECTORS_MODULE_NAMES), (
             "the walk is looking at the wrong set"
         )
+
+    def test_strava_imports_nothing_from_the_publish_package(self) -> None:
+        targets = _import_targets("fitdocs.connectors.strava")
+        assert "fitdocs.connectors.protocol" in targets, (
+            "the walk is looking at the wrong module"
+        )
+        assert sorted(t for t in targets if t.startswith("fitdocs.publish")) == []
+
+    def test_positive_control_a_publish_import_is_seen_by_the_strava_walk(
+        self,
+    ) -> None:
+        tree = ast.parse("from fitdocs.publish.outcomes import PublishCode\n")
+        found = _import_targets_of_tree(tree, "fitdocs.connectors.strava")
+        assert [t for t in found if t.startswith("fitdocs.publish")] == [
+            "fitdocs.publish.outcomes"
+        ]
 
     def test_tomli_w_appears_only_in_ledger_and_credentials(self) -> None:
         users = {

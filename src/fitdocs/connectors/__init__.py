@@ -21,18 +21,20 @@ by ``connectors/protocol.py``, and ``fitdocs.publish.request`` also by
 module here reads the system clock directly; ``now`` and ``sleep`` are always
 passed in by the caller.
 
-The published surface (``__all__``) is 63 names: the 50 that design.md's
+The published surface (``__all__``) is 67 names: the 50 that design.md's
 "PackageInit" section and wellness-pull's "PackageSurface" list together, plus
-publish-core's eight publish names, plus relay-server's five relay names (pinned by
+publish-core's eight publish names, plus relay-server's five relay names, plus
+strava-publish's four new protocol names (pinned by
 ``tests/connectors/test_surface.py``): the protocol layer's types and
 vocabularies, the transport layer, the typed failures, the secret and its
 redactor, and the registration operations. The built-in
 connectors (``FolderConnector``, ``IntervalsConnector`` for an
-intervals.icu account, and ``RelayConnector`` for a fitdocs relay) are
+intervals.icu account, ``RelayConnector`` for a fitdocs relay, and
+``StravaConnector`` for Strava through a relay) are
 deliberately not published here -- internal, like
 ``fitdocs.load``'s ``ThresholdCalculator`` -- but each is registered under its
-id at import time, below, so ``get("folder")``, ``get("intervals")`` and
-``get("relay")`` answer without any settings file naming them.
+id at import time, below, so ``get("folder")``, ``get("intervals")``,
+``get("relay")`` and ``get("strava")`` answer without any settings file naming them.
 """
 
 from __future__ import annotations
@@ -113,6 +115,7 @@ from fitdocs.connectors.registry import (
 )
 from fitdocs.connectors.relay import RelayConnector
 from fitdocs.connectors.secrets import REDACTED, Redactor, Secret
+from fitdocs.connectors.strava import StravaConnector
 
 __all__ = [
     "Capability",
@@ -184,10 +187,12 @@ __all__ = [
     "RelayBound",
 ]
 
-# The built-in connectors: registered at import time so `get("folder")` and
-# `get("intervals")` (and `get("relay")`) answer whether or not any settings
-# file names them. None of `FolderConnector`, `IntervalsConnector` and
-# `RelayConnector` is in `__all__` above (internal, like `ThresholdCalculator`).
+# The built-in connectors: registered at import time so `get("folder")`,
+# `get("intervals")`, `get("relay")` and `get("strava")` answer whether or not
+# any settings file names them. None of `FolderConnector`,
+# `IntervalsConnector`, `RelayConnector` and `StravaConnector` is in `__all__`
+# above (internal, like `ThresholdCalculator`).
 register(FolderConnector())
 register(IntervalsConnector())
 register(RelayConnector())
+register(StravaConnector())

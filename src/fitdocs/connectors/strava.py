@@ -1,5 +1,6 @@
-"""The built-in Strava connector: its settings and consent operations
-(strava-publish design.md "StravaConnector", Requirements 1.1-1.4, 2.4).
+"""The built-in Strava connector: its settings, consent operations and
+publishing (strava-publish design.md "StravaConnector", Requirements 1.1-1.4,
+1.7, 2.4, 5.1-5.10, 8.4).
 
 A Strava instance reaches Strava only through the relay instance it names, so
 this module holds no Strava address. Each consent operation is one
@@ -9,6 +10,11 @@ relay's URL and a user code that passed the codec's format check; no other
 value the relay returned is part of that address. The poll secret and every
 token are registered with the session's redactor before any request that
 carries them.
+
+Publishing sends one request, and a second, upload, request only after the
+relay's definite ``not_found`` outcome with uploads enabled. Publish codes
+come from the protocol module's re-export; nothing is imported from
+``fitdocs.publish``.
 """
 
 from __future__ import annotations
@@ -16,6 +22,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import timedelta
+from pathlib import Path
+from types import MappingProxyType
 from typing import Final
 
 from fitdocs.connectors.errors import ConnectorError, ConnectorSettingsError
@@ -26,6 +34,9 @@ from fitdocs.connectors.protocol import (
     ConsentPolled,
     ConsentStarted,
     CredentialField,
+    PublishCode,
+    PublishRequest,
+    PublishResult,
     RelayRefused,
     SettingsContext,
 )
@@ -40,9 +51,21 @@ from fitdocs.connectors.relay_targets import (
     ACTION_CONNECT,
     ACTION_CONNECT_POLL,
     ACTION_DISCONNECT,
+    ACTION_PUBLISH,
+    ACTION_UPLOAD,
+    LINK_FIELD,
+    MAX_FIT_BYTES,
+    MAX_UPLOAD_REQUEST_BYTES,
+    PUBLISH_OUTCOMES,
     STRAVA,
+    UPLOAD_OUTCOMES,
+    PublishFacts,
     connect_page_path,
+    link_path,
+    publish_fields,
+    route_outcome,
     target_route,
+    upload_fields,
 )
 from fitdocs.connectors.secrets import Secret
 
@@ -70,6 +93,61 @@ _SUCCESS_SHAPED: Final = frozenset(
         RelayCode.CONNECT_GRANTED,
     }
 )
+
+_PC: Final = PublishCode
+_RC: Final = RelayCode
+
+
+def _mapping(
+    rows: Mapping[RelayCode, PublishCode], default: PublishCode
+) -> Mapping[RelayCode, PublishCode]:
+    """Every relay code, the stated rows first and ``default`` for the rest."""
+    return MappingProxyType({code: rows.get(code, default) for code in RelayCode})
+
+
+_SHARED_ROWS: Final[dict[RelayCode, PublishCode]] = {
+    _RC.TOKEN_MISSING: _PC.AUTH_REJECTED,
+    _RC.TOKEN_UNKNOWN: _PC.AUTH_REJECTED,
+    _RC.TOKEN_REVOKED: _PC.AUTH_REJECTED,
+    _RC.RATE_LIMITED: _PC.RATE_LIMITED,
+    _RC.NOT_OFFERED: _PC.NOT_CONNECTED,
+    _RC.REQUEST_MALFORMED: _PC.REJECTED,
+    _RC.REQUEST_TOO_LARGE: _PC.REJECTED,
+    _RC.SCHEMA_BEHIND: _PC.UNAVAILABLE,
+    _RC.SCHEMA_AHEAD: _PC.UNAVAILABLE,
+    _RC.ENVELOPE_UNSUPPORTED: _PC.UNAVAILABLE,
+}
+
+#: The publish request's reading of each relay code (design.md "Mapping
+#: tables"); ``OK`` is the row for an ``ok`` answer without a usable outcome.
+PUBLISH_MAPPING: Final = _mapping(_SHARED_ROWS, _PC.UNAVAILABLE)
+
+#: The upload request's reading: a request that may have reached Strava and
+#: whose result is unknown is ``unconfirmed``, not ``unavailable``.
+UPLOAD_MAPPING: Final = _mapping(
+    {
+        **_SHARED_ROWS,
+        _RC.OK: _PC.UNCONFIRMED,
+        _RC.ANSWER_MALFORMED: _PC.UNCONFIRMED,
+        _RC.RELAY_FAILURE: _PC.UNCONFIRMED,
+        _RC.RELAY_UNREACHABLE: _PC.UNCONFIRMED,
+        _RC.UNAVAILABLE: _PC.UNCONFIRMED,
+        _RC.STORAGE_UNREACHABLE: _PC.UNCONFIRMED,
+    },
+    _PC.UNCONFIRMED,
+)
+
+
+def _conclude(
+    reply: RelayReply,
+    mapping: Mapping[RelayCode, PublishCode],
+    allowed: frozenset[str],
+) -> PublishCode:
+    if reply.code is RelayCode.OK:
+        outcome = route_outcome(reply.outcome, allowed)
+        if outcome is not None:
+            return PublishCode(outcome)
+    return mapping[reply.code]
 
 
 @dataclass(frozen=True)
@@ -107,7 +185,7 @@ def _refused(reply: RelayReply) -> RelayRefused:
 
 
 class StravaConnector:
-    """The Strava target: settings and consent operations."""
+    """The Strava target: settings, consent operations, and publishing."""
 
     connector_id = STRAVA_CONNECTOR_ID
     display_name = "Strava"
@@ -191,3 +269,73 @@ class StravaConnector:
         if reply.code is RelayCode.OK and not reply.data:
             return None
         return _refused(reply)
+
+    def publish(
+        self, session: ConnectorSession, request: PublishRequest
+    ) -> PublishResult:
+        settings = session.settings
+        if not isinstance(settings, StravaSettings):
+            raise ConnectorError(
+                "the Strava connector was given another connector's settings"
+            )
+        subject = request.subject
+        if subject.elapsed_s is None and subject.distance_m is None:
+            return PublishResult(PublishCode.ACTIVITY_FACTS_MISSING)
+        facts = PublishFacts(
+            publication_id=request.publication_id,
+            sport=subject.sport,
+            start=subject.start,
+            elapsed_s=subject.elapsed_s,
+            distance_m=subject.distance_m,
+            title=request.post.title,
+            description=request.post.description,
+        )
+        try:
+            fields = publish_fields(facts)
+        except EnvelopeError:
+            return PublishResult(PublishCode.REJECTED)
+        client = _client(session, session.credentials.value(TOKEN_FIELD))
+        reply = client.post(target_route(STRAVA, ACTION_PUBLISH), fields)
+        code = _conclude(reply, PUBLISH_MAPPING, PUBLISH_OUTCOMES)
+        if code is PublishCode.NOT_FOUND and settings.upload:
+            fit = _read_fit(subject.base_fit)
+            if isinstance(fit, PublishCode):
+                return PublishResult(fit)
+            try:
+                fields = upload_fields(facts, fit)
+            except EnvelopeError:
+                return PublishResult(PublishCode.REJECTED)
+            reply = client.post(
+                target_route(STRAVA, ACTION_UPLOAD),
+                fields,
+                max_request_bytes=MAX_UPLOAD_REQUEST_BYTES,
+            )
+            code = _conclude(reply, UPLOAD_MAPPING, UPLOAD_OUTCOMES)
+        if code not in _LINKED:
+            return PublishResult(code)
+        return PublishResult(code, _link(reply, settings, request))
+
+
+_LINKED: Final = frozenset({PublishCode.POSTED, PublishCode.UPLOADED})
+
+
+def _read_fit(path: Path | None) -> bytes | PublishCode:
+    """The base file's bytes, or the code for a file that cannot be sent."""
+    if path is None:
+        return PublishCode.ACTIVITY_FILE_MISSING
+    try:
+        if path.stat().st_size > MAX_FIT_BYTES:
+            return PublishCode.REJECTED
+        return path.read_bytes()
+    except OSError:
+        return PublishCode.ACTIVITY_FILE_MISSING
+
+
+def _link(
+    reply: RelayReply, settings: StravaSettings, request: PublishRequest
+) -> str | None:
+    if LINK_FIELD in reply.data:
+        link = reply.data[LINK_FIELD]
+        return link if isinstance(link, str) else None
+    assert settings.relay is not None
+    return settings.relay.url + link_path(request.publication_id)
