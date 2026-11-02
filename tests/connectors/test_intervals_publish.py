@@ -12,6 +12,8 @@ from __future__ import annotations
 import base64
 import json
 import re
+import subprocess
+import sys
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from types import MappingProxyType
@@ -38,6 +40,7 @@ from fitdocs.connectors.intervals import (
     _list,
     _listed_activities,
     _listing_window,
+    _match_listing,
     _record_activity,
     _usable_activity_id,
 )
@@ -820,3 +823,348 @@ def test_an_error_status_is_judged_by_status_not_by_body(tmp_path: Path) -> None
         tmp_path, HttpResponse(status=403, headers={}, body=good_body), _subject()
     )
     assert result == C.PERMISSION_DENIED
+
+
+# --- Matching the listing one-to-one (Req 3.6-3.8, 4.1, 4.2) ------------------
+
+PUBLICATION_ID = "0123456789abcdef0123456789abcdef"
+PAGE_START = datetime(2026, 3, 1, 7, 0, tzinfo=UTC)
+
+
+def _page(
+    *,
+    sport: str = "Run",
+    start: datetime = PAGE_START,
+    distance_m: float | None = 5000.0,
+    elapsed_s: float | None = 1800.0,
+) -> CompletedActivity:
+    return CompletedActivity(
+        sport=sport,
+        start=start,
+        elapsed_s=elapsed_s,
+        distance_m=distance_m,
+        source_shas=(),
+        base_fit=None,
+    )
+
+
+def _listed(
+    activity_id: str,
+    *,
+    strava: bool = False,
+    start: datetime | None = PAGE_START,
+    local_start: datetime | None = None,
+    distance_m: float | None = None,
+    elapsed_s: float | None = None,
+    external_id: str | None = None,
+) -> ListedActivity:
+    return ListedActivity(
+        activity_id=activity_id,
+        strava=strava,
+        start=start,
+        local_start=local_start,
+        distance_m=distance_m,
+        elapsed_s=elapsed_s,
+        external_id=external_id,
+    )
+
+
+def _match(
+    listed: list[ListedActivity],
+    subject: CompletedActivity | None = None,
+    *,
+    absent: frozenset[str] = frozenset(),
+) -> str | PublishCode | None:
+    return _match_listing(listed, subject or _page(), PUBLICATION_ID, absent=absent)
+
+
+def test_an_external_id_match_beats_a_strict_match() -> None:
+    strict = _listed("i9000002", distance_m=5000.0, elapsed_s=1800.0)
+    by_id = _listed(
+        "i9000001",
+        start=PAGE_START + timedelta(hours=5),
+        distance_m=42000.0,
+        external_id=PUBLICATION_ID,
+    )
+    assert _match([strict]) == "i9000002"  # the strict entry does match alone
+    assert _match([strict, by_id]) == "i9000001"
+    assert _match([by_id, strict]) == "i9000001"
+
+
+def test_an_external_id_other_than_the_publication_id_names_nothing() -> None:
+    other = _listed(
+        "i9000001", start=PAGE_START + timedelta(hours=5), external_id="x" * 32
+    )
+    assert _match([other]) is None
+
+
+def test_two_external_id_matches_are_ambiguous() -> None:
+    first = _listed("i9000001", start=None, external_id=PUBLICATION_ID)
+    second = _listed("i9000002", start=None, external_id=PUBLICATION_ID)
+    assert _match([first, second]) == C.AMBIGUOUS
+
+
+def test_two_external_id_matches_beat_a_single_strict_match() -> None:
+    strict = _listed("i9000003", distance_m=5000.0)
+    first = _listed("i9000001", start=None, external_id=PUBLICATION_ID)
+    second = _listed("i9000002", start=None, external_id=PUBLICATION_ID)
+    assert _match([strict, first, second]) == C.AMBIGUOUS
+
+
+def test_a_strict_match_by_distance_ignores_elapsed_time() -> None:
+    entry = _listed("i9000001", distance_m=5100.0, elapsed_s=100.0)
+    far = _listed("i9000002", distance_m=7000.0, elapsed_s=1800.0)
+    assert _match([far]) is None  # 2000 m apart is outside the tolerance
+    assert _match([far, entry]) == "i9000001"
+
+
+def test_a_strict_match_needs_the_start_to_agree() -> None:
+    late = _listed(
+        "i9000001", start=PAGE_START + timedelta(seconds=2), distance_m=5000.0
+    )
+    edge = _listed(
+        "i9000002", start=PAGE_START + timedelta(seconds=1), distance_m=5000.0
+    )
+    assert _match([late]) is None
+    assert _match([late, edge]) == "i9000002"
+
+
+def test_a_strict_match_by_elapsed_time_when_the_listed_distance_is_missing() -> None:
+    near = _listed("i9000001", distance_m=None, elapsed_s=1805.0)
+    off = _listed("i9000002", distance_m=None, elapsed_s=1815.0)
+    assert _match([off]) is None
+    assert _match([off, near]) == "i9000001"
+
+
+def test_a_strict_match_by_elapsed_time_when_the_page_distance_is_missing() -> None:
+    page = _page(distance_m=None)
+    near = _listed("i9000001", distance_m=5000.0, elapsed_s=1805.0)
+    off = _listed("i9000002", distance_m=5000.0, elapsed_s=1815.0)
+    assert _match([off], page) is None
+    assert _match([off, near], page) == "i9000001"
+
+
+def test_no_match_when_the_evidence_is_missing_on_both_sides() -> None:
+    bare = _listed("i9000001", distance_m=None, elapsed_s=None)
+    assert _match([bare], _page(distance_m=None)) is None
+    assert _match([bare], _page(distance_m=None, elapsed_s=None)) is None
+    with_distance = _listed("i9000002", distance_m=5000.0, elapsed_s=None)
+    assert _match([with_distance], _page(distance_m=None, elapsed_s=None)) is None
+    assert _match([with_distance]) == "i9000002"  # distance alone is enough
+
+
+def test_an_entry_with_no_instant_start_is_never_a_strict_match() -> None:
+    entry = _listed(
+        "i9000001",
+        start=None,
+        local_start=PAGE_START.replace(tzinfo=None),
+        distance_m=5000.0,
+        elapsed_s=1800.0,
+    )
+    assert _match([entry]) is None
+
+
+@pytest.mark.parametrize("sport", ["Run", "Ride", "WeightTraining", "Swim"])
+def test_the_sport_is_not_compared(sport: str) -> None:
+    entry = _listed("i9000001", distance_m=5000.0)
+    assert _match([entry], _page(sport=sport)) == "i9000001"
+
+
+def test_the_shifted_tier_is_not_a_match() -> None:
+    # An hour apart with the same distance and elapsed time: only the shifted
+    # tier could hold, and only for a phone copy, which a listing never is.
+    shifted = _listed(
+        "i9000001",
+        start=PAGE_START + timedelta(hours=1),
+        distance_m=5000.0,
+        elapsed_s=1800.0,
+    )
+    assert _match([shifted]) is None
+
+
+def test_the_keys_compared_carry_the_page_sport_and_no_device_or_kind(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from fitdocs.identity import matching
+
+    real = matching.pair_evidence
+    seen: list[tuple[matching.SessionKey, matching.SessionKey]] = []
+
+    def spy(a: matching.SessionKey, b: matching.SessionKey) -> matching.Evidence | None:
+        seen.append((a, b))
+        return real(a, b)
+
+    monkeypatch.setattr(matching, "pair_evidence", spy)
+    entry = _listed("i9000001", distance_m=5000.0, elapsed_s=1800.0)
+    assert _match([entry], _page(sport="Ride")) == "i9000001"
+    assert len(seen) == 1, "the rule was not consulted exactly once"
+    for key in seen[0]:
+        assert key.sport == "Ride"
+        assert key.device is None
+        assert key.kind is None
+    assert seen[0][0].start == PAGE_START
+    assert seen[0][1].start == PAGE_START
+    assert {seen[0][0].distance_m, seen[0][1].distance_m} == {5000.0}
+
+
+def test_two_strict_matches_are_ambiguous() -> None:
+    first = _listed("i9000001", distance_m=5000.0)
+    second = _listed("i9000002", distance_m=5010.0)
+    assert _match([first]) == "i9000001"
+    assert _match([first, second]) == C.AMBIGUOUS
+    assert _match([second, first]) == C.AMBIGUOUS
+
+
+def test_an_entry_answered_absent_is_excluded_from_both_steps() -> None:
+    by_id = _listed("i9000001", start=None, external_id=PUBLICATION_ID)
+    strict = _listed("i9000002", distance_m=5000.0)
+    other = _listed("i9000003", distance_m=5000.0)
+    gone = frozenset({"i9000001"})
+    assert _match([by_id, strict], absent=gone) == "i9000002"
+    assert _match([by_id], absent=gone) is None
+    assert _match([strict, other]) == C.AMBIGUOUS
+    assert _match([strict, other], absent=frozenset({"i9000002"})) == "i9000003"
+    assert _match([strict], absent=frozenset({"i9000002"})) is None
+
+
+def test_a_strava_entry_is_never_matched_and_is_not_updatable() -> None:
+    # Otherwise a perfect strict match.
+    strava = _listed("i9000001", strava=True, distance_m=5000.0, elapsed_s=1800.0)
+    assert _match([strava]) == C.NOT_UPDATABLE
+    clone = _listed("i9000002", strava=False, distance_m=5000.0, elapsed_s=1800.0)
+    assert _match([strava, clone]) == "i9000002"  # the other source still matches
+
+
+def test_a_strava_entry_with_the_external_id_is_not_matched() -> None:
+    far = PAGE_START + timedelta(hours=5)
+    strava = _listed("i9000001", strava=True, start=far, external_id=PUBLICATION_ID)
+    assert _match([strava]) is None
+
+
+def test_a_strava_entry_is_reported_by_its_instant_start() -> None:
+    page = _page()
+    within = _listed("i9000001", strava=True, start=PAGE_START + timedelta(seconds=1))
+    outside = _listed("i9000002", strava=True, start=PAGE_START + timedelta(seconds=2))
+    assert _match([within], page) == C.NOT_UPDATABLE
+    assert _match([outside], page) is None
+    before = _listed("i9000003", strava=True, start=PAGE_START - timedelta(seconds=1))
+    assert _match([before], page) == C.NOT_UPDATABLE
+
+
+def test_the_instant_start_decides_when_the_local_start_disagrees() -> None:
+    page = _page()
+    wall = PAGE_START.replace(tzinfo=None)
+    far = _listed(
+        "i9000001",
+        strava=True,
+        start=PAGE_START + timedelta(hours=1),
+        local_start=wall,
+    )
+    assert _match([far], page) is None
+
+
+def test_a_strava_entry_without_an_instant_start_is_reported_by_local_start() -> None:
+    plus_two = timezone(timedelta(hours=2))
+    page = _page(start=datetime(2026, 3, 1, 9, 0, tzinfo=plus_two))  # 07:00 UTC
+    wall = datetime(2026, 3, 1, 9, 0)
+    on_wall = _listed("i9000001", strava=True, start=None, local_start=wall)
+    on_utc = _listed(
+        "i9000002",
+        strava=True,
+        start=None,
+        local_start=datetime(2026, 3, 1, 7, 0),
+    )
+    off_by_two = _listed(
+        "i9000003",
+        strava=True,
+        start=None,
+        local_start=wall + timedelta(seconds=2),
+    )
+    assert _match([on_wall], page) == C.NOT_UPDATABLE
+    assert _match([on_utc], page) is None
+    assert _match([off_by_two], page) is None
+    nothing = _listed("i9000004", strava=True, start=None, local_start=None)
+    assert _match([nothing], page) is None
+
+
+def test_a_non_strava_local_start_never_reports_not_updatable() -> None:
+    entry = _listed("i9000001", start=None, local_start=PAGE_START.replace(tzinfo=None))
+    assert _match([entry]) is None
+
+
+def test_a_strava_entry_answered_absent_is_not_reported() -> None:
+    strava = _listed("i9000001", strava=True)
+    assert _match([strava]) == C.NOT_UPDATABLE
+    assert _match([strava], absent=frozenset({"i9000001"})) is None
+
+
+def test_a_match_beats_a_strava_entry_at_the_same_start() -> None:
+    strava = _listed("i9000001", strava=True)
+    mine = _listed("i9000002", distance_m=5000.0)
+    assert _match([strava, mine]) == "i9000002"
+
+
+def test_an_empty_listing_names_nothing() -> None:
+    assert _match([]) is None
+
+
+def test_importing_the_connectors_package_loads_no_identity_module() -> None:
+    code = (
+        "import sys\n"
+        "import fitdocs.connectors\n"
+        "print(sorted(m for m in sys.modules\n"
+        "             if m == 'fitdocs.identity'\n"
+        "             or m.startswith('fitdocs.identity.')))\n"
+        "print('fitdocs.connectors.intervals' in sys.modules)\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-I", "-B", "-c", code],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    loaded, imported = result.stdout.strip().splitlines()
+    assert imported == "True", "the intervals module was not imported at all"
+    assert loaded == "[]"
+
+
+def test_only_the_strict_tier_counts(monkeypatch: pytest.MonkeyPatch) -> None:
+    from fitdocs.identity import matching
+
+    entry = _listed("i9000001", distance_m=5000.0)
+    outcomes: dict[str, matching.Evidence] = {}
+    for tier in (matching.Evidence.SHIFTED, matching.Evidence.DEVICE):
+        outcomes[tier.value] = tier
+    for name, tier in outcomes.items():
+        monkeypatch.setattr(matching, "pair_evidence", lambda a, b, t=tier: t)
+        assert _match([entry]) is None, name
+    monkeypatch.setattr(
+        matching, "pair_evidence", lambda a, b: matching.Evidence.STRICT
+    )
+    assert _match([entry]) == "i9000001"
+
+
+def test_the_strict_start_is_compared_as_instants() -> None:
+    page = _page(start=datetime(2026, 3, 1, 9, 0, tzinfo=timezone(timedelta(hours=2))))
+    same_instant = _listed(
+        "i9000001", start=datetime(2026, 3, 1, 7, 0, tzinfo=UTC), distance_m=5000.0
+    )
+    same_clock = _listed(
+        "i9000002", start=datetime(2026, 3, 1, 9, 0, tzinfo=UTC), distance_m=5000.0
+    )
+    assert _match([same_clock], page) is None
+    assert _match([same_clock, same_instant], page) == "i9000001"
+
+
+def test_a_strava_instant_start_is_compared_as_instants_against_an_offset_page() -> (
+    None
+):
+    page = _page(start=datetime(2026, 3, 1, 9, 0, tzinfo=timezone(timedelta(hours=2))))
+    same_instant = _listed(
+        "i9000001", strava=True, start=datetime(2026, 3, 1, 7, 0, tzinfo=UTC)
+    )
+    same_clock = _listed(
+        "i9000002", strava=True, start=datetime(2026, 3, 1, 9, 0, tzinfo=UTC)
+    )
+    assert _match([same_instant], page) == C.NOT_UPDATABLE
+    assert _match([same_clock], page) is None

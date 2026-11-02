@@ -139,7 +139,7 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
   - _Requirements: 3.5, 7.4, 9.3, 9.5_
   - _Boundary: ActivityFinding_
 
-- [ ] 2.4 Match the listing one-to-one
+- [x] 2.4 Match the listing one-to-one
   - Over entries not already answered absent: the one non-Strava entry
     carrying the publication id as its external identifier; otherwise the one
     non-Strava entry for which activity-identity's rule gives the strict
@@ -407,3 +407,4 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
 - 2.1: `_activity_link` does not check its argument (design); Req 8.2 "link only from a usable id" must be pinned at each caller (2.2, 2.6, 3.1). Design claims every `_activity_link` result passes publish-core `valid_link` — untested so far; 3.1 should assert it.
 - 2.2: test fixtures use instance `icu-main` (not the connector id) and `_write` appends a hand line so a canonical re-save is visible; keep both when adding ledger tests. Malformed ids must be tested in each tier separately (review found an unfiltered tier-2 survivor).
 - 2.3: response parsing must survive hostile 200 bodies — catch RecursionError with ValueError around json.loads, treat float() OverflowError as absent, decode strictly as UTF-8 (fixtures: utf-16 JSON and a latin-1 byte). 2.6 (upload answer parser) should reuse the same shape.
+- 2.4: time-comparison tests need a non-UTC page start (+02:00), or instant-vs-wall-clock mutations survive. `_match_listing` imports `fitdocs.identity.matching` lazily; tests patch `matching.pair_evidence` by module attribute, so keep the call-time `matching.pair_evidence` lookup.

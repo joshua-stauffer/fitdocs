@@ -15,8 +15,9 @@ A module inside this package may import only the standard library,
 ``fitdocs.version``, the publish request and vocabulary leaves
 (``fitdocs.publish.request`` and ``fitdocs.publish.outcomes``, imported only
 by ``connectors/protocol.py``, and ``fitdocs.publish.request`` also by
-``connectors/registry.py``), and -- in ``connectors/ledger.py`` and
-``connectors/credentials.py`` only -- ``tomli_w``. Only
+``connectors/registry.py``), ``fitdocs.identity.matching`` (imported only
+inside the listing-match helper of ``connectors/intervals.py``), and -- in
+``connectors/ledger.py`` and ``connectors/credentials.py`` only -- ``tomli_w``. Only
 ``connectors/http.py`` may import ``urllib.request``/``urllib.error``. No
 module here reads the system clock directly; ``now`` and ``sleep`` are always
 passed in by the caller.

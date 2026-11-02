@@ -5,6 +5,8 @@ with a personal API key. This module is the one module in the connectors
 package that names the service's address (the service-neutral scan admits it
 here, in its own tests and in its own documentation section only). It imports only the
 standard library and ``fitdocs.connectors.{errors,http,ledger,protocol,secrets}``,
+plus ``fitdocs.identity.matching``, imported inside the publish path's
+listing-match helper only (so importing the package loads no identity module),
 builds no HTTP client of its own, and reads no clock: ``session.now`` is the
 only time source.
 
@@ -24,7 +26,7 @@ import json
 import math
 import re
 import zlib
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from enum import StrEnum
@@ -1002,3 +1004,78 @@ def _list(
     if listed is None:
         return PublishCode.UNAVAILABLE
     return listed
+
+
+def _match_listing(
+    listed: Sequence[ListedActivity],
+    subject: CompletedActivity,
+    publication_id: str,
+    *,
+    absent: Collection[str],
+) -> str | PublishCode | None:
+    """The one listed activity that is the page's, ``AMBIGUOUS`` when several
+    are, ``NOT_UPDATABLE`` when only a Strava import is, else ``None``.
+
+    Entries answered absent are left out. A non-Strava entry carrying the
+    publication id as its external identifier wins; otherwise a non-Strava
+    entry for which the identity rule gives the strict tier, the keys carrying
+    the page's sport and no device or kind so that sport is not compared and no
+    other tier can hold. No step orders candidates: a count above one is the
+    answer. With no match, a Strava entry starting within the rule's start
+    tolerance of the page (by its instant start, or without one by its local
+    wall clock against the page's recorded wall clock) is ``NOT_UPDATABLE``.
+    """
+    from fitdocs.identity.matching import (
+        START_TOLERANCE_S,
+        Evidence,
+        SessionKey,
+        pair_evidence,
+    )
+
+    entries = [entry for entry in listed if entry.activity_id not in absent]
+    mine = [entry for entry in entries if not entry.strava]
+
+    def one(candidates: Collection[str]) -> str | PublishCode | None:
+        if len(candidates) > 1:
+            return PublishCode.AMBIGUOUS
+        return next(iter(candidates), None)
+
+    by_external = {
+        entry.activity_id for entry in mine if entry.external_id == publication_id
+    }
+    if by_external:
+        return one(by_external)
+
+    def key(start: datetime | None, entry: ListedActivity | None) -> SessionKey:
+        source = subject if entry is None else entry
+        return SessionKey(
+            sport=subject.sport,
+            start=start,
+            elapsed_s=source.elapsed_s,
+            distance_m=source.distance_m,
+            device=None,
+            kind=None,
+        )
+
+    page_key = key(subject.start, None)
+    strict = {
+        entry.activity_id
+        for entry in mine
+        if pair_evidence(page_key, key(entry.start, entry)) is Evidence.STRICT
+    }
+    if strict:
+        return one(strict)
+
+    wall_clock = subject.start.replace(tzinfo=None)
+    for entry in entries:
+        if not entry.strava:
+            continue
+        if entry.start is not None:
+            gap = abs((entry.start - subject.start).total_seconds())
+        elif entry.local_start is not None:
+            gap = abs((entry.local_start - wall_clock).total_seconds())
+        else:
+            continue
+        if gap <= START_TOLERANCE_S:
+            return PublishCode.NOT_UPDATABLE
+    return None
