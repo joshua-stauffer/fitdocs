@@ -38,7 +38,7 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
 
 - [ ] 1. Foundation: the update method and the upload switch
 
-- [ ] 1.1 (P) Add the update method to the connector transport
+- [x] 1.1 (P) Add the update method to the connector transport
   - Admit the update method in the request value and add the client's update
     helper beside the existing post helper, taking a body, plain and secret
     headers, and publish-core's single-attempt marker.
