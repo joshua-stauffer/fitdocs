@@ -18,7 +18,7 @@ import os
 import uuid
 from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 import pytest
 
@@ -35,6 +35,9 @@ from fitdocs_relay.storage.interface import (
     TokenStore,
 )
 from fitdocs_relay.storage.migrate import migrate
+
+if TYPE_CHECKING:
+    from tests.strava.scripted_strava import ScriptedOutbound
 
 TEST_POSTGRES_URL_VARIABLE = ENV_PREFIX + "TEST_POSTGRES_URL"
 REQUIRE_POSTGRES_VARIABLE = ENV_PREFIX + "REQUIRE_POSTGRES"
@@ -84,6 +87,15 @@ def _isolate_relay_environment(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.fixture
 def test_pepper() -> str:
     return TEST_PEPPER
+
+
+@pytest.fixture
+def scripted_outbound() -> ScriptedOutbound:
+    """An `Outbound` that serves only what the test scripts and records all."""
+    # Imported here: the harness tests copy this file alone into a child tree.
+    from tests.strava.scripted_strava import ScriptedOutbound
+
+    return ScriptedOutbound()
 
 
 # --- the coverage marker ----------------------------------------------------
