@@ -166,9 +166,9 @@ def classify(step: Step, response: OutboundResponse | OutboundError) -> Failure 
     An `OutboundError` of any kind is NETWORK; 401 AUTH; 403 FORBIDDEN; 404
     MISSING; 429 LIMITED; any other 4xx (the token endpoint's 400 included)
     INVALID; 5xx SERVER. A 2xx whose body lacks what the step needs is
-    UNREADABLE. Any other status (1xx, 3xx, outside 100 to 599) is INVALID: a
+    UNREADABLE. Any other status (1xx, 3xx, outside 100 to 599) is SERVER: a
     request with a body never follows a redirect, so a 3xx is an answer that
-    did nothing."""
+    did nothing, and it is not a refusal of the credential, so it is transient."""
     if isinstance(response, OutboundError):
         return Failure.NETWORK
     status = response.status
@@ -185,9 +185,9 @@ def classify(step: Step, response: OutboundResponse | OutboundError) -> Failure 
         return Failure.MISSING
     if status == 429:
         return Failure.LIMITED
-    if 500 <= status < 600:
-        return Failure.SERVER
-    return Failure.INVALID
+    if 400 <= status < 500:
+        return Failure.INVALID
+    return Failure.SERVER
 
 
 _USAGE: Final = re.compile(r"\s*([0-9]{1,12})\s*,\s*([0-9]{1,12})\s*")

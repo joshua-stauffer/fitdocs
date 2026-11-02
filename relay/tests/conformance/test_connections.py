@@ -979,6 +979,91 @@ def test_a_delete_with_a_generation_a_swap_has_passed_changes_nothing(
     assert revoked_at(store, "tok-ann") == T4
 
 
+@pytest.mark.covers(
+    "TargetConnectionStore.delete_connection",
+    "TargetConnectionStore.put_connection",
+    "TargetConnectionStore.claim_refresh",
+)
+def test_a_delete_with_a_lease_id_deletes_only_the_connection_that_lease_holds(
+    database_target: Target, store: Storage
+) -> None:
+    principals(store, "ann", "bea")
+    mint(store, "tok-ann", "ann")
+    store.put_connection(connection("ann", "acct-A"), now=T1)
+    store.put_connection(connection("bea", "acct-B"), now=T1)
+    attach_token(database_target, "ann", "tok-ann")
+    add_publication(database_target, "pub-a", "ann")
+    assert claim(store, "ann", "L-1", until=T5, now=T2)
+    # another principal holds a live lease with an id ann's row does not hold
+    assert claim(store, "bea", "L-0", until=T5, now=T2)
+    held = must_get(store, "ann")
+    assert held.lease_id == "L-1"
+
+    # a lease id that does not hold the connection changes nothing ...
+    assert (
+        store.delete_connection("ann", STRAVA, generation=None, now=T3, lease_id="L-0")
+        is False
+    )
+    assert (
+        store.delete_connection("ann", STRAVA, generation=1, now=T3, lease_id="L-0")
+        is False
+    )
+    # ... and neither does the holder's, with a generation that is not the row's
+    assert (
+        store.delete_connection("ann", STRAVA, generation=2, now=T3, lease_id="L-1")
+        is False
+    )
+    assert must_get(store, "ann") == held
+    assert must_get(store, "bea").lease_id == "L-0"
+    assert publications(database_target) == [(STRAVA, "pub-a", "ann")]
+    assert revoked_at(store, "tok-ann") is None
+
+    # a reconnection clears the lease: the old holder's id no longer matches,
+    # though the generation is the same one
+    store.put_connection(connection("ann", "acct-A"), now=T3)
+    assert must_get(store, "ann").generation == held.generation
+    assert must_get(store, "ann").lease_id is None
+    assert (
+        store.delete_connection("ann", STRAVA, generation=1, now=T4, lease_id="L-1")
+        is False
+    )
+    assert must_get(store, "ann").lease_id is None
+
+    # the holder's lease id deletes, with the generation or without it
+    assert claim(store, "ann", "L-2", until=T6, now=T4)
+    assert (
+        store.delete_connection("ann", STRAVA, generation=None, now=T4, lease_id="L-2")
+        is True
+    )
+    assert store.get_connection("ann", STRAVA) is None
+    assert publications(database_target) == []
+
+
+@pytest.mark.covers("TargetConnectionStore.delete_connection")
+def test_a_delete_with_a_lease_id_removes_the_publications_and_revokes_the_token(
+    database_target: Target, store: Storage
+) -> None:
+    principals(store, "ann", "bea")
+    mint(store, "tok-ann", "ann")
+    mint(store, "tok-bea", "bea")
+    store.put_connection(connection("ann", "acct-A"), now=T1)
+    store.put_connection(connection("bea", "acct-B"), now=T1)
+    attach_token(database_target, "ann", "tok-ann")
+    attach_token(database_target, "bea", "tok-bea")
+    add_publication(database_target, "pub-a", "ann")
+    add_publication(database_target, "pub-b", "bea")
+    assert claim(store, "ann", "L-1", until=T5, now=T2)
+    assert claim(store, "bea", "L-1", until=T5, now=T2)  # the same id, another row
+
+    assert store.delete_connection("ann", STRAVA, generation=1, now=T4, lease_id="L-1")
+
+    assert store.get_connection("ann", STRAVA) is None
+    assert must_get(store, "bea").lease_id == "L-1"
+    assert publications(database_target) == [(STRAVA, "pub-b", "bea")]
+    assert revoked_at(store, "tok-ann") == T4
+    assert revoked_at(store, "tok-bea") is None
+
+
 def test_a_sealed_token_never_appears_in_a_repr() -> None:
     shown = repr(connection("ann", "acct-X", access="SECRET-A", refresh="SECRET-R"))
     assert "SECRET-A" not in shown

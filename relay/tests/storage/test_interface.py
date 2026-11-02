@@ -322,7 +322,8 @@ DESIGNED: dict[str, dict[str, list[str]]] = {
             "def issue_connection_token(self, principal_id: str, target: str, "
             "token: NewToken, *, now: int) -> TokenRecord | None",
             "def delete_connection(self, principal_id: str, target: str, *, "
-            "generation: int | None, now: int) -> bool",
+            "generation: int | None, now: int, "
+            "lease_id: str | None=None) -> bool",
             "def delete_connection_by_account(self, target: str, account_key: str, "
             "*, now: int) -> bool",
         ],

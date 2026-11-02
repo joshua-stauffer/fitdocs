@@ -88,18 +88,19 @@ STATUS_ROWS = [
     (502, Failure.SERVER),
     (503, Failure.SERVER),
     (599, Failure.SERVER),
-    # not a success, not a client or server error: a 3xx answer did nothing
-    (300, Failure.INVALID),
-    (301, Failure.INVALID),
-    (302, Failure.INVALID),
-    (303, Failure.INVALID),
-    (307, Failure.INVALID),
-    (308, Failure.INVALID),
-    (399, Failure.INVALID),
-    (100, Failure.INVALID),
-    (199, Failure.INVALID),
-    (600, Failure.INVALID),
-    (0, Failure.INVALID),
+    # not a success, not a client or server error: a 3xx answer did nothing and
+    # refused nothing, so it is transient (SERVER)
+    (300, Failure.SERVER),
+    (301, Failure.SERVER),
+    (302, Failure.SERVER),
+    (303, Failure.SERVER),
+    (307, Failure.SERVER),
+    (308, Failure.SERVER),
+    (399, Failure.SERVER),
+    (100, Failure.SERVER),
+    (199, Failure.SERVER),
+    (600, Failure.SERVER),
+    (0, Failure.SERVER),
 ]
 
 
@@ -458,10 +459,10 @@ def test_a_redirect_is_never_a_success(status: int) -> None:
     fake.expect("POST", TOKEN_URL, redirect, redirect)
     fake.expect("POST", REVOKE_URL, redirect)
     assert api.exchange("c", timeout=5.0) == StravaFailure(
-        Step.EXCHANGE, Failure.INVALID
+        Step.EXCHANGE, Failure.SERVER
     )
-    assert api.refresh("r", timeout=5.0) == StravaFailure(Step.REFRESH, Failure.INVALID)
-    assert api.revoke("t", timeout=5.0) == StravaFailure(Step.REVOKE, Failure.INVALID)
+    assert api.refresh("r", timeout=5.0) == StravaFailure(Step.REFRESH, Failure.SERVER)
+    assert api.revoke("t", timeout=5.0) == StravaFailure(Step.REVOKE, Failure.SERVER)
 
 
 @pytest.mark.parametrize("kind", ["timeout", "network", "invalid", "too-large"])

@@ -284,10 +284,19 @@ class TargetConnectionStore(StorageBase, Protocol):
         ...
 
     def delete_connection(
-        self, principal_id: str, target: str, *, generation: int | None, now: int
+        self,
+        principal_id: str,
+        target: str,
+        *,
+        generation: int | None,
+        now: int,
+        lease_id: str | None = None,
     ) -> bool:
-        """Delete the connection (when `generation` is given, only if it matches),
-        its publications, and revoke its connection token."""
+        """Delete the connection (when `generation` is given, only if it matches;
+        when `lease_id` is given, only if the connection's lease is that one),
+        its publications, and revoke its connection token. A `put_connection`
+        clears the lease, so the lease id held before it no longer matches
+        unless it is claimed again."""
         ...
 
     def delete_connection_by_account(

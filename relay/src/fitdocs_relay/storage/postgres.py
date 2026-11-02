@@ -704,7 +704,13 @@ class PostgresBackend:
         )
 
     def delete_connection(
-        self, principal_id: str, target: str, *, generation: int | None, now: int
+        self,
+        principal_id: str,
+        target: str,
+        *,
+        generation: int | None,
+        now: int,
+        lease_id: str | None = None,
     ) -> bool:
         self._check_open()
 
@@ -715,6 +721,15 @@ class PostgresBackend:
                         "SELECT 1 FROM target_connections WHERE principal_id = %s "
                         "AND target = %s AND generation = %s FOR UPDATE",
                         (principal_id, target, generation),
+                    ).fetchone()
+                    is None
+                ):
+                    return False
+                if lease_id is not None and (
+                    db.execute(
+                        "SELECT 1 FROM target_connections WHERE principal_id = %s "
+                        "AND target = %s AND lease_id = %s FOR UPDATE",
+                        (principal_id, target, lease_id),
                     ).fetchone()
                     is None
                 ):

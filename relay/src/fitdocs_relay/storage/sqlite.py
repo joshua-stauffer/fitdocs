@@ -566,7 +566,13 @@ class SqliteBackend:
         )
 
     def delete_connection(
-        self, principal_id: str, target: str, *, generation: int | None, now: int
+        self,
+        principal_id: str,
+        target: str,
+        *,
+        generation: int | None,
+        now: int,
+        lease_id: str | None = None,
     ) -> bool:
         with self._write() as db:
             if generation is not None and not _run(
@@ -574,6 +580,13 @@ class SqliteBackend:
                 "SELECT 1 FROM target_connections "
                 "WHERE principal_id = ? AND target = ? AND generation = ?",
                 (principal_id, target, generation),
+            ):
+                return False
+            if lease_id is not None and not _run(
+                db,
+                "SELECT 1 FROM target_connections "
+                "WHERE principal_id = ? AND target = ? AND lease_id = ?",
+                (principal_id, target, lease_id),
             ):
                 return False
             return self._remove_connection(db, principal_id, target, now)
