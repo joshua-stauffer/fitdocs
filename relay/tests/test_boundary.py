@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
@@ -33,6 +34,18 @@ QUALIFIED_PLACEMENT: dict[str, frozenset[str]] = {
 }
 
 SHARED_PACKAGE = "shared"
+
+# Relay modules that are standard-library-only leaves at run time. Each maps to
+# the relay modules (dotted, absolute) it may also import at run time. Imports
+# nested under `if TYPE_CHECKING:` / `if typing.TYPE_CHECKING:` (the branch
+# only, not its `else`) may name the standard library or `fitdocs_relay.*`
+# (relative imports included); any other package there is refused.
+# Run-time relative imports are refused, so the allow-listed module is spelled
+# absolutely.
+STDLIB_ONLY_ALLOWED: dict[str, frozenset[str]] = {
+    "strava.pages": frozenset({"fitdocs_relay.strava.policy"}),
+    "strava.policy": frozenset(),
+}
 
 
 def _module_name(root: Path, path: Path) -> str:
@@ -120,6 +133,92 @@ def check_shared(root: Path) -> tuple[list[str], int]:
     return problems, len(files)
 
 
+def _is_type_checking(test: ast.expr) -> bool:
+    if isinstance(test, ast.Name):
+        return test.id == "TYPE_CHECKING"
+    return (
+        isinstance(test, ast.Attribute)
+        and test.attr == "TYPE_CHECKING"
+        and isinstance(test.value, ast.Name)
+        and test.value.id == "typing"
+    )
+
+
+def _classified_imports(
+    node: ast.AST, in_type_checking: bool = False
+) -> list[tuple[ast.stmt, bool]]:
+    """(import, inside a TYPE_CHECKING branch) for every import under `node`."""
+    found: list[tuple[ast.stmt, bool]] = []
+    for child in ast.iter_child_nodes(node):
+        if isinstance(child, ast.Import | ast.ImportFrom):
+            found.append((child, in_type_checking))
+        elif isinstance(child, ast.If) and _is_type_checking(child.test):
+            found.extend(_branch_imports(child.body, True))
+            found.extend(_branch_imports(child.orelse, in_type_checking))
+        else:
+            found.extend(_classified_imports(child, in_type_checking))
+    return found
+
+
+def _branch_imports(
+    body: list[ast.stmt], in_type_checking: bool
+) -> list[tuple[ast.stmt, bool]]:
+    return _classified_imports(ast.Module(body=body, type_ignores=[]), in_type_checking)
+
+
+def check_stdlib_only(
+    root: Path, allowed: Mapping[str, frozenset[str]] = STDLIB_ONLY_ALLOWED
+) -> tuple[list[str], int]:
+    """Run-time imports in `allowed`'s modules beyond the stdlib and the allow-list."""
+    scanned = 0
+    messages: list[str] = []
+    for path in _sources(root):
+        module = _module_name(root, path)
+        if module not in allowed:
+            continue
+        scanned += 1
+        found: list[tuple[int, str]] = []
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node, in_type_checking in _classified_imports(tree):
+            if in_type_checking:
+                # Typing-only imports may name the standard library or the relay.
+                names = (
+                    [a.name for a in node.names]
+                    if isinstance(node, ast.Import)
+                    else [node.module or ""]
+                    if isinstance(node, ast.ImportFrom) and not node.level
+                    else []
+                )
+                for name in names:
+                    top = name.split(".")[0]
+                    if top not in sys.stdlib_module_names and top != "fitdocs_relay":
+                        found.append(
+                            (node.lineno, f"imports {top} under TYPE_CHECKING")
+                        )
+                continue
+            if isinstance(node, ast.ImportFrom) and node.level:
+                found.append((node.lineno, "a run-time relative import"))
+                continue
+            if isinstance(node, ast.Import):
+                targets = [a.name for a in node.names]
+            else:
+                assert isinstance(node, ast.ImportFrom) and node.module is not None
+                targets = [
+                    node.module
+                    if node.module in allowed[module]
+                    else f"{node.module}.{a.name}"
+                    for a in node.names
+                ]
+            for dotted in targets:
+                top = dotted.split(".")[0]
+                if top in sys.stdlib_module_names or dotted in allowed[module]:
+                    continue
+                shown = dotted if top == "fitdocs_relay" else top
+                found.append((node.lineno, f"imports {shown}"))
+        messages.extend(f"{module}:{line} {what}" for line, what in sorted(found))
+    return messages, scanned
+
+
 def _write(root: Path, rel: str, source: str) -> None:
     target = root / rel
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -161,6 +260,12 @@ def test_shared_copies_import_only_stdlib_and_siblings() -> None:
         "relay_targets.py",
         "strict.py",
     ]
+
+
+def test_pages_and_policy_are_standard_library_leaves_at_run_time() -> None:
+    problems, scanned = check_stdlib_only(PACKAGE_ROOT)
+    assert scanned == len(STDLIB_ONLY_ALLOWED) == 2
+    assert problems == []
 
 
 # --- positive controls: each rule can fail ---------------------------------
@@ -381,3 +486,144 @@ def test_the_real_package_root_holds_python_sources() -> None:
         assert (PACKAGE_ROOT / name).is_file(), name
     assert _module_name(PACKAGE_ROOT, PACKAGE_ROOT / "cli.py") == "cli"
     assert _module_name(PACKAGE_ROOT, PACKAGE_ROOT / "__init__.py") == ""
+
+
+@pytest.mark.parametrize(
+    ("module", "source", "expected"),
+    [
+        ("strava.pages", "import yaml\n", ["strava.pages:1 imports yaml"]),
+        (
+            "strava.pages",
+            "from starlette import status\n",
+            ["strava.pages:1 imports starlette"],
+        ),
+        (
+            "strava.pages",
+            "def f():\n    import psycopg\n",
+            ["strava.pages:2 imports psycopg"],
+        ),
+        (
+            "strava.pages",
+            "from fitdocs_relay.strava.config import LinkSetting\n",
+            ["strava.pages:1 imports fitdocs_relay.strava.config.LinkSetting"],
+        ),
+        (
+            "strava.pages",
+            "from fitdocs_relay.strava import config\n",
+            ["strava.pages:1 imports fitdocs_relay.strava.config"],
+        ),
+        (
+            "strava.pages",
+            "from . import config\n",
+            ["strava.pages:1 a run-time relative import"],
+        ),
+        (
+            "strava.pages",
+            "from .policy import consent_text\n",
+            ["strava.pages:1 a run-time relative import"],
+        ),
+        (
+            "strava.pages",
+            "import fitdocs_relay.crypto\n",
+            ["strava.pages:1 imports fitdocs_relay.crypto"],
+        ),
+        (
+            "strava.pages",
+            "from fitdocs_relay import crypto\n",
+            ["strava.pages:1 imports fitdocs_relay.crypto"],
+        ),
+        (
+            "strava.pages",
+            "from typing import TYPE_CHECKING\n"
+            "if TYPE_CHECKING:\n    pass\nelse:\n"
+            "    from fitdocs_relay.strava.config import LinkSetting\n",
+            ["strava.pages:5 imports fitdocs_relay.strava.config.LinkSetting"],
+        ),
+        (
+            "strava.pages",
+            "from typing import TYPE_CHECKING\n"
+            "if not TYPE_CHECKING:\n"
+            "    from fitdocs_relay.strava.config import LinkSetting\n",
+            ["strava.pages:3 imports fitdocs_relay.strava.config.LinkSetting"],
+        ),
+        (
+            "strava.pages",
+            "if DEBUG:\n    import yaml\n",
+            ["strava.pages:2 imports yaml"],
+        ),
+        (
+            "strava.pages",
+            "import typing\nif typing.DEBUG:\n    import yaml\n",
+            ["strava.pages:3 imports yaml"],
+        ),
+        (
+            "strava.pages",
+            "import os\nif os.TYPE_CHECKING:\n    import yaml\n",
+            ["strava.pages:3 imports yaml"],
+        ),
+        (
+            "strava.pages",
+            "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    import yaml\n",
+            ["strava.pages:3 imports yaml under TYPE_CHECKING"],
+        ),
+        (
+            "strava.pages",
+            "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n"
+            "    from yaml import safe_load\n",
+            ["strava.pages:3 imports yaml under TYPE_CHECKING"],
+        ),
+        (
+            "strava.policy",
+            "from fitdocs_relay.strava.policy import consent_text\n",
+            ["strava.policy:1 imports fitdocs_relay.strava.policy.consent_text"],
+        ),
+        (
+            "strava.policy",
+            "from fitdocs_relay.strava import policy\n",
+            ["strava.policy:1 imports fitdocs_relay.strava.policy"],
+        ),
+    ],
+)
+def test_stdlib_only_rule_rejects(
+    tmp_path: Path, module: str, source: str, expected: list[str]
+) -> None:
+    _write(tmp_path, module.replace(".", "/") + ".py", source)
+    _write(tmp_path, "identity.py", "import yaml\n")  # not a listed module
+    problems, scanned = check_stdlib_only(tmp_path)
+    assert scanned == 1
+    assert problems == expected
+
+
+@pytest.mark.parametrize(
+    ("module", "source"),
+    [
+        ("strava.pages", "import html\nfrom dataclasses import dataclass\n"),
+        (
+            "strava.pages",
+            "from fitdocs_relay.strava.policy import consent_text\n",
+        ),
+        ("strava.pages", "from fitdocs_relay.strava import policy\n"),
+        ("strava.pages", "import fitdocs_relay.strava.policy\n"),
+        (
+            "strava.pages",
+            "from typing import TYPE_CHECKING\n"
+            "if TYPE_CHECKING:\n"
+            "    from fitdocs_relay.strava.config import LinkSetting\n",
+        ),
+        (
+            "strava.policy",
+            "import typing\nif typing.TYPE_CHECKING:\n"
+            "    from fitdocs_relay.strava.config import LinkSetting\n"
+            "    from . import config\n",
+        ),
+    ],
+)
+def test_stdlib_only_rule_admits(tmp_path: Path, module: str, source: str) -> None:
+    _write(tmp_path, module.replace(".", "/") + ".py", source)
+    problems, scanned = check_stdlib_only(tmp_path)
+    assert scanned == 1
+    assert problems == []
+
+
+def test_stdlib_only_rule_scans_nothing_in_an_empty_tree(tmp_path: Path) -> None:
+    assert check_stdlib_only(tmp_path) == ([], 0)
