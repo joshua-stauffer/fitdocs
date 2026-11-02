@@ -21,7 +21,10 @@ guard, registry snapshot/restore, credentials/environment isolation):
    ``query``, ``dashboard refresh`` and ``recovery`` -- completing exactly as
    it would with no ``[connectors]`` table at all: same exit code and output, the
    same number of socket attempts as the bare run (an in-test recorder that
-   also raises), and no call on a scripted connector.
+   also raises), and no call on a scripted connector. ``publish`` is the one
+   exception to "same output": the wired root's Strava instance is a publish
+   target, so its dry run and ``--targets`` name it where the bare root reports
+   none; both outputs are pinned literally, with no socket attempt either way.
 """
 
 from __future__ import annotations
@@ -51,6 +54,7 @@ from fitdocs.connectors.protocol import (
 )
 from fitdocs.connectors.relay import RelaySettings
 from fitdocs.connectors.settings import load_connectors_settings
+from fitdocs.connectors.strava import StravaSettings
 from fitdocs.index.location import resolve_index_location
 from fitdocs.index.store import open_index, read_bookkeeping
 from fitdocs.layout import archive_path, recovery_doc_path, settings_path
@@ -78,6 +82,7 @@ runner = CliRunner()
 
 _STUB_CALCULATOR_ID = "stub-analytics-index-parity"
 _RELAY_TOKEN = "fdr1_" + "e" * 16 + "_" + "e" * 52
+_STRAVA_TOKEN = "fdr1_" + "f" * 16 + "_" + "f" * 52
 
 
 class _FieldFreeIndexParityCalculator:
@@ -310,7 +315,8 @@ def _fresh_synced_root(
 ) -> Path:
     """A freshly synced data root with one workout document, optionally
     carrying a `[connectors]` table naming the built-in folder and relay connectors,
-    the scripted personal-key connector, and wellness-enabled intervals.
+    the scripted personal-key connector, wellness-enabled intervals, and a Strava
+    instance bound to the relay.
     Recovery can additionally stage an intervals delivery through the inbox drain."""
     source = tmp_path / f"{name}-src"
     source.mkdir()
@@ -326,6 +332,7 @@ def _fresh_synced_root(
             '[connectors.wellness-src]\nconnector = "intervals"\nwellness = true\n'
             '[connectors.relay-src]\nconnector = "relay"\n'
             'url = "https://relay.example.com"\n'
+            '[connectors.strava-src]\nconnector = "strava"\nrelay = "relay-src"\n'
         )
     if tiles_disabled:
         settings += "\n[tiles]\nenabled = false\n"
@@ -390,7 +397,9 @@ def test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded(
     args: list[str],
 ) -> None:
     """Every command Req 14.1 names, other than `connect`/`pull`, completes
-    exactly as it would with no `[connectors]` table -- compared directly
+    exactly as it would with no `[connectors]` table -- except `publish`, whose
+    bare and wired outputs are each pinned literally because only the wired root
+    carries a publish target -- compared directly
     (both roots use the identical single-file workout source and, for
     recovery, the same synthetic wellness delivery). A connector call is
     visible even when a command swallows the error: the socket-attempt counts
@@ -403,6 +412,7 @@ def test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded(
     monkeypatch.setenv(env_var_name("key-src", "api_key"), "s3cr3t-api-key")
     monkeypatch.setenv(env_var_name("wellness-src", "api_key"), "ik-synthetic-7Q2x9")
     monkeypatch.setenv(env_var_name("relay-src", "token"), _RELAY_TOKEN)
+    monkeypatch.setenv(env_var_name("strava-src", "token"), _STRAVA_TOKEN)
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "fallback-xdg-cache"))
     is_query = command == "query"
     is_dashboard = command == "dashboard"
@@ -431,6 +441,14 @@ def test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded(
     relay_instances = [i for i in wired_instances if i.name == "relay-src"]
     assert len(relay_instances) == 1
     assert relay_instances[0].settings == RelaySettings(url="https://relay.example.com")
+    strava_instances = [i for i in wired_instances if i.name == "strava-src"]
+    assert len(strava_instances) == 1
+    assert strava_instances[0].connector.connector_id == "strava"
+    assert strava_instances[0].settings == StravaSettings(
+        relay_instance="relay-src",
+        upload=False,
+        relay=RelaySettings(url="https://relay.example.com"),
+    )
     assert not load_connectors_settings(
         load_settings_document(bare_root),
         settings_file=settings_path(bare_root),
@@ -500,7 +518,25 @@ def test_offline_commands_complete_unchanged_with_connectors_and_socket_guarded(
     wired_output = wired_output.replace(str(wired_root), "<data-root>").replace(
         str(wired_location.database), "<resolved-index-database>"
     )
-    assert wired_output == bare_output
+    if command == "publish":
+        # A publish target now exists in the wired root only, so the two
+        # outputs differ by construction; the wired run is pinned literally.
+        assert bare_output == "No publish target is configured.\n"
+        if args == ["--targets"]:
+            assert wired_output == (
+                "strava-src: strava (Strava); capabilities: push-activity, "
+                "annotate-remote-activity, resolve-remote-activity; "
+                "state: ready\n\n"
+                "ready: This target is configured and has the credentials "
+                "it needs.\n"
+            )
+        else:
+            assert wired_output == (
+                "fitdocs publish: dry run; nothing is sent (add --yes to post).\n"
+                "no results; 1 page opted in to no selected target.\n"
+            )
+    else:
+        assert wired_output == bare_output
     if is_query:
         assert bare.stdout == "n\n1\n"
         assert bare_attempts == 0

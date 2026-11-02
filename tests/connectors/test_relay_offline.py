@@ -13,7 +13,12 @@
   tell apart.
 
 The offline-commands half of the task lives in ``test_e2e.py`` (the wired root
-there carries a relay instance).
+there carries a relay instance and a Strava instance bound to it).
+
+A Strava instance bound to a relay (strava-publish task 6.1; Requirements 1.6,
+1.8, 2.9) holds the same guarantees: bare and named ``fitdocs pull`` and
+``fitdocs publish --targets`` make no request for it, and a Strava connect run
+through the CLI writes nothing under the data root.
 """
 
 from __future__ import annotations
@@ -26,18 +31,35 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+import fitdocs.cli as cli_module
 from fitdocs.cli import app
 from fitdocs.connectors import registry as connector_registry
-from fitdocs.connectors.credentials import CredentialStore, StoredCredentials
+from fitdocs.connectors.credentials import (
+    CredentialStore,
+    StoredCredentials,
+    env_var_name,
+)
 from fitdocs.connectors.protocol import AuthStyle, Capability
 from fitdocs.connectors.relay_codes import RelayCode
 from fitdocs.connectors.secrets import Secret
+from tests.connectors.test_browser_connect import (
+    _CONNECTION_TOKEN,
+    _granted,
+)
+from tests.connectors.test_browser_connect import (
+    _pending as _strava_pending,
+)
+from tests.connectors.test_browser_connect import (
+    _started as _strava_started,
+)
 from tests.connectors.test_cli_relay_connect import (
     _NAME,
 )
 from tests.connectors.test_cli_relay_connect import (
     _setup as _setup_connect,
 )
+from tests.connectors.test_cli_strava import _NAME as _STRAVA_NAME
+from tests.connectors.test_cli_strava import _setup as _setup_strava
 from tests.connectors.test_relay_connect import _TOKEN, _envelope
 from tests.connectors.test_relay_register import (
     _EMAIL,
@@ -236,3 +258,140 @@ def test_a_bare_pull_with_only_a_relay_instance_is_offline_and_prints_the_nothin
     assert "does not pull" not in result.output
     assert "my-relay" not in result.output
     assert attempts == []
+
+
+# ---------------------------------------------------------------------------
+# A Strava instance bound to a relay (strava-publish 6.1)
+# ---------------------------------------------------------------------------
+
+
+_REAL_TRANSPORT = cli_module._connector_transport
+
+
+def _guard_network(monkeypatch: pytest.MonkeyPatch) -> list[object]:
+    """Put the real transport back (the Strava setup scripts a fake one) and
+    record every attempt to open a socket or resolve a name."""
+    monkeypatch.setattr(cli_module, "_connector_transport", _REAL_TRANSPORT)
+    attempts: list[object] = []
+
+    def _record_and_refuse(*args: object, **kwargs: object) -> object:
+        attempts.append(args)
+        raise RuntimeError("tests/connectors must not open a real network socket")
+
+    for name in _NETWORK_ENTRY_POINTS:
+        monkeypatch.setattr(socket, name, _record_and_refuse)
+    return attempts
+
+
+def _seed_strava(token: str) -> None:
+    CredentialStore(_credentials_dir()).save(
+        _STRAVA_NAME,
+        StoredCredentials(
+            connector_id="strava",
+            auth_style=AuthStyle.OAUTH_BROWSER,
+            values={"token": Secret(token)},
+            expires_at=None,
+            scopes=None,
+        ),
+    )
+
+
+def test_a_bare_pull_never_selects_a_strava_instance_and_makes_no_request(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _setup_strava(tmp_path, monkeypatch, [])
+    _seed_strava(_CONNECTION_TOKEN)
+    attempts = _guard_network(monkeypatch)
+
+    result = runner.invoke(app, ["pull", "--out", str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+    assert _NOTHING in " ".join(result.output.split())
+    assert _STRAVA_NAME not in result.output
+    assert attempts == []
+
+
+@pytest.mark.parametrize("stored", [True, False], ids=["with-token", "no-token"])
+def test_a_named_pull_of_a_strava_instance_makes_no_request(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stored: bool
+) -> None:
+    _setup_strava(tmp_path, monkeypatch, [])
+    if stored:
+        _seed_strava(_CONNECTION_TOKEN)
+    attempts = _guard_network(monkeypatch)
+
+    result = runner.invoke(app, ["pull", _STRAVA_NAME, "--out", str(tmp_path)])
+
+    collapsed = " ".join(result.output.split())
+    assert result.exit_code == 1, result.output
+    assert _STRAVA_NAME in collapsed
+    if stored:
+        assert "does not pull activities or wellness" in collapsed
+    else:
+        assert "not connected" in collapsed
+    assert attempts == []
+
+
+@pytest.mark.parametrize(
+    "mode,state",
+    [("stored", "ready"), ("environment", "ready"), ("none", "not_connected")],
+)
+def test_the_targets_listing_shows_a_strava_instance_without_a_request(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str, state: str
+) -> None:
+    _setup_strava(tmp_path, monkeypatch, [])
+    if mode == "stored":
+        _seed_strava(_CONNECTION_TOKEN)
+    if mode == "environment":
+        monkeypatch.setenv(env_var_name(_STRAVA_NAME, "token"), _CONNECTION_TOKEN)
+    attempts = _guard_network(monkeypatch)
+
+    result = runner.invoke(app, ["publish", "--targets", "--out", str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+    rows = [line for line in result.stdout.splitlines() if line.startswith("strava:")]
+    assert len(rows) == 1, result.stdout
+    assert rows[0].endswith(f"state: {state}"), rows[0]
+    assert attempts == []
+
+
+def test_a_strava_connect_writes_nothing_under_the_data_root_and_one_credentials_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    session = _setup_strava(
+        tmp_path,
+        monkeypatch,
+        [_strava_started(expires_in_s=600), _strava_pending(), _granted()],
+    )
+    _populate_data_root(tmp_path)
+    bystander, bystander_bytes = _bystander()
+    own_file = _credentials_dir() / f"{_STRAVA_NAME}.toml"
+    assert not own_file.exists()
+    _restrict_credentials_dir()
+    root_before = _tree(tmp_path)
+    credentials_before = _tree(_credentials_dir())
+    base_before = _tree(_env_base())
+    assert {"fitdocs.toml", "inbox/dropped.fit", "workouts/2024-01-01-run.md"} <= set(
+        root_before
+    )
+    assert "home.toml" in credentials_before
+
+    result = runner.invoke(
+        app, ["connect", _STRAVA_NAME, "--no-browser", "--out", str(tmp_path)]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert f"{_STRAVA_NAME}: connected." in result.output
+    assert len(session.transport.requests) == 3
+    assert session.opened == []
+    assert _tree(tmp_path) == root_before
+    credentials_after = _tree(_credentials_dir())
+    assert set(credentials_after) == set(credentials_before) | {f"{_STRAVA_NAME}.toml"}
+    assert credentials_after["bystander.toml"] == credentials_before["bystander.toml"]
+    assert credentials_after["home.toml"] == credentials_before["home.toml"]
+    assert credentials_after["."][1] == credentials_before["."][1]
+    _only_changed(
+        base_before, _tree(_env_base()), {f"credentials-dir/{_STRAVA_NAME}.toml"}
+    )
+    assert bystander.read_bytes() == bystander_bytes
+    assert _CONNECTION_TOKEN in own_file.read_text()
