@@ -106,6 +106,7 @@ _MODULES: Final[tuple[str, ...]] = (
     "fitdocs.identity.planning",
     "fitdocs.identity.roles",
     "fitdocs.identity.settings",
+    "fitdocs.identity.strict",
 )
 
 _FILESYSTEM_MODULES: Final[frozenset[str]] = frozenset(

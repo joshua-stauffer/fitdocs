@@ -18,6 +18,15 @@ from types import MappingProxyType
 from typing import Final
 
 from fitdocs.identity.kinds import SourceKind, source_identity
+from fitdocs.identity.strict import (
+    DISTANCE_TOLERANCE_FRACTION,
+    DISTANCE_TOLERANCE_M,
+    ELAPSED_TOLERANCE_S,
+    START_TOLERANCE_S,
+    StrictFacts,
+    strict_match,
+    within,
+)
 from fitdocs.model import Activity
 
 __all__ = [
@@ -36,10 +45,6 @@ __all__ = [
     "session_key",
 ]
 
-START_TOLERANCE_S: Final[float] = 1.0
-ELAPSED_TOLERANCE_S: Final[float] = 10.0
-DISTANCE_TOLERANCE_M: Final[float] = 5.0
-DISTANCE_TOLERANCE_FRACTION: Final[float] = 0.2
 SHIFT_STEP_S: Final[int] = 3600
 SHIFT_MAX_HOURS: Final[int] = 36
 SHIFTED_ELAPSED_TOLERANCE_S: Final[float] = 5.0
@@ -116,16 +121,7 @@ def session_key(activity: Activity) -> SessionKey:
     )
 
 
-_RELATIVE_SLACK: Final[float] = 1e-9
-"""Floating-point slack, relative to the tolerance (``math.isclose``'s default);
-far below any tolerance's measured meaning."""
-
-
-def _within(delta: float, tolerance: float) -> bool:
-    """``delta <= tolerance``, inclusive to floating-point precision: a gap that
-    is a tolerance exactly in decimal (25.05 m - 20.04 m against 20 % of
-    25.05 m) can exceed it by one unit in the last place in binary."""
-    return delta <= tolerance * (1.0 + _RELATIVE_SLACK)
+_within = within
 
 
 def _is_shift(delta_s: float) -> bool:
@@ -156,25 +152,15 @@ def pair_evidence(a: SessionKey, b: SessionKey) -> Evidence | None:
         if a.distance_m is not None and b.distance_m is not None
         else None
     )
-    if close_start and a.distance_m is not None and b.distance_m is not None:
-        # Both distances recorded: elapsed is not compared (Amendment 1).
-        limit_m = max(
-            DISTANCE_TOLERANCE_M,
-            DISTANCE_TOLERANCE_FRACTION * max(a.distance_m, b.distance_m),
-        )
-        if _within(abs(a.distance_m - b.distance_m), limit_m):
-            return Evidence.STRICT
+    if strict_match(
+        StrictFacts(a.sport, a.start, a.elapsed_s, a.distance_m),
+        StrictFacts(b.sport, b.start, b.elapsed_s, b.distance_m),
+    ):
+        return Evidence.STRICT
 
     if a.elapsed_s is None or b.elapsed_s is None:
         return None
     elapsed_delta_s = abs(a.elapsed_s - b.elapsed_s)
-
-    if (
-        close_start
-        and distance_delta_m is None
-        and _within(elapsed_delta_s, ELAPSED_TOLERANCE_S)
-    ):
-        return Evidence.STRICT
 
     if (
         SourceKind.PHONE_COPY in (a.kind, b.kind)

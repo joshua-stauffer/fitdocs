@@ -1418,6 +1418,7 @@ _IDENTITY_SUBMODULES = (
     "planning",
     "roles",
     "settings",
+    "strict",
 )
 
 

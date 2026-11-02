@@ -55,7 +55,7 @@ Rules for every task:
 
 - [ ] 1. Foundation: the shared modules and their pinned copies
 
-- [ ] 1.1 Extract the strict tier of the match rule into a standard-library-only module
+- [x] 1.1 Extract the strict tier of the match rule into a standard-library-only module
   - Move the four strict tolerances and the inclusive comparison into the
     new strict-rule module, with the strict facts value and the strict
     match function exactly as design.md states them.
@@ -716,3 +716,7 @@ Rules for every task:
     real-account write, and the template has a row for each of the four
     steps.
   - _Requirements: 18.1, 18.2_
+
+## Implementation Notes
+
+- 1.1: the strict tier keeps main's 1e-9 relative slack in `within`, so exact-tolerance table rows cannot see a `<`-for-`<=` flip; inclusivity is pinned only by `test_within_is_inclusive`. Controller downgrade: the round-1 rejection was one false docstring sentence in `tests/identity/test_strict.py`; the controller deleted it and re-ran the file instead of a second review round.
