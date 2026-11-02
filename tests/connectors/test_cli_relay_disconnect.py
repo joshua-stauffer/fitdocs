@@ -30,7 +30,10 @@ from tests.connectors.conftest import (
     ScriptedPersonalKeyConnector,
     ScriptedPuller,
 )
-from tests.connectors.test_cli_connectors import _ReservedConnector
+from tests.connectors.test_cli_connectors import (
+    RESERVED_RELAY_TABLE,
+    _ReservedConnector,
+)
 from tests.connectors.test_relay_connect import _TOKEN, _envelope
 
 runner = CliRunner()
@@ -249,7 +252,8 @@ def test_reserved_style_exits_2_naming_it_unsupported(
         tmp_path,
         monkeypatch,
         [],
-        settings='[connectors.res]\nconnector = "reserved-style"\n',
+        settings='[connectors.res]\nconnector = "reserved-style"\n'
+        + RESERVED_RELAY_TABLE,
     )
     path = _seed("res", style=AuthStyle.OAUTH_BROWSER)
     exit_code, lines = _run(tmp_path, "res")

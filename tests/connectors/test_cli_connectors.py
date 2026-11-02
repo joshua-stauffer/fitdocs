@@ -91,6 +91,25 @@ from tests.fixtures import builder
 runner = CliRunner()
 
 
+@dataclass(frozen=True)
+class _ReservedSettings:
+    """Settings that name a relay instance (so the browser-consent binding
+    pass accepts the instance) and bind to themselves."""
+
+    relay_instance: str
+
+    def bound(self, relay_settings: object) -> _ReservedSettings:
+        return self
+
+
+RESERVED_RELAY_TABLE = (
+    '\n[connectors.reserved-relay]\nconnector = "relay"\n'
+    'url = "https://relay.example.com"\n'
+)
+"""A relay instance for the reserved-style connector to bind to; append it
+to any settings file that configures that connector."""
+
+
 @dataclass
 class _ReservedConnector:
     """A minimal ``AuthStyle.OAUTH_BROWSER`` connector whose consent
@@ -114,7 +133,7 @@ class _ReservedConnector:
     def parse_settings(
         self, table: Mapping[str, object], context: SettingsContext
     ) -> object:
-        return None
+        return _ReservedSettings(relay_instance="reserved-relay")
 
     def start_consent(self, session: object, relay_token: object) -> object:
         raise AssertionError("not driven by these tests")
@@ -364,7 +383,9 @@ def test_a_style_outside_the_supported_set_is_refused_exactly(
     """Every style is supported today, so the refusal branch is reached by
     removing one from the CLI's supported set."""
     connector_registry.register(_ReservedConnector())
-    _write_settings(tmp_path, connectors="[connectors.reserved-style]\n")
+    _write_settings(
+        tmp_path, connectors="[connectors.reserved-style]\n" + RESERVED_RELAY_TABLE
+    )
     monkeypatch.setattr(
         "fitdocs.cli.SUPPORTED_AUTH_STYLES",
         frozenset(AuthStyle) - {AuthStyle.OAUTH_BROWSER},

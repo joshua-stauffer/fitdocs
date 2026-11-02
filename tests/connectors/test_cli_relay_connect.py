@@ -35,7 +35,10 @@ from tests.connectors.conftest import (
     ScriptedPersonalKeyConnector,
     ScriptedPuller,
 )
-from tests.connectors.test_cli_connectors import _ReservedConnector
+from tests.connectors.test_cli_connectors import (
+    RESERVED_RELAY_TABLE,
+    _ReservedConnector,
+)
 from tests.connectors.test_relay_connect import _TOKEN, _envelope
 from tests.connectors.test_relay_register import (
     _EMAIL,
@@ -353,6 +356,7 @@ def test_register_or_email_on_a_non_relay_instance_exits_2(
     session = _setup(tmp_path, monkeypatch, [])
     (tmp_path / "fitdocs.toml").write_text(
         f'[connectors.{_NAME}]\nconnector = "{connector.connector_id}"\n'  # type: ignore[attr-defined]
+        + RESERVED_RELAY_TABLE
     )
     code, lines = _run(tmp_path, *flags)
     assert code == 2
