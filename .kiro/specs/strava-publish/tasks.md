@@ -100,7 +100,7 @@ Rules for every task:
     or removing a sport from the literal reds a test.
   - _Requirements: 5.1, 5.3, 5.4, 5.6, 6.2, 15.3_
 
-- [ ] 1.3 Append the connect answers to the relay code vocabulary
+- [x] 1.3 Append the connect answers to the relay code vocabulary
   - Five codes after `answer-malformed`, all sent by the relay, with the
     statuses and explanations in design.md.
   - Keep relay-server's 22-value prefix pin; add a literal pin of all 27
@@ -720,3 +720,5 @@ Rules for every task:
 ## Implementation Notes
 
 - 1.1: the strict tier keeps main's 1e-9 relative slack in `within`, so exact-tolerance table rows cannot see a `<`-for-`<=` flip; inclusivity is pinned only by `test_within_is_inclusive`. Controller downgrade: the round-1 rejection was one false docstring sentence in `tests/identity/test_strict.py`; the controller deleted it and re-ran the file instead of a second review round.
+- 1.3: controller rulings. (a) `relay_connect._NEXT_STEPS` covers the whole vocabulary, a file design.md's file list omits: the five connect codes take the `REGISTRATION_*` text ("Run {connect} again; if this repeats, tell the relay's operator."), because to the relay connector they are another route's answers. (b) `RelayClient`'s token operations keep refusing all five connect codes (`_SUCCESS_SHAPED` unchanged; refusal literal 19). **Task 4.4 must delete both `_CONNECT_CODES_RECORDED_BY_4_4` exemption sets** (tests/connectors/test_relay_wire_examples.py, relay/tests/test_envelope_replay.py) when it records the connect exchanges. Controller downgrade: round 2's only finding was one false comment sentence in tests/connectors/test_relay.py; the controller rewrote it and re-ran the file.
+- Local relay runs need `uv sync --directory relay --extra postgres` (without it, relay mypy shows 26 psycopg errors and the PostgreSQL cases cannot import).
