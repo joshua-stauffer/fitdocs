@@ -124,9 +124,9 @@ Rules for every task:
     and editing one byte of any new copy reds the cross-check.
   - _Requirements: 6.3, 15.1_
 
-- [ ] 2. Relay foundation: configuration, encryption, the outbound client and storage
+- [x] 2. Relay foundation: configuration, encryption, the outbound client and storage
 
-- [ ] 2.1 Seal tokens with rotating keys
+- [x] 2.1 Seal tokens with rotating keys
   - Add the relay's encryption dependency to its manifest and lock, and the
     keyring: parse the configured keys, seal with the first key under the
     associated-data context, open with any configured key, and report a
@@ -140,7 +140,7 @@ Rules for every task:
     context reds the wrong-context test.
   - _Requirements: 4.1, 4.2, 4.7_
 
-- [ ] 2.2 Configure the Strava target from the environment
+- [x] 2.2 Configure the Strava target from the environment
   - Give relay-server's environment-variable record a `required_with:
     tuple[str, ...] = ()` field (required when any named variable is set),
     rendered in `docs/relay.md`'s Required column as "with `<variable>`",
@@ -167,7 +167,7 @@ Rules for every task:
     table reds the binding test.
   - _Requirements: 9.1, 10.7, 13.1, 13.2, 13.5_
 
-- [ ] 2.3 Add the relay's outbound client for provider calls
+- [x] 2.3 Add the relay's outbound client for provider calls
   - Requests with GET, POST, PUT and DELETE; secret headers added
     unredirected; a per-call timeout; a response cap; the relay's own
     User-Agent; failures raised with a fixed kind and never a URL, header
@@ -179,7 +179,7 @@ Rules for every task:
     of a planted secret query value.
   - _Requirements: 4.6, 12.2_
 
-- [ ] 2.4 Store target connections on both backends
+- [x] 2.4 Store target connections on both backends
   - Add the schema change pair (the three tables of design.md's physical
     model, identically named for both backends, with a nullable
     `access_expires_at`) and the connection area's
@@ -201,7 +201,7 @@ Rules for every task:
     removed.
   - _Requirements: 3.10, 11.5, 11.6, 11.8, 12.3, 14.1, 14.2, 14.3, 14.4_
 
-- [ ] 2.5 Issue connection tokens atomically
+- [x] 2.5 Issue connection tokens atomically
   - Add the connection-token issuance to the connection area: insert the
     new relay token for the principal, revoke the connection's previous
     token and record the new one, in one transaction; `None` without a
@@ -216,7 +216,7 @@ Rules for every task:
     same-principal re-put), and a delete revoking the current one.
   - _Requirements: 3.8, 11.5, 14.2_
 
-- [ ] 2.6 Rotate tokens atomically through a refresh lease
+- [x] 2.6 Rotate tokens atomically through a refresh lease
   - Add claim, swap and release to the connection area with the generation
     and lease rules of design.md; a swap without a lease succeeds only when
     no lease is live.
@@ -228,7 +228,7 @@ Rules for every task:
     generation condition from the swap reds the stale-swap test.
   - _Requirements: 4.3, 4.4, 4.5, 14.2_
 
-- [ ] 2.7 Store link records on both backends
+- [x] 2.7 Store link records on both backends
   - Add the publication area: put only for the owning principal, get by
     target and publication id; it joins the combined protocol.
   - Done when conformance tests on both backends show another principal's
@@ -238,7 +238,7 @@ Rules for every task:
     put changes the account.
   - _Requirements: 3.10, 3.11, 10.1, 10.6, 14.1, 14.4_
 
-- [ ] 2.8 Count the call budget on both backends
+- [x] 2.8 Count the call budget on both backends
   - Add the budget area: an all-or-nothing spend over several windows with
     ceilings, the longest wait reported on refusal, ended windows deleted,
     and an exhaust that raises a window's count; it joins the combined
@@ -250,9 +250,9 @@ Rules for every task:
     before checking every charge reds the all-or-nothing test.
   - _Requirements: 9.2, 9.6, 14.1, 14.2, 14.4_
 
-- [ ] 3. Relay Strava services
+- [x] 3. Relay Strava services
 
-- [ ] 3.1 Speak Strava's OAuth endpoints and classify every answer
+- [x] 3.1 Speak Strava's OAuth endpoints and classify every answer
   - The authorization address with exactly the two requested scopes, the
     state and `approval_prompt=auto`; the code exchange, the refresh and
     the revoke calls, with client credentials as Strava documents and
@@ -266,7 +266,7 @@ Rules for every task:
     scripted error body appears in no returned value.
   - _Requirements: 3.3, 3.6, 4.6, 8.1, 8.3_
 
-- [ ] 3.2 Speak Strava's activity, upload and subscription endpoints
+- [x] 3.2 Speak Strava's activity, upload and subscription endpoints
   - The activity listing with its window, page size and full-page flag; the
     update of name and description only; the multipart upload with the
     publication id as external identifier; the upload state from its
@@ -278,7 +278,7 @@ Rules for every task:
     update request carrying no field but the two.
   - _Requirements: 6.1, 7.1, 7.3, 7.4, 7.5, 7.6, 11.9_
 
-- [ ] 3.3 (P) Spend the call budget before every Strava call
+- [x] 3.3 (P) Spend the call budget before every Strava call
   - The application-wide and per-principal windows per call kind, the link
     headroom, the upload reservation, and marking windows spent after a
     rate-limit answer, as design.md states them.
@@ -290,7 +290,7 @@ Rules for every task:
   - _Requirements: 9.2, 9.3, 9.4, 9.5, 9.7_
   - _Boundary: StravaBudget_
 
-- [ ] 3.4 Pick one activity by the strict rule
+- [x] 3.4 Pick one activity by the strict rule
   - The sport-family table, every family value pinned within the shared
     fitdocs-sports literal's pinned copy; the listing window; the pick through the pinned strict match, where a full
     listing, two matches and an unknown sport type never yield a pick and
@@ -300,7 +300,7 @@ Rules for every task:
     ambiguity test.
   - _Requirements: 6.1, 6.2, 6.4, 6.5_
 
-- [ ] 3.5 Keep custody of a principal's Strava tokens
+- [x] 3.5 Keep custody of a principal's Strava tokens
   - Store a grant sealed under the connection's context with the keyed
     account hash; return a usable access token, refreshing through the
     lease near expiry, waiting on another holder, deleting on a definitive
@@ -315,7 +315,7 @@ Rules for every task:
     unreadable row and leaving it unchanged.
   - _Requirements: 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 4.7, 4.8, 11.5, 11.10_
 
-- [ ] 3.6 Publish a post on Strava
+- [x] 3.6 Publish a post on Strava
   - The common checks (both facts absent, a publication id owned by another
     principal, a usable token), then the publish flow of design.md: one
     listing, the pick, one update with at most one repeat of the identical
@@ -331,7 +331,7 @@ Rules for every task:
     scripted activity's page address.
   - _Requirements: 5.6, 6.4, 7.1, 7.2, 7.6, 7.7, 8.1, 8.2, 10.1, 10.6_
 
-- [ ] 3.7 Upload a post on Strava when no activity exists
+- [x] 3.7 Upload a post on Strava when no activity exists
   - The upload flow of design.md: listing and pick again, the upload
     reservation, one upload never repeated, bounded status polling,
     re-resolution after a failed upload, the upload deadline, and the
@@ -349,7 +349,7 @@ Rules for every task:
     a fake monotonic clock drives the deadline to `unconfirmed`.
   - _Requirements: 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 8.1, 9.3, 10.1_
 
-- [ ] 3.8 Resolve a link at click time
+- [x] 3.8 Resolve a link at click time
   - Look up the publication, its connection and a usable token, spend the
     budget for a link, list and pick, and return the activity page address
     or a refusal, storing nothing about the result.
@@ -358,7 +358,7 @@ Rules for every task:
     storage write during a resolution.
   - _Requirements: 10.2, 10.3, 10.4, 10.5_
 
-- [ ] 3.9 Run connect sessions, the page claim, the callback and the poll
+- [x] 3.9 Run connect sessions, the page claim, the callback and the poll
   - Add the token service's prepare step (a token generated but not
     stored), which minting also uses; the connection token carries the
     label `connection:strava`, so the operator's token listing shows what
@@ -373,7 +373,7 @@ Rules for every task:
     the granted answer issued exactly once.
   - _Requirements: 3.1, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10, 3.11_
 
-- [ ] 3.10 Act on Strava's webhook
+- [x] 3.10 Act on Strava's webhook
   - Validation answered only for the configured verify token; a
     deauthorization event forgetting its account; every other event
     acknowledged and ignored.
@@ -382,7 +382,7 @@ Rules for every task:
     every table unchanged.
   - _Requirements: 11.6, 11.7, 11.10_
 
-- [ ] 3.11 (P) Write the pages, the consent text and the privacy policy
+- [x] 3.11 (P) Write the pages, the consent text and the privacy policy
   - Every page of design.md, in fitdocs's words, with the support contact
     and policy link on each, the connect page in the stated order, and the
     "Connect with Strava" control as a link to the authorization address at
@@ -397,9 +397,9 @@ Rules for every task:
   - _Requirements: 3.2, 3.5, 10.3, 10.4, 10.7, 12.4, 16.1, 16.2, 16.3, 16.4_
   - _Boundary: Pages, Policy_
 
-- [ ] 4. Relay HTTP surface and operator commands
+- [x] 4. Relay HTTP surface and operator commands
 
-- [ ] 4.1 Extend the relay pipeline for targets
+- [x] 4.1 Extend the relay pipeline for targets
   - The services gain the configured targets and the Strava services, built
     when the target is configured; the capabilities endpoint lists only
     configured targets; the reserved prefixes gain the Strava paths; the
@@ -415,7 +415,7 @@ Rules for every task:
     captured logs.
   - _Requirements: 12.1, 12.2, 13.3, 13.4, 15.3_
 
-- [ ] 4.2 Serve the Strava envelope routes
+- [x] 4.2 Serve the Strava envelope routes
   - Connect, poll, publish, upload and disconnect, through the relay's
     authentication, per-token limit and strict request reader, each answer
     checked against its route's outcome set. Under the `activity` link
@@ -429,7 +429,7 @@ Rules for every task:
     and none under `relay`, and `/go/` redirecting under both settings.
   - _Requirements: 3.1, 3.8, 3.9, 5.1, 8.2, 10.7, 11.5, 12.1, 12.5, 13.3_
 
-- [ ] 4.3 Serve the browser pages, the link and the webhook
+- [x] 4.3 Serve the browser pages, the link and the webhook
   - The connect page, the callback, `/go/`, `/privacy`, a `robots.txt`
     that disallows `/go/`, and the webhook address, rate-limited per client
     except a webhook request with the right secret, and the unavailable page
@@ -441,13 +441,13 @@ Rules for every task:
     sentinel the scripted Strava returned.
   - _Requirements: 3.2, 3.4, 3.5, 3.6, 3.7, 10.2, 10.3, 10.4, 10.5, 11.6, 11.7, 12.4, 16.1, 16.3_
 
-- [ ] 4.4 Record the Strava exchanges and replay them against the relay
+- [x] 4.4 Record the Strava exchanges and replay them against the relay
   - One recorded exchange per Strava envelope route and per new relay code,
     with visibly fake values, replayed by the relay suite byte for byte.
   - Done when the replay passes and editing one recorded byte reds it.
   - _Requirements: 12.1, 15.4_
 
-- [ ] 4.5 Provide the Strava operator commands
+- [x] 4.5 Provide the Strava operator commands
   - The webhook show, create and delete commands, re-encryption, and key
     generation, printing only fitdocs-written states, with the exit codes
     of design.md; append `strava`, `reencrypt` and `new-encryption-key` to
@@ -457,9 +457,9 @@ Rules for every task:
     exiting 1 when a row is unreadable.
   - _Requirements: 4.2, 11.9_
 
-- [ ] 5. fitdocs client: the Strava connector, connect and disconnect
+- [x] 5. fitdocs client: the Strava connector, connect and disconnect
 
-- [ ] 5.1 Drive the browser-consent authentication style
+- [x] 5.1 Drive the browser-consent authentication style
   - Every style becomes supported; add the consent value types, the
     relay-bound settings protocol and the browser-consent operation
     protocol; the registry requires the three consent operations for the
@@ -475,7 +475,7 @@ Rules for every task:
     the style from credential resolution reds the new test.
   - _Requirements: 1.5, 1.6, 2.6_
 
-- [ ] 5.2 Bind each browser-consent instance to its relay instance
+- [x] 5.2 Bind each browser-consent instance to its relay instance
   - The cross-instance pass after the credential-collision check: the
     named relay instance must exist and use the relay-token style, and the
     instance's settings are bound to the relay instance's settings. Only
@@ -489,7 +489,7 @@ Rules for every task:
     no file read or written.
   - _Requirements: 1.3_
 
-- [ ] 5.3 Attempt every relay request exactly once
+- [x] 5.3 Attempt every relay request exactly once
   - The relay client marks every request it builds single-attempt, and
     `post(route, fields, *, max_request_bytes: int | None = None)` refuses
     an encoded body over the bound before any request (`None` keeps
@@ -501,7 +501,7 @@ Rules for every task:
     `single_attempt=True` from `post` sees three calls.
   - _Requirements: 5.5_
 
-- [ ] 5.4 Add the Strava connector's settings and consent operations
+- [x] 5.4 Add the Strava connector's settings and consent operations
   - The settings (`relay` required, `upload` optional boolean, other keys
     ignored), the bind that accepts only relay settings, and the three
     consent operations over the relay client, with the page address
@@ -514,7 +514,7 @@ Rules for every task:
     host.
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.4_
 
-- [ ] 5.5 Publish to Strava and register the connector
+- [x] 5.5 Publish to Strava and register the connector
   - The publish operation: facts and bounds checks before any request, the
     publish request, the upload request only after `not_found` with
     uploads enabled, the file checks, both mapping tables, and the link
@@ -544,7 +544,7 @@ Rules for every task:
     the boundary assertion.
   - _Requirements: 1.1, 1.7, 5.1, 5.2, 5.3, 5.4, 5.6, 5.7, 5.8, 5.9, 5.10, 7.8, 8.4_
 
-- [ ] 5.6 Run the browser-consent connect loop
+- [x] 5.6 Run the browser-consent connect loop
   - The engine of design.md: the relay instance's token first, one start,
     the started callback, polls at the stated interval, the local deadline,
     the store on grant, and the fixed next steps.
@@ -556,7 +556,7 @@ Rules for every task:
     stored).
   - _Requirements: 2.1, 2.2, 2.5, 2.6, 2.7, 2.8, 2.9_
 
-- [ ] 5.7 Disconnect a Strava instance
+- [x] 5.7 Disconnect a Strava instance
   - The disconnect rows for the style: one withdraw request with the stored
     token, the local-only removal with its note, and nothing to disconnect
     without a stored token.
@@ -565,7 +565,7 @@ Rules for every task:
     sent.
   - _Requirements: 11.1, 11.2, 11.3, 11.4_
 
-- [ ] 5.8 Present Strava connect and disconnect in the CLI
+- [x] 5.8 Present Strava connect and disconnect in the CLI
   - The browser-consent branch of `fitdocs connect` with `--no-browser`,
     its refusals of `--register` and `--email`, `--no-browser` refused on
     other styles, the printed lines, the browser opener and its failure
@@ -579,7 +579,7 @@ Rules for every task:
     when the relay instance has no token, and exit 130 on interrupt.
   - _Requirements: 2.3, 2.8, 2.9, 2.10, 11.1, 11.3_
 
-- [ ] 5.9 Decode the recorded Strava exchanges through the client
+- [x] 5.9 Decode the recorded Strava exchanges through the client
   - The fitdocs suite decodes every recorded Strava answer through the
     relay client and the Strava connector with a fake transport and asserts
     the code and the parsed data.
@@ -588,9 +588,9 @@ Rules for every task:
   - _Requirements: 5.6, 8.4_
   - _Depends: 4.4_
 
-- [ ] 6. Integration and validation
+- [x] 6. Integration and validation
 
-- [ ] 6.1 Hold the fitdocs-side guarantees with a Strava instance configured
+- [x] 6.1 Hold the fitdocs-side guarantees with a Strava instance configured
   - The socket-guarded offline-commands test gains a Strava instance in its
     wired root; a bare and a named `fitdocs pull` make no request for it;
     `fitdocs publish --targets` shows it ready and not connected; the
@@ -600,7 +600,7 @@ Rules for every task:
     `fitdocs pull` fails the socket guard.
   - _Requirements: 1.6, 1.8, 2.9_
 
-- [ ] 6.2 Prove nothing from Strava escapes the relay except the landed activity's link
+- [x] 6.2 Prove nothing from Strava escapes the relay except the landed activity's link
   - A scripted Strava that plants one sentinel in every field and header,
     driven through connect, publish, upload, a link, a disconnect and a
     deauthorization on both backends.
@@ -699,7 +699,7 @@ Rules for every task:
   - Done when every gate is green and the sync check reports no drift.
   - _Requirements: 17.7, 17.8_
 
-- [ ] 8. Write the maintainer's live-check procedure and its record template
+- [x] 8. Write the maintainer's live-check procedure and its record template
   - Controller ruling R12: no implementation, review or validation session
     carries out any step that reaches the real Strava API or a relay
     connected to it (no Strava connect against a live relay, no publish to
@@ -725,3 +725,57 @@ Rules for every task:
 - 1.2: `relay_targets` imports only `relay_envelope` (design.md's allowed-dependency line also names `relay_codes`; the exact-equality boundary table pins `{relay_envelope}`). `target_route`, `connect_page_path` and `link_path` refuse malformed parts with `EnvelopeError` (design is silent; every design-described caller passes valid parts). Control characters are Unicode category Cc only (Cf such as ZWJ in emoji, and U+2028, are accepted). Numbers parse to float; a too-large int is refused, not an OverflowError. No test yet shows the largest valid upload body fits `MAX_UPLOAD_REQUEST_BYTES` (literal pin only): the consumer of that bound (4.1 route limits / 5.5 client bound) should pin it. Controller downgrade: round 3 (test-only, from the round-2 reviewer's exhaustive 55-mutation list) was verified by the controller re-running that harness: every non-equivalent mutation reds; survivors R, AR, BF are equivalent.
 - Mutation harness trap: a copied tree's `.venv` editable install still imports the ORIGINAL tree's `src`; force `PYTHONPATH=<copy>/src` or every mutation reads green.
 - 1.4: `SHARED_MODULES` has five pairs (relay_codes, relay_envelope, publish/outcomes, relay_targets, identity/strict). **7.4 must also reword** the steering phrases "today `relay_codes` and `relay_envelope`" (tech.md ~35, structure.md ~93-96, incl. what each shared module may import) and move their literal pins in tests/connectors/test_network_statements.py (~914, ~962).
+- 2.1: `cryptography>=44,<51` (lock 50.0.2, +cffi, pycparser). `parse_keys` also refuses duplicate key ids and non-canonical base64url (design silent; docs row for FITDOCS_RELAY_ENCRYPTION_KEYS must say ids are distinct); `Keyring(())` raises. Controller downgrade: round 1's two test-only findings (extra-segment value, non-UTF-8 plaintext) were added by the controller and verified by the reviewer's mutations M8/M19 (each reds its test alone). Branch CI must show the relay image smoke on both backends green.
+- 5.1: connectors `__all__` 67. OAUTH_BROWSER now passes the CLI style check; until 5.8 a browser-consent instance would fall into the generic prompt path (unreachable: no such connector registered before 5.5) — **5.8 must add the branch before group 5 merges**. 5.7/5.8: sweep leftover "reserved" wording (cli.py ~1494, ~1708 docstrings; tests/connectors/test_cli_relay_connect.py:352; `_ReservedConnector` name). The order "style refusal before the credentials-directory check" is no longer pinned (one CLI reserved-style test deleted, the other rewritten to monkeypatch SUPPORTED_AUTH_STYLES).
+- 5.2: browser-consent instance naming another browser instance is refused with the same 'relay:' message (only RELAY_TOKEN instances count). The shared _ReservedConnector test fixture now carries bindable settings + RESERVED_RELAY_TABLE. Controller downgrade: round 2 (test-only) verified by the controller re-running reviewer mutations R1/R5/R8 in a scratch copy, each red.
+- 5.3 ruling: shared relay_envelope encode_request/decode_request gain keyword-only max_bytes (default MAX_REQUEST_BYTES); RelayClient.post passes its bound through; relay copy re-synced. Relay-server amendment item for 7.6. **4.1 needs this: merge impl/sp-client (or integration) into impl/sp-relay before 4.1** so ROUTE_BODY_LIMITS can call decode_request(max_bytes=...).
+- 2.2: new relay package relay/src/fitdocs_relay/strava/ (config.py: load_targets_config, load_strava_config, TargetsConfig, StravaConfig, Limits, LinkSetting). Any target variable (PUBLIC_URL, ENCRYPTION_KEYS, OPERATOR_NAME, SUPPORT_CONTACT, PRIVACY_POLICY_URL) without a client id is refused. required_with: _WITH_ANY_TARGET (generic rows; a later target appends its client id) vs _WITH_STRAVA (CLIENT_SECRET, WEBHOOK_TOKEN). Value bounds the design left open (client id 1-20 ASCII digits, secret <=256 printable ASCII no spaces, limits 1..1e6, contact <=254) are the implementer's. docs/relay.md states the Strava windows are quarter hours and days from midnight UTC — **3.3 must implement exactly that**. Controller downgrade: round 3 (exhaustive 155-mutation sweep, test/prose only) verified by the controller: full relay suite green, 6 sweep survivors all equivalent (empty values refused earlier by load_config; host None; leading-slash strip).
+- 5.3: controller downgrade: round-2 review's three test/comment findings (bound 0, decode smaller bound, _DESIGN_SIGNATURES comment) applied by the controller and verified by the reviewer's mutations M4b/M10 (each reds its new test alone). **4.1: relay answers.py:119 and app.py:237-249 enforce MAX_REQUEST_BYTES on their own — raise both for the upload route, not only decode_request(max_bytes=...).**
+- 5.4: controller ruling: a success code from another route (ok, registration-*, connect-* not the operation's own) and `ok` with data read as `RelayRefused(ANSWER_MALFORMED)` (mirrors relay.py `_refused`/`_empty_ok`), where design.md:936-944 literally says "anything else is RelayRefused(code)" / "ok gives None" — design text to be amended in 7.6. Tests for settings/consent live in tests/connectors/test_strava_consent.py (design's file plan names test_strava.py). Controller downgrade: round-1 test/docstring findings (capabilities literal, credential label, every success code, one docstring sentence) applied by the controller and verified by the reviewer's mutations (each reds).
+- 2.3: relay/src/fitdocs_relay/outbound.py. Non-2xx comes back as an OutboundResponse (capped, 8 MiB); a request WITH A BODY never follows a redirect — its 3xx is returned as a response; GET/DELETE follow https-only redirects (secret headers unredirected); urllib's own loop/limit/file:// redirect refusals also surface as a 3xx response. **3.1/3.2 classify MUST treat any 3xx as a non-success (design ~1252 classify has no 3xx row; revoke/update/create_subscription would otherwise report success on a 302).** Errors are raised outside any except block (no __context__). The outbound `timeout > 0` guard admits inf (OverflowError escapes) — unreachable per design (min(CALL_TIMEOUT_S, left)).
+- 2.3 controller downgrade: round 3 (test/prose only) verified by the controller re-running V1 and P2 in a scratch copy (each reds its new test alone); round-2 reviewer's mutations V2/P1/R3 reported red by the implementer.
+- 5.5 review FUs for later tasks: (5.7) `fitdocs disconnect strava` exits 2 "oauth-browser not supported" until 5.7; (5.8) `fitdocs connect strava` falls into generic prompt path until 5.8; (6.1) pin named `fitdocs pull strava` makes no request with AND without a token (without one it reports NotConnectedError — same as relay instances, predates this spec), bare pull skips strava, `publish --targets` not_connected/ready, all under the socket guard; (7.1) rewrite docs/connectors.md preamble "Outside those ... sections" sentence to cover `## Strava`, keep the "`...`. Outside" adjacency test_docs.py:688 matches.
+- 5.5: StravaConnector registered (registry order folder, intervals, relay, strava); surface stays 67 (connector not exported). publish_fields EnvelopeError -> rejected unsent; unreadable/non-regular base file -> activity_file_missing. Controller downgrade: round 2 (tests + prose) verified by the controller re-running reviewer mutations R1/R2/R15/R19 (each reds). R7 (drop st_size pre-read guard) is equivalent (the codec refuses oversize anyway; only memory differs).
+- 2.4: schema pair 0002_target_custody (target_connections, target_publications, budget_counts); TargetConnectionStore in Storage. The recorded /readyz exchange bodies moved to schema 2 in place (a replayed recording cannot keep a stale twin). PostgreSQL put takes a per-target advisory lock (not schema-scoped; FYI). Controller downgrade: round-1 finding (rival lookup must be target-scoped) fixed by the controller with test_a_rival_is_sought_on_the_puts_target_only, verified by the reviewer's R1s/R1p (each reds only its own backend).
+- 5.6: controller ruling: connectors/browser_connect.py imports `fitdocs.connectors.errors` (NotConnectedError, which design's own behaviour text needs) and `fitdocs.connectors.relay` (RelaySettings guard + url) beyond design.md:122/:518's allowed list; the boundary table pins both. `_env_override` is a private copy of relay_connect's (design asks for no shared helper). The engine sleeps the full stated interval even past the deadline, so the CLI "expires in" line and the exit can differ by up to one interval (low).
+- 5.6 controller downgrade: round 2 (tests + docstring) verified by the controller re-running the reviewer's harness for R5/R14/R15/R16/R18 (each reds its own case).
+- 5.7: browser-consent disconnect: ok/token-unknown/token-revoked remove the file (the latter two with CONSENT_UNKNOWN_NOTE); local-only note CONSENT_LOCAL_ONLY_NOTE (implementer-written from design rows). UnsupportedDisconnect kept for a future reserved style; the CLI branch is now unreachable and untested (low). Controller downgrade: round-1 finding (Strava no-token error said 'relay token') fixed by the controller: wording by style + exact-message pin, verified by the reverting mutation (reds that test alone).
+- 2.5: issue_connection_token raises DuplicateIdentifier on an existing token id and rolls back everything (like mint_token); updated_at unchanged on issuance — design silent on both; **3.9 decides what DuplicateIdentifier means to the poll caller**.
+- 5.8: fitdocs connect browser-consent branch + --no-browser (no new command; no count pin moved). --register/--email on Strava reuse the relay-only refusal line. Controller downgrade: round 2 (tests only) verified by the controller re-running M8 (unredacted exception line) and M12 (narrowed opener catch), each reds its new test alone.
+- 2.6: a swap by the holder after its lease expired still lands (literal design rule; safe: any claim replaces lease_id, a landed swap advances generation). **3.5 custody: keep a refresh shorter than LEASE_S (60 s) and decide what reencrypt_all does when its no-lease swap is refused** (a no-lease swap may land between an expired holder's Strava refresh and its own swap, losing Strava's new tokens). Lease races live in tests/conformance/test_concurrency.py (design names test_concurrency_custody.py).
+- 3.11 rulings: Operator dataclass lives in pages.py (pages may not import config at run time); page statuses implementer-chosen (only unavailable=503 is in design); the breach-notice sentence (Req 16.6) stays in the policy; policy/consent describe what fitdocs disconnect does, never who runs it. The pages/policy stdlib-only boundary rule (task 4.1's bullet) is pre-landed in 3.11.
+- 2.7: PublicationStore.put_publication returns False for another principal's id, raises UnknownPrincipal for a missing principal, and does NOT require a live connection (design ~1663). **3.6/3.7 must not leave a link record after a disconnect/account change**: a publish finishing after a disconnect would put a record that outlives its connection (queued FU). Controller downgrade: round-1's only finding (one false docstring sentence + a suggestion) fixed by the controller; interface/publication tests re-run green.
+- 3.11 controller downgrade: round 3 (prose + literal pins, exhaustive) accepted on the implementer's mutation table (R1-R25, N1-N7 red; N5 equivalent) plus a controller read of every final policy/consent sentence against design; no fresh reviewer round. Merge impl/sp-pages into impl/sp-relay after 2.8.
+- 3.1 rulings: any 3xx/1xx/out-of-range status classifies INVALID (so update/upload map to rejected per STEP_OUTCOMES; a redirect is never success); daily_spent compares x-ratelimit-usage / x-readratelimit-usage to the configured Limits (overall_day, read_day), not Strava's own -limit headers. Scripted Strava fake: relay/tests/strava/scripted_strava.py (ScriptedOutbound/UnscriptedCall), fixture scripted_outbound in relay/tests/conftest.py (lazy import — tests/storage/test_harness.py copies that conftest alone). 3.2 must extend list/upload/upload-status body readers and their pinned rows.
+- 2.8 FUs for 3.3: StravaBudget must omit zero-amount charges (amount<1 is ValueError); exhaust_budget takes no principal_id, so mark_spent stays on application windows only; a refusal with amount > ceiling on an empty window reports a misleading wait — 3.3 should refuse such charges before calling storage (e.g. reserve_upload reads above the per-principal ceiling).
+- **4.1 must add an autouse network guard to the relay suite** (no autouse guard refuses real HTTPS in relay/tests; once urllib_outbound is the app's default outbound, one route test that forgets scripted_outbound would call the configured Strava base). Patch socket.create_connection + getaddrinfo (relay-server lesson: socket-only guards are blind to example.com hosts).
+- 2.8: PostgreSQL spend cleanup deletes ended windows with FOR UPDATE SKIP LOCKED (never waits; a held ended row is left for a later spend) — fixes a window-boundary deadlock the round-1 reviewer reproduced. exhaust_budget refuses a negative count. Controller downgrade: round 2 verified by the controller re-running the restore-blocking-DELETE / drop-SKIP-LOCKED mutation on PostgreSQL (both new PG tests red); other round-2 mutations per implementer.
+- 3.2: listing reads sport from sport_type and start from start_date (UTC instant, never start_date_local); any malformed entry makes the WHOLE listing unreadable (never drop an entry: a dropped entry could make an ambiguous listing look unique). Subscription view/delete carry client credentials in the query with url_is_secret=True (Strava's documented shape); requests whose path carries a Strava id are url_is_secret (Req 12.2).
+- 3.2 controller downgrade: round 2 (tests + docstring + url_is_secret on id-bearing paths) verified by the controller re-running M16 and M27 (red); the rest per the implementer's table.
+- 3.3: StravaBudget keys strava:all|read:<w> and strava:p:<pid>:all|read:<w>; for_link lowers only the read windows; a charge larger than its ceiling is refused before storage as BudgetDecision(False, None) — **callers (3.5-3.8) must accept retry_after_s None on a refusal**. Only READ and UPLOAD call kinds exist; OAuth/subscription callers charge READ (pin per caller task). Controller downgrade: round-1's only finding (odd-limit row for the principal link ceiling) added by the controller and verified by the reviewer's nested-floor mutation (reds the odd rows on both backends).
+- 3.4: resolve.py skips a candidate whose sport type is unknown/missing (design built one with sport ""; same result for every envelope-valid page). SPORT_FAMILIES' 50 Strava types written from memory (queued: source + live-check). Controller downgrade: round-1's only finding (unknown/missing type vs a Workout page) fixed by the controller by checking every FITDOCS_SPORTS page; verified by the reviewer's R1 (.get default Workout) and R2 (or "Workout") — both red.
+- 8: relay/LIVE_CHECK_STRAVA.md + _RECORD.md; observations verified against the fitdocs CLI as built, but the webhook commands (4.5), the link setting and /go/ behaviour (4.2/4.3) are described per design — **re-check the procedure against the built relay at validate-impl**. Controller downgrade: round 2 (documents; implementer reported STATUS: DONE instead of the template token) accepted on the round-1 reviewer's itemised remediation without a second review round.
+- 3.5 CONTROLLER RULINGS (tell Josh): (B) a 1xx/3xx/out-of-range Strava answer classifies SERVER (transient), not INVALID — revises the 3.1 ruling, because INVALID on the refresh step deletes the connection (Req 4.5 deletes only on a refusal; a moved token endpoint would have deleted every connection). (A) TargetConnectionStore.delete_connection gains keyword `lease_id`; custody's refused-refresh delete requires the holder's generation AND lease_id, so a reconnect during a refresh (put resets generation to 1 and clears the lease) is never deleted (reviewer reproduced the ABA deletion on both backends). Design amendments for 7.6: classify table rows; delete_connection signature.
+- 3.5 controller downgrade: round 3 (two tests + docstrings, no behaviour change) verified by the controller re-running O6 on PostgreSQL (reds the lease test alone); O5/O12 per implementer.
+- 3.6 rulings: the link record is written only if the connection still exists just before put_publication (narrows the orphan race; storage-level fix queued); an update that landed while the connection vanished still answers Landed(POSTED, page) with no record; put_publication False after landing is ignored. strava/publish.py holds StravaPublisher, STEP_OUTCOMES, Landed and activity_page(web_url, id) — **3.7/3.8 extend this class and reuse activity_page**.
+- 3.9 rulings: a 429 on the connect code exchange calls budget.mark_spent (Req 9.4; design's ConnectFlow is silent); a store_grant/result-write failure after the state was taken marks the session refused (Req 3.7) instead of leaving it pending to expiry. **4.3 routes: read the `fitdocs_connect` cookie from the Cookie header, pass the raw value to page() and callback(), send ShowConsent.set_cookie back verbatim as one Set-Cookie header, and turn an exception escaping callback() into a fitdocs-written page.** TokenService.prepare(*, label) added (IdentityAmendment); mint uses it.
+- 3.6 controller downgrade: round 2 (tests + docstrings + deadline-before-spend reorder) verified by the controller re-running O9 (reds its test); others per implementer. Deadline check now precedes the budget spend in _find/_update.
+- 3.9 controller downgrade: round 2 verified by the controller re-running N2 and R10 (each reds its test).
+- 3.7 ruling: after a failed upload the re-resolution update is made once with no repeat, to stay within the upload reservation (UPLOAD_FOLLOW_UPS = 2); a server failure there answers via the update column. StravaPublisher gained sleep=; publish() routes through _post; _find/_update take charge=/repeat=.
+- **4.3 webhook route: cap the body read at MAX_EVENT_BYTES+1 before calling Webhook.event (it checks len only after the body is in memory); oversized → 200-ignore per design "Always 200"; bound the hub.challenge query value.** Deauth keying verified end to end (exchange str(int) == webhook str(owner_id)).
+- intervals-publish MERGED to main at 978c74fa: it took amendments connectors 8, intervals-connector 2, distribution 8, wellness-pull 1 (**7.6: strava-publish takes connectors 9, distribution 9, next relay-server/activity-identity numbers on main**); tests/connectors/test_network_statements.py already has _names_publish_command + position pins (**7.3: skip steps intervals already made**); HttpClient.put exists. strava lands second: merge main into the spec branch before 7.x.
+- 3.10 controller downgrade: round 2 (test-only) verified by the controller re-running M20 (reds the exact-delta deauth test).
+- 3.7 controller downgrade: round 2 verified by the controller re-running O3b (reds the new upload twin test alone).
+- 4.5 rulings: `strava webhook create` over another application's callback creates nothing, prints `subscribed elsewhere` on stderr, exit 1; a Strava failure prints `strava failure: <Failure value>` on stderr, exit 1; `reencrypt` refuses (exit 2) when the Strava target is unconfigured (no keys load). **4.3: the webhook route must share WEBHOOK_PATH (now in strava/cli.py) — move it to strava/webhook.py and import it in both, with a test tying route and callback.** Optional: an exception-path test that no unexpected outbound exception text reaches stderr.
+- 3.8 ruling: resolve_link answers TRY_LATER only for a refresh or link spend the budget refuses, or Strava's 429 on the refresh/listing; a Strava-refused refresh, custody unavailable (refresh 5xx/network, lease wait timeout), a passed deadline, unknown id, no connection, no single match and any other listing failure → NOT_FOUND (design resolve_link bullet + Req 10.4). Link deadline reuses PUBLISH_DEADLINE_S (design names none; a click can wait lease 5 s + refresh + 8 s listing — low FU).
+- 3.8 controller downgrade: round 2 (tests + prose) verified by the controller re-running M11 (reds the new 503/network tests).
+- 4.1 ruling: the larger upload body bound applies only when the Strava target is configured (per_route_limits = services.strava is not None) — an unconfigured relay stays byte-for-byte relay-server (Req 13.3); design RoutesAmendment/AppAmendment to say so (7.6). read_request takes its bound from the scope key the admission stage sets. make_services(config, store, *, clock, outbound, monotonic, sleep) builds RelayServices. **4.2/4.3: core_routes must append strava_routes(services); add Strava call-event fields step and failure to logs REQUEST_FIELDS/_STRING_FIELDS when an emitter is added.** Relay tests have an autouse network guard (conftest).
+- 4.1 controller downgrade: round 2 verified by the controller re-running R13 (keyring) and C2 (CLI redactor), each reds its test alone. One unreproduced SQLite flake of test_the_built_connect_page_names_the_configured_public_address during a mutation run — watch CI.
+- 4.2: /go/ is served in minimal form (ready → per-client limit → id format → resolve_link → 302 Location + PAGE_HEADERS, else try-later/not-found pages); **4.3 must: put Referrer-Policy/CSP on every /go/ answer incl. storage failures (a StorageUnreachable from resolve_link currently gives a JSON envelope), pin PAGE_HEADERS on /go/ refusal pages, decide HEAD /go/ (Starlette adds HEAD — runs a full resolve).** Disconnect revokes only the connection's own token (pinned). Controller downgrade: round-1 findings (connection-token-only revocation unpinned; a misnamed storage-error test) fixed by the controller and verified by the reviewer's O7 (reds the strengthened test).
+- 4.3 ruling: a webhook body over 64 KiB is refused by the pipeline's admission bound (request-too-large 413) before the route, not the design's 'Always 200' (Strava events are tiny); HEAD on every page route answers 405 Allow: GET with page headers (a link previewer can't claim a session or run the callback).
+- 4.3 controller downgrade: round-1 findings (ready-before-limit unpinned; false docstring) fixed by the controller; verified by the reviewer's M1 guard swap (reds the new test on all page routes).
+- **5.9: the recorded strava-publish-facts-missing request can't be reached through StravaConnector.publish (the connector answers ACTIVITY_FACTS_MISSING locally, never sends it) — decode that answer through the relay client directly, or exempt it with a reason.** **7.2: docs/relay.md ~487-489 says the recording uses only the all-a token; it now also carries the all-b connection token.**
+- 4.4: a second visibly fake token (all-b) is the recorded connection token. Controller downgrade: round 2 verified by the controller re-running the extra-route mutation (reds the derived route-coverage test).
+- 5.9 controller downgrade: test-only task accepted on the implementer's 9-mutation table plus a controller re-run (poll-granted token mutation reds its case), without an independent review round. Mapping rows other than NOT_OFFERED stay pinned only by test_strava_publish.py (recordings are all ok answers).
+- 6.2 controller downgrade: test-only task accepted on the implementer's 11-mutation table plus a controller re-run (plaintext athlete-id account key reds both link settings), without an independent review round. Logs are checked via caplog (before the redacting filter) — stricter than production.
+- 6.1 controller downgrade: round-1 finding (three now-false docstrings in test_e2e.py) fixed by the controller. **Merge hazard: main's intervals-publish rewrote the same publish block in tests/connectors/test_e2e.py — reconcile to an exact two-row --targets literal (strava-src then wellness-src) and recompute the dry-run literal; don't adopt main's startswith.**
