@@ -132,6 +132,11 @@ _EXPECTED_HEADINGS = [
     "### Disconnecting",
     "### What each command sends",
     "### Pulling a relay instance",
+    "## Strava",
+    "### Connecting a Strava instance",
+    "### Publishing and uploads",
+    "### The View on Strava link",
+    "### Disconnecting a Strava instance",
 ]
 
 
@@ -197,6 +202,8 @@ _DOCUMENTED_ENV_VAR_EXAMPLES: list[tuple[str, str]] = [
     # The relay section's override variable (pinned in the relay section tests
     # below).
     ("relay", "token"),
+    # The Strava section's override variable (pinned in test_strava_docs.py).
+    ("strava", "token"),
 ]
 
 
@@ -701,15 +708,17 @@ def test_preamble_connector_list_is_the_registry_built_ins() -> None:
 
 def test_preamble_treats_relay_like_intervals() -> None:
     """The framework sections describe no online service outside the
-    intervals and relay sections, and the preamble links both.
+    intervals, relay and Strava sections, and the preamble links all three.
 
-    Mutation: dropping either link, or restoring the one-section sentence,
-    reds this.
+    Mutation: dropping any of the three links, or restoring the
+    two-section or one-section sentence, reds this.
     """
     preamble = " ".join(_preamble_text().split())
-    assert "Outside those two sections, the framework sections" in preamble
+    assert "Outside those three sections, the framework sections" in preamble
     assert "([its section](#intervalsicu) below)" in preamble
     assert "([its section](#the-relay-connector) below)" in preamble
+    assert "([its section](#strava) below)" in preamble
+    assert "Outside those two sections" not in preamble
     assert "Outside that section" not in preamble
 
 
@@ -901,6 +910,7 @@ NEUTRAL_SCAN_EXEMPTIONS: dict[str, frozenset[str]] = {
             "src/fitdocs/connectors/relay.py",
             "tests/connectors/test_relay.py",
             "docs/connectors.md#The relay connector",
+            "docs/connectors.md#Strava",
         }
     ),
 }
@@ -1193,6 +1203,13 @@ def test_the_scan_finds_the_relay_host_in_the_relay_docs_section() -> None:
     assert "api.fitdocs.ai" in _extract_hosts(
         sources["docs/connectors.md#The relay connector"]
     )
+
+
+def test_the_scan_finds_the_relay_host_in_the_strava_docs_section() -> None:
+    """The Strava exemption key is exercised: the section really names the
+    host (its default relay's policy address)."""
+    sources = _real_sources()
+    assert "api.fitdocs.ai" in _extract_hosts(sources["docs/connectors.md#Strava"])
 
 
 def test_the_scan_finds_the_relay_host_in_the_connectors_own_module() -> None:

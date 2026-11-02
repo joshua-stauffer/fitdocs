@@ -14,7 +14,7 @@ keys, the credential rules, and the four connectors fitdocs ships: `folder`,
 which needs no service at all; `intervals`, for an intervals.icu account
 ([its section](#intervalsicu) below); `relay`, for a fitdocs relay
 ([its section](#the-relay-connector) below); and `strava`, for a Strava
-account through a relay. Outside those two sections, the
+account through a relay ([its section](#strava) below). Outside those three sections, the
 framework sections of this page describe no online service and no network
 protocol; the services they mention (intervals.icu, the relay, and Strava)
 are named only to say which connector they belong to.
@@ -633,7 +633,8 @@ terms of use permit this kind of automated, personal access. The one
 third-party service connector fitdocs ships is the [intervals.icu](#intervalsicu)
 one. The [relay](#the-relay-connector) connector talks to a fitdocs relay (the
 maintainer's, or one you or another operator run), not to a third-party
-service's API. The only web addresses of online services this page gives are
+service's API, and the [Strava](#strava) connector reaches Strava only through
+a relay. The only web addresses of online services this page gives are
 intervals.icu's and the relay's.
 
 ## Regenerating before a first pull
@@ -803,3 +804,245 @@ all, it still prints that none are configured. Naming an instance
 (`fitdocs pull relay`) selects it and reports that it is not connected, or
 that it does not pull activities or wellness, and exits `1`; it makes no
 request either way.
+
+## Strava
+
+`strava` is the connector for a Strava account, and it is Compatible with
+Strava. It never contacts Strava itself: a Strava instance talks only to a
+fitdocs relay, and the relay holds the connection to the account and does the
+work on Strava. It pulls nothing, so `fitdocs pull` never contacts it. What it
+does is `fitdocs publish --yes`: the post on a workout page is written onto
+the matching activity on Strava, and the page links to that activity
+([Publishing and uploads](#publishing-and-uploads) below).
+
+An instance needs a relay instance to talk to, and the relay behind it has to
+offer Strava, which depends on how its operator set it up. The instance is
+configured in `<data-root>/fitdocs.toml`:
+
+```toml
+[connectors.relay]
+
+[connectors.strava]
+relay = "relay"
+upload = false   # optional; this is the default
+```
+
+| Key | Required | Meaning |
+|---|---|---|
+| `relay` | yes | The name of a configured instance of the [relay connector](#the-relay-connector); a non-empty string. Every request the Strava instance makes goes to that instance's `url`. |
+| `upload` | no | `true` or `false`; `false` by default. While it is `true` a publish that finds no matching activity on Strava sends the page's activity file and has the relay create the activity ([Publishing and uploads](#publishing-and-uploads) below). |
+
+A Strava instance named anything other than `strava` sets `connector =
+"strava"` in its table, as for any other connector. Other keys in the table are
+ignored. A refused key is reported by name.
+
+The relay instance has to be connected before the Strava instance can be,
+because the relay accepts a Strava connection only from a holder of its token
+([The token](#the-token) above). The relay instance's `url` must be the
+relay's public address, because the connect page and the page link described
+below are served at that address.
+
+The default relay (https://api.fitdocs.ai) publishes its privacy policy at
+https://api.fitdocs.ai/privacy.
+
+### Connecting a Strava instance
+
+```
+fitdocs connect strava
+```
+
+`fitdocs connect strava` prompts for nothing. It makes one request to the
+relay instance to start the connection, then prints an address on the relay,
+a code, and how long the attempt lasts:
+
+```
+strava: open this address in a browser to connect this instance:
+  ADDRESS
+Code: CODE. Continue only if the page shows this same code.
+This attempt expires in N minutes.
+```
+
+Open the address in a browser and give consent on the page it shows **only if
+the page shows the same code**; that match is what stops someone else's
+connection from being completed as yours. fitdocs opens the address in your
+browser for you, and prints `Could not open a browser; open the address above
+yourself.` when it cannot. `--no-browser` stops it from trying. While you
+consent, fitdocs asks the relay once per interval the relay states whether the
+connection is complete, until it is complete, refused or expired.
+
+When the relay reports the connection, fitdocs stores the connection token it
+issued, in the same credentials store as any other instance ([Credentials](#credentials)),
+and prints `strava: connected.`, the credentials file and the relay's address.
+Nothing is stored in any other case. A refusal, an expiry or an unreachable
+relay prints the code, fitdocs's explanation and a next step, and exits `1`.
+A relay instance with no token, neither stored nor set in its `TOKEN`
+variable, makes no request: fitdocs prints that it has no stored token and the
+command to connect it first, and exits `1`.
+Press Ctrl-C to stop waiting: nothing is stored, and the exit status is `130`.
+Connecting again replaces the stored connection token.
+
+`--register` and `--email` apply only to a relay instance, and `--no-browser`
+applies only to an instance such as this one; either mistake exits `2` before
+any request. A set, non-empty `FITDOCS_CONNECTOR_STRAVA_TOKEN` (the instance's
+name, upper-cased, then `TOKEN`) overrides the stored connection token wherever
+fitdocs resolves the instance's credentials, and `fitdocs connect` prints its name when it
+is set.
+
+### Publishing and uploads
+
+This is the Strava side of `fitdocs publish`, whose command, outcome codes and
+ledger are described in
+[Publishing](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/publishing.md).
+A page opts in with `publish: <name>` in its frontmatter, where `<name>` is the
+name of the Strava instance (`strava` unless you named it otherwise). Nothing
+is sent without `--yes`: `fitdocs publish` alone and `fitdocs publish --targets`
+make no request, and `fitdocs publish --yes` sends.
+
+For each page, fitdocs sends the relay one **publish** request. The relay finds
+the activity on Strava that is the page's, by the same strict rule fitdocs
+uses to recognise one activity recorded twice, on every publish, and sets that
+activity's name to the post's title and its description to the post's
+description. Nothing else on the activity is changed, and nothing on Strava is
+deleted.
+
+What leaves your machine, to the relay instance's `url` and nowhere else:
+
+- **A publish request** carries the publication id, the activity's sport, its
+  start time with the recorded clock offset, its elapsed time and distance (a
+  value the page does not record is sent as absent, never as zero), and the
+  post's title and description. It carries no activity file.
+- **An upload request** is sent only when `upload` is `true` and the relay
+  answered `not_found` to the publish request. It carries the same fields and
+  the page's base activity file, unmodified. The file must be in the archive; a
+  page whose file is not is `activity_file_missing`, and a file over 16 MiB is
+  `rejected`, with no upload request sent in either case. The relay creates the
+  activity once and never repeats the upload.
+- **Every publish and upload request** carries the fitdocs User-Agent and the
+  instance's connection token as a bearer credential, and is attempted exactly
+  once, whatever the answer.
+
+A page that records neither an elapsed time nor a distance is
+`activity_facts_missing` with no request, and a title over 255 characters or a
+description over 8000 characters is `rejected` with no request. The relay
+answers `ambiguous`, changing nothing, when more than one activity matches.
+
+fitdocs turns each reply into one outcome code and prints, logs and writes
+nothing else the relay returned: the code, and the link of a post that landed.
+An `ok` reply carries the relay's outcome. The publish request accepts
+`activity_facts_missing`, `ambiguous`, `auth_rejected`, `not_connected`, `not_found`, `not_updatable`, `permission_denied`, `posted`, `rate_limited`, `rejected`, `unavailable`
+and the upload request accepts
+`activity_facts_missing`, `ambiguous`, `auth_rejected`, `not_connected`, `not_updatable`, `permission_denied`, `posted`, `rate_limited`, `rejected`, `unavailable`, `unconfirmed`, `uploaded`;
+an `ok` reply naming any other outcome, or none, is read through the row for
+`ok` below. Every other reply is read by the tables, one row for each answer
+the relay can give. An upload whose result is not known is
+`unconfirmed`, not `unavailable`.
+
+The publish request:
+
+| Relay answer | Code |
+|---|---|
+| `ok` | `unavailable` |
+| `token-missing` | `auth_rejected` |
+| `token-unknown` | `auth_rejected` |
+| `token-revoked` | `auth_rejected` |
+| `envelope-unsupported` | `unavailable` |
+| `request-malformed` | `rejected` |
+| `request-too-large` | `rejected` |
+| `not-offered` | `not_connected` |
+| `rate-limited` | `rate_limited` |
+| `unavailable` | `unavailable` |
+| `relay-failure` | `unavailable` |
+| `storage-unreachable` | `unavailable` |
+| `schema-behind` | `unavailable` |
+| `schema-ahead` | `unavailable` |
+| `registration-started` | `unavailable` |
+| `registration-pending` | `unavailable` |
+| `registration-slow-down` | `unavailable` |
+| `registration-issued` | `unavailable` |
+| `registration-refused` | `unavailable` |
+| `registration-expired` | `unavailable` |
+| `relay-unreachable` | `unavailable` |
+| `answer-malformed` | `unavailable` |
+| `connect-started` | `unavailable` |
+| `connect-pending` | `unavailable` |
+| `connect-granted` | `unavailable` |
+| `connect-refused` | `unavailable` |
+| `connect-expired` | `unavailable` |
+
+The upload request:
+
+| Relay answer | Code |
+|---|---|
+| `ok` | `unconfirmed` |
+| `token-missing` | `auth_rejected` |
+| `token-unknown` | `auth_rejected` |
+| `token-revoked` | `auth_rejected` |
+| `envelope-unsupported` | `unavailable` |
+| `request-malformed` | `rejected` |
+| `request-too-large` | `rejected` |
+| `not-offered` | `not_connected` |
+| `rate-limited` | `rate_limited` |
+| `unavailable` | `unconfirmed` |
+| `relay-failure` | `unconfirmed` |
+| `storage-unreachable` | `unconfirmed` |
+| `schema-behind` | `unavailable` |
+| `schema-ahead` | `unavailable` |
+| `registration-started` | `unconfirmed` |
+| `registration-pending` | `unconfirmed` |
+| `registration-slow-down` | `unconfirmed` |
+| `registration-issued` | `unconfirmed` |
+| `registration-refused` | `unconfirmed` |
+| `registration-expired` | `unconfirmed` |
+| `relay-unreachable` | `unconfirmed` |
+| `answer-malformed` | `unconfirmed` |
+| `connect-started` | `unconfirmed` |
+| `connect-pending` | `unconfirmed` |
+| `connect-granted` | `unconfirmed` |
+| `connect-refused` | `unconfirmed` |
+| `connect-expired` | `unconfirmed` |
+
+### The View on Strava link
+
+When a publish lands (`posted` or `uploaded`), fitdocs records a link for the
+page, which its published region shows as "View on Strava", provided the link
+is valid (below). Where the link comes from depends on the relay's link
+setting:
+
+- **`activity`** (the relay's default): the link is the activity's page on
+  Strava, which the relay put in its answer.
+- **`relay`**: the relay's answer carries no link, and fitdocs
+  composes the link as the relay instance's `url` followed by `/go/` and the
+  page's publication id. Opening that address makes the relay find the
+  activity at that moment and send the browser to its page on Strava; if the
+  activity cannot be found it shows a page saying so, and sends the browser
+  nowhere.
+
+When the relay's link setting is `relay` and the relay instance's `url` is a
+loopback `http` address (the form for testing a local relay), there is no
+"View on Strava" link: the post still lands and the code is `posted` or `uploaded`, but a link
+must be `https`, so fitdocs refuses to record it and the page carries no link.
+
+### Disconnecting a Strava instance
+
+```
+fitdocs disconnect strava
+fitdocs disconnect strava --local-only
+```
+
+`fitdocs disconnect strava` makes one request, carrying the stored connection
+token, asking the relay to end the Strava connection. When the relay confirms,
+or reports the token as unknown or revoked, fitdocs removes the instance's
+credentials file and prints `strava: disconnected.`, the file it removed and
+the relay's code. A token the relay reports as unknown or revoked also prints a
+note that the relay no longer knows the token and that a remaining Strava
+connection can be revoked in Strava's settings. If the relay cannot confirm,
+the file is kept exactly as it was and the command prints the code, fitdocs's
+explanation and a next step (run it again, or add `--local-only`), exiting
+`1`. It does not touch the relay instance's own token or credentials file.
+
+`--local-only` makes no request and removes the file without reading it. It
+prints a note that the Strava connection stays at the relay until this
+instance is connected and disconnected again, or access is revoked in
+Strava's settings. Without a stored file, the command says there is nothing to
+disconnect and exits `0`; a set `FITDOCS_CONNECTOR_STRAVA_TOKEN` is never
+revoked and remains set.
