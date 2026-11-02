@@ -39,6 +39,9 @@ COMMANDS: Final[tuple[str, ...]] = (
     "principal",
     "token",
     "new-pepper",
+    "strava",
+    "reencrypt",
+    "new-encryption-key",
 )
 
 ENV_DATABASE_URL: Final = ENV_PREFIX + "DATABASE_URL"

@@ -7,6 +7,9 @@ is a fixed form plus, at most, an identifier the operator typed; once the
 configuration has loaded, all of it passes through one redactor (the token
 format, the pepper, the database password), and no command prints a secret.
 Only `token mint` writes a token, and only to standard output.
+The Strava commands (`strava`, `reencrypt`, `new-encryption-key`) print the
+fixed forms of `strava.cli`; `new-encryption-key` prints a fresh key and needs no
+configuration, the others refuse (exit 2) when the Strava target is not configured.
 """
 
 from __future__ import annotations
@@ -29,8 +32,10 @@ from fitdocs_relay.contract import (
     ENV_DATABASE_URL,
     ENV_TOKEN_PEPPER,
 )
+from fitdocs_relay.crypto import Keyring
 from fitdocs_relay.identity import TokenService
 from fitdocs_relay.logs import SecretRedactor
+from fitdocs_relay.outbound import urllib_outbound
 from fitdocs_relay.seam import SeamError
 from fitdocs_relay.serve import database_secrets, run_server
 from fitdocs_relay.storage import MissingPostgresSupport, open_storage
@@ -43,6 +48,11 @@ from fitdocs_relay.storage.interface import (
     UnknownPrincipal,
 )
 from fitdocs_relay.storage.migrate import migrate, pending
+from fitdocs_relay.strava import cli as strava_cli
+from fitdocs_relay.strava.api import StravaApi
+from fitdocs_relay.strava.budget import StravaBudget
+from fitdocs_relay.strava.config import StravaConfig, TargetsConfig
+from fitdocs_relay.strava.custody import Custody
 
 EXIT_OK: Final = 0
 EXIT_FAILED: Final = 1
@@ -73,6 +83,11 @@ MSG_PRINCIPAL_LABEL: Final = "--principal-label needs --new-principal"
 
 def _wall_clock() -> int:
     return int(time.time())
+
+
+def _print(report: strava_cli.Report) -> int:
+    (_err if report.stderr else _out)(report.line)
+    return report.code
 
 
 def _iso(seconds: int) -> str:
@@ -154,6 +169,21 @@ def build_parser() -> argparse.ArgumentParser:
     revoke.add_argument("token_id", metavar="TOKEN_ID")
 
     commands.add_parser("new-pepper", help="print a fresh token-hashing secret")
+
+    strava = commands.add_parser("strava", help="operate the Strava target")
+    strava_commands = strava.add_subparsers(dest="action", required=True)
+    webhook = strava_commands.add_parser(
+        "webhook", help="manage the webhook subscription"
+    )
+    webhook_commands = webhook.add_subparsers(dest="webhook_action", required=True)
+    webhook_commands.add_parser("show", help="print the subscription's state")
+    webhook_commands.add_parser("create", help="subscribe to Strava's events")
+    webhook_commands.add_parser("delete", help="remove the subscription")
+
+    commands.add_parser(
+        "reencrypt", help="re-encrypt stored Strava tokens under the current key"
+    )
+    commands.add_parser("new-encryption-key", help="print a fresh encryption key")
     return parser
 
 
@@ -164,6 +194,7 @@ class _Session:
         self.storage = storage
         self.redact = _redactor(config)
         self.tokens = TokenService(storage, pepper=config.pepper, clock=_wall_clock)
+        self.config = config
 
 
 def _redactor(config: RelayConfig) -> SecretRedactor:
@@ -266,6 +297,39 @@ def _token_revoke(session: _Session, args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _strava_parts(config: RelayConfig) -> tuple[TargetsConfig, StravaConfig]:
+    """The Strava target's settings; `main` has refused an unconfigured target."""
+    assert config.targets is not None and config.strava is not None
+    return config.targets, config.strava
+
+
+def _strava_webhook(config: RelayConfig, args: argparse.Namespace) -> int:
+    targets, strava = _strava_parts(config)
+    api = StravaApi(strava, outbound=urllib_outbound)
+    callback = strava_cli.webhook_callback(targets, strava)
+    if args.webhook_action == "show":
+        return _print(strava_cli.webhook_show(api, callback))
+    if args.webhook_action == "create":
+        return _print(strava_cli.webhook_create(api, callback))
+    return _print(strava_cli.webhook_delete(api))
+
+
+def _reencrypt(session: _Session, args: argparse.Namespace) -> int:
+    del args
+    targets, strava = _strava_parts(session.config)
+    custody = Custody(
+        session.storage,
+        Keyring(targets.keys),
+        StravaApi(strava, outbound=urllib_outbound),
+        StravaBudget(session.storage, strava.limits, clock=_wall_clock),
+        pepper=session.config.pepper,
+        clock=_wall_clock,
+        monotonic=time.monotonic,
+        sleep=time.sleep,
+    )
+    return _print(strava_cli.reencrypt(custody))
+
+
 _SESSION_COMMANDS: Final[dict[tuple[str, str], Callable[..., int]]] = {
     ("principal", "create"): _principal_create,
     ("principal", "list"): _principal_list,
@@ -341,6 +405,8 @@ def _run_on_storage(args: argparse.Namespace, config: RelayConfig) -> int:
             refused = _require_current(storage, redact)
             if refused is not None:
                 return refused
+            if args.command == "reencrypt":
+                return _reencrypt(_Session(config, storage), args)
             handler = _SESSION_COMMANDS[(args.command, args.action)]
             return handler(_Session(config, storage), args)
         except SchemaAhead as error:
@@ -381,6 +447,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "new-pepper":
         _out(secrets.token_urlsafe(PEPPER_BYTES))
         return EXIT_OK
+    if args.command == "new-encryption-key":
+        return _print(strava_cli.new_encryption_key())
     if (
         (args.command, getattr(args, "action", None)) == ("token", "mint")
         and args.principal is not None
@@ -394,9 +462,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     except ConfigError as error:
         _err(str(error))
         return EXIT_CONFIG
+    if args.command in ("strava", "reencrypt") and (
+        config.targets is None or config.strava is None
+    ):
+        _err(strava_cli.MSG_NOT_CONFIGURED)
+        return EXIT_CONFIG
     try:
         if args.command == "serve":
             return _serve(config)
+        if args.command == "strava":
+            return _strava_webhook(config, args)
         return _run_on_storage(args, config)
     except Exception as error:  # noqa: BLE001 - the last line: type name only
         return _fail(

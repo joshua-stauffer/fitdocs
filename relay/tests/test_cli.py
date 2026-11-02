@@ -23,6 +23,7 @@ from typing import Any, cast
 from urllib.parse import quote
 
 import pytest
+from tests.test_cli_strava import STRAVA_COMMANDS
 
 from fitdocs_relay import cli, contract, identity
 from fitdocs_relay.config import PostgresTarget, SqliteTarget
@@ -182,7 +183,8 @@ def test_the_command_list_covers_every_registered_command() -> None:
     }
     assert pairs == set(cli._SESSION_COMMANDS)
     assert len(pairs) == 6
-    assert {argv[0] for argv in ALL_COMMANDS} == set(contract.COMMANDS)
+    covered = [*ALL_COMMANDS, *STRAVA_COMMANDS]  # the Strava rows: test_cli_strava
+    assert {argv[0] for argv in covered} == set(contract.COMMANDS)
 
 
 def test_the_subcommands_are_the_contracts_commands_in_order() -> None:
