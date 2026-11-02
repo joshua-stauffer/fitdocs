@@ -19,6 +19,7 @@ THIRD_PARTY_PLACEMENT: dict[str, frozenset[str]] = {
     "psycopg_pool": frozenset({"storage.postgres"}),
     "starlette": frozenset({"answers", "routes", "app", "seam", "serve"}),
     "uvicorn": frozenset({"serve"}),
+    "cryptography": frozenset({"crypto"}),
 }
 
 SHARED_PACKAGE = "shared"
@@ -158,6 +159,12 @@ def test_shared_copies_import_only_stdlib_and_siblings() -> None:
             "storage.sqlite:1 imports starlette",
         ),
         ("app.py", "import uvicorn\n", "app:1 imports uvicorn"),
+        ("identity.py", "import cryptography\n", "identity:1 imports cryptography"),
+        (
+            "storage/sqlite.py",
+            "from cryptography.hazmat.primitives.ciphers.aead import AESGCM\n",
+            "storage.sqlite:1 imports cryptography",
+        ),
         ("cli.py", "import uvicorn\n", "cli:1 imports uvicorn"),
         ("cli.py", "x = 1\nimport starlette\n", "cli:2 imports starlette"),
         (
@@ -194,6 +201,7 @@ def test_placement_rules_reject_a_forbidden_import(
         ("app.py", "from starlette.applications import Starlette\n"),
         ("seam.py", "import starlette\n"),
         ("serve.py", "import starlette\nimport uvicorn\n"),
+        ("crypto.py", "from cryptography.exceptions import InvalidTag\n"),
         (
             "identity.py",
             "import hashlib\nfrom . import contract\nfrom .shared import relay_codes\n",
@@ -217,6 +225,7 @@ def test_the_third_party_table_names_exactly_the_design_placements() -> None:
         "psycopg_pool": frozenset({"storage.postgres"}),
         "starlette": frozenset({"answers", "routes", "app", "seam", "serve"}),
         "uvicorn": frozenset({"serve"}),
+        "cryptography": frozenset({"crypto"}),
     }
     assert design == THIRD_PARTY_PLACEMENT
 
