@@ -62,6 +62,7 @@ _RELAY_OPERATIONS = (
     "poll_registration",
     "revoke_token",
 )
+_CONSENT_OPERATIONS = ("start_consent", "poll_consent", "withdraw_consent")
 
 
 class InvalidConnectorError(ValueError):
@@ -135,8 +136,10 @@ def validate_connector(obj: object) -> str | None:
     are callable when ``LOGIN`` is the auth style; ``check_token``,
     ``read_capabilities``, ``start_registration``, ``poll_registration`` and
     ``revoke_token`` are callable, in that order, when ``RELAY_TOKEN`` is the
-    auth style; ``list_activities`` and
-    ``fetch_activity`` are callable when ``PULL_ACTIVITIES`` is declared;
+    auth style; ``start_consent``, ``poll_consent`` and ``withdraw_consent``
+    are callable, in that order, when ``OAUTH_BROWSER`` is the auth style;
+    ``list_activities`` and ``fetch_activity`` are callable when
+    ``PULL_ACTIVITIES`` is declared;
     ``list_wellness`` and ``package_wellness`` are callable when
     ``PULL_WELLNESS`` is declared; ``resolve-remote-activity`` and
     ``push-activity`` are declared only with ``annotate-remote-activity``;
@@ -145,9 +148,8 @@ def validate_connector(obj: object) -> str | None:
     ``fitdocs.publish.request.valid_label``.
 
     The four reserved capabilities (``PUSH_PLANNED_WORKOUT``,
-    ``PULL_PLANNED_WORKOUTS``, ``PULL_PLANS``, ``PULL_THRESHOLDS``) and the
-    reserved ``OAUTH_BROWSER`` auth style impose no operation: this version of
-    fitdocs never invokes them (Req 1.4, 1.7).
+    ``PULL_PLANNED_WORKOUTS``, ``PULL_PLANS``, ``PULL_THRESHOLDS``) impose no
+    operation: this version of fitdocs never invokes them (Req 1.4).
 
     Never calls ``parse_settings``, ``verify``, ``login``, ``refresh``,
     ``list_activities``, ``fetch_activity``, ``list_wellness``,
@@ -220,6 +222,14 @@ def validate_connector(obj: object) -> str | None:
                 if not callable(getattr(obj, current, None)):
                     return (
                         f"{operation} must be callable when auth_style is RELAY_TOKEN"
+                    )
+
+        if auth_style is AuthStyle.OAUTH_BROWSER:
+            for operation in _CONSENT_OPERATIONS:
+                current = operation
+                if not callable(getattr(obj, current, None)):
+                    return (
+                        f"{operation} must be callable when auth_style is OAUTH_BROWSER"
                     )
 
         current = "capabilities"

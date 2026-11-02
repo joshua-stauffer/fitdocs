@@ -63,11 +63,14 @@ from fitdocs.connectors.protocol import (
     TARGET_CODES,
     ActivityPuller,
     AuthStyle,
+    BrowserConsentClient,
     Capability,
     CapabilityInfo,
     CompletedActivity,
     Connector,
     ConnectorSession,
+    ConsentPolled,
+    ConsentStarted,
     CredentialAccess,
     CredentialField,
     Declined,
@@ -85,6 +88,7 @@ from fitdocs.connectors.protocol import (
     PublishResult,
     RegistrationPolled,
     RegistrationStarted,
+    RelayBound,
     RelayCapabilities,
     RelayRefused,
     RelayTokenClient,
@@ -174,6 +178,10 @@ __all__ = [
     "RelayCapabilities",
     "RegistrationStarted",
     "RegistrationPolled",
+    "BrowserConsentClient",
+    "ConsentStarted",
+    "ConsentPolled",
+    "RelayBound",
 ]
 
 # The built-in connectors: registered at import time so `get("folder")` and

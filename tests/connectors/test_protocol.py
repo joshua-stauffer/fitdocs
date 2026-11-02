@@ -42,10 +42,13 @@ from fitdocs.connectors.protocol import (
     SUPPORTED_AUTH_STYLES,
     ActivityPuller,
     AuthStyle,
+    BrowserConsentClient,
     Capability,
     CapabilityInfo,
     Connector,
     ConnectorSession,
+    ConsentPolled,
+    ConsentStarted,
     CredentialAccess,
     CredentialField,
     Declined,
@@ -58,6 +61,7 @@ from fitdocs.connectors.protocol import (
     ListingDeferral,
     RegistrationPolled,
     RegistrationStarted,
+    RelayBound,
     RelayCapabilities,
     RelayRefused,
     RelayTokenClient,
@@ -254,13 +258,13 @@ def test_auth_style_has_exactly_five_members_with_the_designed_values() -> None:
     ]
 
 
-def test_exactly_oauth_browser_is_reserved() -> None:
-    reserved = set(AuthStyle) - SUPPORTED_AUTH_STYLES
-    assert reserved == {AuthStyle.OAUTH_BROWSER}
+def test_every_auth_style_is_supported() -> None:
+    assert set(AuthStyle) - SUPPORTED_AUTH_STYLES == set()
     assert {
         AuthStyle.NONE,
         AuthStyle.API_KEY,
         AuthStyle.LOGIN,
+        AuthStyle.OAUTH_BROWSER,
         AuthStyle.RELAY_TOKEN,
     } == SUPPORTED_AUTH_STYLES
 
@@ -1055,3 +1059,117 @@ def test_published_publish_names_are_the_leaf_objects() -> None:
     assert protocol.CompletedActivity is request.CompletedActivity
     assert protocol.PublishRequest is request.PublishRequest
     assert protocol.PublishResult is request.PublishResult
+
+
+# ---------------------------------------------------------------------------
+# The browser-consent types (strava-publish Req 2.6; design.md
+# "ProtocolAmendment ..."), pinned whole like the relay types above.
+# ---------------------------------------------------------------------------
+
+_CONSENT_DESIGN_RENDERINGS = {
+    "ConsentStarted": (
+        "@dataclass(frozen=True)\n"
+        "class ConsentStarted:\n"
+        "    user_code: str\n"
+        "    page_url: str\n"
+        "    poll_secret: Secret\n"
+        "    interval_s: int\n"
+        "    expires_at: datetime"
+    ),
+    "ConsentPolled": (
+        "@dataclass(frozen=True)\n"
+        "class ConsentPolled:\n"
+        "    code: RelayCode\n"
+        "    token: Secret | None"
+    ),
+    "RelayBound": (
+        "@runtime_checkable\n"
+        "class RelayBound(Protocol):\n"
+        "\n"
+        "    @property\n"
+        "    def relay_instance(self) -> str:\n"
+        "        ...\n"
+        "\n"
+        "    def bound(self, relay_settings: object) -> object:\n"
+        "        ..."
+    ),
+    "BrowserConsentClient": (
+        "class BrowserConsentClient(Protocol):\n"
+        "\n"
+        "    def start_consent(self, session: ConnectorSession,"
+        " relay_token: Secret) -> ConsentStarted | RelayRefused:\n"
+        "        ...\n"
+        "\n"
+        "    def poll_consent(self, session: ConnectorSession,"
+        " started: ConsentStarted, relay_token: Secret)"
+        " -> ConsentPolled | RelayRefused:\n"
+        "        ...\n"
+        "\n"
+        "    def withdraw_consent(self, session: ConnectorSession, token: Secret)"
+        " -> RelayRefused | None:\n"
+        "        ..."
+    ),
+}
+
+
+def test_the_four_consent_types_match_the_design_block_whole() -> None:
+    assert set(_CONSENT_DESIGN_RENDERINGS) == {
+        "ConsentStarted",
+        "ConsentPolled",
+        "RelayBound",
+        "BrowserConsentClient",
+    }
+    for name, expected in _CONSENT_DESIGN_RENDERINGS.items():
+        assert _render_class_without_docstrings(name) == expected, name
+
+
+def test_consent_value_types_are_frozen_with_no_defaults() -> None:
+    _fields_and_defaults(
+        ConsentStarted,
+        (
+            ("user_code", "str"),
+            ("page_url", "str"),
+            ("poll_secret", "Secret"),
+            ("interval_s", "int"),
+            ("expires_at", "datetime"),
+        ),
+        frozen=True,
+        defaulted=frozenset(),
+    )
+    _fields_and_defaults(
+        ConsentPolled,
+        (("code", "RelayCode"), ("token", "Secret | None")),
+        frozen=True,
+        defaulted=frozenset(),
+    )
+
+
+def test_browser_consent_client_member_set() -> None:
+    assert _public_names(BrowserConsentClient) == {
+        "start_consent",
+        "poll_consent",
+        "withdraw_consent",
+    }
+
+
+class _BoundSettings:
+    relay_instance = "home-relay"
+
+    def bound(self, relay_settings: object) -> object:
+        return self
+
+
+class _SettingsWithoutBound:
+    relay_instance = "home-relay"
+
+
+class _SettingsWithoutRelayInstance:
+    def bound(self, relay_settings: object) -> object:
+        return self
+
+
+def test_relay_bound_is_checkable_at_run_time_and_needs_both_members() -> None:
+    assert isinstance(_BoundSettings(), RelayBound)
+    assert not isinstance(_SettingsWithoutBound(), RelayBound)
+    assert not isinstance(_SettingsWithoutRelayInstance(), RelayBound)
+    assert not isinstance(object(), RelayBound)

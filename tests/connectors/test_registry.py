@@ -578,13 +578,16 @@ def test_a_non_driven_capability_requires_no_operation() -> None:
     assert validate_connector(connector) is None
 
 
-def test_the_reserved_auth_style_requires_no_operation() -> None:
+def test_the_browser_consent_style_requires_its_operations() -> None:
     connector = _make_connector(
         auth_style=AuthStyle.OAUTH_BROWSER,
         credential_fields=(CredentialField("token", "Token", secret=True),),
     )
-    # No login/refresh/verify attribute exists at all on this object.
-    assert validate_connector(connector) is None
+    # No start_consent/poll_consent/withdraw_consent attribute exists at all
+    # on this object.
+    assert validate_connector(connector) == (
+        "start_consent must be callable when auth_style is OAUTH_BROWSER"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1486,3 +1489,71 @@ def test_relay_operations_follow_the_protocols_declared_method_order() -> None:
     )
     assert len(declared) == 5
     assert declared == REGISTRY_OPERATIONS
+
+
+# ---------------------------------------------------------------------------
+# The browser-consent style (strava-publish Req 2.6, connectors Amendment):
+# the three consent operations are required, in declared order, after the
+# login checks.
+# ---------------------------------------------------------------------------
+
+_CONSENT_OPERATIONS = ("start_consent", "poll_consent", "withdraw_consent")
+
+
+def _make_consent_connector(**overrides: Any) -> SimpleNamespace:
+    fields: dict[str, object] = {
+        "auth_style": AuthStyle.OAUTH_BROWSER,
+        "capabilities": frozenset({Capability.PULL_THRESHOLDS}),
+        "credential_fields": (CredentialField("token", "Token", secret=True),),
+    }
+    fields.update({name: _noop for name in _CONSENT_OPERATIONS})
+    fields.update(overrides)
+    return _make_connector(**fields)
+
+
+def test_a_complete_browser_consent_connector_registers() -> None:
+    connector = _make_consent_connector(connector_id="consent-like")
+    assert validate_connector(connector) is None
+    register(connector)
+    assert get("consent-like") is connector
+
+
+@pytest.mark.parametrize("missing", _CONSENT_OPERATIONS)
+def test_a_browser_consent_connector_lacking_one_operation_is_rejected_naming_it(
+    missing: str,
+) -> None:
+    connector = _make_consent_connector(**{missing: None})
+    assert validate_connector(connector) == (
+        f"{missing} must be callable when auth_style is OAUTH_BROWSER"
+    )
+    with pytest.raises(InvalidConnectorError, match=missing):
+        register(connector)
+
+
+@pytest.mark.parametrize(
+    ("earlier", "later"),
+    [
+        (_CONSENT_OPERATIONS[i], _CONSENT_OPERATIONS[j])
+        for i in range(len(_CONSENT_OPERATIONS))
+        for j in range(i + 1, len(_CONSENT_OPERATIONS))
+    ],
+)
+def test_a_browser_consent_connector_lacking_two_operations_names_the_first_declared(
+    earlier: str, later: str
+) -> None:
+    connector = _make_consent_connector(**{later: None, earlier: None})
+    assert validate_connector(connector) == (
+        f"{earlier} must be callable when auth_style is OAUTH_BROWSER"
+    )
+
+
+def test_consent_operations_are_not_required_of_a_relay_token_connector() -> None:
+    connector = _make_relay_connector()
+    assert not hasattr(connector, "start_consent")
+    assert validate_connector(connector) is None
+
+
+def test_a_browser_consent_connector_still_needs_credential_fields() -> None:
+    connector = _make_consent_connector(credential_fields=())
+    assert validate_connector(connector) is not None
+    assert "credential_fields" in str(validate_connector(connector))
