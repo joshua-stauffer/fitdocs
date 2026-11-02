@@ -258,6 +258,21 @@ def test_list_needs_an_array_and_upload_an_object_with_an_id() -> None:
     assert classify(Step.UPLOAD_STATUS, reply(200, [])) is Failure.UNREADABLE
     assert classify(Step.UPLOAD_STATUS, reply(200, b"{")) is Failure.UNREADABLE
     assert classify(Step.UPLOAD_STATUS, reply(200, {})) is None
+    # 3.2: the readers are structural, not just "an array" or "an object with an id"
+    start = {"id": 1, "start_date": "2026-03-04T05:06:07Z"}
+    assert classify(Step.LIST, reply(200, [start])) is None
+    assert classify(Step.LIST, reply(200, [{"id": 1}])) is Failure.UNREADABLE
+    assert (
+        classify(Step.LIST, reply(200, [{"start_date": start["start_date"]}]))
+        is Failure.UNREADABLE
+    )
+    assert classify(Step.UPLOAD, reply(200, {"id": "7"})) is Failure.UNREADABLE
+    assert classify(Step.UPLOAD, reply(200, {"id": None})) is Failure.UNREADABLE
+    assert classify(Step.UPLOAD_STATUS, reply(200, {"error": "x"})) is None
+    assert (
+        classify(Step.UPLOAD_STATUS, reply(200, {"activity_id": "7"}))
+        is Failure.UNREADABLE
+    )
 
 
 # --- the daily-spent flag ----------------------------------------------------
