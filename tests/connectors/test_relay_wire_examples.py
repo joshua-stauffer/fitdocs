@@ -135,20 +135,6 @@ def _transport_for(exchange: Mapping[str, Any]) -> FakeTransport:
     return FakeTransport([_recorded_response(exchange)])
 
 
-# strava-publish task 1.3 appends these; their routes arrive in the relay
-# tasks and strava-publish task 4.4 records their exchanges, so until then the
-# recording legitimately lacks them. Task 4.4 deletes this set.
-_CONNECT_CODES_RECORDED_BY_4_4 = frozenset(
-    {
-        RelayCode.CONNECT_STARTED,
-        RelayCode.CONNECT_PENDING,
-        RelayCode.CONNECT_GRANTED,
-        RelayCode.CONNECT_REFUSED,
-        RelayCode.CONNECT_EXPIRED,
-    }
-)
-
-
 def _expected_code(exchange: Mapping[str, Any]) -> RelayCode:
     return RelayCode(json.loads(exchange["answer"]["body"])["code"])
 
@@ -215,6 +201,8 @@ def test_every_answer_without_route_defined_data_carries_none() -> None:
         RelayCode.OK,
         RelayCode.REGISTRATION_STARTED,
         RelayCode.REGISTRATION_ISSUED,
+        RelayCode.CONNECT_STARTED,
+        RelayCode.CONNECT_GRANTED,
         RelayCode.RATE_LIMITED,
         RelayCode.ENVELOPE_UNSUPPORTED,
         RelayCode.SCHEMA_BEHIND,
@@ -273,7 +261,7 @@ def test_the_client_decodes_each_recorded_answer(exchange: dict[str, Any]) -> No
     # The client never fabricates a code: it is the recorded one.
     assert reply.code is _expected_code(exchange)
     assert reply.data == _expected_data(exchange)
-    assert reply.outcome is None
+    assert reply.outcome == json.loads(exchange["answer"]["body"]).get("outcome")
     assert reply.retry_after_s == _expected_retry_after(exchange)
 
 
@@ -459,7 +447,7 @@ def test_every_recorded_relay_code_is_decoded_by_some_exchange() -> None:
     seen = {_expected_code(e) for e in EXCHANGES}
     relay_codes = {
         code for code, info in RELAY_CODES.items() if info.origin is CodeOrigin.RELAY
-    } - _CONNECT_CODES_RECORDED_BY_4_4
+    }
     # A code the recording lacks would be a code no decode test exercises.
     assert relay_codes - seen == set()
     assert seen - relay_codes == set()
