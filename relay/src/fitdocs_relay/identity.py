@@ -36,6 +36,14 @@ class MintedToken:
 
 
 @dataclass(frozen=True)
+class PreparedToken:
+    """A token generated but not stored: the row to store and the token to show once."""
+
+    new_token: NewToken
+    token: str = field(repr=False)
+
+
+@dataclass(frozen=True)
 class Authenticated:
     principal_id: str
     token_id: str
@@ -79,18 +87,26 @@ class TokenService:
         except DuplicateIdentifier:
             return self._mint(principal_id, label, principal_label)
 
+    def prepare(self, *, label: str | None) -> PreparedToken:
+        """Generate a token and its row without storing either."""
+        token_id = _random(_ID_LENGTH)
+        secret = _random(_SECRET_LENGTH)
+        return PreparedToken(
+            NewToken(token_id, self._verifier(token_id, secret), label),
+            f"{TOKEN_PREFIX}_{token_id}_{secret}",
+        )
+
     def _mint(
         self, principal_id: str | None, label: str | None, principal_label: str | None
     ) -> MintedToken:
-        token_id = _random(_ID_LENGTH)
-        secret = _random(_SECRET_LENGTH)
+        prepared = self.prepare(label=label)
         new_principal = (
             None
             if principal_id is not None
             else NewPrincipal(_PRINCIPAL_PREFIX + _random(_ID_LENGTH), principal_label)
         )
         record = self._storage.mint_token(
-            NewToken(token_id, self._verifier(token_id, secret), label),
+            prepared.new_token,
             principal_id=principal_id,
             new_principal=new_principal,
             now=self._clock(),
@@ -98,7 +114,7 @@ class TokenService:
         return MintedToken(
             record.token_id,
             record.principal_id,
-            f"{TOKEN_PREFIX}_{token_id}_{secret}",
+            prepared.token,
         )
 
     def authenticate(self, presented: str | None) -> Authenticated | RelayCode:

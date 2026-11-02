@@ -44,10 +44,13 @@ DESIGNED = """
 class MintedToken: token_id: str; principal_id: str; token: str = field(repr=False)
 @dataclass(frozen=True)
 class Authenticated: principal_id: str; token_id: str
+@dataclass(frozen=True)
+class PreparedToken: new_token: NewToken; token: str = field(repr=False)
 class TokenService:
     def __init__(self, storage: Storage, *, pepper: bytes, clock: Callable[[], int]) -> None: ...
     def create_principal(self, label: str | None) -> Principal: ...
     def mint(self, *, principal_id: str | None, label: str | None, principal_label: str | None = None) -> MintedToken: ...
+    def prepare(self, *, label: str | None) -> PreparedToken: ...
     def authenticate(self, presented: str | None) -> Authenticated | RelayCode: ...
     def revoke(self, token_id: str) -> RevokeResult: ...
     def delete_principal(self, principal_id: str) -> bool: ...
@@ -98,8 +101,13 @@ def _actual_classes() -> dict[str, ast.ClassDef]:
 def test_designed_interface_is_pinned_whole() -> None:
     designed = _designed_classes()
     actual = _actual_classes()
-    assert set(designed) == {"MintedToken", "Authenticated", "TokenService"}
-    for name in ("MintedToken", "Authenticated"):
+    assert set(designed) == {
+        "MintedToken",
+        "Authenticated",
+        "PreparedToken",
+        "TokenService",
+    }
+    for name in ("MintedToken", "Authenticated", "PreparedToken"):
         want, got = designed[name], actual[name]
         assert [ast.dump(d) for d in got.decorator_list] == [
             ast.dump(d) for d in want.decorator_list
@@ -118,7 +126,7 @@ def test_designed_interface_is_pinned_whole() -> None:
         if isinstance(n, ast.FunctionDef)
         and (n.name == "__init__" or not n.name.startswith("_"))
     }
-    assert set(want_methods) == set(got_methods) and len(want_methods) == 6
+    assert set(want_methods) == set(got_methods) and len(want_methods) == 7
     for name, want_fn in want_methods.items():
         got_fn = got_methods[name]
         assert want_fn.returns is not None and got_fn.returns is not None
@@ -167,6 +175,41 @@ def test_every_random_part_is_drawn_from_secrets(
     assert minted.principal_id == "prn_" + "q" * 16
     assert len(drawn) == 16 + 52 + 16
     assert set(drawn) == {"abcdefghijklmnopqrstuvwxyz234567"}
+
+
+# --- prepare: a token generated and not stored (strava-publish 3.9) --------
+
+
+def test_prepare_stores_nothing_and_its_token_authenticates_once_stored(
+    service: TokenService, storage: Storage
+) -> None:
+    principal = service.create_principal("p")
+    before = storage.list_tokens(None)
+    assert before == ()
+    prepared = service.prepare(label="connection:strava")
+    assert storage.list_tokens(None) == ()  # nothing stored by prepare
+    assert prepared.new_token.label == "connection:strava"
+    parts = split_relay_token(prepared.token)
+    assert parts is not None
+    token_id, secret = parts
+    assert prepared.new_token.token_id == token_id
+    assert prepared.new_token.verifier == _expected_verifier(PEPPER, token_id, secret)
+    assert service.authenticate(prepared.token) == RelayCode.TOKEN_UNKNOWN
+    storage.mint_token(
+        prepared.new_token,
+        principal_id=principal.principal_id,
+        new_principal=None,
+        now=NOW,
+    )
+    assert service.authenticate(prepared.token) == Authenticated(
+        principal.principal_id, token_id
+    )
+    assert secret not in repr(prepared)
+
+
+def test_prepared_tokens_differ(service: TokenService) -> None:
+    ids = {service.prepare(label=None).new_token.token_id for _ in range(20)}
+    assert len(ids) == 20
 
 
 # --- the stored record (2.2, 2.6) -------------------------------------------
