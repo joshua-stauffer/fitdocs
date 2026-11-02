@@ -240,7 +240,7 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.2, 3.4, 3.9, 3.10, 4.2, 5.3, 6.1, 6.5, 6.6, 6.7, 6.8, 7.1, 7.8, 9.4_
   - _Depends: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6_
 
-- [ ] 3.2 Guard the publish path against service text
+- [x] 3.2 Guard the publish path against service text
   - Add the call-graph test: parse the intervals module, follow every
     module-level function a call reachable from the publish operation names,
     and assert that the two service-message helpers, the generic failure

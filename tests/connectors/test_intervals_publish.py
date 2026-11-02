@@ -9,9 +9,12 @@ scripted transport).
 
 from __future__ import annotations
 
+import ast
 import base64
+import dataclasses
 import hashlib
 import json
+import logging
 import re
 import subprocess
 import sys
@@ -2590,3 +2593,339 @@ def test_an_ambiguous_record_does_not_stop_the_recorded_link(tmp_path: Path) -> 
     result = _publish(tmp_path, flow, _flow_subject(_BASE_SHA), link=_LINK + _STALE)
     assert result == PublishResult(C.POSTED, _LINK + _STALE)
     assert flow.puts == [_STALE]
+
+
+# --- 3.2: the publish path carries no service text (Req 8.1) ----------------
+
+_FORBIDDEN_ON_PUBLISH = (
+    "_service_text",
+    "_service_message",
+    "_raise_for_status",
+    "_raise_for_wellness_status",
+    "auth_failure_from",
+)
+_REACHABLE_ON_PUBLISH = ("_update", "_list", "_upload", "_auth_headers")
+# Four levels below publish (publish -> _list -> _listed_activities ->
+# _listed_activity -> here), the deepest helper the walk reaches.
+_DEEP_REACHABLE = "_local_wall_clock"
+
+
+def _reachable(
+    tree: ast.Module, class_name: str, method: str
+) -> tuple[dict[str, int], set[str]]:
+    """Every module-level function and class (and sibling method, through
+    ``self``) reachable from ``class_name.method`` by naming it anywhere in a
+    reachable body (a call, a callback, a nested function, ``Cls.m()``), with
+    its distance from the start; and every name or attribute any reachable
+    body mentions, imported ones and ``module.name`` ones too. A reached class
+    is walked whole, every method of it."""
+    functions = {
+        node.name: node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+    }
+    methods = {
+        node.name: node
+        for cls in tree.body
+        if isinstance(cls, ast.ClassDef) and cls.name == class_name
+        for node in cls.body
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+    }
+    classes = {
+        node.name: node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name != class_name
+    }
+    depth = {f"{class_name}.{method}": 0}
+    mentioned: set[str] = set()
+    queue: list[tuple[ast.AST, int]] = [(methods[method], 0)]
+    while queue:
+        node, distance = queue.pop(0)
+        for sub in ast.walk(node):
+            targets: list[tuple[str, ast.AST | None]] = []
+            if isinstance(sub, ast.Name):
+                mentioned.add(sub.id)
+                targets.append((sub.id, functions.get(sub.id) or classes.get(sub.id)))
+            elif isinstance(sub, ast.Attribute):
+                mentioned.add(sub.attr)
+                if isinstance(sub.value, ast.Name) and sub.value.id == "self":
+                    targets.append((f"{class_name}.{sub.attr}", methods.get(sub.attr)))
+            for name, target in targets:
+                if target is not None and name not in depth:
+                    depth[name] = distance + 1
+                    queue.append((target, distance + 1))
+    return depth, mentioned
+
+
+def test_the_walk_finds_what_it_must_and_only_that() -> None:
+    # The walker itself, on a module whose answer is known.
+    tree = ast.parse(
+        "from lib import imported\n"
+        "def a(): return b()\n"
+        "def b(): return c\n"
+        "def c(): return deep()\n"
+        "def deep(): return imported()\n"
+        "def decoy(): return a()\n"
+        "def forbidden(): pass\n"
+        "def hidden(): return mod.forbidden()\n"
+        "class Helper:\n"
+        "    @staticmethod\n"
+        "    def m(): return hidden()\n"
+        "def callback(): pass\n"
+        "def nested_target(): pass\n"
+        "def via_method(): pass\n"
+        "class K:\n"
+        "    def start(self):\n"
+        "        def inner(): return nested_target()\n"
+        "        Helper.m()\n"
+        "        return map(callback, [a, self.other()])\n"
+        "    def other(self): return via_method()\n"
+        "    def unused(self): return decoy()\n"
+    )
+    depth, mentioned = _reachable(tree, "K", "start")
+    assert depth == {
+        "K.start": 0,
+        "callback": 1,
+        "a": 1,
+        "nested_target": 1,
+        "K.other": 1,
+        "b": 2,
+        "via_method": 2,
+        "c": 3,
+        "deep": 4,
+        "Helper": 1,
+        "hidden": 2,
+    }
+    assert "imported" in mentioned and "decoy" not in mentioned
+    # a qualified call is a mention of its attribute, whatever the module
+    assert "forbidden" in mentioned
+
+
+def test_the_publish_path_never_reaches_the_service_text_helpers() -> None:
+    source = Path(intervals.__file__).read_text(encoding="utf-8")
+    depth, mentioned = _reachable(ast.parse(source), "IntervalsConnector", "publish")
+    # Not vacuous: the walk went through the module, several levels deep.
+    assert len(depth) >= 18, sorted(depth)
+    assert max(depth.values()) >= 3, depth
+    for name in _REACHABLE_ON_PUBLISH:
+        assert name in depth, f"{name} is not reached: the walk is wrong"
+    assert depth.get(_DEEP_REACHABLE, 0) >= 3, depth
+    for name in _FORBIDDEN_ON_PUBLISH:
+        assert name not in mentioned, f"the publish path reaches {name}"
+    # The forbidden names are real: each is defined or imported in the module.
+    module_tree = ast.parse(source)
+    defined = {
+        node.name for node in module_tree.body if isinstance(node, ast.FunctionDef)
+    } | {
+        alias.asname or alias.name
+        for node in module_tree.body
+        if isinstance(node, ast.ImportFrom)
+        for alias in node.names
+    }
+    assert set(_FORBIDDEN_ON_PUBLISH) <= defined
+
+
+_SENT = "Sentinel7Leak"  # alphanumeric: it would pass for an activity id
+_LOUD_STEPS = ("linked", "recorded", "listing", "matched", "upload", "confirm")
+_LOUD_ROUTES = {
+    "linked": ("PUT", _STALE),
+    "recorded": ("PUT", _RECORDED),
+    "listing": ("GET", None),
+    "matched": ("PUT", _LISTED),
+    "upload": ("POST", None),
+    "confirm": ("PUT", _UPLOADED_ID),
+}
+_LOUD_STATUSES: tuple[int | None, ...] = (
+    *(200, 201, 204, 400, 401, 403, 404, 429, 500, 503),
+    None,  # a transport failure
+)
+_LOUD_BODIES = ("json", "text")
+
+
+class _LoudFlow(_Flow):
+    """A flow that remembers what it served to which request."""
+
+    def __init__(self, **kwargs: object) -> None:
+        super().__init__(**kwargs)  # type: ignore[arg-type]
+        self.served: list[tuple[HttpRequest, HttpResponse | TransportError]] = []
+
+    def __call__(self, request: HttpRequest, timeout: float) -> HttpResponse:
+        try:
+            step = super().__call__(request, timeout)
+        except TransportError as error:
+            self.served.append((request, error))
+            raise
+        self.served.append((request, step))
+        return step
+
+
+def _loud(step: str, status: int | None, kind: str) -> HttpResponse | TransportError:
+    """An answer whose body and every header carry the sentinel."""
+    if status is None:
+        return TransportError(f"connection lost: {_SENT}")
+    body: object
+    if kind == "text":
+        body = None
+    elif status == 200 and step == "listing":
+        body = [{**_strict_entry(), "name": _SENT, "description": _SENT}]
+    elif status in (200, 201) and step == "upload":
+        body = {"activities": [{"id": _UPLOADED_ID, "name": _SENT}], "message": _SENT}
+    elif status == 200:
+        body = {"id": "i1", "name": _SENT}
+    else:
+        body = {"error": _SENT, "message": _SENT}
+    return HttpResponse(
+        status=status,
+        headers={
+            "x-sentinel": _SENT,
+            "x-error": _SENT,
+            "location": ACTIVITY_LINK_BASE + _SENT,
+        },
+        body=f"{_SENT} {_SENT}".encode() if body is None else json.dumps(body).encode(),
+    )
+
+
+def _loud_defaults() -> dict[str, HttpResponse | TransportError]:
+    """Every step answers so that the flow goes on to the next one."""
+    return {
+        "linked": _loud("linked", 404, "json"),
+        "recorded": _loud("recorded", 404, "json"),
+        "listing": _loud("listing", 200, "json"),
+        "matched": _loud("matched", 404, "json"),
+        "upload": _loud("upload", 201, "json"),
+        "confirm": _loud("confirm", 200, "json"),
+    }
+
+
+def _loud_run(
+    root: Path, step: str, status: int | None, kind: str
+) -> tuple[PublishResult, _LoudFlow, HttpResponse | TransportError]:
+    root.mkdir(parents=True, exist_ok=True)
+    path, sha = _archive(root)
+    _write(root, _entry(_RECORDED, sha))
+    target = _loud(step, status, kind)
+    steps = {**_loud_defaults(), step: target}
+    flow = _LoudFlow(
+        listing=(steps["listing"],),
+        updates={
+            _STALE: (steps["linked"],),
+            _RECORDED: (steps["recorded"],),
+            _LISTED: (steps["matched"],),
+            _UPLOADED_ID: (steps["confirm"],),
+            # an identifier taken from a header would be updated and linked
+            _SENT: (_loud("confirm", 200, "json"),),
+        },
+        upload=(steps["upload"],),
+    )
+    result = _publish(
+        root, flow, _flow_subject(sha, base_fit=path), link=_LINK + _STALE, upload=True
+    )
+    return result, flow, target
+
+
+def _assert_no_sentinel(result: PublishResult) -> None:
+    fields = dataclasses.fields(result)
+    assert len(fields) >= 2  # the code and the link, at least
+    for field in fields:
+        value = getattr(result, field.name)
+        assert _SENT not in str(value) and _SENT not in repr(value), field.name
+    assert _SENT not in repr(result)
+
+
+def _assert_reached_with_sentinel(
+    flow: _LoudFlow, step: str, target: HttpResponse | TransportError
+) -> None:
+    method, activity = _LOUD_ROUTES[step]
+    to_step = [
+        answer
+        for request, answer in flow.served
+        if request.method == method
+        and (activity is None or urlsplit(request.url).path.endswith("/" + activity))
+    ]
+    assert to_step and all(answer is target for answer in to_step), step
+    for _, answer in flow.served:
+        if isinstance(answer, TransportError):
+            assert _SENT in str(answer)
+        else:
+            assert _SENT.encode() in answer.body
+            assert answer.headers and all(
+                _SENT in value for value in answer.headers.values()
+            )
+
+
+@pytest.mark.parametrize("kind", _LOUD_BODIES)
+@pytest.mark.parametrize("status", _LOUD_STATUSES)
+@pytest.mark.parametrize("step", _LOUD_STEPS)
+def test_no_answer_at_any_step_leaves_service_text_in_the_result(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
+    step: str,
+    status: int | None,
+    kind: str,
+) -> None:
+    caplog.set_level(logging.DEBUG)
+    result, flow, target = _loud_run(tmp_path, step, status, kind)
+    _assert_reached_with_sentinel(flow, step, target)
+    _assert_no_sentinel(result)
+    captured = capsys.readouterr()
+    assert _SENT not in captured.out and _SENT not in captured.err
+    assert _SENT not in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("status", "code"),
+    [
+        (401, C.AUTH_REJECTED),
+        (403, C.PERMISSION_DENIED),
+        (404, C.REJECTED),
+        (400, C.REJECTED),
+        (429, C.RATE_LIMITED),
+        (500, C.UNAVAILABLE),
+        (204, C.UNAVAILABLE),
+        (302, C.UNAVAILABLE),
+    ],
+)
+def test_the_body_of_a_failing_listing_is_never_read(
+    tmp_path: Path, status: int, code: PublishCode
+) -> None:
+    # Buffer-protocol reads cannot be intercepted on 3.11 (see the update
+    # test above); the per-status code is the backstop.
+    answer = HttpResponse(
+        status=status, headers={"x-sentinel": _SENT}, body=_Tripwire(_SENT.encode())
+    )
+    flow = _Flow(listing=(answer,))
+    assert _publish(tmp_path, flow) == PublishResult(code)
+    assert flow.gets and not flow.puts and not flow.posts
+
+
+def test_the_sentinel_runs_cover_every_answer_class_and_many_outcomes(
+    tmp_path: Path,
+) -> None:
+    classes = {
+        _answer_class(kind, status)
+        for kind in (K.READ, K.UPDATE, K.CREATE)
+        for status in _LOUD_STATUSES
+        if status is not None
+    } | {A.NETWORK_FAILURE}
+    assert classes == set(AnswerClass)
+    codes: set[PublishCode] = set()
+    runs = 0
+    for step in _LOUD_STEPS:
+        for status in _LOUD_STATUSES:
+            for kind in _LOUD_BODIES:
+                root = tmp_path / f"{runs}"
+                codes.add(_loud_run(root, step, status, kind)[0].code)
+                runs += 1
+    assert runs == len(_LOUD_STEPS) * len(_LOUD_STATUSES) * len(_LOUD_BODIES)
+    # Uploads are on and every step is reached, so not-found never answers.
+    assert codes == {
+        C.POSTED,
+        C.UPLOADED,
+        C.UNCONFIRMED,
+        C.UNAVAILABLE,
+        C.REJECTED,
+        C.AUTH_REJECTED,
+        C.PERMISSION_DENIED,
+        C.RATE_LIMITED,
+    }
