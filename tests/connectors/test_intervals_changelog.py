@@ -29,7 +29,11 @@ _ADDED: dict[str, str] = {
 }
 _CHANGED: dict[str, str] = {
     "writes": "The `intervals` connector now writes to the account",
-    "network": "names `fitdocs publish --yes` among the commands that make connector",
+    "network scope": (
+        "where fitdocs touches the network, in the README, the documentation "
+        "pages under `docs/` and the code, now names `fitdocs publish --yes` "
+        "among the commands that make connector"
+    ),
     "no contract change": "advances no contract version",
     "no action": "Action: none.",
     "reads": "`fitdocs connect` and `fitdocs pull` still only read",

@@ -305,7 +305,7 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
   - _Requirements: 11.1, 11.2, 11.3_
   - _Depends: 3.1_
 
-- [ ] 4.2 Name `fitdocs publish --yes` in every network statement
+- [x] 4.2 Name `fitdocs publish --yes` in every network statement
   - In every statement that lists the commands making network requests
     (README "Route maps", `docs/configuration.md` twice, the CLI module
     docstring, the sync engine's docstring, the tiles module three times,
@@ -415,3 +415,4 @@ moves. Nothing under `website/content/` is edited (R9); the site copy is
 - 3.3: the CLI e2e tests live in tests/connectors/test_intervals_publish_cli.py. A refusal test must first make the page due again (change the target title), or "nothing sent / byte-identical" holds before the run.
 - 4.3: amendments taken: connectors 8, intervals-connector 2, distribution 8 (in-place tags on the criteria they change). The CHANGELOG Changed bullet claims the network statements name `fitdocs publish --yes`, which is true only after 4.2. Changelog pins read through `read_unreleased_since(_, V0_2_0)` so they survive the next cut.
 - 4.1: the docs codes notes were rewritten from the complete list of what `publish()` returns; each claim is observed by a `_Flow` scenario. Pins in tests/connectors/test_intervals_docs.py bind the answer table to ANSWER_CODES, success statuses to SUCCESS_STATUSES, and the window, file name and fields to their constants. Three review rounds found missing members of exception lists; when the flow changes, re-derive the notes rather than patch them.
+- 4.2: tests/connectors/test_network_statements.py has `_names_publish_command` (shared name with strava-publish) and position pins for tech.md and docs/connectors.md (`_tech_position_ok`, `_connectors_position_ok`), because a presence-only pin passed when `--yes` moved into the no-request list. The connectors page names intervals.icu only by host plus a section pointer, per its preamble.

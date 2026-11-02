@@ -121,7 +121,8 @@ recorded as one.
 - The `intervals` connector now writes to the account for pages that opt in
   (`fitdocs publish --yes` updates an activity and, with `publish_upload`, uploads
   one); `fitdocs connect` and `fitdocs pull` still only read. Every statement of
-  where fitdocs touches the network, in the documentation and the code, now
+  where fitdocs touches the network, in the README, the documentation pages
+  under `docs/` and the code, now
   names `fitdocs publish --yes` among the commands that make connector
   requests. The change advances no contract version. Action: none.
 

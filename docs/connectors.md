@@ -189,8 +189,8 @@ earlier runs did not.
 What leaves your machine. Requests go to intervals.icu only. Each carries the
 one fitdocs User-Agent and, in the `Authorization` header, your key. The key
 is sent to intervals.icu itself and never to the target of a redirect, and it
-never appears in an address. The addresses carry date bounds and activity
-ids.
+never appears in an address. A pull's addresses carry date bounds and activity
+ids; what a publish sends is described under [Publishing](#publishing).
 
 What you get. The file a pull delivers is the copy intervals.icu holds. For an
 activity whose source is `GARMIN_CONNECT` (the default), that is Garmin's own
@@ -602,11 +602,17 @@ ledger and never writes it.
 
 The only requests any connector instance makes are the ones `fitdocs
 connect <name>` (including a relay instance's registration), `fitdocs
-disconnect <name>` (a relay revocation, unless `--local-only`) and `fitdocs
-pull` make for that instance, while you are running one of those three
-commands — carrying the one fitdocs User-Agent and whatever credentials that
-instance needs (and, when a relay registration starts, your email address). No other fitdocs command ever makes a connector request,
-configured or not.
+disconnect <name>` (a relay revocation, unless `--local-only`), `fitdocs
+pull` and `fitdocs publish --yes` make for that instance, while you are
+running one of those four commands — carrying the one fitdocs User-Agent and
+whatever credentials that instance needs (and, when a relay registration
+starts, your email address).
+
+An [intervals.icu](#intervalsicu) instance's publish requests go to
+intervals.icu; what each one sends is described under
+[Publishing](#publishing). `fitdocs publish` without `--yes` and `fitdocs
+publish --targets` make no request, and no other fitdocs command ever makes a
+connector request, configured or not.
 
 The only other network access anywhere in fitdocs is fetching basemap map
 tiles for an outdoor activity's Map section — see

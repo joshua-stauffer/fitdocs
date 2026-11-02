@@ -75,11 +75,13 @@ Outdoor activities (runs, rides, and other workouts whose samples carry GPS
 positions) get a **Map** section in their document: the route drawn over real
 basemap tiles. Rendering that map, and the connector commands — `fitdocs
 connect` (authenticating once against a configured source, or registering
-with a relay), `fitdocs disconnect` (revoking a relay token) and `fitdocs
-pull` (fetching activities from it) — are the only times fitdocs touches the
+with a relay), `fitdocs disconnect` (revoking a relay token), `fitdocs
+pull` (fetching activities from it) and `fitdocs publish --yes` (posting to a
+publish target) — are the only times fitdocs touches the
 network — every other operation runs fully offline. Map tiles are switched
 off with `[tiles] enabled = false` (below); a connector only ever runs when
-`fitdocs connect`, `fitdocs disconnect` or `fitdocs pull` is run against it,
+`fitdocs connect`, `fitdocs disconnect`, `fitdocs pull` or `fitdocs publish
+--yes` is run against it,
 and removing its `[connectors.<name>]` table removes it from those commands
 entirely.
 
@@ -102,8 +104,8 @@ This happens **only on a cache miss**, and **only during `sync`, `regen` or
 most once and then cached (see below), so a warm tile cache is fully
 offline — like every
 fitdocs operation except the connector commands, `fitdocs connect`
-(including a relay registration), `fitdocs disconnect` and `fitdocs pull`,
-which run only when invoked and are switched off simply by not running
+(including a relay registration), `fitdocs disconnect`, `fitdocs publish --yes` and
+`fitdocs pull`, which run only when invoked and are switched off simply by not running
 them, or by removing the instance's `[connectors.<name>]` table.
 
 **Turning tile requests off (the persistent opt-out).** To stop fitdocs from

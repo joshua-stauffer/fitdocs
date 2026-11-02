@@ -71,13 +71,16 @@ map-tile fetch (`fitdocs.tiles`) and the connector transport
 `fitdocs connect` (one authentication call per attempt; for a registering
 relay instance, a capabilities read, a registration start and one poll per
 stated interval), `fitdocs disconnect` (one revocation call for a relay
-instance, none otherwise) and `fitdocs pull`
+instance, none otherwise), `fitdocs pull`
 (a single-attempt token renewal when a login-style token is due, then
-bounded, retried data calls); every other command — `sync`, `regen`,
+bounded, retried data calls) and `fitdocs publish --yes` (for each page it
+sends to a target, any of a listing, an update and an upload request, one at
+a time); every other command — `sync`, `regen`,
 `load`, `dashboard`, `recovery`, `check`, `query`, `history`, `plan`, `derive-benchmarks`, `index`, and
 rendering — makes no connector request, whether or not connectors are
 configured, and keeps its existing map-tile behavior (rendering a map may fetch missing
-basemap tiles unless tile requests are disabled). Both of the package's
+basemap tiles unless tile requests are disabled). `fitdocs publish` without
+`--yes` and `fitdocs publish --targets` make none. Both of the package's
 network paths go through the standard library's `urllib` only, sending the one composed
 fitdocs User-Agent; connectors add no runtime dependency (beyond the
 standard library they use only the already-required `tomli_w`). `fitdocs
