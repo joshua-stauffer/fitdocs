@@ -108,6 +108,7 @@ _EXPECTED_HEADINGS = [
     "### Configuring",
     "### What a pull fetches",
     "### Wellness",
+    "### Publishing",
     "## Connecting",
     "## Credentials",
     "## Pulling",
