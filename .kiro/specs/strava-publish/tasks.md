@@ -611,7 +611,7 @@ Rules for every task:
     `link` under the `activity` setting.
   - _Requirements: 12.1, 12.2, 12.3, 12.5_
 
-- [ ] 7. Documentation, gates, steering and amendments
+- [x] 7. Documentation, gates, steering and amendments
 
 - [x] 7.1 Document the Strava connector
   - The Strava section of the connectors page with the four subsections of
@@ -691,7 +691,7 @@ Rules for every task:
     recorded it).
   - _Requirements: 15.2, 17.3, 17.6, 17.8_
 
-- [ ] 7.7 Run the full validation sweep
+- [x] 7.7 Run the full validation sweep
   - Both suites and gates, the release build and artifact check, the site
     build and checks, the sync check mode, the relay workflow and image
     smoke on both backends, and a scan that the packaged skill names no
@@ -784,3 +784,4 @@ Rules for every task:
 - 7.2: two review rounds (round 1: eight false sentences — operator name only on the privacy page, token revoked not deleted, connection ends only on a refused renewal, upload updates a match first, Envelope v1 outcome/routes/'every answer'); round 2 APPROVED.
 - 7.5: relay changelog section headed `## Unreleased` (controller ruling: relay/pyproject.toml is 0.1.0; no version invented — whether Strava ships in relay 0.1.0 is a release-cut call). Round-1 findings (Strava --local-only consequence omitted 'or access is revoked in Strava's settings' and the token-unknown/revoked removal rows; 'an unconfigured relay is unchanged' ignored that every relay must apply migration 0002) fixed by the controller; new 'revoked' pin reds alone when the clause is dropped.
 - 7.6: connectors Amendment 9, relay-server Amendment 1, activity-identity Amendment 3; distribution skipped (Amendment 8 by intervals-publish already records Req 10.4); design.md gains an Amendment note (2026-11-02) carrying the 5.4, 3.5 and 4.1 rulings. Also fixed (17.3): tech.md and the cli.py module docstring now name the Strava connect/disconnect requests. Three review rounds; the round-3 one-line finding (5.4 parenthetical overclaimed the malformed set) fixed by the controller.
+- 7.7: local sweep at 3372cf86 — root suite 31710 passed / 11 skipped (17.6 min); relay suite on PostgreSQL 4130 passed / 8 skipped; ruff+mypy root and relay clean; sync check: 5 shared copies in sync; site tests 756 passed + site build (23 pages); release build produced wheel+sdist, check_artifacts clean except gate_not_run (FITDOCS_FORBIDDEN_STRINGS secret is CI-only); packaged skill unchanged and names no target. Image smoke on both backends and the forbidden-strings gate are covered by branch CI (relay.yml / ci.yml), not run locally.
