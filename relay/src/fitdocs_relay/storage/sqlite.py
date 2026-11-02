@@ -11,6 +11,8 @@ from typing import Any, Literal
 
 from fitdocs_relay.config import SqliteTarget
 from fitdocs_relay.storage.interface import (
+    BudgetCharge,
+    BudgetDecision,
     DuplicateIdentifier,
     NewConnection,
     NewPrincipal,
@@ -110,6 +112,21 @@ def _publication_from_row(row: tuple[Any, ...]) -> Publication:
         elapsed_s=row[5],
         distance_m=row[6],
     )
+
+
+def _check_charges(charges: tuple[BudgetCharge, ...], now: int) -> None:
+    """Refuse a malformed spend before it touches anything."""
+    windows: set[tuple[str, int]] = set()
+    for charge in charges:
+        if charge.window_s < 1 or charge.amount < 1 or charge.ceiling < 0:
+            raise ValueError(
+                "a charge needs a window of a second or more, an amount of one "
+                "or more and a ceiling of zero or more"
+            )
+        window = (charge.key, now - now % charge.window_s)
+        if window in windows:
+            raise ValueError("a window is charged once in a spend")
+        windows.add(window)
 
 
 def _lease_live(lease_until: int | None, now: int) -> bool:
@@ -647,6 +664,73 @@ class SqliteBackend:
                 (target, publication_id),
             )
         return _publication_from_row(rows[0]) if rows else None
+
+    # --- BudgetStore ---------------------------------------------------------
+
+    def spend_budget(
+        self, charges: tuple[BudgetCharge, ...], *, now: int
+    ) -> BudgetDecision:
+        _check_charges(charges, now)
+        with self._write() as db:
+            for principal_id in sorted(
+                {c.principal_id for c in charges if c.principal_id is not None}
+            ):
+                if not _run(
+                    db,
+                    "SELECT 1 FROM principals WHERE principal_id = ?",
+                    (principal_id,),
+                ):
+                    raise UnknownPrincipal("the principal does not exist")
+            # A window that has ended (window_end <= now) is deleted.
+            _run(db, "DELETE FROM budget_counts WHERE window_end <= ?", (now,))
+            waits: list[int] = []
+            for charge in charges:
+                start = now - now % charge.window_s
+                rows = _run(
+                    db,
+                    "SELECT count FROM budget_counts "
+                    "WHERE key = ? AND window_start = ?",
+                    (charge.key, start),
+                )
+                used = int(rows[0][0]) if rows else 0
+                if used + charge.amount > charge.ceiling:
+                    waits.append(start + charge.window_s - now)
+            if waits:
+                return BudgetDecision(allowed=False, retry_after_s=max(waits))
+            for charge in charges:
+                start = now - now % charge.window_s
+                _run(
+                    db,
+                    "INSERT INTO budget_counts "
+                    "(key, window_start, count, window_end, principal_id) "
+                    "VALUES (?, ?, ?, ?, ?) "
+                    "ON CONFLICT (key, window_start) "
+                    "DO UPDATE SET count = count + excluded.count",
+                    (
+                        charge.key,
+                        start,
+                        charge.amount,
+                        start + charge.window_s,
+                        charge.principal_id,
+                    ),
+                )
+        return BudgetDecision(allowed=True, retry_after_s=None)
+
+    def exhaust_budget(self, *, key: str, window_s: int, count: int, now: int) -> None:
+        if window_s < 1:
+            raise ValueError("a window is a second or more")
+        if count < 0:
+            raise ValueError("a count is zero or more")
+        start = now - now % window_s
+        with self._write() as db:
+            _run(
+                db,
+                "INSERT INTO budget_counts (key, window_start, count, window_end) "
+                "VALUES (?, ?, ?, ?) "
+                "ON CONFLICT (key, window_start) DO UPDATE SET "
+                "count = max(count, excluded.count)",
+                (key, start, count, start + window_s),
+            )
 
     # --- ServingStore --------------------------------------------------------
 

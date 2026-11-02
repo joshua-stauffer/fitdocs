@@ -44,11 +44,13 @@ EXPECTED = {
     "TargetConnectionStore.delete_connection_by_account",
     "PublicationStore.put_publication",
     "PublicationStore.get_publication",
+    "BudgetStore.spend_budget",
+    "BudgetStore.exhaust_budget",
 }
 
 
 def test_the_member_enumeration_is_the_designed_set(storage_members: set[str]) -> None:
-    assert len(EXPECTED) == 30
+    assert len(EXPECTED) == 32
     assert storage_members == EXPECTED
 
 

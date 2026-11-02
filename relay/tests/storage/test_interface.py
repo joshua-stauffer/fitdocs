@@ -12,6 +12,9 @@ import pytest
 
 from fitdocs_relay.storage import interface
 from fitdocs_relay.storage.interface import (
+    BudgetCharge,
+    BudgetDecision,
+    BudgetStore,
     DuplicateIdentifier,
     NewConnection,
     NewPrincipal,
@@ -71,6 +74,7 @@ EXPECTED_MEMBERS: dict[str, set[str]] = {
         "delete_connection_by_account",
     },
     "PublicationStore": {"put_publication", "get_publication"},
+    "BudgetStore": {"spend_budget", "exhaust_budget"},
 }
 
 AREAS = {
@@ -82,6 +86,7 @@ AREAS = {
     "ServingStore": ServingStore,
     "TargetConnectionStore": TargetConnectionStore,
     "PublicationStore": PublicationStore,
+    "BudgetStore": BudgetStore,
 }
 
 
@@ -114,6 +119,7 @@ def test_every_area_is_based_on_storage_base_and_composed_into_storage() -> None
         ServingStore,
         TargetConnectionStore,
         PublicationStore,
+        BudgetStore,
         Protocol,
     )
     assert _declared(Storage) == set()
@@ -343,6 +349,32 @@ DESIGNED: dict[str, dict[str, list[str]]] = {
             "Publication | None",
         ],
     },
+    "BudgetCharge": {
+        "decorators": ["dataclass(frozen=True)"],
+        "bases": [],
+        "body": [
+            "key: str",
+            "window_s: int",
+            "ceiling: int",
+            "amount: int",
+            "principal_id: str | None = None",
+        ],
+    },
+    "BudgetDecision": {
+        "decorators": ["dataclass(frozen=True)"],
+        "bases": [],
+        "body": ["allowed: bool", "retry_after_s: int | None"],
+    },
+    "BudgetStore": {
+        "decorators": [],
+        "bases": ["StorageBase", "Protocol"],
+        "body": [
+            "def spend_budget(self, charges: tuple[BudgetCharge, ...], *, now: int) "
+            "-> BudgetDecision",
+            "def exhaust_budget(self, *, key: str, window_s: int, count: int, now: "
+            "int) -> None",
+        ],
+    },
     "Storage": {
         "decorators": [],
         "bases": [
@@ -354,6 +386,7 @@ DESIGNED: dict[str, dict[str, list[str]]] = {
             "ServingStore",
             "TargetConnectionStore",
             "PublicationStore",
+            "BudgetStore",
             "Protocol",
         ],
         "body": [],
@@ -409,6 +442,7 @@ TAKES_NOW = {
         "delete_connection_by_account",
     },
     PublicationStore: {"put_publication"},
+    BudgetStore: {"spend_budget", "exhaust_budget"},
 }
 
 
@@ -499,6 +533,8 @@ def test_the_interface_module_imports_no_clock() -> None:
                 "distance_m",
             ],
         ),
+        (BudgetCharge, ["key", "window_s", "ceiling", "amount", "principal_id"]),
+        (BudgetDecision, ["allowed", "retry_after_s"]),
     ],
 )
 def test_value_types_are_frozen_with_the_designed_fields(

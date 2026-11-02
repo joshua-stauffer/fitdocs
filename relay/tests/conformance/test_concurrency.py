@@ -9,6 +9,8 @@ import pytest
 from tests.conformance.state_support import Target, raw
 
 from fitdocs_relay.storage.interface import (
+    BudgetCharge,
+    BudgetDecision,
     DuplicateIdentifier,
     NewConnection,
     NewPrincipal,
@@ -437,3 +439,109 @@ def test_claims_racing_a_swap_never_leave_a_lease_on_a_passed_generation(
         assert connection.generation == 1
         assert connection.lease_id == f"lease-{claimed[0]:02d}"
         assert connection.tokens.access == "sealed"
+
+
+def _budget_rows(target: Target) -> dict[tuple[str, int], int]:
+    return {
+        (str(k), int(s)): int(c)
+        for k, s, c in raw(
+            target,
+            "SELECT key, window_start, count FROM budget_counts WHERE count > 0",
+        )
+    }
+
+
+@pytest.mark.covers("BudgetStore.spend_budget")
+def test_twenty_one_unit_spends_against_a_ceiling_of_ten_allow_exactly_ten(
+    database_target: Target, storages: list[Storage]
+) -> None:
+    assert _budget_rows(database_target) == {}
+    ceiling = 10
+    results = race(
+        THREADS,
+        lambda i: storages[i].spend_budget(
+            (BudgetCharge("race", WINDOW, ceiling, 1),), now=START + 1
+        ),
+    )
+    decisions = [r for r in results if isinstance(r, BudgetDecision)]
+    assert len(decisions) == THREADS, f"a spend failed: {results}"
+    assert sum(d.allowed for d in decisions) == ceiling
+    assert [d.retry_after_s for d in decisions if not d.allowed] == [WINDOW - 1] * (
+        THREADS - ceiling
+    )
+    assert [d.retry_after_s for d in decisions if d.allowed] == [None] * ceiling
+    assert _budget_rows(database_target) == {("race", START): ceiling}
+
+
+@pytest.mark.covers("BudgetStore.spend_budget")
+def test_two_charge_spends_racing_over_a_full_second_window_leave_the_first_unchanged(
+    database_target: Target, storages: list[Storage]
+) -> None:
+    storages[0].spend_budget((BudgetCharge("full", WINDOW, 1, 1),), now=START + 1)
+    assert _budget_rows(database_target) == {("full", START): 1}
+    results = race(
+        THREADS,
+        lambda i: storages[i].spend_budget(
+            (
+                BudgetCharge("first", WINDOW, 1000, 1),
+                BudgetCharge("full", WINDOW, 1, 1),
+            ),
+            now=START + 2,
+        ),
+    )
+    decisions = [r for r in results if isinstance(r, BudgetDecision)]
+    assert len(decisions) == THREADS, f"a spend failed: {results}"
+    assert [d.allowed for d in decisions] == [False] * THREADS
+    assert _budget_rows(database_target) == {("full", START): 1}
+
+
+@pytest.mark.covers("BudgetStore.spend_budget")
+def test_opposite_charge_orders_racing_complete_without_deadlock_or_loss(
+    database_target: Target, storages: list[Storage]
+) -> None:
+    ceiling = 7
+
+    def spend(i: int) -> BudgetDecision:
+        pair = (
+            BudgetCharge("alpha", WINDOW, ceiling, 1),
+            BudgetCharge("omega", WINDOW, ceiling, 1),
+        )
+        return storages[i].spend_budget(
+            pair if i % 2 == 0 else tuple(reversed(pair)), now=START + 1
+        )
+
+    results = race(THREADS, spend)
+    decisions = [r for r in results if isinstance(r, BudgetDecision)]
+    assert len(decisions) == THREADS, f"a spend failed: {results}"
+    assert sum(d.allowed for d in decisions) == ceiling
+    assert _budget_rows(database_target) == {
+        ("alpha", START): ceiling,
+        ("omega", START): ceiling,
+    }
+
+
+@pytest.mark.covers("BudgetStore.spend_budget")
+def test_opposite_orders_over_one_key_in_two_windows_complete_without_deadlock(
+    database_target: Target, storages: list[Storage]
+) -> None:
+    ceiling = 7
+    now = START + WINDOW + 1  # the 60 s window starts at START + 60, the 120 s at START
+    assert now - now % 60 != now - now % 120
+
+    def spend(i: int) -> BudgetDecision:
+        pair = (
+            BudgetCharge("same", 60, ceiling, 1),
+            BudgetCharge("same", 120, ceiling, 1),
+        )
+        return storages[i].spend_budget(
+            pair if i % 2 == 0 else tuple(reversed(pair)), now=now
+        )
+
+    results = race(THREADS, spend)
+    decisions = [r for r in results if isinstance(r, BudgetDecision)]
+    assert len(decisions) == THREADS, f"a spend failed: {results}"
+    assert sum(d.allowed for d in decisions) == ceiling
+    assert _budget_rows(database_target) == {
+        ("same", START + WINDOW): ceiling,
+        ("same", START): ceiling,
+    }

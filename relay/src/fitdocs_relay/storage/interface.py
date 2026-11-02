@@ -326,6 +326,53 @@ class PublicationStore(StorageBase, Protocol):
     ) -> Publication | None: ...
 
 
+@dataclass(frozen=True)
+class BudgetCharge:
+    """One window of a spend: `amount` units against a `ceiling` of `window_s`."""
+
+    key: str
+    window_s: int
+    ceiling: int
+    amount: int
+    principal_id: str | None = None
+
+
+@dataclass(frozen=True)
+class BudgetDecision:
+    allowed: bool
+    retry_after_s: int | None  # None when allowed
+
+
+class BudgetStore(StorageBase, Protocol):
+    def spend_budget(
+        self, charges: tuple[BudgetCharge, ...], *, now: int
+    ) -> BudgetDecision:
+        """Charge every window, or none.
+
+        Windows are fixed, starting at `now - now % window_s`. The spend is
+        allowed only when every charged window stays within its ceiling after
+        its amount is added; then every count rises. Otherwise nothing rises and
+        the decision carries the longest wait among the windows that would have
+        gone over (seconds to the end of each). Windows that have ended are
+        deleted, except that PostgreSQL leaves one another transaction holds
+        (the cleanup never waits); a later spend deletes it. A charge with a
+        `principal_id` tags its row with that principal, and the row goes with
+        the principal. Raises `UnknownPrincipal` for a
+        tagged principal that does not exist, and `ValueError` for a window
+        shorter than a second, an amount below one, a negative ceiling, or two
+        charges of one window.
+        """
+        ...
+
+    def exhaust_budget(self, *, key: str, window_s: int, count: int, now: int) -> None:
+        """Raise the current window's count of `key` to at least `count`.
+
+        Never lowers a count. Raises `ValueError` for a window shorter than a
+        second or a negative count.
+        """
+        ...
+
+
 class Storage(
     PrincipalStore,
     TokenStore,
@@ -335,6 +382,7 @@ class Storage(
     ServingStore,
     TargetConnectionStore,
     PublicationStore,
+    BudgetStore,
     Protocol,
 ):
     """All state; `backend`, `ping` and `close` come from `StorageBase`."""

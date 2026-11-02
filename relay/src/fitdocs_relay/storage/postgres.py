@@ -10,6 +10,8 @@ import psycopg_pool
 
 from fitdocs_relay.config import PostgresTarget
 from fitdocs_relay.storage.interface import (
+    BudgetCharge,
+    BudgetDecision,
     DuplicateIdentifier,
     NewConnection,
     NewPrincipal,
@@ -65,6 +67,21 @@ def _publication_from_row(row: tuple[object, ...]) -> Publication:
         elapsed_s=None if row[5] is None else float(row[5]),  # type: ignore[arg-type]
         distance_m=None if row[6] is None else float(row[6]),  # type: ignore[arg-type]
     )
+
+
+def _check_charges(charges: tuple[BudgetCharge, ...], now: int) -> None:
+    """Refuse a malformed spend before it touches anything."""
+    windows: set[tuple[str, int]] = set()
+    for charge in charges:
+        if charge.window_s < 1 or charge.amount < 1 or charge.ceiling < 0:
+            raise ValueError(
+                "a charge needs a window of a second or more, an amount of one "
+                "or more and a ceiling of zero or more"
+            )
+        window = (charge.key, now - now % charge.window_s)
+        if window in windows:
+            raise ValueError("a window is charged once in a spend")
+        windows.add(window)
 
 
 def _lease_live(lease_until: object, now: int) -> bool:
@@ -803,6 +820,105 @@ class PostgresBackend:
 
         row = _guarded(work)
         return _publication_from_row(row) if row else None
+
+    # --- BudgetStore ---------------------------------------------------------
+
+    def spend_budget(
+        self, charges: tuple[BudgetCharge, ...], *, now: int
+    ) -> BudgetDecision:
+        _check_charges(charges, now)
+        self._check_open()
+        ordered = sorted(charges, key=lambda c: (c.key, now - now % c.window_s))
+
+        def work() -> BudgetDecision:
+            with self._pool.connection() as db:
+                for principal_id in sorted(
+                    {c.principal_id for c in charges if c.principal_id is not None}
+                ):
+                    if (
+                        db.execute(
+                            "SELECT 1 FROM principals WHERE principal_id = %s "
+                            "FOR SHARE",
+                            (principal_id,),
+                        ).fetchone()
+                        is None
+                    ):
+                        raise UnknownPrincipal("the principal does not exist")
+                # Create every row first, then lock them in key order: spends
+                # that share rows take turns in the same order, so none waits
+                # in a cycle, and the row lock makes check-then-add one step.
+                for charge in ordered:
+                    start = now - now % charge.window_s
+                    db.execute(
+                        "INSERT INTO budget_counts "
+                        "(key, window_start, count, window_end, principal_id) "
+                        "VALUES (%s, %s, 0, %s, %s) ON CONFLICT DO NOTHING",
+                        (
+                            charge.key,
+                            start,
+                            start + charge.window_s,
+                            charge.principal_id,
+                        ),
+                    )
+                waits: list[int] = []
+                for charge in ordered:
+                    start = now - now % charge.window_s
+                    row = db.execute(
+                        "SELECT count FROM budget_counts "
+                        "WHERE key = %s AND window_start = %s FOR UPDATE",
+                        (charge.key, start),
+                    ).fetchone()
+                    assert row is not None
+                    if row[0] + charge.amount > charge.ceiling:
+                        waits.append(start + charge.window_s - now)
+                if not waits:
+                    for charge in ordered:
+                        db.execute(
+                            "UPDATE budget_counts SET count = count + %s "
+                            "WHERE key = %s AND window_start = %s",
+                            (
+                                charge.amount,
+                                charge.key,
+                                now - now % charge.window_s,
+                            ),
+                        )
+                # A window that has ended (window_end <= now) is deleted unless
+                # another transaction holds its row: this cleanup never waits
+                # (a wait here, after the locks above, could close a cycle with
+                # a spend that straddles a window boundary), and a later spend
+                # deletes what it skipped.
+                db.execute(
+                    "DELETE FROM budget_counts WHERE (key, window_start) IN ("
+                    "SELECT key, window_start FROM budget_counts "
+                    "WHERE window_end <= %s FOR UPDATE SKIP LOCKED)",
+                    (now,),
+                )
+                if waits:
+                    return BudgetDecision(allowed=False, retry_after_s=max(waits))
+                return BudgetDecision(allowed=True, retry_after_s=None)
+
+        return _guarded(work)
+
+    def exhaust_budget(self, *, key: str, window_s: int, count: int, now: int) -> None:
+        if window_s < 1:
+            raise ValueError("a window is a second or more")
+        if count < 0:
+            raise ValueError("a count is zero or more")
+        self._check_open()
+        start = now - now % window_s
+
+        def work() -> None:
+            with self._pool.connection() as db:
+                db.execute(
+                    "INSERT INTO budget_counts "
+                    "(key, window_start, count, window_end) "
+                    "VALUES (%s, %s, %s, %s) "
+                    "ON CONFLICT (key, window_start) DO UPDATE SET "
+                    "count = GREATEST(budget_counts.count, excluded.count)",
+                    (key, start, count, start + window_s),
+                )
+
+        _guarded(work)
 
     # --- ServingStore --------------------------------------------------------
 
