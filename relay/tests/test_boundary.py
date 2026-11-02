@@ -22,6 +22,16 @@ THIRD_PARTY_PLACEMENT: dict[str, frozenset[str]] = {
     "cryptography": frozenset({"crypto"}),
 }
 
+# Dotted stdlib modules that only one relay module may import. The spellings
+# caught are `import urllib.request`, `from urllib import request` and
+# `from urllib.request import X` (likewise for http.client), at any nesting
+# depth in a file; `importlib` and `__import__` calls are not looked for.
+# Other `urllib` and `http` submodules are not restricted.
+QUALIFIED_PLACEMENT: dict[str, frozenset[str]] = {
+    "urllib.request": frozenset({"outbound"}),
+    "http.client": frozenset({"outbound"}),
+}
+
 SHARED_PACKAGE = "shared"
 
 
@@ -66,6 +76,32 @@ def check_placement(root: Path) -> tuple[list[str], int]:
     return problems, len(files)
 
 
+def _qualified_imports(path: Path) -> list[tuple[int, str]]:
+    """Every absolute import in `path` as (line, dotted module imported)."""
+    found: list[tuple[int, str]] = []
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Import):
+            found.extend((node.lineno, a.name) for a in node.names)
+        elif isinstance(node, ast.ImportFrom) and not node.level:
+            assert node.module is not None
+            found.append((node.lineno, node.module))
+            found.extend((node.lineno, f"{node.module}.{a.name}") for a in node.names)
+    return found
+
+
+def check_qualified(root: Path) -> tuple[list[str], int]:
+    """Violations of QUALIFIED_PLACEMENT under `root`, and files scanned."""
+    problems: list[str] = []
+    files = _sources(root)
+    for path in files:
+        module = _module_name(root, path)
+        for line, dotted in _qualified_imports(path):
+            for guarded, allowed in QUALIFIED_PLACEMENT.items():
+                if dotted == guarded and module not in allowed:
+                    problems.append(f"{module}:{line} imports {guarded}")
+    return sorted(set(problems)), len(files)
+
+
 def check_shared(root: Path) -> tuple[list[str], int]:
     """Violations of the shared-copy rule: stdlib and relative siblings only."""
     shared = root / SHARED_PACKAGE
@@ -97,6 +133,16 @@ def test_placement_rules_hold_over_the_package() -> None:
     problems, scanned = check_placement(PACKAGE_ROOT)
     assert scanned, "the walk is looking at the wrong directory"
     assert problems == []
+
+
+def test_urllib_request_and_http_client_live_only_in_outbound() -> None:
+    problems, scanned = check_qualified(PACKAGE_ROOT)
+    assert scanned, "the walk is looking at the wrong directory"
+    assert problems == []
+    imported = {
+        dotted for _, dotted in _qualified_imports(PACKAGE_ROOT / "outbound.py")
+    }
+    assert set(QUALIFIED_PLACEMENT) <= imported
 
 
 def test_shared_copies_import_only_stdlib_and_siblings() -> None:
@@ -215,6 +261,50 @@ def test_placement_rules_admit_the_allowed_homes(
     problems, scanned = check_placement(tmp_path)
     assert scanned == 1
     assert problems == []
+
+
+@pytest.mark.parametrize(
+    ("module", "source", "expected"),
+    [
+        (
+            "identity.py",
+            "import urllib.request\n",
+            ["identity:1 imports urllib.request"],
+        ),
+        (
+            "identity.py",
+            "from urllib import request\n",
+            ["identity:1 imports urllib.request"],
+        ),
+        (
+            "storage/sqlite.py",
+            "from urllib.request import urlopen\n",
+            ["storage.sqlite:1 imports urllib.request"],
+        ),
+        ("identity.py", "import http.client\n", ["identity:1 imports http.client"]),
+        (
+            "identity.py",
+            "from http import client\n",
+            ["identity:1 imports http.client"],
+        ),
+        (
+            "cli.py",
+            "def f():\n    from http.client import HTTPSConnection\n",
+            ["cli:2 imports http.client"],
+        ),
+        ("outbound.py", "import urllib.request\nimport http.client\n", []),
+        ("outbound.py", "from urllib import request\nfrom http import client\n", []),
+        ("config.py", "from urllib.parse import urlsplit\nimport urllib.error\n", []),
+        ("serve.py", "from http import HTTPStatus\n", []),
+    ],
+)
+def test_qualified_placement_rejects_and_admits(
+    tmp_path: Path, module: str, source: str, expected: list[str]
+) -> None:
+    _write(tmp_path, module, source)
+    problems, scanned = check_qualified(tmp_path)
+    assert scanned == 1
+    assert problems == expected
 
 
 def test_the_third_party_table_names_exactly_the_design_placements() -> None:
