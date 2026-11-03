@@ -102,7 +102,10 @@ extension seam.
     that exports what the relay holds about one athlete;
   - the intervals.icu connect page and consent text (relay-intervals);
   - provider registration and the consent machinery (relay-providers);
-  - the held-item retention section (relay-held-files contributes it).
+  - the held-item retention section (relay-held-files contributes it);
+  - automated tests of documentation, the changelog or specs, and tests that
+    pin the wording of the served pages: only code is under test, and the
+    pages are tested for structure (maintainer, 2026-11-03).
 - **Adjacent expectations**:
   - relay-providers registers providers whose policy sections and terms
     clauses use the contribution shape defined here, with no second
@@ -183,7 +186,6 @@ extension seam.
 7. Every retention statement shall name a trigger on which the relay deletes the data, or say only that the data may be deleted; no statement shall promise a deletion the relay does not perform.
 8. The common contact and changes section shall show the operator's support contact, say that the policy at this address is the one in force, say that the operator may change it, and say that what it shows also follows the relay's configuration.
 9. The common closing shall state the latest date on which any text the page shows was written: the later of the date of the fixed fitdocs text it shows and the latest date any contributed section it shows declares.
-10. If the fixed fitdocs text of either page changes without its date changing, the relay's tests shall fail.
 
 ### Requirement 7: The Terms Page
 **Objective:** As the operator, and on behalf of the platforms the relay connects to, I want end-user terms that carry the common disclaimers and the protections each platform expects, so that the platforms that require terms with each user can be satisfied by one page.
@@ -212,7 +214,7 @@ extension seam.
 1. The deploy contract's variable table shall gain the announce setting and an optional operator terms address (an `https` address, like the policy address), each with whether it is required, its default, whether it is secret and its meaning; the operator name and support contact rows shall say they are also required while any provider section applies; the operator name, support contact, privacy policy address and terms address shall be accepted whether or not a target is configured; `/terms` shall join the relay's reserved paths; and, since every change is additive, the deploy-contract version shall not move.
 2. The relay documentation's privacy section shall describe the composition and its order, announcing and the announced statement, the terms page, the addresses to give a platform's application (`<public address>/privacy` and `<public address>/terms`), what a deployment must contribute (its operator sections, a group for each provider it adds, and its own clauses), and that the text is not legal advice.
 3. The relay documentation shall state the operator's obligations this feature adds: to answer access, export and deletion requests at the support contact, to notify each affected platform of a breach as the policy states, and to keep every statement true, publishing their own policy instead where their own additions would make a fixed statement (such as the AI statement) untrue.
-4. The relay documentation's seam section shall document the contribution surface and the new seam version, and the relay's automated tests shall bind the documentation's list of policy parts, the variable table and the seam surface to the code.
+4. The relay documentation's seam section shall document the contribution surface and the new seam version. No test this feature adds shall read the documentation, the changelog or a spec, and where an existing test reads a part of one of them that this feature changes, the test shall be removed rather than updated, and the amendments shall name each removed test.
 5. The connectors documentation shall name the default relay's terms address beside its privacy policy address.
 6. The pages and documentation shall use Strava's name only to name the service, describe the feature only as compatible with Strava, name no AI product or agent, and carry no Garmin section text, nothing from Garmin's developer documentation and no statement about any application or agreement with Garmin.
 7. When this feature lands, the relay-server, strava-publish and relay-intervals specs shall each record an amendment at its next free number stating what moved: the seam's contributions and version, the new rows and reserved path, and pages served without a target (relay-server); the policy text moved into the composition, the terms link on every page, and the policy page served while the database is unreachable (strava-publish); and the composition and the intervals.icu section delivered here (relay-intervals).

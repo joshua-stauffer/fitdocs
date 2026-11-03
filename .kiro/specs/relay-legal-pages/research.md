@@ -165,15 +165,36 @@
 - **Rationale**: The legal pages must not depend on the Strava package, and
   relay-providers' later lift then moves only Strava's own pages.
 
-### Decision: Dates and digests for fixed text
-- **Context**: Requirements 6.9, 6.10, 7.1.
+### Decision: Dates for fixed text
+- **Context**: Requirements 6.9, 7.1.
 - **Selected Approach**: Each fixed part (policy common, terms common,
-  Strava group, intervals.icu group) carries a `date` constant; a test pins a
-  literal history of `(date, sha256)` per part over every variant of that
-  part's text, so a text change without a new history entry fails. A page's
-  date is the latest date among the parts it shows.
-- **Trade-offs**: A history edit in place (rather than an append) is caught
-  by review, not by the test.
+  Strava group, intervals.icu group) carries a `date` constant. A page's
+  date is the latest date among the parts it shows. Moving a date when its
+  text changes is kept by review.
+- **History**: the first design also pinned a `(date, sha256)` history per
+  part, so a text change without a new date failed a test (former
+  Requirement 6.10). Dropped with the testing-scope decision below.
+
+### Decision: Testing scope — code only (maintainer, 2026-11-03)
+- **Context**: Josh, after the spec landed: "i dont' want to test
+  documentation - let's strip down testing so that only code is under test."
+- **Selected Approach**:
+  - No test this feature adds reads documentation, the changelog or a spec.
+  - Existing tests that read a part of a document this feature changes are
+    deleted rather than updated, and the amendments name them.
+  - The served pages are tested for structure only. There are no
+    word-for-word pins of the new text, no text-date histories and no brand
+    scan on the legal pages.
+  - The wording is checked by reading.
+- **Alternatives Considered**:
+  1. Add no new doc tests but keep the existing ones green.
+  2. Remove every documentation test repo-wide.
+
+  Josh chose this spec only, deleting the touched tests, and structure-only
+  page tests.
+- **Trade-offs**: A wording slip in the policy, or drift between the docs
+  and the code, is no longer caught by CI. The final sweep's read of both
+  pages is the check.
 
 ### Decision: The access/export operator command stays out
 - **Context**: Requirement 6.4 says requests go to the support contact.
@@ -192,14 +213,16 @@
   dependency, no lift of `strava/` (relay-providers owns that).
 
 ## Risks & Mitigations
-- Policy text drifts from what the relay does: pinned word for word, dated,
-  and each retention statement checked against the storage code named above.
+- Policy text drifts from what the relay does: written from the design's
+  exact text, and each retention statement checked against the storage code
+  named above, by reading in its task and in the final sweep (no test pins
+  the wording).
 - The seam version bump breaks the hosted wrapper until it declares 2: the
   changelog marks it breaking; the hosted deployment updates in step.
 - The intervals.icu section goes stale when relay-intervals is rewritten:
   relay-intervals' amendment records that it owns the section from then on.
-- The brand scan flags new text: the scan runs over the legal pages in
-  tests, with block boundaries kept as line breaks.
+- A brand phrase slips into the legal pages: no scan covers them; the final
+  sweep reads both pages against the wording rules.
 
 ## References
 - `.kiro/specs/relay-legal-pages/brief.md` — discovery brief.

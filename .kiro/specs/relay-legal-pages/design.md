@@ -183,13 +183,16 @@ relay/src/fitdocs_relay/
 
 relay/tests/legal/
 ├── test_legal_content.py    # NEW: contribution validation, one refusal per reason
-├── test_legal_text.py       # NEW: fixed text word for word, text-date histories, brand scan
+├── test_legal_text.py       # NEW: the text module's structure (heading lists match sections, formats take a name or date)
+├── test_legal_intervals.py  # NEW: the intervals.icu group's structure, announced flag, validation
 ├── test_legal_compose.py    # NEW: applicability, order, announced statement, dates, escaping, determinism
 ├── test_legal_routes.py     # NEW: served/not served, headers, HEAD, unreachable store, every-page links
-├── test_legal_config.py     # NEW: announce row, terms address, operator rows without a target
-└── test_legal_docs.py       # NEW: docs/relay.md "Privacy policy and terms" bound to the code
+└── test_legal_config.py     # NEW: announce row, terms address, operator rows without a target
                              # (unique basenames: the relay tests have no __init__.py and pytest
                              #  uses prepend import mode, so a repeated basename fails collection)
+
+relay/tests/strava/
+└── test_policy_group.py      # NEW: the Strava group mapped from the unchanged sections (code against code)
 ```
 
 ### Modified Files
@@ -228,21 +231,26 @@ relay/tests/legal/
   `core_routes` appends `legal_routes(services.legal)` when present.
 - `relay/tests/test_boundary.py` — stdlib-leaf entries for the new modules;
   Starlette placement gains `legal.routes`.
-- `relay/tests/test_seam.py`, `relay/tests/test_contract.py`,
-  `relay/tests/test_docs_relay.py` — surface, version, table and docs pins.
+- `relay/tests/test_seam.py`, `relay/tests/test_contract.py` — the seam
+  surface and version pins and the environment-table pin (code).
+- Removed documentation tests (maintainer, 2026-11-03: only code is under
+  test). Each test below reads a part of a document this feature changes, so
+  it is deleted rather than updated: in `relay/tests/test_docs_relay.py`, the
+  environment-table binding group and the versions binding group; in
+  `relay/tests/test_contract.py`, the changelog group and its helper; in
+  `relay/tests/strava/test_policy_docs.py`, the routes-table binding group;
+  in the root `tests/connectors/test_strava_changelog.py`, the
+  restated-versions and marks-nothing-breaking tests. Any other test that
+  reads a changed document and would go red is deleted the same way.
 - `relay/tests/strava/test_pages.py`, `test_policy_docs.py`,
   `relay/tests/test_strava_pages_routes.py` — imports and the place on the
   page where a section is looked for; every expected policy and consent value
   kept. The route-gating tests that use `/privacy` as a sample page (not
   ready, store unreachable, client-limited, shared client count) change
-  expectation under 1.5 and move to another Strava page path; the Strava
-  routes-table binding drops `/privacy`.
+  expectation under 1.5 and move to another Strava page path.
 - `relay/tests/test_config_strava.py` — the operator rows' `required_with`,
   the literal refusal group and counts, and the refusal labels change under
   9.1; the two new rows gain refusal cases.
-- `tests/connectors/test_strava_changelog.py` (root) — the restated seam
-  version line and the "marks nothing breaking" check change with the seam
-  advance (8.5).
 - `relay/tests/test_config.py` — the whole-config comparison gains the
   loaded `LegalConfig`; `relay/tests/test_seam.py` — the designed services
   fields gain `operator` and `legal`; `relay/tests/test_strava_routes.py` —
@@ -318,7 +326,6 @@ nothing applies, `LegalPages` is `None` and neither path has a route.
 | 6.7 | Retention names a real trigger | LegalText, StravaGroup, IntervalsGroup | text review against storage | — |
 | 6.8 | Contact and changes | LegalText | `POLICY_CONTACT`, `POLICY_CHANGES` | — |
 | 6.9 | Closing date is the latest shown date | Composer | `LegalDocument.changed` | — |
-| 6.10 | Text change without new date fails tests | LegalText tests | text-date histories | — |
 | 7.1 | Terms order | Composer | `compose_terms` | — |
 | 7.2 | Common terms content | LegalText | `TERMS_COMMON` | — |
 | 7.3 | Same providers; links the policy | Composer, PageShell | `compose_terms`, `footer` | — |
@@ -332,9 +339,9 @@ nothing applies, `LegalPages` is `None` and neither path has a route.
 | 9.1 | Contract rows, reserved path, version unchanged | Contract, LegalConfig, Routes | `ENVIRONMENT`, `RESERVED_PREFIXES` | — |
 | 9.2 | Docs privacy section | Docs | `docs/relay.md` | — |
 | 9.3 | Docs operator obligations | Docs | `docs/relay.md` | — |
-| 9.4 | Seam docs; docs bound to code | Docs, tests | `test_legal_docs.py`, `test_docs_relay.py` | — |
+| 9.4 | Seam docs; no documentation tests; touched doc tests removed | Docs, tests | removed-test list (File Structure Plan) | — |
 | 9.5 | Connectors docs terms address | Docs | `docs/connectors.md` | — |
-| 9.6 | Wording rules | LegalText, Docs | brand scan, review | — |
+| 9.6 | Wording rules | LegalText, Docs | review | — |
 | 9.7 | Amendments | Spec records | three amendments | — |
 
 ## Components and Interfaces
@@ -343,7 +350,7 @@ nothing applies, `LegalPages` is `None` and neither path has a route.
 |-----------|--------|--------|--------------|------------------|-----------|
 | PageShell | relay pages | Document wrapper, headers, footer, operator values | 1.3, 1.6, 1.7, 3.4 | stdlib (P0) | Service |
 | LegalContent | legal | Content model and contribution validation | 2.8, 8.1, 8.2, 8.6 | stdlib (P0) | Service |
-| LegalText | legal | Fixed common text and dates | 2.4, 6.1-6.8, 6.10, 7.2, 7.4, 9.6 | LegalContent (P0) | State |
+| LegalText | legal | Fixed common text and dates | 2.4, 6.1-6.8, 7.2, 7.4, 9.6 | LegalContent (P0) | State |
 | IntervalsGroup | legal | intervals.icu relay-route group | 2.6, 5.1-5.3, 6.7, 8.6 | LegalContent (P0) | Service |
 | StravaGroup | strava | Strava's nine sections as a group | 2.5, 4.1, 4.2, 6.7, 8.6 | LegalContent (P0) | Service |
 | Composer | legal | Order, applicability lists, dates, rendering | 2.4, 3.1-3.4, 6.9, 7.1, 7.3, 8.4 | LegalText, PageShell (P0) | Service |
@@ -490,7 +497,7 @@ def contribution_problem(
 | Field | Detail |
 |-------|--------|
 | Intent | The fixed fitdocs text of both pages, as data |
-| Requirements | 2.4, 6.1-6.8, 6.10, 7.2, 7.4, 9.6 |
+| Requirements | 2.4, 6.1-6.8, 7.2, 7.4, 9.6 |
 
 **Contracts**: State [x]
 - Constants (text in Supporting References): `POLICY_TITLE`,
@@ -506,7 +513,8 @@ def contribution_problem(
   `POLICY_COMMON_CHANGED: date`, `TERMS_COMMON_CHANGED: date`,
   `POLICY_COMMON_HEADINGS`, `TERMS_COMMON_HEADINGS`.
 - The `*_CHANGED` dates are set by the implementing task to the date the
-  text lands, and move with every later text change (6.10).
+  text lands, and move with every later text change (kept by review; no
+  test pins the wording).
 
 #### IntervalsGroup — `legal/intervals.py`
 
@@ -743,9 +751,14 @@ template; nothing new is logged.
 
 ## Testing Strategy
 
-Every new assertion names the production mutation it dies on
-(change-protocol § Fixture Discrimination). Mutations run through `uv run
-pytest` in the relay project.
+Only code is under test (maintainer, 2026-11-03). No test reads the
+documentation, the changelog or a spec, and no test pins the wording of the
+served pages: the pages are tested for structure (which parts appear, their
+order, links, escaping, the announced lead, dates). The fixed text is written
+exactly as Supporting References gives it and checked by reading, in its task
+and in the final sweep. Every new assertion names the production mutation it
+dies on (change-protocol § Fixture Discrimination). Mutations run through
+`uv run pytest` in the relay project.
 
 ### Unit Tests
 - `legal/test_legal_content.py`: one malformed contribution per reason, each
@@ -754,12 +767,14 @@ pytest` in the relay project.
   admitted); dropping the reserved-heading check (an operator section headed
   "Security" is admitted); accepting a `list` (a list-valued `blocks`
   passes).
-- `legal/test_legal_text.py`: every fixed section of both pages and of the
-  intervals.icu group pinned word for word against the Supporting References
-  text; per part, a literal history of `(date, sha256)` over the canonical
-  text of every variant, whose last entry must match the current text and
-  date. Mutation: editing one word of `POLICY_AI` reds the history check
-  alone.
+- `legal/test_legal_text.py`: each common heading list equals the headings
+  of its sections in order; the announced and list-entry formats render a
+  given service name; the closing format renders an ISO date. Mutation:
+  moving one section in `POLICY_COMMON` without its heading list.
+- The Strava group: for both link settings, each section's paragraph is the
+  matching `policy_sections(links)` text (code against code, not a literal),
+  with the operator and contact lines placed. Mutation: attaching the
+  operator line to another section.
 - `legal/test_legal_compose.py`: order for a fixture with Strava configured,
   intervals.icu announced and two wrappers with distinct providers and
   operator sections (pairwise-distinct names and dates, the latest date on
@@ -794,14 +809,9 @@ pytest` in the relay project.
 - strava-publish's `test_every_policy_section_is_pinned_word_for_word` and
   `test_every_consent_paragraph_is_pinned_word_for_word` run unchanged;
   `test_the_privacy_page_lists_the_sections_in_order_and_names_the_operator`
-  reads the Strava group of the composed page; the brand scan runs over both
-  legal pages for both link settings and for Strava offered and announced.
-
-### Documentation Tests
-- `legal/test_legal_docs.py` binds `docs/relay.md` "Privacy policy and terms" to
-  `POLICY_COMMON_HEADINGS`, `TERMS_COMMON_HEADINGS`, `BUILT_IN_PROVIDERS`
-  and the two new variables; `test_docs_relay.py` binds the seam block and
-  the "Seam v2" heading to `SEAM_VERSION` and the surface.
+  reads the Strava group of the composed page; Strava's existing brand scan
+  keeps running over the Strava pages it covers, minus the retired privacy
+  page. No brand scan or wording test is added for the legal pages.
 
 ## Security Considerations
 - Contributions are data, not markup: no contributed or configured value can
