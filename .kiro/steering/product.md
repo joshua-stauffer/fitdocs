@@ -12,7 +12,10 @@ inside a vendor platform.
 1. **`.fit` → markdown, one-to-one.** Each activity becomes one workout
    document. The user gets the files into a target directory (Garmin exports,
    watch sync, etc.), or, from Phase 8 of the roadmap, a configured connector
-   fetches them. fitdocs does the rest. When several files record the same
+   fetches them. fitdocs does the rest. *(Planned, 2026-11-03, by Phase 14's
+   extension: a relay can hold what a push-only source sends until the
+   athlete's next pull, and a user-installed connector plugin can pull from
+   any source that offers an API token.)* When several files record the same
    session (a phone-side re-export and the device original, say), Phase 8
    makes them one document: a base file plus extras that add only the
    channels the base lacks, never a duplicate.

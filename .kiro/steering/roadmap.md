@@ -1465,7 +1465,12 @@ Rejected:
   `curl_cffi` wheel, against fitdocs's ≥3.11 and its frozen dependency
   list. The discovery probe's single login drew HTTP 429. Garmin rides come
   through intervals.icu instead, which receives them over Garmin's official
-  partner API.
+  partner API. *(Revisited 2026-11-03 by Phase 14's extension. Garmin
+  relaunched its developer program on 2026-10-21 with official tiers, and
+  intervals.icu's developer said Garmin-origin data will stop flowing
+  through its API. Garmin now comes through the hosted relay and through a
+  connector plugin with a personal token. A password login stays
+  rejected.)*
 - *A Garmin export-zip importer as the only path.* Robust, but a manual step
   per batch, so it is kept as a follow-on.
 
@@ -1544,7 +1549,9 @@ Rejected:
     Phase 14; planned workouts stay out)*;
   - pulling thresholds, wellness, workout libraries or plans (wellness
     promoted 2026-10-12 to Phase 12's `wellness-pull`);
-  - a direct Garmin Connect connector, and a Garmin export-zip importer;
+  - a direct Garmin Connect connector, and a Garmin export-zip importer
+    *(Garmin through the hosted relay, and the connector plugin slot for
+    personal tokens: Phase 14's extension, 2026-11-03)*;
   - a shipped Stryd connector (see the decisions above);
   - a daemon, watcher or scheduler (the OS schedules the one-shot command);
   - cycling dynamics in the model (pedal dynamics, gears, training effect);
@@ -1692,6 +1699,8 @@ Rejected:
 
   The machinery in `plugins.py` is parameterized by kind, not copied. This
   is the slot a user-installed connector lives in. Dependencies: connectors
+  *(Moved 2026-11-03 to Phase 14's extension, widened to any source that
+  offers an API token. It is tracked there.)*
 - [x] wiki-contract — Amendment 4:
   - source roles (base and extras) on the page;
   - which file each channel came from, if `channel-merge` records it;
@@ -1786,7 +1795,9 @@ credential store are designed for them now and built later.
   with placeholders filled from the page's own values.)*
 - **A direct Garmin Connect connector, and a Garmin export-zip importer,**
   for athletes without intervals.icu. The importer is the no-login fallback
-  (the maintainer's 2026-09-12 backfill route).
+  (the maintainer's 2026-09-12 backfill route). *(The connector half is
+  promoted 2026-11-03 to Phase 14's extension: the hosted relay, and the
+  connector plugin slot. The export-zip importer stays a follow-on.)*
 - **Stryd data beyond files**: CP history and stress. These arrive through
   whatever channel Stryd's terms allow, and map onto athlete benchmarks.
 - **Cycling dynamics**: pedal dynamics, power phase, gears and training
@@ -4109,3 +4120,391 @@ Amendment numbers are the next free number at landing.
     - R13.5: the neutral CLI started line;
     - R13.6: the folds;
     - R13.7: behaviour wording.
+
+#### Extension — held files from push sources, and connector plugins (discovery 2026-11-03)
+
+**Goal**: an athlete connects a push-only source once, by browser consent
+through the relay.
+- The relay receives each activity and each daily wellness summary as the
+  source sends it.
+- It holds each item encrypted until the athlete's next `fitdocs pull`.
+- It evicts the item once fitdocs confirms the item is in the inbox.
+
+An athlete who has a personal API token for any source pulls it directly,
+through a connector plugin they install or write, with no relay involved.
+
+One privacy policy and one terms page cover every platform the relay talks
+to. They ship first, because each platform's developer application asks for
+a policy URL.
+
+The first push source is Garmin. Garmin relaunched its developer program on
+2026-10-21 with three tiers (<https://developer.garmin.com/gc-developer-program/overview/>):
+- Personal: a self-generated key, pull only;
+- Starter: free, push only, no historical data, limited users;
+- Enterprise: paid.
+
+intervals.icu's developer has said that Garmin-origin data will stop flowing
+through intervals.icu's API: "You need to get your own connection to Garmin
+to get activity data" (<https://forum.intervals.icu/t/api-access-to-intervals-icu/609>,
+2026-10-24). That ends Phase 8's Garmin route for anything new.
+
+**Public-text rule for Garmin** (maintainer, 2026-11-03):
+- The Garmin provider is not in this repository.
+- Public specs, docs and tests may name Garmin and cite Garmin's public
+  pages.
+- They carry nothing from Garmin's developer documentation, which Garmin's
+  agreement makes confidential (§8.1 of the public FRM-0952 Rev. B).
+- They say nothing about the maintainer's application or agreement (§8.4).
+- The hosted deployment's Garmin material lives with the hosted deployment.
+  This follows the Stryd precedent (Phase 8) and the no-infrastructure rule
+  (Phase 14).
+
+##### Decisions taken at discovery (2026-11-03)
+
+- **Path E** (maintainer): four new specs, plus existing-spec updates. One
+  of the updates is the connector plugin kind, moved here from Phase 8.
+- **Garmin goes through the hosted relay, on Garmin's push-only tier.**
+  - The provider is private and plugs in through the relay's extension
+    seam.
+  - This repository gets the generic layer:
+    - the policy pages;
+    - provider registration;
+    - held-file custody;
+    - the generic connector that pulls through a relay;
+    - the wellness interchange format.
+  - *Rejected:* the Garmin provider in the public `relay/`, as with Strava.
+    It would publish code derived from documentation Garmin treats as
+    confidential. Self-hosters would gain little from it, because the push
+    tier is for organizations and Garmin directs individuals to the
+    Personal tier.
+- **Activities and daily wellness both** (maintainer).
+  - Women's health and Garmin's course and training APIs are out.
+  - Wellness reaches fitdocs as the fitdocs wellness interchange format. The
+    provider converts each summary into it, so the public CLI never parses a
+    source's private schema.
+- **Holding time** (maintainer):
+  - The user-facing policy is a 30-day hold.
+  - The mechanism is built but off by default; turning it on is one
+    setting.
+  - While it is off, the policy says unretrieved items "may be deleted
+    after 30 days", never that they are, so the policy stays true.
+- **Encryption** (maintainer):
+  - The relay's existing AES-256-GCM key ring encrypts every held object
+    before it leaves the process, so object storage sees only ciphertext.
+  - *Rejected:* per-user keys. They would need a cryptography library in
+    the `fitdocs` wheel, and the key on every machine that pulls.
+- **Object storage** (maintainer): held objects live in S3-compatible
+  object storage, through an optional extra selected by URL. A local relay
+  keeps working with no extra server: this follows the SQLite-default
+  precedent, so a local directory backend is the default.
+- **No self-hosting docs for a push-tier provider** (maintainer). Instead,
+  the personal path is supported for any source that offers an API token:
+  the connector plugin kind, a template plugin, a small test kit and a
+  "write your own connector" section. A plugin pulls directly from the CLI,
+  so it needs no relay and no public URL.
+- **Policy first** (maintainer).
+  - One privacy policy and one terms page, at the relay's `/privacy` and
+    `/terms`, cover Strava, intervals.icu's relay route, and whatever a
+    deployment contributes (the hosted Garmin section). On the hosted relay
+    these are `https://api.fitdocs.ai/privacy` and `/terms`.
+  - A provider's section can be published before its credentials exist,
+    because the application that grants the credentials asks for the
+    policy first.
+  - Garmin's public agreement also asks for:
+    - terms with each user that protect Garmin (§5.3);
+    - an AI transparency statement wherever AI processes the data
+      (§15.10);
+    - access, export and deletion rights (§15.4).
+  - The relay processes nothing with AI, and its policy says so.
+- **Nothing here publishes Garmin files** (maintainer): "Nothing in this
+  work is about publishing Garmin .fit files. What the user does with their
+  .fit files after retrieved from the Fitdocs and written into the wiki is
+  up to them."
+- **Phase 14's rule that fitdocs "returns nothing from a platform's API"
+  governs publishing.**
+  - A held item is the payload of a pull: the relay returns the athlete's
+    own items byte for byte.
+  - Every relay answer is still a fitdocs code.
+  - No platform JSON, error text or other platform field crosses the
+    relay boundary.
+
+##### Approach
+
+- **The generic layer is public; the Garmin provider is private.**
+  - The relay gains a provider seam, a held-item store and a durable fetch
+    queue.
+  - fitdocs gains a generic relay-source connector and a plugin slot for
+    personal-token connectors.
+  - The hosted deployment supplies the Garmin provider, its policy section
+    and its storage bucket.
+- **Rejected:**
+  - *One `garmin-sync` spec* carrying everything. It would run to about 60
+    tasks, mixing generic layers with one platform.
+  - *Held items in the relay's database.* The database and its backups
+    would grow by megabytes per activity, and the maintainer chose object
+    storage.
+  - *Fetching at pull time.* Some push sources send a notice whose download
+    link is short-lived and single-use, so a weekly pull would lose files.
+    The relay fetches as soon as it has answered the notice.
+  - *Holding a source's raw wellness JSON and parsing it in the CLI.* That
+    would publish the source's schema.
+  - *A provider recipe for self-hosters on a push tier* (offered at
+    discovery, dropped by the maintainer). Garmin directs individuals to its
+    Personal tier, which the plugin slot serves.
+
+##### Scope
+
+- **In**:
+  - the relay's policy and terms pages, composed from sections, including
+    sections a deployment contributes;
+  - the wellness interchange format, recognized by the wellness inbox;
+  - the target-neutral consent machinery (relay-intervals' planned lift,
+    done now):
+    - PKCE;
+    - providers registered through the extension seam;
+    - webhook routes behind a secret path;
+    - token custody;
+    - per-provider call budgets;
+    - a fake provider and a provider test kit;
+  - held-item custody:
+    - metadata in the database, and objects in a local directory or
+      S3-compatible storage, encrypted with the relay key;
+    - the deposit API, with a supersede key;
+    - the durable fetch queue;
+    - list, download and acknowledge;
+    - eviction on acknowledge;
+    - the hold limit (off by default);
+    - the deletion cascades;
+    - the deploy-contract change;
+    - conformance on both databases and both object stores;
+  - the fitdocs relay-source connector, with an acknowledge step after a
+    durable delivery;
+  - the connector plugin kind (moved from Phase 8), with a template plugin,
+    a connector test kit and docs.
+- **Out**:
+  - Garmin provider code or docs in this repository;
+  - self-hosting docs for push tiers;
+  - history before connecting (the push tier has none);
+  - women's health, courses and training APIs;
+  - publishing held items;
+  - the relay parsing or deriving anything from a held item;
+  - a general-purpose file API;
+  - enforcing the hold by default;
+  - per-user encryption;
+  - several relay replicas;
+  - a no-code HTTP connector (plugins are code);
+  - the hosted bucket and deploy (hosted deployment).
+
+##### Constraints
+
+- **The public-text rule** above, and Phase 14's no-infrastructure rule.
+- **Eviction only after a durable delivery.**
+  - fitdocs acknowledges an item only after the item is written to the
+    inbox and the ledger is saved.
+  - Acknowledging is idempotent.
+  - A crash between download and acknowledge re-delivers the item, and sha
+    dedup absorbs it.
+- **No silent loss.**
+  - The relay records a notice before answering it.
+  - It fetches each item once, and resumes pending fetches after a
+    restart.
+  - A fetch that cannot finish before its link expires reaches the
+    athlete's next pull as a code.
+  - The same goes for an item the hold limit evicted.
+- **Deletion at once.** Held items and tokens are deleted on:
+  - disconnect;
+  - the source's deregistration;
+  - a permission withdrawal, for that data type;
+  - principal deletion;
+  - operator revocation.
+- **The relay treats held items as opaque bytes.** It never parses,
+  indexes or derives from them.
+- **The relay serves an athlete only their own held items,** to the
+  connection token their own fitdocs holds. It is never a general API.
+- **Webhooks.**
+  - Each webhook has a secret path.
+  - Each provider declares an allow-list of the hosts its fetches may
+    reach, so a forged notice cannot send a user's token elsewhere.
+  - Tokens are never logged.
+  - Webhook bodies of at least 10 MB are accepted on provider routes.
+- **The deploy contract changes deliberately.**
+  - State becomes the database plus the object store.
+  - `DEPLOY_CONTRACT_VERSION` advances, and the changelog marks the change
+    as breaking.
+  - Readiness covers the object store.
+  - A SQLite relay with a local directory still needs no extra server.
+  - Backup and consistency semantics are stated: the database references
+    objects, and orphans are swept.
+- **The network.** `fitdocs pull` gains relay requests for relay-source
+  instances: list, download and acknowledge. Every repo network statement
+  is rewritten under R9. Every other command stays offline.
+- **The interchange format.**
+  - It is fitdocs-defined, documented and versioned.
+  - It uses the standard library only.
+  - An absent value is never written as `0`.
+  - The source is declared per file, so attribution survives (the
+    "Garmin <model>" rule, `render/attribution.py`).
+- **Plugins.**
+  - A plugin receives its token through the protocol, never the credential
+    store itself.
+  - A plugin delivers only through fitdocs's delivery path.
+  - A failing plugin is isolated.
+  - Plugin output is validated like a built-in's.
+- **Version numbers.** Each spec takes main + 1 at landing, with literal
+  histories (R6, R13.1). This applies to:
+  - `CONTRACT_VERSION`;
+  - the wrapper-seam version;
+  - the relay schema (relay-held-files takes the next free migration
+    number; relay-intervals adds none);
+  - the CLI and connectors surface counts.
+
+##### Boundary Strategy
+
+- **Why this split**: each spec changes for a different reason.
+  - The policy pages follow platform terms.
+  - The consent machinery follows OAuth.
+  - Held-item custody follows storage and the deploy contract.
+  - The interchange format follows the wellness model.
+  - The plugin kind follows `plugins.py`.
+
+  The policy pages and the interchange format depend on nothing new, so they
+  start at once.
+- **Shared seams to watch**:
+  - the extension (wrapper) seam, now carrying:
+    - policy sections (relay-legal-pages);
+    - providers (relay-providers);
+    - deposits (relay-held-files).
+
+    Its version is a breaking surface for the hosted wrapper.
+  - how an extension declares its own environment rows. The contract
+    refuses unknown `FITDOCS_RELAY_*` names today.
+  - the `ConsentProvider` protocol, which relay-intervals and the hosted
+    provider consume;
+  - the deposit API, held-item identity and the supersede key;
+  - the download and acknowledge wire: a binary route, or an envelope
+    exception to the 64 KiB answer limit;
+  - `relay_codes` appends, and the connectors protocol's acknowledge
+    operation (`PULL_ACTIVITIES` is declared non-mutating today);
+  - the interchange format, which is a public contract;
+  - the wire's "target" naming (`/v1/targets/`, `target_connections`),
+    which pull sources will share or sidestep.
+
+##### Existing Spec Updates
+
+- [ ] plugin-api — the connector plugin kind (moved from Phase 8, widened):
+  - Connectors are discovered from an entry-point group and from local
+    plugin files.
+  - They are validated against the published protocol, with per-plugin
+    failure isolation.
+  - They are listed by `fitdocs plugins` with their capabilities.
+  - It is source-agnostic for API-token sources: `fitdocs connect` stores
+    the token, and pull delivers into the inbox.
+  - It adds a template plugin, a connector test kit, and a "write your own
+    connector" section in `docs/plugins.md`. Garmin's Personal tier is one
+    example there; nothing from Garmin's developer documentation goes in.
+
+  Run `/kiro-spec-requirements plugin-api`. Dependencies: none.
+- [ ] relay-intervals — implemented after the extension's specs, it consumes
+  relay-legal-pages' composition and relay-providers' lift instead of
+  building them. Its intervals.icu policy section ships early, in
+  relay-legal-pages. The spec batch's cross-spec review rewrites its
+  requirements, design and tasks (it is unimplemented).
+- [ ] strava-publish — its policy text moves into the composition
+  unchanged, with the Req 16.1 statements still pinned (relay-legal-pages).
+  Its consent machinery is lifted, with no change in behavior
+  (relay-providers).
+- [ ] relay-server, carried by relay-held-files:
+  - the state rule (Req 7.8, 10.3);
+  - the deploy contract and its version;
+  - pull contacting a relay for relay-source instances (Req 11.5, 11.6);
+  - the answer limit, or a binary route (Req 4.5);
+  - the conformance discipline extended to object stores.
+
+  The extension seam gains policy sections (relay-legal-pages) and
+  providers (relay-providers).
+- [ ] connectors, carried by relay-held-files:
+  - the acknowledge operation after a durable delivery;
+  - relay-bound pulling instances (activities and wellness);
+  - the network statements.
+- [ ] wellness-store — the interchange format registered, with the source
+  declared per file. Carried by wellness-interchange.
+- [ ] steering, carried by relay-held-files and plugin-api:
+  - `tech.md`: the relay paragraph's "one database", and "Network and
+    Credentials" for pull;
+  - `structure.md`.
+
+##### Direct Implementation Candidates
+
+- [x] `product.md`: capability 1 names the relay-held and plugin routes, in
+  this discovery change.
+- [x] The queue item `2026-10-12-intervals-garmin-data-block-risk` records
+  the fallback-route decision, in this discovery change.
+- [ ] Maintainer prerequisites (not code):
+  - the hosted relay answering at its address, so the policy URL resolves;
+  - the intervals.icu OAuth application and the Garmin application, both
+    of which need the policy URL;
+  - the Strava application (Phase 14).
+
+  Hosted specifics are recorded with the hosted deployment.
+
+##### Follow-on candidates (not scheduled)
+
+- Other push sources on the same held-item layer.
+- Enforcing the 30-day hold, once real use is measured.
+- Per-user end-to-end encryption of held items.
+- Garmin's training and course APIs, which could push planned workouts to a
+  device. This is the planned-workout door Phase 14 kept open (R8).
+- The Garmin export-zip importer (Phase 8).
+
+##### Specs (dependency order)
+
+- [ ] relay-legal-pages — one privacy policy and one terms page, at
+  `/privacy` and `/terms`. Dependencies: none.
+  - They are composed from common sections, built-in provider sections
+    (Strava unchanged; intervals.icu's relay route written now), and
+    sections a deployment contributes through the extension seam.
+  - A section can be published before its provider's credentials exist.
+  - The consent pages link both.
+  - Implement first: it unblocks the platform applications.
+- [ ] wellness-interchange — a fitdocs-defined daily wellness file that the
+  wellness inbox recognizes. Dependencies: none.
+  - The source is declared per file, so attribution follows.
+  - An absent value is never `0`.
+  - Latest entry wins per day and metric.
+  - It is documented for any producer.
+- [ ] relay-providers — the target-neutral consent machinery (relay-intervals'
+  planned `fitdocs_relay/targets/` lift, done now). Dependencies:
+  relay-legal-pages.
+  - It adds optional PKCE.
+  - Providers register through the extension seam: consent, policy
+    sections, webhook routes with a secret path and a body limit, token
+    custody, a fetch-host allow-list, and a call budget.
+  - Strava becomes a built-in provider, with no change in behavior.
+  - On the fitdocs side, `relay_route` is lifted out of the Strava
+    connector.
+  - It adds a fake provider and a provider test kit.
+- [ ] relay-held-files — held-item custody on the relay, and the fitdocs
+  connector that pulls from it. Dependencies: relay-providers,
+  wellness-interchange.
+  - Storage:
+    - metadata in the database, and objects in a local directory or
+      S3-compatible storage, encrypted with the relay key;
+    - deposit with a supersede key;
+    - the durable fetch queue.
+  - Retrieval and removal:
+    - list, download and acknowledge;
+    - eviction on acknowledge;
+    - the hold limit (off by default);
+    - the deletion cascades.
+  - The contract: state becomes the database plus the object store, and
+    `DEPLOY_CONTRACT_VERSION` advances.
+  - fitdocs side: a relay-source connector (`OAUTH_BROWSER` bound to a
+    relay, pulling activities and wellness). It acknowledges only after the
+    inbox write and the ledger save, and reports expired or failed fetches
+    as codes.
+
+The hosted deployment's provider, policy sections and storage are outside
+this repository. Run `/kiro-spec-batch` scoped to this extension by name
+(the multi-phase trap is still open,
+`.kiro/queue/2026-09-15-spec-batch-multi-phase-roadmap-unscoped.md`). Run the
+plugin-api update separately.

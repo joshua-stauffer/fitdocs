@@ -151,3 +151,24 @@ This adds a fallback candidate to step 3:
 Sources: <https://developer.garmin.com/gc-developer-program/overview/>,
 <https://www.dcrainmaker.com/2026/10/garmin-connect-api-revamps-connect-developer.html>,
 <https://the5krunner.com/2026/10/22/garmin-personal-api/>.
+
+## Update (2026-11-03): fallback route decided
+
+The maintainer chose the fallback route, recorded in the roadmap under
+Phase 14's extension, "held files from push sources, and connector
+plugins":
+- **Garmin through the hosted relay, on Garmin's push-only tier.** The
+  provider is private and outside this repository; this repository gets the
+  generic held-file layer (`relay-held-files` and its neighbours).
+- **Any source with a personal API token through a connector plugin**, for
+  example Garmin's Personal tier. This is the plugin-api update in the same
+  extension.
+
+What this item still owns is detection: a pull should report Garmin-origin
+activities it can list but not download. intervals.icu's developer said on
+2026-10-24 that Garmin data will stop reaching API apps ("You need to get
+your own connection to Garmin to get activity data", thread 609, #883), with
+no cut-off date yet (#890). Once the block lands, the detection question
+becomes what the intervals connector reports for those activities. Close
+this item when that is decided, or when the block lands with the new routes
+live.
