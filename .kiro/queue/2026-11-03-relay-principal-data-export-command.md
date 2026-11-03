@@ -3,7 +3,7 @@ id: 2026-11-03-relay-principal-data-export-command
 title: Give relay operators a command that shows what the relay holds for one principal
 status: open
 importance: medium
-importance_why: The relay's privacy policy promises access and export on request; today an operator can answer only by querying the database by hand.
+importance_why: A deployment's contributed policy (the hosted one first) promises access and export on request; today an operator can answer only by querying the database by hand.
 effort: M
 kind: gap
 area: relay-legal-pages, relay-server, relay/src/fitdocs_relay/cli.py
@@ -22,11 +22,12 @@ blocked_by:
 ---
 
 ## What
-relay-legal-pages' common "Your rights" section tells athletes they can get a
-copy of what the relay holds about them by asking the operator at the support
-contact (Requirement 6.4), and the relay docs make answering such requests an
-operator obligation (Requirement 9.3). The spec deliberately ships no tooling
-for it ("Out of scope: ... an operator command that exports what the relay
+relay-legal-pages (slim version, 2026-11-03) leaves the access, export and
+deletion request process to each deployment: the hosted wrapper contributes a
+rights section promising athletes a copy of what the relay holds about them
+on request, and the relay docs tell operators to contribute the commitments
+their platforms require (Requirement 9.3). The spec deliberately ships no
+tooling for answering such requests ("Out of scope: ... an operator command that exports what the relay
 holds about one athlete"). The operator commands today are `principal
 create|list|delete`, `token mint|list|revoke` and the Strava/key commands
 (`docs/relay.md` "Operator commands"); none prints a principal's connections,
@@ -44,15 +45,15 @@ public agreement (FRM-0952 Rev. B §15.4(d)) is one public example.
 - `.kiro/specs/relay-legal-pages/requirements.md` Boundary Context, "Out of
   scope": "enforcing anything the policy states, including an operator
   command that exports what the relay holds about one athlete".
-- `.kiro/specs/relay-legal-pages/design.md` Supporting References, "Your
-  rights": "To get a copy of what the relay holds about you ... ask the
-  operator at the support contact shown on this page."
+- `.kiro/specs/relay-legal-pages/requirements.md` Requirement 7.3: the
+  relay ships "no process for access, export or deletion requests"; a
+  deployment contributes it (Requirement 8.1).
 - `docs/relay.md` "Operator commands" table at 50d5d33c: no per-principal
   data command.
 
 ## How to pick it up
-1. Read relay-legal-pages' "Your rights" and retention text (design.md
-   Supporting References) for the list of what the relay holds.
+1. Read relay-legal-pages' retention text (design.md Supporting References)
+   for the list of what the relay holds.
 2. Read `storage/interface.py` for read operations per principal. Decide
    whether a new storage read is needed on both backends; if so, the
    conformance suite covers it.
