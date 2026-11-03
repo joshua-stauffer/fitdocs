@@ -182,12 +182,14 @@ relay/src/fitdocs_relay/
     └── routes.py            # NEW: PRIVACY_PATH, TERMS_PATH, legal_routes(pages)
 
 relay/tests/legal/
-├── test_content.py          # NEW: contribution validation, one refusal per reason
-├── test_text.py             # NEW: fixed text word for word, text-date histories, brand scan
-├── test_compose.py          # NEW: applicability, order, announced statement, dates, escaping, determinism
-├── test_routes.py           # NEW: served/not served, headers, HEAD, unreachable store, every-page links
-├── test_config.py           # NEW: announce row, terms address, operator rows without a target
-└── test_docs.py             # NEW: docs/relay.md "Privacy policy and terms" bound to the code
+├── test_legal_content.py    # NEW: contribution validation, one refusal per reason
+├── test_legal_text.py       # NEW: fixed text word for word, text-date histories, brand scan
+├── test_legal_compose.py    # NEW: applicability, order, announced statement, dates, escaping, determinism
+├── test_legal_routes.py     # NEW: served/not served, headers, HEAD, unreachable store, every-page links
+├── test_legal_config.py     # NEW: announce row, terms address, operator rows without a target
+└── test_legal_docs.py       # NEW: docs/relay.md "Privacy policy and terms" bound to the code
+                             # (unique basenames: the relay tests have no __init__.py and pytest
+                             #  uses prepend import mode, so a repeated basename fails collection)
 ```
 
 ### Modified Files
@@ -231,7 +233,21 @@ relay/tests/legal/
 - `relay/tests/strava/test_pages.py`, `test_policy_docs.py`,
   `relay/tests/test_strava_pages_routes.py` — imports and the place on the
   page where a section is looked for; every expected policy and consent value
-  kept.
+  kept. The route-gating tests that use `/privacy` as a sample page (not
+  ready, store unreachable, client-limited, shared client count) change
+  expectation under 1.5 and move to another Strava page path; the Strava
+  routes-table binding drops `/privacy`.
+- `relay/tests/test_config_strava.py` — the operator rows' `required_with`,
+  the literal refusal group and counts, and the refusal labels change under
+  9.1; the two new rows gain refusal cases.
+- `tests/connectors/test_strava_changelog.py` (root) — the restated seam
+  version line and the "marks nothing breaking" check change with the seam
+  advance (8.5).
+- `relay/tests/test_config.py` — the whole-config comparison gains the
+  loaded `LegalConfig`; `relay/tests/test_seam.py` — the designed services
+  fields gain `operator` and `legal`; `relay/tests/test_strava_routes.py` —
+  the shared Strava test world, which builds its app without `create_app`,
+  assembles the legal pages through `_legal_pages` as the factory does.
 - `relay/CHANGELOG.md`, `docs/relay.md`, `docs/connectors.md`.
 - `.kiro/specs/relay-server/requirements.md`,
   `.kiro/specs/strava-publish/requirements.md`,
@@ -316,7 +332,7 @@ nothing applies, `LegalPages` is `None` and neither path has a route.
 | 9.1 | Contract rows, reserved path, version unchanged | Contract, LegalConfig, Routes | `ENVIRONMENT`, `RESERVED_PREFIXES` | — |
 | 9.2 | Docs privacy section | Docs | `docs/relay.md` | — |
 | 9.3 | Docs operator obligations | Docs | `docs/relay.md` | — |
-| 9.4 | Seam docs; docs bound to code | Docs, tests | `test_docs.py`, `test_docs_relay.py` | — |
+| 9.4 | Seam docs; docs bound to code | Docs, tests | `test_legal_docs.py`, `test_docs_relay.py` | — |
 | 9.5 | Connectors docs terms address | Docs | `docs/connectors.md` | — |
 | 9.6 | Wording rules | LegalText, Docs | brand scan, review | — |
 | 9.7 | Amendments | Spec records | three amendments | — |
@@ -610,8 +626,8 @@ def operator_from(legal: LegalConfig | None) -> Operator | None: ...   # None un
   unknown provider 'x'; known: strava, intervals`), and a repeated entry
   likewise (`... names 'strava' twice`).
 - When `any_target` or `announced` is non-empty, a missing operator name or
-  support contact raises `ConfigError` naming that variable (`... is
-  required while the relay serves its privacy policy`).
+  support contact raises `ConfigError` naming that variable with the
+  existing wording (`<VARIABLE>: is required`).
 - Validation of each value is the existing rule: the operator name 1-100
   printable characters; the contact an email address or `https` address;
   each page address `https` only.
@@ -632,8 +648,11 @@ def legal_routes(pages: LegalPages) -> list[BaseRoute]: ...
 ```
 - Each handler returns the pre-rendered page; it reads no store, checks no
   readiness and counts no client request (1.5). Routes are built as
-  `Route(path, handler, methods=["GET"])`, like Strava's page routes, so
-  other methods answer as those do (1.4).
+  `Route(path, handler, methods=["GET"])`, like Strava's page routes. Starlette
+  admits HEAD on a GET route, and Strava's 405 comes from its `browser()`
+  wrapper, which these routes do not use, so each handler answers HEAD itself
+  with 405, `PAGE_HEADERS` and `Allow: GET`; any other method falls to the
+  router as it does for Strava's pages (1.4).
 
 ### Relay app and seam
 
@@ -729,19 +748,19 @@ Every new assertion names the production mutation it dies on
 pytest` in the relay project.
 
 ### Unit Tests
-- `legal/test_content.py`: one malformed contribution per reason, each
+- `legal/test_legal_content.py`: one malformed contribution per reason, each
   refused with its own reason, plus one valid contribution accepted.
   Mutations: removing the casefold in the name check (a "STRAVA" provider is
   admitted); dropping the reserved-heading check (an operator section headed
   "Security" is admitted); accepting a `list` (a list-valued `blocks`
   passes).
-- `legal/test_text.py`: every fixed section of both pages and of the
+- `legal/test_legal_text.py`: every fixed section of both pages and of the
   intervals.icu group pinned word for word against the Supporting References
   text; per part, a literal history of `(date, sha256)` over the canonical
   text of every variant, whose last entry must match the current text and
   date. Mutation: editing one word of `POLICY_AI` reds the history check
   alone.
-- `legal/test_compose.py`: order for a fixture with Strava configured,
+- `legal/test_legal_compose.py`: order for a fixture with Strava configured,
   intervals.icu announced and two wrappers with distinct providers and
   operator sections (pairwise-distinct names and dates, the latest date on
   the second wrapper's operator part so neither `max` over providers alone
@@ -753,7 +772,7 @@ pytest` in the relay project.
   `escape` from the heading render.
 
 ### Integration Tests
-- `legal/test_routes.py`: through `create_app` with a scripted store —
+- `legal/test_legal_routes.py`: through `create_app` with a scripted store —
   Strava unconfigured and nothing announced answers both paths as
   `not-offered` and lists no target; `ANNOUNCED_PROVIDERS=intervals` serves
   both pages, lists no target and adds no intervals.icu route; with the store
@@ -763,7 +782,7 @@ pytest` in the relay project.
 - Every-page links: each Strava page and both legal pages link `/privacy`
   and `/terms` exactly once, and the operator's own addresses replace them
   (mutation: dropping the terms anchor from the footer).
-- `legal/test_config.py`: the operator variables accepted without a target;
+- `legal/test_legal_config.py`: the operator variables accepted without a target;
   each `ConfigError` above with its message; `test_contract.py` pins the two
   new rows and the widened `required_with`.
 - Seam: version 1 refused; a wrapper contributing nothing leaves both pages
@@ -779,7 +798,7 @@ pytest` in the relay project.
   legal pages for both link settings and for Strava offered and announced.
 
 ### Documentation Tests
-- `legal/test_docs.py` binds `docs/relay.md` "Privacy policy and terms" to
+- `legal/test_legal_docs.py` binds `docs/relay.md` "Privacy policy and terms" to
   `POLICY_COMMON_HEADINGS`, `TERMS_COMMON_HEADINGS`, `BUILT_IN_PROVIDERS`
   and the two new variables; `test_docs_relay.py` binds the seam block and
   the "Seam v2" heading to `SEAM_VERSION` and the surface.
