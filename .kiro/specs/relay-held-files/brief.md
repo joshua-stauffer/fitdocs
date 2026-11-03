@@ -140,6 +140,34 @@ files.
 - **The fitdocs connector reuses the pull engine,** with the acknowledge
   step after `deliver` and the ledger save.
 
+**Viability findings (2026-11-03)** shape this spec:
+- **The S3 adapter:**
+  - Prefer a SigV4 signer over `outbound.py` (pure `hmac`/`hashlib`, zero
+    dependencies) for put, get, head and delete. The fallback is boto3,
+    with checksums set to `when_required` and an explicit addressing style.
+  - The database is the object index, so the relay never lists objects.
+    Some S3-compatible stores do not paginate listings.
+  - Do not depend on conditional PUT.
+- **`outbound.py` has two blockers:** it refuses `http://`, which CI
+  emulators need behind a test seam; and its 8 MiB response cap blocks the
+  16–32 MiB downloads that provider fetches need too.
+- **Conformance:** moto's in-process server, plus the AWS SigV4 test
+  vectors. moto never checks signatures; SeaweedFS pinned by digest can.
+  LocalStack (a CI token since 2026) and MinIO's archived images are out.
+- **The fetch queue:**
+  - A lifespan-started worker drains database rows: commit, answer, wake
+    the worker. It rescans at startup, and is cancelled and awaited at
+    shutdown.
+  - No Starlette `BackgroundTask`, which is not durable and pollutes the
+    request log.
+  - Record the attempt before the GET, and mark the row terminal on a 4xx.
+  - A unique constraint absorbs re-sent notices.
+  - Storage calls go through the thread pool, and no transaction is held
+    across a fetch.
+- **Encryption:** byte-oriented `seal_bytes`/`open_bytes` on an HKDF blob
+  subkey, with the key id in a header. Associated data binds principal,
+  object and kind. `Keyring.seal` is text and base64, and not reused.
+
 ## Scope
 
 - **In**: every item under Desired Outcome. Docs: `docs/relay.md` (storage,

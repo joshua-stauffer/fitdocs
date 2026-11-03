@@ -98,6 +98,15 @@ cannot reuse it, and a deployment cannot register a provider of its own.
 - **Keep the wire stable.** The design decides whether a provider that
   sends data in is still a "target" on the wire (`/v1/targets/<id>/...`),
   which needs no envelope change, or gets a new prefix.
+- **Body limits** (viability, 2026-11-03):
+  - `ROUTE_BODY_LIMITS` is honoured only when Strava is configured
+    (`app.py:412`), so a relay without Strava would cap every webhook at
+    64 KiB. Decouple per-route limits from Strava, and let a provider's
+    registration add its webhook paths.
+  - Read webhook bodies as raw bytes; Starlette's `form()` caps parts at
+    1 MiB.
+  - Bound concurrency on the large-body routes. `_admit` buffers whole
+    bodies, and uvicorn has no body-read timeout.
 
 ## Scope
 

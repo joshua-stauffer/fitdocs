@@ -1487,7 +1487,10 @@ Rejected:
 - **Connectors fill the inbox, and the engine reconciles** (maintainer,
   2026-09-23), over direct attach.
 - **Garmin rides come via intervals.icu** (maintainer, 2026-09-23), over a
-  direct Garmin login and over an export-zip-only path. The intervals.icu
+  direct Garmin login and over an export-zip-only path. *(Superseded for new
+  Garmin data, 2026-11-03, by Phase 14's extension: intervals.icu is ending
+  Garmin passthrough, so Garmin comes through the hosted relay and through
+  connector plugins with personal tokens.)* The intervals.icu
   connector's pull capability moves into this phase. Its push,
   planned-workout, threshold and plan capabilities stay follow-ons. The
   viability check (2026-09-24) found intervals.icu's copy is Garmin's
@@ -3585,6 +3588,10 @@ The maintainer set the rule this phase is built around (2026-10-31):
 - it exposes its own publishing interface, with its own success and failure
   codes, and translates each platform's API into them.
 
+*(Scoped 2026-11-03 by this phase's extension: the rule governs publishing.
+A held item is the payload of a pull, so the relay returns the athlete's own
+items byte for byte. Every answer is still a fitdocs code.)*
+
 Strava publishing goes through a passthrough relay at fitdocs.ai.
 - Athletes register an email from their fitdocs, verify it by email, and
   receive a relay token that authenticates them to the relay's publish API.
@@ -3701,7 +3708,9 @@ Rejected:
   - This repository ships a small server that runs locally on SQLite, plus
     the deploy contract above. Hosting is out of scope.
   - The database is the relay's only state, so a database backup is a
-    complete backup.
+    complete backup. *(To change under this phase's extension: once
+    `relay-held-files` lands, state is the database plus the object
+    store.)*
 - **The open-source relay server has no accounts and sends no email**
   (maintainer, 2026-10-31).
   - The operator mints tokens.
@@ -3778,7 +3787,9 @@ Rejected:
 #### Constraints
 
 - **Nothing a platform's API returns is printed, logged or written by
-  fitdocs.**
+  fitdocs.** *(Scoped to publishing by this phase's extension, 2026-11-03.
+  A held source item the athlete pulls is written to the inbox, like any
+  pulled file.)*
   - Every outcome is a fitdocs code, with fitdocs-written text.
   - The only exceptions are the links: intervals.icu's direct activity link,
     and Strava's link (the activity's address, or the relay redirect link).
@@ -3813,7 +3824,9 @@ Rejected:
   changes only deliberately:
   - configuration only from the environment, with no secret in the image;
   - the configured database (a SQLite file or PostgreSQL) as the only state,
-    so the app container is disposable;
+    so the app container is disposable *(the extension's `relay-held-files`
+    adds the object store, deliberately, with a `DEPLOY_CONTRACT_VERSION`
+    advance)*;
   - health and readiness endpoints;
   - a migration command the deploy runs before the app starts;
   - graceful shutdown, and logs to stdout;
@@ -4154,7 +4167,8 @@ to get activity data" (<https://forum.intervals.icu/t/api-access-to-intervals-ic
   pages.
 - They carry nothing from Garmin's developer documentation, which Garmin's
   agreement makes confidential (§8.1 of the public FRM-0952 Rev. B).
-- They say nothing about the maintainer's application or agreement (§8.4).
+- They make no statement about any application or agreement with Garmin
+  (§8.4).
 - The hosted deployment's Garmin material lives with the hosted deployment.
   This follows the Stryd precedent (Phase 8) and the no-infrastructure rule
   (Phase 14).
@@ -4441,11 +4455,61 @@ to get activity data" (<https://forum.intervals.icu/t/api-access-to-intervals-ic
   the fallback-route decision, in this discovery change.
 - [ ] Maintainer prerequisites (not code):
   - the hosted relay answering at its address, so the policy URL resolves;
-  - the intervals.icu OAuth application and the Garmin application, both
-    of which need the policy URL;
+  - the platforms' developer applications, which need the policy URL
+    (intervals.icu's OAuth app among them);
   - the Strava application (Phase 14).
 
   Hosted specifics are recorded with the hosted deployment.
+
+##### Viability (2026-11-03)
+
+No showstopper was found. These findings shape the specs; each brief
+carries its own.
+- **S3 access:**
+  - Prefer a SigV4 signer over `outbound.py`: it is pure `hmac`/`hashlib`,
+    adds no dependency, and keeps the boundary guard true. It covers put,
+    get, head and delete.
+  - The database is the object index, so the relay never lists objects.
+    Some S3-compatible stores do not paginate listings.
+  - `outbound.py` refuses `http://`, so CI emulators need a test seam. Its
+    8 MiB response cap blocks a 16–32 MiB download, and that applies to a
+    provider's file fetch as well.
+  - Fallback: boto3, with checksum calculation and validation set to
+    `when_required` (its 2025 default checksums broke several S3-compatible
+    stores) and an explicit addressing style.
+  - *Rejected:*
+    - aiobotocore (it lags botocore and pulls in aiohttp);
+    - minio-py (stale; heavy dependencies);
+    - obstore (0.x, ships no license texts, bypasses `outbound.py`).
+- **CI emulator:**
+  - moto's in-process server for the conformance suite, plus the AWS SigV4
+    test vectors for the signer. moto never checks signatures.
+  - SeaweedFS (Apache-2.0), pinned by digest, if live signature checks are
+    wanted.
+  - *Rejected:*
+    - LocalStack, which needs an auth token in CI since 2026;
+    - MinIO's official images, archived in October 2025.
+  - Do not depend on conditional PUT.
+- **Background fetch:**
+  - A lifespan-started worker drains a database-backed queue. The webhook
+    commits the notice, answers, and wakes the worker. On startup the
+    worker rescans pending rows. It is cancelled and awaited at shutdown.
+  - Starlette `BackgroundTask` is rejected. It is lost if the process dies,
+    and it runs inside the request, so the request log's duration and
+    errors would include it.
+  - A single-use link: record the attempt before the GET, and mark the row
+    terminal on a 4xx. A unique constraint absorbs re-sent notices.
+- **Body limits:**
+  - Per-route limits are switched on only when Strava is configured
+    (`app.py:412`). Decouple them, and add the provider webhook paths.
+  - Read webhooks as raw bytes, and bound concurrency on the large-body
+    routes.
+- **Encryption:** the key ring's `seal` is text-oriented, base64 included.
+  Add byte-oriented sealing on an HKDF-derived blob subkey. Bind
+  principal, object and kind as associated data, and run it in the thread
+  pool.
+- **Dependency floors:** the relay's floors admit known CVEs, although the
+  lockfile is clean. That is queued separately (2026-11-03).
 
 ##### Follow-on candidates (not scheduled)
 

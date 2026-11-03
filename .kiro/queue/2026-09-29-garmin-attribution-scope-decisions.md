@@ -81,3 +81,28 @@ and none of them is decided for the maintainer.
 - **A surface nobody covers.** Dashboards over `wellness_daily` owe the same
   attribution and the dashboards spec has no mechanism for it. Queued
   separately: `.kiro/queue/2026-10-13-dashboards-over-wellness-daily-owe-garmin-attribution.md`.
+
+## Update (2026-11-03): Phase 14's extension raises the stakes
+
+Phase 14's extension (roadmap, "held files from push sources, and connector
+plugins") brings Garmin data in directly. Activities come as files and
+daily health summaries as `wellness-interchange` files with source
+`garmin`, through the hosted relay and through connector plugins with
+personal tokens. Garmin-sourced pages and wellness values become routine
+rather than incidental, so (a) and (b) matter more.
+
+The current public API Brand Guidelines (v6.30.2025) still say:
+- "The Garmin attribution must be visible in every image." This bears on
+  (a), chart SVGs.
+- Under "Combined or derived data": a global attribution in a header is
+  acceptable for multi-entry displays, for example "Insights derived in part
+  from Garmin device-sourced data." This bears on (b): the history, block,
+  recovery and dashboard pages.
+- Exports: attribution "must be adjacent to the data and repeated on each
+  page".
+
+Garmin's agreement §6.6 (the 2026 FRM-0952 Rev. B edition) also asks for 30
+days' notice, with mockups, before Garmin data appears in a new display
+format. That is a maintainer step, recorded with the hosted deployment.
+Deciding (a) and (b) before that notice means the mockups show the final
+attribution.
