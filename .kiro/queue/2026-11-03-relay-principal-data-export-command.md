@@ -3,31 +3,28 @@ id: 2026-11-03-relay-principal-data-export-command
 title: Give relay operators a command that shows what the relay holds for one principal
 status: open
 importance: medium
-importance_why: A deployment's contributed policy (the hosted one first) promises access and export on request; today an operator can answer only by querying the database by hand.
+importance_why: The hosted deployment's privacy policy promises access and export on request; today an operator can answer only by querying the database by hand.
 effort: M
 kind: gap
-area: relay-legal-pages, relay-server, relay/src/fitdocs_relay/cli.py
+area: relay-server, relay/src/fitdocs_relay/cli.py
 created: 2026-11-03
 surfaced_by: /kiro-spec-quick relay-legal-pages (requirements and design)
 pinned_at: 50d5d33c
 resume_command: "/kiro-spec-requirements relay-server [queue: .kiro/queue/2026-11-03-relay-principal-data-export-command.md] An operator command that prints what the relay holds for one principal"
 context:
-  - .kiro/specs/relay-legal-pages/requirements.md
+  - .kiro/specs/relay-legal-pages/research.md
   - .kiro/specs/relay-legal-pages/design.md
   - docs/relay.md
   - relay/src/fitdocs_relay/cli.py
   - relay/src/fitdocs_relay/storage/interface.py
-blocked_by:
-  - relay-legal-pages
+blocked_by: []
 ---
 
 ## What
-relay-legal-pages (slim version, 2026-11-03) leaves the access, export and
-deletion request process to each deployment: the hosted wrapper contributes a
-rights section promising athletes a copy of what the relay holds about them
-on request, and the relay docs tell operators to contribute the commitments
-their platforms require (Requirement 9.3). The spec deliberately ships no
-tooling for answering such requests ("Out of scope: ... an operator command that exports what the relay
+The hosted deployment's static privacy policy (hosted-policy, private; the
+public relay-legal-pages spec was shelved on 2026-11-03 in its favour)
+promises athletes a copy of what the relay holds about them on request. The
+relay ships no tooling for answering such requests ("Out of scope: ... an operator command that exports what the relay
 holds about one athlete"). The operator commands today are `principal
 create|list|delete`, `token mint|list|revoke` and the Strava/key commands
 (`docs/relay.md` "Operator commands"); none prints a principal's connections,
@@ -45,9 +42,9 @@ public agreement (FRM-0952 Rev. B §15.4(d)) is one public example.
 - `.kiro/specs/relay-legal-pages/requirements.md` Boundary Context, "Out of
   scope": "enforcing anything the policy states, including an operator
   command that exports what the relay holds about one athlete".
-- `.kiro/specs/relay-legal-pages/requirements.md` Requirement 7.3: the
-  relay ships "no process for access, export or deletion requests"; a
-  deployment contributes it (Requirement 8.1).
+- `.kiro/steering/roadmap.md`, Phase 14 extension, "Specs":
+  relay-legal-pages is shelved, and the hosted deployment's static pages
+  carry the rights promise.
 - `docs/relay.md` "Operator commands" table at 50d5d33c: no per-principal
   data command.
 

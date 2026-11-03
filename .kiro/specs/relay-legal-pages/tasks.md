@@ -1,5 +1,18 @@
 # Implementation Plan
 
+> **SHELVED 2026-11-03 (maintainer). Do not implement.**
+> - **Instead:** the hosted deployment serves `/privacy` and `/terms` as static
+>   pages (hosted-policy, private). The relay keeps its built-in Strava policy
+>   as it is.
+> - **This spec stays as a record and a source.** Reusable parts:
+>   - design.md "Supporting References" holds truth-reviewed text for the
+>     common sections, Strava and intervals.icu;
+>   - the terms, rights and breach drafts are at commit 73e210f8;
+>   - research.md holds the retention and logging facts, with code
+>     references.
+> - **Why shelved:** see `.kiro/steering/roadmap.md`, Phase 14 extension,
+>   "Specs".
+
 Prerequisite: `main` at or after 5d1d3cc5, with strava-publish (f0ca31cd)
 and relay-server (dbf34412) landed. No other spec in flight touches the
 relay's pages, configuration or seam; relay-providers, which touches

@@ -66,8 +66,10 @@ cannot reuse it, and a deployment cannot register a provider of its own.
   well.
 - **Extension-registered providers.** A `RelayExtension` can register a
   provider that declares:
-  - consent text, and its policy and terms sections (through
-    relay-legal-pages);
+  - consent text. Policy text is not a provider declaration: relay-legal-pages
+    was shelved on 2026-11-03. A built-in provider's policy lives in the
+    relay's built-in policy (Strava's today); a deployment's provider's
+    policy lives with that deployment (the hosted static pages);
   - webhook routes under a secret path, each with its own body limit (at
     least 10 MB where a source needs it);
   - token custody through `TokenVault`, with the existing refresh lease;
@@ -143,14 +145,15 @@ cannot reuse it, and a deployment cannot register a provider of its own.
 
 - What a provider does with a webhook beyond verifying and routing it. A
   deposit is relay-held-files'; Strava's deauthorization stays Strava's.
-- Policy composition (relay-legal-pages; this spec only feeds it).
+- Policy pages. relay-legal-pages was shelved on 2026-11-03; the relay's
+  built-in Strava policy stays as it is, and the hosted deployment serves
+  static pages.
 
 ## Upstream / Downstream
 
 - **Upstream**:
   - relay-server: the seam, storage, the envelope and the contract;
-  - strava-publish: the machinery being lifted;
-  - relay-legal-pages: the section API.
+  - strava-publish: the machinery being lifted.
 - **Downstream**:
   - relay-held-files: providers deposit through it;
   - relay-intervals: it consumes the lift;
@@ -166,7 +169,6 @@ cannot reuse it, and a deployment cannot register a provider of its own.
   - connectors: the `BrowserConsentClient.service_name` and
     `relay_route` lift.
 - **Adjacent**:
-  - relay-legal-pages, which lands first and shares `strava/pages.py`;
   - relay-held-files, which lands next and shares the route table and the
     contract.
 

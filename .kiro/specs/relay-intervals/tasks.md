@@ -327,6 +327,12 @@ Rules for every task:
   - The consent text and the policy group of design.md, as fixed fitdocs
     text, with no artwork and no brand phrase; the relay boundary test keeps
     the module to the standard library in this task.
+  - A truth-reviewed draft of the intervals.icu policy group already exists
+    in the shelved relay-legal-pages design ("Supporting References",
+    "## intervals.icu"). It was checked against this spec's Requirements 4,
+    5, 6, 7, 8, 11 and 12 on 2026-11-03, and the hosted static policy
+    carries the same text. Start from it, and re-check it against this
+    spec as the cross-spec review leaves it.
   - Done when a test of the policy composition over a stub provider carrying
     these sections shows them grouped under intervals.icu, a test pins the
     group's section headings as literals (removing one reds it), and the

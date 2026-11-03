@@ -96,12 +96,18 @@ files.
     orphaned objects are swept.
 - **Conformance** runs on SQLite and PostgreSQL × the local and S3 backends
   (an S3 emulator in CI).
-- **The policy** gains a held-data section through relay-legal-pages,
-  covering:
+- **The policy.** relay-legal-pages was shelved on 2026-11-03. Held data is
+  described by the policy of the deployment that offers a push source (the
+  hosted static pages). This spec documents in `docs/relay.md` the behavior
+  that policy must state:
   - encryption;
   - eviction on retrieval;
   - "may be deleted after 30 days";
   - the deletion triggers.
+
+  It also records a queue item for the hosted policy pages when that
+  behavior lands (the roadmap's "hosted policy pages describe public code"
+  constraint).
 
 **fitdocs.**
 - **A relay-source connector:**
@@ -199,8 +205,8 @@ files.
 - Provider registration, consent and webhooks (relay-providers).
 - The wellness format (wellness-interchange). Held wellness items are
   interchange files.
-- Policy composition (relay-legal-pages). This spec contributes one
-  section.
+- The policy pages (relay-legal-pages shelved; the hosted deployment's
+  static pages describe held data).
 
 ## Upstream / Downstream
 

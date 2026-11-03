@@ -4148,7 +4148,10 @@ through a connector plugin they install or write, with no relay involved.
 
 One privacy policy and one terms page cover every platform the relay talks
 to. They ship first, because each platform's developer application asks for
-a policy URL.
+a policy URL. *(Revised 2026-11-03, maintainer: the hosted deployment writes
+them as static pages, which Caddy serves at `api.fitdocs.ai/privacy` and
+`/terms`. The relay keeps its built-in Strava policy for self-hosters, and
+relay-legal-pages is shelved. See Specs.)*
 
 The first push source is Garmin. Garmin relaunched its developer program on
 2026-10-21 with three tiers (<https://developer.garmin.com/gc-developer-program/overview/>):
@@ -4181,7 +4184,7 @@ to get activity data" (<https://forum.intervals.icu/t/api-access-to-intervals-ic
   - The provider is private and plugs in through the relay's extension
     seam.
   - This repository gets the generic layer:
-    - the policy pages;
+    - the policy pages *(shelved 2026-11-03: hosted static pages instead)*;
     - provider registration;
     - held-file custody;
     - the generic connector that pulls through a relay;
@@ -4230,6 +4233,11 @@ to get activity data" (<https://forum.intervals.icu/t/api-access-to-intervals-ic
       (§15.10);
     - access, export and deletion rights (§15.4).
   - The relay processes nothing with AI, and its policy says so.
+  - *Revised 2026-11-03 (maintainer):* a relay-composed policy turned out to
+    be machinery for many differently configured deployments, and only one
+    deployment needs more than the Strava page. The hosted deployment
+    writes both pages as static text. The research and the truth-reviewed
+    drafts stay in `.kiro/specs/relay-legal-pages/` (shelved).
 - **Nothing here publishes Garmin files** (maintainer): "Nothing in this
   work is about publishing Garmin .fit files. What the user does with their
   .fit files after retrieved from the Fitdocs and written into the wiki is
@@ -4269,8 +4277,9 @@ to get activity data" (<https://forum.intervals.icu/t/api-access-to-intervals-ic
 ##### Scope
 
 - **In**:
-  - the relay's policy and terms pages, composed from sections, including
-    sections a deployment contributes;
+  - ~~the relay's policy and terms pages, composed from sections, including
+    sections a deployment contributes~~ *(shelved 2026-11-03; hosted static
+    pages)*;
   - the wellness interchange format, recognized by the wellness inbox;
   - the target-neutral consent machinery (relay-intervals' planned lift,
     done now):
@@ -4312,6 +4321,13 @@ to get activity data" (<https://forum.intervals.icu/t/api-access-to-intervals-ic
 ##### Constraints
 
 - **The public-text rule** above, and Phase 14's no-infrastructure rule.
+- **The hosted policy pages describe public code** (added 2026-11-03,
+  with relay-legal-pages shelved):
+  - When a change here alters what the relay stores, sends, returns, logs or
+    deletes, the same change records a queue item for the hosted
+    deployment's policy pages.
+  - The item names the behavior that changed and the commit. The hosted
+    text is not in this repository, so nothing else catches the drift.
 - **Eviction only after a durable delivery.**
   - fitdocs acknowledges an item only after the item is written to the
     inbox and the ledger is saved.
@@ -4375,17 +4391,15 @@ to get activity data" (<https://forum.intervals.icu/t/api-access-to-intervals-ic
 ##### Boundary Strategy
 
 - **Why this split**: each spec changes for a different reason.
-  - The policy pages follow platform terms.
+  - The policy pages follow platform terms *(shelved; now hosted text)*.
   - The consent machinery follows OAuth.
   - Held-item custody follows storage and the deploy contract.
   - The interchange format follows the wellness model.
   - The plugin kind follows `plugins.py`.
 
-  The policy pages and the interchange format depend on nothing new, so they
-  start at once.
+  The interchange format depends on nothing new, so it starts at once.
 - **Shared seams to watch**:
   - the extension (wrapper) seam, now carrying:
-    - policy sections (relay-legal-pages);
     - providers (relay-providers);
     - deposits (relay-held-files).
 
@@ -4418,15 +4432,17 @@ to get activity data" (<https://forum.intervals.icu/t/api-access-to-intervals-ic
     example there; nothing from Garmin's developer documentation goes in.
 
   Run `/kiro-spec-requirements plugin-api`. Dependencies: none.
-- [ ] relay-intervals — implemented after the extension's specs, it consumes
-  relay-legal-pages' composition and relay-providers' lift instead of
-  building them. Its intervals.icu policy section ships early, in
-  relay-legal-pages. The spec batch's cross-spec review rewrites its
-  requirements, design and tasks (it is unimplemented).
-- [ ] strava-publish — its policy text moves into the composition
-  unchanged, with the Req 16.1 statements still pinned (relay-legal-pages).
-  Its consent machinery is lifted, with no change in behavior
-  (relay-providers).
+- [ ] relay-intervals: implemented after the extension's specs, it consumes
+  relay-providers' lift instead of building it.
+  - The spec batch's cross-spec review rewrites its requirements, design and
+    tasks (it is unimplemented).
+  - Its intervals.icu policy section goes into the relay's built-in policy
+    beside Strava's. A truth-reviewed draft is in the shelved
+    relay-legal-pages design ("Supporting References"), and the hosted
+    static page carries the same text.
+- [ ] strava-publish: its consent machinery is lifted, with no change in
+  behavior (relay-providers). Its policy text and pages stay as they are,
+  because relay-legal-pages is shelved.
 - [ ] relay-server, carried by relay-held-files:
   - the state rule (Req 7.8, 10.3);
   - the deploy contract and its version;
@@ -4434,8 +4450,7 @@ to get activity data" (<https://forum.intervals.icu/t/api-access-to-intervals-ic
   - the answer limit, or a binary route (Req 4.5);
   - the conformance discipline extended to object stores.
 
-  The extension seam gains policy sections (relay-legal-pages) and
-  providers (relay-providers).
+  The extension seam gains providers (relay-providers).
 - [ ] connectors, carried by relay-held-files:
   - the acknowledge operation after a durable delivery;
   - relay-bound pulling instances (activities and wellness);
@@ -4522,14 +4537,23 @@ carries its own.
 
 ##### Specs (dependency order)
 
-- [ ] relay-legal-pages — one privacy policy and one terms page, at
-  `/privacy` and `/terms`. Dependencies: none.
-  - They are composed from common sections, built-in provider sections
-    (Strava unchanged; intervals.icu's relay route written now), and
-    sections a deployment contributes through the extension seam.
-  - A section can be published before its provider's credentials exist.
-  - The consent pages link both.
-  - Implement first: it unblocks the platform applications.
+- [ ] relay-legal-pages: **SHELVED 2026-11-03 (maintainer). Do not
+  implement.** It would have composed `/privacy` and `/terms` from sections
+  in the relay. Its spec (requirements, design, tasks, research) stays as a
+  record.
+  - Why: the end result is two text pages for the one deployment that needs
+    more than the built-in Strava page. That deployment writes them as static
+    pages (hosted-policy, private). Composing them would have cost about 14
+    tasks, a breaking seam bump and gating on the public build, while
+    checking the text is the same work either way.
+  - Reusable: its design's "Supporting References" holds truth-reviewed text
+    for the common sections, Strava and intervals.icu. The drafts of the
+    terms, rights and breach sections are at 73e210f8. `research.md` holds
+    the retention and logging facts with code references.
+  - Revisit only for a real need, such as several deployments with different
+    configurations, or self-hosters asking for a multi-provider policy.
+  - The optional `FITDOCS_RELAY_TERMS_URL` footer link is queued
+    (`2026-11-03-relay-terms-url-footer-link`).
 - [ ] wellness-interchange — a fitdocs-defined daily wellness file that the
   wellness inbox recognizes. Dependencies: none.
   - The source is declared per file, so attribution follows.
@@ -4537,11 +4561,10 @@ carries its own.
   - Latest entry wins per day and metric.
   - It is documented for any producer.
 - [ ] relay-providers — the target-neutral consent machinery (relay-intervals'
-  planned `fitdocs_relay/targets/` lift, done now). Dependencies:
-  relay-legal-pages.
+  planned `fitdocs_relay/targets/` lift, done now). Dependencies: none
+  (relay-legal-pages was shelved).
   - It adds optional PKCE.
-  - Providers register through the extension seam: consent, policy
-    sections, webhook routes with a secret path and a body limit, token
+  - Providers register through the extension seam: consent, webhook routes with a secret path and a body limit, token
     custody, a fetch-host allow-list, and a call budget.
   - Strava becomes a built-in provider, with no change in behavior.
   - On the fitdocs side, `relay_route` is lifted out of the Strava
@@ -4567,7 +4590,7 @@ carries its own.
     inbox write and the ledger save, and reports expired or failed fetches
     as codes.
 
-The hosted deployment's provider, policy sections and storage are outside
+The hosted deployment's provider, policy pages and storage are outside
 this repository. Run `/kiro-spec-batch` scoped to this extension by name
 (the multi-phase trap is still open,
 `.kiro/queue/2026-09-15-spec-batch-multi-phase-roadmap-unscoped.md`). Run the
