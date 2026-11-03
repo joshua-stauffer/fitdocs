@@ -71,8 +71,8 @@ configured or announced: announcing lets an operator publish the section
 before the platform has issued credentials, and the page says plainly that
 the connection is not offered yet. The common sections state the
 operator, security, breach notice, the athlete's rights and how to use
-them, an AI statement, retention for each provider, contact, and the date
-the latest date any of the page's text was written. Strava's statements move into the composition word
+them, an AI statement, retention for each provider, contact, and the
+latest date any of the page's text was written. Strava's statements move into the composition word
 for word; the intervals.icu relay route's section is written now; the
 hosted deployment adds its own provider and operator sections through the
 extension seam.
