@@ -52,6 +52,10 @@ hosted deployment), legal advice, translation, cookie banners, and
 enforcing anything the policy states. Keep the spec small: it unblocks the
 rest of the Phase 14 extension.
 
+*(Revised 2026-11-03, maintainer: the relay ships no terms text and no
+operator commitments of its own; a deployment contributes them. See Boundary
+Context.)*
+
 Discovery context: `brief.md` in this directory, and the Phase 14 extension
 section of `.kiro/steering/roadmap.md`.
 
@@ -64,15 +68,16 @@ show only a Strava policy, and only once Strava's credentials are
 configured, so no application can cite a policy that covers what the relay
 will do.
 
-This feature gives the relay one privacy policy and one terms page, each
-composed from fixed fitdocs text and from sections a deployment
-contributes. A provider's section appears only while that provider is
+This feature gives the relay one privacy policy, composed from fixed
+fitdocs text and from sections a deployment contributes, and a terms page
+composed only from what a deployment contributes. A provider's section appears only while that provider is
 configured or announced: announcing lets an operator publish the section
 before the platform has issued credentials, and the page says plainly that
 the connection is not offered yet. The common sections state the
-operator, security, breach notice, the athlete's rights and how to use
-them, an AI statement, retention for each provider, contact, and the
-latest date any of the page's text was written. Strava's statements move into the composition word
+operator, security, an AI statement, retention for each provider, contact,
+and the latest date any of the page's text was written. They state facts
+about the relay's code; the operator's own commitments (terms, breach
+notice, how requests are handled) are the deployment's to contribute. Strava's statements move into the composition word
 for word; the intervals.icu relay route's section is written now; the
 hosted deployment adds its own provider and operator sections through the
 extension seam.
@@ -80,19 +85,23 @@ extension seam.
 ## Boundary Context
 
 - **In scope**:
-  - serving `/privacy` and `/terms` whenever at least one provider section
-    applies, whether or not a target is configured;
+  - serving `/privacy` whenever at least one provider section applies,
+    whether or not a target is configured, and `/terms` whenever a
+    deployment also contributes terms;
   - the composition and its fixed order;
   - the common sections, the Strava section (moved) and the intervals.icu
     relay-route section;
   - announcing a provider ahead of its credentials;
-  - contributions of policy sections and terms clauses through the
-    extension seam;
-  - links to both pages from every page the relay serves, and the
-    operator's own addresses overriding them;
-  - the deploy-contract rows, documentation, tests that pin the required
-    statements, and the records this change owes other specs.
+  - contributions of policy sections, terms sections and terms clauses
+    through the extension seam;
+  - links to the policy from every page the relay serves, and to the terms
+    while they exist, with the operator's own addresses overriding them;
+  - the deploy-contract rows, documentation, code tests, and the records
+    this change owes other specs.
 - **Out of scope**:
+  - end-user terms text and the operator's own commitments (breach notice,
+    handling of access, export and deletion requests): a deployment
+    contributes them, and the relay ships none (maintainer, 2026-11-03);
   - any Garmin section text and any operator-specific content (legal
     entity, jurisdiction, sub-processor names): a deployment contributes
     them;
@@ -125,13 +134,13 @@ extension seam.
 **Objective:** As an operator applying for a platform's developer access, I want my relay to serve a privacy policy and a terms page as soon as it has something to describe, so that the application can cite stable addresses before the platform issues credentials.
 
 #### Acceptance Criteria
-1. While at least one provider section applies (Requirement 2), the relay server shall serve the privacy policy at `/privacy` and the terms at `/terms` as fitdocs-written HTML pages outside the envelope, whether or not any target is configured.
+1. While at least one provider section applies (Requirement 2), the relay server shall serve the privacy policy at `/privacy` as a fitdocs-written HTML page outside the envelope, whether or not any target is configured, and shall serve the terms at `/terms` as Requirement 7 states.
 2. While no provider section applies, the relay server shall serve neither page and shall answer both paths as it answers a path it does not offer.
-3. The relay server shall serve both pages with the same response headers as its other fitdocs-written pages (the restrictive content security policy, no referrer, no caching, no content sniffing), shall set no cookie on them and shall load no resource from another address.
+3. The relay server shall serve each of these pages with the same response headers as its other fitdocs-written pages (the restrictive content security policy, no referrer, no caching, no content sniffing), shall set no cookie on them and shall load no resource from another address.
 4. The relay server shall answer a request other than GET to either page as it answers one to its other pages.
-5. The relay server shall serve both pages while its database is unreachable or not ready, since neither page reads stored state.
-6. The relay server shall link both the privacy policy and the terms from every fitdocs-written page it serves, beside the operator's support contact.
-7. Where the operator configures their own privacy policy address, every page shall link that address instead of `/privacy`, and `/privacy` shall still be served; where the operator configures their own terms address, every page shall link that address instead of `/terms`, and `/terms` shall still be served.
+5. The relay server shall serve each of these pages while its database is unreachable or not ready, since neither page reads stored state.
+6. The relay server shall link the privacy policy from every fitdocs-written page it serves, beside the operator's support contact, and shall link the terms from every such page while it serves its terms page or the operator configures their own terms address.
+7. Where the operator configures their own privacy policy address, every page shall link that address instead of `/privacy`, and `/privacy` shall still be served; where the operator configures their own terms address, every page shall link that address, and `/terms` shall still be served where Requirement 7 provides it.
 8. If at least one provider section applies and the operator's name or support contact is not configured, the relay server and its commands shall refuse to start with a configuration error naming the missing variable; where only a wrapper's contribution makes a section apply, the relay server shall refuse to start naming the wrapper and the missing variable.
 
 ### Requirement 2: Which Provider Sections Apply, and Announcing
@@ -174,36 +183,34 @@ extension seam.
 3. The intervals.icu group shall state that connecting intervals.icu directly with the athlete's own API key does not involve the relay.
 
 ### Requirement 6: The Common Sections
-**Objective:** As an athlete, I want the policy to say who runs the relay, how my data is protected, what I can do about it, whether AI touches it and how long it is kept, so that I can decide whether to connect and know how to withdraw.
+**Objective:** As an athlete, I want the policy to say who runs the relay, how my data is protected, whether AI touches it and how long it is kept, so that I can decide whether to connect.
 
 #### Acceptance Criteria
 1. The common opening shall name the operator, state that the relay is a service the operator runs to connect fitdocs to the platforms the page lists on the athlete's behalf, list each applying provider as offered or announced, and state that fitdocs works without the relay.
 2. The common security section shall state that platform tokens are encrypted before they are stored, that relay tokens are kept only as an identifier and a keyed hash, and that the relay's logs carry no token, authorization code, platform response, request body or client network address.
-3. The common breach section shall state that if a breach affects an athlete's data the operator will notify each affected platform, within any time that platform's group states, and shall promise no notice the relay has no means to give.
-4. The common rights section shall state the athlete's rights to access, export and delete what the relay holds about them, and how to exercise each: `fitdocs disconnect` for a connection, revoking access in the platform's own settings, and a request at the operator's support contact for a copy of what the relay holds about them or for deletion of their relay account and everything it holds.
-5. The common AI section shall state that the relay processes none of the data it receives with artificial intelligence or machine learning, uses none of it to train such a system, and sends it nowhere except as the policy describes, and that what each platform does with what the relay sends it is governed by that platform's own policy.
-6. The common retention section shall state, for each applying provider, how long the relay keeps that provider's data, as the provider declares it, and, for the relay as a whole: that relay-token records (identifier, keyed hash, label and times, revoked tokens included) are kept until the relay account is deleted, that a connect session lasts at most ten minutes, that request and call counters hold only counts, kept against a relay token, a relay account or a keyed hash of the client's network address (never the address itself), each of which may be deleted once its window has ended, and that how long log records are kept is the operator's choice.
-7. Every retention statement shall name a trigger on which the relay deletes the data, or say only that the data may be deleted; no statement shall promise a deletion the relay does not perform.
-8. The common contact and changes section shall show the operator's support contact, say that the policy at this address is the one in force, say that the operator may change it, and say that what it shows also follows the relay's configuration.
-9. The common closing shall state the latest date on which any text the page shows was written: the later of the date of the fixed fitdocs text it shows and the latest date any contributed section it shows declares.
+3. The common AI section shall state that the relay processes none of the data it receives with artificial intelligence or machine learning, uses none of it to train such a system, and sends it nowhere except as the policy describes, and that what each platform does with what the relay sends it is governed by that platform's own policy.
+4. The common retention section shall state, for each applying provider, how long the relay keeps that provider's data, as the provider declares it, and, for the relay as a whole: that relay-token records (identifier, keyed hash, label and times, revoked tokens included) are kept until the relay account is deleted, that a connect session lasts at most ten minutes, that request and call counters hold only counts, kept against a relay token, a relay account or a keyed hash of the client's network address (never the address itself), each of which may be deleted once its window has ended, and that how long log records are kept is the operator's choice.
+5. Every retention statement shall name a trigger on which the relay deletes the data, or say only that the data may be deleted; no statement shall promise a deletion the relay does not perform.
+6. The common contact and changes section shall show the operator's support contact, say that the operator may change the policy, and say that what it shows also follows the relay's configuration.
+7. The common closing shall state the latest date on which any text the page shows was written: the later of the date of the fixed fitdocs text it shows and the latest date any contributed section it shows declares.
 
-### Requirement 7: The Terms Page
-**Objective:** As the operator, and on behalf of the platforms the relay connects to, I want end-user terms that carry the common disclaimers and the protections each platform expects, so that the platforms that require terms with each user can be satisfied by one page.
+### Requirement 7: Terms Supplied by the Deployment
+**Objective:** As the operator of a relay that serves other people, I want to publish my own end-user terms at the relay's address, while the relay ships none, so that the terms are mine, complete, and only present where a platform requires them.
 
 #### Acceptance Criteria
-1. The relay server shall compose the terms in this order: a common opening naming the operator, saying what the relay is, and saying that connecting a platform through the relay accepts these terms; the common terms; clauses a provider or a deployment contributes, in the order Requirement 3 criterion 1 gives providers, then a deployment's own clauses; the common closing with the latest date on which any text the terms page shows was written.
-2. The common terms shall state: the athlete's responsibilities (to connect only accounts they control, to follow each platform's own terms, and not to misuse the relay); that the relay is provided as is, without warranty, and may change or stop; a limitation of the operator's liability to the extent the law allows; that each platform the page lists is not a party to these terms, gives no warranty for the relay and bears no liability to the athlete for it, and may rely on and enforce the clauses written for its benefit; how the athlete ends use (disconnecting) and that the operator may revoke relay access; that the terms may change; and the support contact.
-3. The terms shall list the same providers, under the same rule (Requirement 2), as the privacy policy, and shall link the privacy policy.
-4. The fixed terms shall name no legal entity, governing law or jurisdiction; such clauses appear only when a deployment contributes them.
+1. While the relay serves its privacy policy and a deployment contributes terms (its own terms sections, or terms clauses for a provider it contributes), the relay server shall serve `/terms`, composed in this order: one group per applying provider that has terms clauses, in the order Requirement 3 criterion 1 gives providers; then each deployment's own terms sections, in wrapper installation order; then a closing with the latest date on which any text the page shows was written.
+2. While no deployment contributes terms, the relay server shall serve no terms page and shall answer `/terms` as it answers a path it does not offer.
+3. The relay package shall ship no terms text and no operator commitment of its own: no end-user terms, no breach-notice promise, no process for access, export or deletion requests, and no legal entity, governing law or jurisdiction shall appear on either page unless a deployment contributes it.
+4. The terms page shall show the operator's support contact and link the privacy policy.
 
 ### Requirement 8: Deployment Contributions Through the Extension Seam
 **Objective:** As someone running a hosted relay, I want my wrapper to add provider sections, operator sections and terms clauses to the relay's own pages, so that one policy and one terms page cover everything my deployment does without forking the relay's pages.
 
 #### Acceptance Criteria
-1. The extension seam shall let a wrapper contribute: provider groups for the privacy policy, each with the platform's name, its sections, its retention statement and whether it is announced; operator sections for the privacy policy (such as the operator's legal entity, jurisdiction or sub-processors); and clauses for the terms. Each contribution shall carry headings, plain-text content and the date its text last changed.
+1. The extension seam shall let a wrapper contribute: provider groups for the privacy policy, each with the platform's name, its sections, its retention statement and whether it is announced; operator sections for the privacy policy (such as the operator's commitments on breach notice and on access, export and deletion requests, its legal entity, jurisdiction or sub-processors); and terms: its own terms sections and, for a provider it contributes, that provider's terms clauses. Each contribution shall carry headings, plain-text content and the date its text last changed.
 2. If a wrapper's contribution is malformed (an empty or overlong heading or text, a heading repeated within one part, a platform name equal to a built-in provider's or to another contribution's, a provider group without a retention statement, or a missing or invalid date), the relay server shall refuse to start, naming the wrapper and the reason, as it refuses other wrapper errors.
 3. The relay server shall read contributions once at start-up, so that they cannot change between requests.
-4. A wrapper that contributes nothing shall leave both pages exactly as they would be without it.
+4. A wrapper that contributes nothing shall leave the pages exactly as they would be without it.
 5. The seam shall advance its version by one, recorded with a literal history in the relay changelog, which shall call the change out as breaking for every wrapper; a wrapper declaring any other version shall still be refused at start-up.
 6. Built-in providers shall supply their sections in the same shape that wrappers contribute, so that a provider registered later supplies its sections without a second composition.
 
@@ -212,9 +219,9 @@ extension seam.
 
 #### Acceptance Criteria
 1. The deploy contract's variable table shall gain the announce setting and an optional operator terms address (an `https` address, like the policy address), each with whether it is required, its default, whether it is secret and its meaning; the operator name and support contact rows shall say they are also required while any provider section applies; the operator name, support contact, privacy policy address and terms address shall be accepted whether or not a target is configured; `/terms` shall join the relay's reserved paths; and, since every change is additive, the deploy-contract version shall not move.
-2. The relay documentation's privacy section shall describe the composition and its order, announcing and the announced statement, the terms page, the addresses to give a platform's application (`<public address>/privacy` and `<public address>/terms`), what a deployment must contribute (its operator sections, a group for each provider it adds, and its own clauses), and that the text is not legal advice.
-3. The relay documentation shall state the operator's obligations this feature adds: to answer access, export and deletion requests at the support contact, to notify each affected platform of a breach as the policy states, and to keep every statement true, publishing their own policy instead where their own additions would make a fixed statement (such as the AI statement) untrue.
+2. The relay documentation's privacy section shall describe the composition and its order, announcing and the announced statement, the terms page and that the relay ships no terms of its own, the addresses to give a platform's application (`<public address>/privacy`, and `<public address>/terms` where the deployment contributes terms), what a deployment must contribute (its operator sections, including any breach-notice and request-handling commitments its platforms require, a group for each provider it adds, and its terms), and that the text is not legal advice.
+3. The relay documentation shall state the operator's obligations this feature adds: to keep every fixed statement true, publishing their own policy instead where their own additions would make one (such as the AI statement) untrue, and to contribute the terms and the operator commitments (breach notice, handling of access, export and deletion requests) that the platforms they connect to require.
 4. The relay documentation's seam section shall document the contribution surface and the new seam version. No test this feature adds shall read the documentation, the changelog or a spec, and where an existing test reads a part of one of them that this feature changes, the test shall be removed rather than updated, and the amendments shall name each removed test.
 5. The connectors documentation shall name the default relay's terms address beside its privacy policy address.
 6. The pages and documentation shall use Strava's name only to name the service, describe the feature only as compatible with Strava, name no AI product or agent, and carry no Garmin section text, nothing from Garmin's developer documentation and no statement about any application or agreement with Garmin.
-7. When this feature lands, the relay-server, strava-publish and relay-intervals specs shall each record an amendment at its next free number stating what moved: the seam's contributions and version, the new rows and reserved path, and pages served without a target (relay-server); the policy text moved into the composition, the terms link on every page, and the policy page served while the database is unreachable (strava-publish); and the composition and the intervals.icu section delivered here (relay-intervals).
+7. When this feature lands, the relay-server, strava-publish and relay-intervals specs shall each record an amendment at its next free number stating what moved: the seam's contributions and version, the new rows and reserved path, and pages served without a target (relay-server); the policy text moved into the composition, the terms link on every page while terms exist, and the policy page served while the database is unreachable (strava-publish); and the composition and the intervals.icu section delivered here (relay-intervals).

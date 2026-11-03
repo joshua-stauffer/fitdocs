@@ -20,7 +20,7 @@ contribution and advances to version 2, and the deploy contract gains two
 optional rows without a version change.
 
 ### Goals
-- Serve both pages from start-up-composed bytes, with no database on the
+- Serve the pages from start-up-composed bytes, with no database on the
   request path.
 - Keep every Strava policy sentence word for word, under the existing tests.
 - Ship the common sections and the intervals.icu relay-route section, and let
@@ -42,10 +42,11 @@ optional rows without a version change.
 
 ### This Spec Owns
 - The neutral page shell `fitdocs_relay/pages.py`: `Page`, `Operator`
-  (with the new `terms_url`), `PAGE_HEADERS`, the document wrapper and the
-  footer that links the policy, the terms and the support contact.
+  (with the new `terms_url` and `serves_terms`), `PAGE_HEADERS`, the
+  document wrapper and the footer that links the policy, the terms (only
+  while they exist) and the support contact.
 - The `fitdocs_relay/legal/` package: the content model and its validation,
-  the fixed common text of both pages, the intervals.icu relay-route group,
+  the fixed common text of the policy, the intervals.icu relay-route group,
   composition and rendering, the operator configuration loader, and the
   `/privacy` and `/terms` routes.
 - The Strava group builder, retention statement and text date in
@@ -61,7 +62,12 @@ optional rows without a version change.
 
 ### Out of Boundary
 - Strava's connect flow, consent text, webhook, `/go/`, `robots.txt` and
-  every other Strava page's content (only their footer gains the terms link).
+  every other Strava page's content (only their footer gains the terms link,
+  while terms exist).
+- End-user terms text and the operator's own commitments (breach notice,
+  handling of access, export and deletion requests, legal entity,
+  jurisdiction): a deployment contributes them; this package ships none
+  (maintainer, 2026-11-03).
 - Provider registration, `ConsentProvider`, `TokenVault` and the `targets/`
   package (relay-providers consumes `ProviderPages` from here).
 - The intervals.icu target itself; this spec ships only its policy group.
@@ -126,7 +132,7 @@ graph TB
     Validate --> Assemble
     Assemble --> Compose[Compose and render]
     LegalText[Fixed common text] --> Compose
-    Compose --> LegalPages[Two rendered pages]
+    Compose --> LegalPages[Rendered policy and optional terms]
     LegalPages --> LegalRoutes[privacy and terms routes]
     Shell[Neutral page shell] --> Compose
     Shell --> StravaPages[Strava pages]
@@ -164,7 +170,7 @@ graph TB
 ```
 relay/src/fitdocs_relay/
 ├── pages.py                 # NEW: neutral page shell moved from strava/pages.py:
-│                            #   Page, Operator(+terms_url), PAGE_HEADERS, escape, document(), footer,
+│                            #   Page, Operator(+terms_url, serves_terms), PAGE_HEADERS, escape, document(), footer,
 │                            #   BUILT_IN_POLICY_PATH "/privacy", BUILT_IN_TERMS_PATH "/terms",
 │                            #   policy_address(), terms_address()
 └── legal/
@@ -172,7 +178,7 @@ relay/src/fitdocs_relay/
     ├── content.py           # NEW: Paragraph, Bullets, OperatorLine, ContactLine, Block, Section,
     │                        #   ProviderPages, OperatorPages, LegalContribution, limits,
     │                        #   contribution_problem()
-    ├── text.py              # NEW: fixed common text of both pages, headings, announced statement,
+    ├── text.py              # NEW: fixed common text of the policy, headings, announced statement,
     │                        #   provider list wording, relay-wide retention, closing format, dates
     ├── intervals.py         # NEW: INTERVALS_KEY, INTERVALS_NAME, intervals_pages(announced)
     ├── pages.py             # NEW: LegalDocument, compose_policy(), compose_terms(), render(),
@@ -200,7 +206,7 @@ relay/tests/strava/
   `fitdocs_relay.pages` and re-exports `Page`, `Operator`, `PAGE_HEADERS`,
   `BUILT_IN_POLICY_PATH` and `policy_address` explicitly; drops
   `privacy_page`; every page's footer comes from the shell (adds the terms
-  link).
+  link while terms exist).
 - `relay/src/fitdocs_relay/strava/policy.py` — adds `STRAVA_KEY`,
   `STRAVA_NAME`, `STRAVA_RETENTION`, `STRAVA_TEXT_CHANGED` and
   `strava_pages(links, *, announced) -> ProviderPages`; `POLICY_HEADINGS`,
@@ -276,7 +282,7 @@ sequenceDiagram
     App->>App: validate each contribution or SeamError
     App->>App: built-in groups that apply plus contributions
     App->>App: operator values present or SeamError
-    App->>L: compose and render both pages once
+    App->>L: compose and render the policy and any terms once
     L-->>App: LegalPages or none
     App->>R: core routes plus privacy and terms when pages exist
 ```
@@ -290,12 +296,12 @@ nothing applies, `LegalPages` is `None` and neither path has a route.
 
 | Requirement | Summary | Components | Interfaces | Flows |
 |-------------|---------|------------|------------|-------|
-| 1.1 | Serve both pages while a section applies | LegalRoutes, AppAssembly | `legal_routes`, `build_legal_pages` | Start-up |
+| 1.1 | Serve the policy while a section applies | LegalRoutes, AppAssembly | `legal_routes`, `build_legal_pages` | Start-up |
 | 1.2 | Neither page when nothing applies | AppAssembly, LegalRoutes | `LegalPages | None` | Start-up |
 | 1.3 | Same headers, no cookie, no outside resource | PageShell, LegalRoutes | `PAGE_HEADERS`, `document` | — |
 | 1.4 | Non-GET answered as other pages | LegalRoutes | `Route(..., methods=["GET"])` | — |
 | 1.5 | Served while the store is unreachable | LegalRoutes | fixed bytes, no store call | — |
-| 1.6 | Every page links policy and terms | PageShell | `footer` | — |
+| 1.6 | Every page links the policy, and the terms while they exist | PageShell | `footer`, `Operator.serves_terms` | — |
 | 1.7 | Operator's own addresses override | PageShell, LegalConfig | `policy_address`, `terms_address` | — |
 | 1.8 | Missing operator values refused | LegalConfig, AppAssembly | `load_legal_config`, `SeamError` | Start-up |
 | 2.1 | Built-in section only while configured or announced | AppAssembly | `_legal_pages` | Start-up |
@@ -318,18 +324,16 @@ nothing applies, `LegalPages` is `None` and neither path has a route.
 | 5.2 | Agrees with relay-intervals; relay route only | IntervalsGroup | text (Supporting References) | — |
 | 5.3 | Direct route does not involve the relay | IntervalsGroup | "Your choices" text | — |
 | 6.1 | Common opening | LegalText, Composer | `POLICY_OPENING_BEFORE`, `POLICY_OPENING_AFTER`, `compose_policy` | — |
-| 6.2 | Security | LegalText | `POLICY_SECURITY` | — |
-| 6.3 | Breach | LegalText | `POLICY_BREACH` | — |
-| 6.4 | Rights and how to use them | LegalText | `POLICY_RIGHTS` | — |
-| 6.5 | AI statement | LegalText | `POLICY_AI` | — |
-| 6.6 | Retention per provider and relay-wide | LegalText, Composer | `RELAY_RETENTION`, `ProviderPages.retention` | — |
-| 6.7 | Retention names a real trigger | LegalText, StravaGroup, IntervalsGroup | text review against storage | — |
-| 6.8 | Contact and changes | LegalText | `POLICY_CONTACT`, `POLICY_CHANGES` | — |
-| 6.9 | Closing date is the latest shown date | Composer | `LegalDocument.changed` | — |
-| 7.1 | Terms order | Composer | `compose_terms` | — |
-| 7.2 | Common terms content | LegalText | `TERMS_COMMON` | — |
-| 7.3 | Same providers; links the policy | Composer, PageShell | `compose_terms`, `footer` | — |
-| 7.4 | No legal entity, law or jurisdiction in fixed text | LegalText | text | — |
+| 6.2 | Security | LegalText | `POLICY_COMMON` Security | — |
+| 6.3 | AI statement | LegalText | `POLICY_COMMON` Artificial intelligence | — |
+| 6.4 | Retention per provider and relay-wide | LegalText, Composer | `RELAY_RETENTION`, `ProviderPages.retention` | — |
+| 6.5 | Retention names a real trigger | LegalText, StravaGroup, IntervalsGroup | text review against storage | — |
+| 6.6 | Contact and changes | LegalText | `POLICY_CLOSING_SECTIONS` | — |
+| 6.7 | Closing date is the latest shown date | Composer | `LegalDocument.changed` | — |
+| 7.1 | Terms only from contributions, in order | Composer, AppAssembly | `compose_terms` | Start-up |
+| 7.2 | No terms page without contributed terms | Composer, LegalRoutes | `LegalPages.terms is None` | — |
+| 7.3 | No terms text or operator commitment shipped | LegalText | text review | — |
+| 7.4 | Terms page shows contact and links the policy | PageShell | `footer` | — |
 | 8.1 | Contribution kinds | LegalContent, Seam | `LegalContribution` | — |
 | 8.2 | Malformed contribution refused | LegalContent, AppAssembly | `contribution_problem`, `SeamError` | Start-up |
 | 8.3 | Read once at start-up | AppAssembly | composed in `create_app` | Start-up |
@@ -348,12 +352,12 @@ nothing applies, `LegalPages` is `None` and neither path has a route.
 
 | Component | Domain | Intent | Requirements | Key Dependencies | Contracts |
 |-----------|--------|--------|--------------|------------------|-----------|
-| PageShell | relay pages | Document wrapper, headers, footer, operator values | 1.3, 1.6, 1.7, 3.4 | stdlib (P0) | Service |
+| PageShell | relay pages | Document wrapper, headers, footer, operator values | 1.3, 1.6, 1.7, 3.4, 7.4 | stdlib (P0) | Service |
 | LegalContent | legal | Content model and contribution validation | 2.8, 8.1, 8.2, 8.6 | stdlib (P0) | Service |
-| LegalText | legal | Fixed common text and dates | 2.4, 6.1-6.8, 7.2, 7.4, 9.6 | LegalContent (P0) | State |
+| LegalText | legal | Fixed common text of the policy and its date | 2.4, 6.1-6.6, 7.3, 9.6 | LegalContent (P0) | State |
 | IntervalsGroup | legal | intervals.icu relay-route group | 2.6, 5.1-5.3, 6.7, 8.6 | LegalContent (P0) | Service |
 | StravaGroup | strava | Strava's nine sections as a group | 2.5, 4.1, 4.2, 6.7, 8.6 | LegalContent (P0) | Service |
-| Composer | legal | Order, applicability lists, dates, rendering | 2.4, 3.1-3.4, 6.9, 7.1, 7.3, 8.4 | LegalText, PageShell (P0) | Service |
+| Composer | legal | Order, applicability lists, dates, rendering | 2.4, 3.1-3.4, 6.7, 7.1, 7.2, 8.4 | LegalText, PageShell (P0) | Service |
 | LegalConfig | legal | Operator variables and the announce row | 1.7, 1.8, 2.2, 2.3, 9.1 | config, contract (P0) | Service |
 | LegalRoutes | legal | Serve the two pages | 1.1-1.5 | Starlette, Composer (P0) | API |
 | AppAssembly | relay app | Decide what applies; validate; compose once | 1.1, 1.2, 1.8, 2.1, 2.6-2.8, 3.2, 8.2, 8.3 | all above, seam (P0) | Service |
@@ -371,8 +375,9 @@ nothing applies, `LegalPages` is `None` and neither path has a route.
 
 **Responsibilities & Constraints**
 - Moved unchanged from `strava/pages.py` except: `Operator` gains
-  `terms_url: str | None = None`; the footer renders the policy link, then a
-  terms link, then the support contact.
+  `terms_url: str | None = None` and `serves_terms: bool = False`; the
+  footer renders the policy link, then the terms link when there is a terms
+  address, then the support contact.
 - Escapes every interpolated value with `html.escape(value, quote=True)`.
 
 **Contracts**: Service [x]
@@ -393,14 +398,18 @@ class Operator:
     support_contact: str
     policy_url: str | None
     terms_url: str | None = None
+    serves_terms: bool = False       # the relay serves its own /terms
 
 def escape(value: str) -> str: ...
 def policy_address(operator: Operator) -> str: ...   # policy_url or "/privacy"
-def terms_address(operator: Operator) -> str: ...    # terms_url or "/terms"
+def terms_address(operator: Operator) -> str | None: ...  # terms_url, else "/terms" when serves_terms, else None
 def document(title: str, body: str, operator: Operator, status: int) -> Page: ...
 ```
-- Footer markup: `<footer><p><a href="{policy}">Privacy policy</a></p><p><a
-  href="{terms}">Terms of use</a></p><p>Support: {contact}</p></footer>`.
+- Footer markup: `<footer><p><a href="{policy}">Privacy policy</a></p>`,
+  then `<p><a href="{terms}">Terms of use</a></p>` only when
+  `terms_address` is not `None`, then `<p>Support: {contact}</p></footer>`.
+  With the defaults (no terms address, `serves_terms` false) every Strava
+  page's footer is today's.
 - Implementation Notes: `strava/pages.py` keeps its own page functions and
   re-exports the moved names with explicit `X as X` imports, so its tests
   import unchanged; `privacy_page` leaves it.
@@ -476,7 +485,7 @@ def contribution_problem(
     *,
     taken_keys: frozenset[str],
     taken_names: frozenset[str],        # casefolded service names already used
-    reserved_headings: frozenset[str],  # common headings of both pages, casefolded
+    reserved_headings: frozenset[str],  # the policy's common headings, casefolded
 ) -> str | None: ...                    # None when valid, else the reason
 ```
 - Preconditions checked by `contribution_problem`, each with its own reason
@@ -496,22 +505,22 @@ def contribution_problem(
 
 | Field | Detail |
 |-------|--------|
-| Intent | The fixed fitdocs text of both pages, as data |
-| Requirements | 2.4, 6.1-6.8, 7.2, 7.4, 9.6 |
+| Intent | The fixed fitdocs text of the policy, as data |
+| Requirements | 2.4, 6.1-6.6, 7.3, 9.6 |
 
 **Contracts**: State [x]
 - Constants (text in Supporting References): `POLICY_TITLE`,
   `TERMS_TITLE`, `POLICY_OPENING_HEADING`, `POLICY_OPENING_BEFORE` and
   `POLICY_OPENING_AFTER` (blocks around the provider list),
-  `POLICY_COMMON: tuple[Section, ...]` (Security, If there is a breach, Your
-  rights, Artificial intelligence), `RETENTION_HEADING`, `RETENTION_LEAD`,
-  `RELAY_RETENTION_HEADING`, `RELAY_RETENTION: Bullets`,
-  `POLICY_CLOSING_SECTIONS` (Contact, Changes to this policy),
-  `TERMS_OPENING_HEADING`, `TERMS_OPENING_BEFORE`, `TERMS_OPENING_AFTER`,
-  `TERMS_COMMON: tuple[Section, ...]`, `ANNOUNCED_LEAD_FORMAT`,
-  `OFFERED_ENTRY_FORMAT`, `ANNOUNCED_ENTRY_FORMAT`, `CLOSING_FORMAT`,
-  `POLICY_COMMON_CHANGED: date`, `TERMS_COMMON_CHANGED: date`,
-  `POLICY_COMMON_HEADINGS`, `TERMS_COMMON_HEADINGS`.
+  `POLICY_COMMON: tuple[Section, ...]` (Security, Artificial intelligence),
+  `RETENTION_HEADING`, `RETENTION_LEAD`, `RELAY_RETENTION_HEADING`,
+  `RELAY_RETENTION: Bullets`, `POLICY_CLOSING_SECTIONS` (Contact, Changes to
+  this policy), `ANNOUNCED_LEAD_FORMAT`, `OFFERED_ENTRY_FORMAT`,
+  `ANNOUNCED_ENTRY_FORMAT`, `CLOSING_FORMAT`, `POLICY_COMMON_CHANGED: date`,
+  `POLICY_COMMON_HEADINGS`.
+- No terms text, breach-notice promise or request-handling process is
+  defined here (7.3); the only fixed text of the terms page is its title and
+  the closing format.
 - The `*_CHANGED` dates are set by the implementing task to the date the
   text lands, and move with every later text change (kept by review; no
   test pins the wording).
@@ -567,14 +576,15 @@ class LegalDocument:
 @dataclass(frozen=True)
 class LegalPages:
     policy: Page
-    terms: Page
+    terms: Page | None              # None while no deployment contributes terms
+    operator: Operator              # the footer's operator, serves_terms set
 
 def compose_policy(
     providers: tuple[ProviderPages, ...], operators: tuple[OperatorPages, ...]
 ) -> LegalDocument: ...
 def compose_terms(
     providers: tuple[ProviderPages, ...], operators: tuple[OperatorPages, ...]
-) -> LegalDocument: ...
+) -> LegalDocument | None: ...     # None when nothing contributes terms
 def render(document: LegalDocument, operator: Operator) -> Page: ...
 def build_legal_pages(
     providers: tuple[ProviderPages, ...],
@@ -593,10 +603,14 @@ def build_legal_pages(
   `Section`); `POLICY_CLOSING_SECTIONS`; each operator's `policy` sections.
   `changed` is the maximum of `POLICY_COMMON_CHANGED`, each provider's
   `policy_changed` and each operator's `policy_changed`.
-- `compose_terms` parts: opening `Section`; `TERMS_COMMON`; one `Group` per
-  provider with non-empty `terms` (no lead); each operator's `terms`
-  sections. `changed` is the maximum of `TERMS_COMMON_CHANGED` and the
-  shown `terms_changed` values.
+- `compose_terms` parts: one `Group` per provider with non-empty `terms`
+  (no lead), in provider order; each operator's `terms` sections, in wrapper
+  order. It returns `None` when there are no such parts. `changed` is the
+  maximum of the shown `terms_changed` values.
+- `build_legal_pages` composes both documents first, sets
+  `serves_terms = terms is not None` on the operator, then renders the
+  policy and, when present, the terms with that operator, so every footer
+  agrees on whether terms exist.
 - `render`: `<h1>` title; a top-level `Section` as
   `<section><h2>…</h2>{blocks}</section>`; a `Group` as
   `<section><h2>…</h2>{lead}{<section><h3>…</h3>{blocks}</section>…}</section>`;
@@ -652,7 +666,7 @@ def operator_from(legal: LegalConfig | None) -> Operator | None: ...   # None un
 ```python
 PRIVACY_PATH: Final = BUILT_IN_POLICY_PATH
 TERMS_PATH: Final = BUILT_IN_TERMS_PATH
-def legal_routes(pages: LegalPages) -> list[BaseRoute]: ...
+def legal_routes(pages: LegalPages) -> list[BaseRoute]: ...   # /terms only when pages.terms is not None
 ```
 - Each handler returns the pre-rendered page; it reads no store, checks no
   readiness and counts no client request (1.5). Routes are built as
@@ -714,8 +728,11 @@ def _legal_pages(
   contributed), it raises `SeamError` naming the first contributing wrapper
   and the missing variable; else it returns `build_legal_pages(...)`.
 - `create_app` order: services, wrappers, `services.legal =
-  _legal_pages(...)`, then routes. `StravaServices.operator` is
-  `services.operator`.
+  _legal_pages(...)`, then `services.operator` becomes
+  `services.legal.operator` (when pages exist) and the Strava services are
+  replaced with that operator (`dataclasses.replace`), then routes. Strava's
+  pages therefore link the terms exactly when the relay serves them or the
+  operator configures a terms address.
 
 ## Data Models
 
@@ -790,17 +807,21 @@ dies on (change-protocol § Fixture Discrimination). Mutations run through
 - `legal/test_legal_routes.py`: through `create_app` with a scripted store —
   Strava unconfigured and nothing announced answers both paths as
   `not-offered` and lists no target; `ANNOUNCED_PROVIDERS=intervals` serves
-  both pages, lists no target and adds no intervals.icu route; with the store
-  raising `StorageUnreachable` and readiness false, both pages still answer
+  `/privacy`, answers `/terms` as `not-offered` (no wrapper contributes
+  terms), lists no target and adds no intervals.icu route; a test wrapper
+  contributing terms makes `/terms` answer 200; with the store raising
+  `StorageUnreachable` and readiness false, the served pages still answer
   200 (mutation: gating on `services.ready`); HEAD answers 405 `Allow: GET`;
   headers equal `PAGE_HEADERS` and no `Set-Cookie`.
-- Every-page links: each Strava page and both legal pages link `/privacy`
-  and `/terms` exactly once, and the operator's own addresses replace them
-  (mutation: dropping the terms anchor from the footer).
+- Every-page links: each Strava page and each served legal page links
+  `/privacy` exactly once; it links `/terms` exactly once when a wrapper
+  contributes terms and not at all otherwise; and the operator's own
+  addresses replace them (mutations: dropping the terms anchor from the
+  footer; linking `/terms` regardless of `serves_terms`).
 - `legal/test_legal_config.py`: the operator variables accepted without a target;
   each `ConfigError` above with its message; `test_contract.py` pins the two
   new rows and the widened `required_with`.
-- Seam: version 1 refused; a wrapper contributing nothing leaves both pages
+- Seam: version 1 refused; a wrapper contributing nothing leaves the pages
   byte-identical to the no-wrapper pages (8.4); a wrapper-only provider with
   no operator variables refused naming the wrapper and
   `FITDOCS_RELAY_OPERATOR_NAME`.
@@ -854,15 +875,6 @@ group).
 
 **## Security**: "Tokens that a platform grants the relay are encrypted before they are stored. Your relay token is kept only as its identifier and a keyed hash, never as the token itself. The relay's logs carry no token, authorization code, platform response, request body or client network address."
 
-**## If there is a breach**: "If a breach of the relay's security affects your data, the operator will notify each platform whose data it affects, within any time that platform's section above states."
-
-**## Your rights**
-- P: "You have the right to see, export and delete what this relay holds about you, and to withdraw your consent at any time."
-- Bullets:
-  - "To withdraw your consent for a platform and have the relay delete what it keeps for it at once, run fitdocs disconnect for that connection. Revoking the relay's access in a platform's own settings also withdraws your consent; that platform's section above says when the relay then deletes what it keeps."
-  - "To get a copy of what the relay holds about you, or to have your relay account and everything the relay holds for it deleted, ask the operator at the support contact shown on this page."
-  - "Withdrawing your consent stops the relay acting for you. It does not undo what the relay already did, such as a post it made."
-
 **## Artificial intelligence**: "The relay does not process the data it receives with artificial intelligence or machine learning, does not use that data to train such a system, and sends it nowhere except as this policy describes. What each platform does with what the relay sends it is governed by that platform's own policy."
 
 **## How long the relay keeps data**
@@ -878,36 +890,20 @@ group).
 
 **## Contact**: "Questions about this policy or your data go to the operator's support contact shown on this page." + ContactLine
 
-**## Changes to this policy**: "The operator may change this policy, and what it shows also follows how the operator has configured the relay. The version at this address is the one in force. The date at the end of this page is the latest date on which any of its text was written."
+**## Changes to this policy**: "The operator may change this policy, and what it shows also follows how the operator has configured the relay. The date at the end of this page is the latest date on which any of its text was written."
 
 Operator policy sections (contributed), then the closing paragraph "Text dated {date}." (`CLOSING_FORMAT`)
 
 ### Terms of use (title "Terms of use")
 
-**## About these terms**
-- P: "These terms apply when you connect a platform to your fitdocs through this relay. The relay is a service that connects your fitdocs to the platforms listed below, on your behalf. It is operated by the person or organization named below."
-- OperatorLine
-- Bullets: the same provider list as the policy.
-- P: "By connecting a platform through this relay, you accept these terms. The relay's privacy policy, linked at the foot of this page, says what the relay does with your data."
-
-**## Your responsibilities** — Bullets:
-- "Connect only accounts that are your own."
-- "Follow each platform's own terms when you use it through this relay."
-- "Do not misuse the relay: do not try to reach anyone else's data or connections, to get around its limits, or to disrupt it."
-
-**## No warranty**: "The relay is provided as is and as available, without any warranty, to the extent the law allows. The operator may change, suspend or stop the relay at any time."
-
-**## Limitation of liability**: "To the extent the law allows, the operator is not liable for any loss or damage that arises from your use of the relay, including lost data, posts that are not made or are made wrongly, and any interruption of the service."
-
-**## The platforms**: "Each platform listed above is a separate service that you use under its own terms. The platforms are not parties to these terms, make no warranty about the relay, and are not liable to you for the relay or for anything it does. Each platform may rely on and enforce the terms written for its benefit, including this section."
-
-**## Ending**: "You can stop using the relay at any time: disconnect each platform with fitdocs disconnect, or revoke the relay's access in the platform's settings. The operator may revoke your access to the relay at any time. The privacy policy says what then happens to your data."
-
-**## Changes to these terms**: "The operator may change these terms, and what they show also follows how the operator has configured the relay. The version at this address is the one in force. The date at the end of this page is the latest date on which any of its text was written."
-
-**## Contact**: "Questions about these terms go to the operator's support contact shown on this page." + ContactLine
-
-Provider terms groups (contributed), operator terms sections (contributed), then "Text dated {date}."
+No fixed text besides the title and the closing. The page holds, in order:
+one `##` group per applying provider with contributed terms clauses (its
+`###` sections); the deployment's own terms sections as `##` parts; then
+"Text dated {date}." The footer links the privacy policy and shows the
+support contact. A deployment that serves others writes its own terms
+(responsibilities, disclaimers, limitation of liability, protections for
+the platforms' benefit, governing law), and its own breach-notice and
+request-handling commitments as operator policy sections.
 
 ### Contract rows
 
@@ -924,11 +920,13 @@ after `FITDOCS_RELAY_PRIVACY_POLICY_URL`. `DEPLOY_CONTRACT_VERSION` stays 1.
 
 ### Documentation outline (`docs/relay.md`)
 - New `## Privacy policy and terms`, before `## The Strava target`: when the
-  pages are served; the addresses to give a platform application; the order
-  of both pages and the common headings; announcing and the announced
-  statement; the operator's own addresses; what a wrapper contributes
-  (provider groups, operator sections such as legal entity, jurisdiction and
-  sub-processors, terms clauses, dates) and what it must keep true; the
+  pages are served (the terms only when a deployment contributes them); the
+  addresses to give a platform application; the policy's order and common
+  headings; announcing and the announced statement; the operator's own
+  addresses; that the relay ships no terms and no operator commitments; what
+  a wrapper contributes (provider groups, operator sections such as breach
+  notice, request handling, legal entity, jurisdiction and sub-processors,
+  terms sections and clauses, dates) and what it must keep true; the
   operator obligations of 9.3; and that the text is not legal advice.
 - `### Privacy policy and consent` under the Strava target keeps its section
   list and points to the new section for the composition; the Strava routes

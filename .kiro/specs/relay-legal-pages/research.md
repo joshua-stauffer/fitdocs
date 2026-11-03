@@ -196,6 +196,34 @@
   and the code, is no longer caught by CI. The final sweep's read of both
   pages is the check.
 
+### Decision: Slim public version (maintainer, 2026-11-03)
+- **Context**: Josh: "it seems strange to ship these incomplete terms with
+  fitdocs oss. im' considering moving them all into the private fitdocs_api
+  package."
+- **Alternatives Considered**:
+  1. Keep everything (the first design).
+  2. Slim public version: keep the composition, the seam hook, the provider
+     data-handling sections and the factual common sections; ship no terms
+     text and no operator commitments.
+  3. Minimal public version: move all new text private and add only a terms
+     address setting.
+- **Selected Approach**: 2.
+  - The relay serves `/terms` only when a deployment contributes terms.
+  - Footers link the terms only while they exist or an operator address is
+    set.
+  - The breach-notice, rights-request and "in force" sentences leave the
+    fixed text.
+  - Requirement 6 drops its breach and rights criteria, and Requirement 7
+    becomes "Terms Supplied by the Deployment" (51 criteria).
+- **Rationale**: Statements about what the relay stores, sends and deletes
+  stay next to the code they describe. That co-location is now the only
+  coupling, since no test reads text. Terms and operator promises are
+  contracts of a specific operator: incomplete by nature in a package, not
+  required by Strava or intervals.icu, and a risk when deployed unreviewed.
+- **Trade-offs**: A self-hoster who serves others must write their own terms.
+  Option 3 was rejected because the hosted copy of public facts would drift,
+  and because a wrapper cannot serve the root `/privacy` today.
+
 ### Decision: The access/export operator command stays out
 - **Context**: Requirement 6.4 says requests go to the support contact.
 - **Selected Approach**: No new operator command; the docs state the

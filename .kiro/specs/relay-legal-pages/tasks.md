@@ -55,14 +55,14 @@ Ground rules:
   names them and the requirement that changes them; each is recorded in the
   matching amendment (task 4.2).
 
-- [ ] 1. Move the page shell out of the Strava package and link the terms from every page
-  - Move the page value, the operator value, the page headers, escaping, the document wrapper, the footer and the built-in policy path into a target-neutral relay module, adding the built-in terms path, the operator's optional terms address and the terms address rule (the operator's own address, else the built-in one).
-  - The footer links the privacy policy, then the terms ("Terms of use"), then shows the support contact.
+- [ ] 1. Move the page shell out of the Strava package and link the terms when they exist
+  - Move the page value, the operator value, the page headers, escaping, the document wrapper, the footer and the built-in policy path into a target-neutral relay module, adding the built-in terms path, the operator's optional terms address, whether the relay serves its own terms, and the terms address rule (the operator's own address, else the built-in path while the relay serves terms, else none).
+  - The footer links the privacy policy, then the terms ("Terms of use") when there is a terms address, then shows the support contact.
   - The Strava pages module imports the shell and re-exports the moved names explicitly, so every Strava test keeps its imports; its own page functions, the privacy page included, are unchanged apart from the footer.
   - Create the `legal` package with its docstring only, so group 2's parallel tasks each add their own module to it.
   - Add the boundary entries: the shell module is a standard-library leaf; the Strava pages module may also import it; the leaf count moves to match.
-  - Done when every Strava page links `/privacy` and `/terms` exactly once each beside the support contact, an operator terms address replaces `/terms` on every page while `/privacy` is untouched, and the Strava page and route tests pass with only the footer expectations they assert changed (1.6). The terms-link test dies on removing the terms anchor from the footer; the override test dies on the terms address rule returning the built-in path unconditionally.
-  - _Requirements: 1.3, 1.6, 1.7, 4.3, 4.4_
+  - Done when, with the default operator, every Strava page's footer is unchanged (one `/privacy` link, no terms link) and the Strava page and route tests pass unchanged; an operator that serves terms gets one `/terms` link on every page; and an operator terms address replaces it while `/privacy` is untouched. The terms-link test dies on removing the terms anchor from the footer; the default test dies on linking `/terms` regardless of whether the relay serves terms; the override test dies on ignoring the operator's terms address.
+  - _Requirements: 1.3, 1.6, 1.7, 4.3, 4.4, 7.4_
 
 - [ ] 2. Core: content, configuration, fixed text and composition
 
@@ -84,12 +84,12 @@ Ground rules:
   - _Requirements: 1.7, 1.8, 2.2, 2.3, 9.1_
   - _Boundary: LegalConfig, Contract_
 
-- [ ] 2.3 (P) Write the fixed common text of both pages, with text dates
-  - Add the policy's opening, security, breach, rights, artificial-intelligence, retention lead and relay-wide retention, contact and changes text, and the terms' opening, responsibilities, no-warranty, liability, platforms, ending, changes and contact text, the announced lead and provider-list wording, the closing format, both pages' common heading lists and both text dates, exactly as design.md's Supporting References give them.
+- [ ] 2.3 (P) Write the fixed common text of the policy, with its date
+  - Add the policy's opening, security, artificial-intelligence, retention lead and relay-wide retention, contact and changes text, the announced lead and provider-list wording, both page titles, the closing format, the policy's common heading list and its text date, exactly as design.md's Supporting References give them. Write no terms text, breach-notice promise or request-handling process (7.3).
   - Check each relay-wide retention statement against the storage code it describes (record expiry purged on the next stored record; rate and budget counts removed as new counts of the same kind are recorded; tokens deleted with their principal) before writing it, and record the check in the task's report.
-  - Test the module's structure: each common heading list equals the headings of its sections, in order; the announced and list-entry formats render a given service name; the closing format renders an ISO date.
-  - Done when the structure tests pass, a read of the module against design.md's Supporting References finds every sentence as written (recorded in the report), and the fixed text names no legal entity, governing law, jurisdiction, AI product or agent. The heading-list test dies on moving one section without its heading list.
-  - _Requirements: 2.4, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 7.2, 7.4, 9.6_
+  - Test the module's structure: the common heading list equals the headings of the policy's common sections, in order; the announced and list-entry formats render a given service name; the closing format renders an ISO date.
+  - Done when the structure tests pass, a read of the module against design.md's Supporting References finds every sentence as written (recorded in the report), and the fixed text names no legal entity, governing law, jurisdiction, AI product or agent and holds no terms text or operator commitment. The heading-list test dies on moving one section without its heading list.
+  - _Requirements: 2.4, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 7.3, 9.6_
   - _Boundary: LegalText_
   - _Depends: 2.1_
 
@@ -97,7 +97,7 @@ Ground rules:
   - Build the intervals.icu provider pages (key `intervals`, name "intervals.icu") with the seven sections and the retention statement from design.md's Supporting References, announced as the caller says, with its own text date.
   - Re-read each statement against the relay-intervals criteria design.md lists for it, and report any disagreement instead of editing either side.
   - Done when, in its own test module, the group has the seven sections in the designed order and a retention statement, the announced flag follows the builder's argument, and the group passes the content validation; and a read of its text against design.md and the relay-intervals criteria is recorded in the report, including that "Your choices" states the direct route with the athlete's own key does not involve the relay. The announced test dies on the builder ignoring its announced argument.
-  - _Requirements: 5.1, 5.2, 5.3, 6.7, 8.6_
+  - _Requirements: 5.1, 5.2, 5.3, 6.5, 8.6_
   - _Boundary: IntervalsGroup_
   - _Depends: 2.1_
 
@@ -106,15 +106,15 @@ Ground rules:
   - Leave the nine sections, their headings and the consent text untouched.
   - The Strava policy module gains a run-time import of the content model: add it to that module's boundary entry.
   - Done when, in its own test module, for both link settings each section's paragraph is the matching text the unchanged section function returns (code against code, not a literal), the operator and contact lines sit where today's privacy page shows them, the group has a retention statement and passes the content validation, and the boundary test passes; strava-publish's existing word-for-word policy and consent tests run unchanged. The placement test dies on attaching the operator line to another section.
-  - _Requirements: 2.5, 4.1, 6.7, 8.6_
+  - _Requirements: 2.5, 4.1, 6.5, 8.6_
   - _Boundary: StravaGroup_
   - _Depends: 2.1_
 
-- [ ] 2.6 Compose and render both pages
-  - Compose the privacy policy (opening with the provider list, one group per provider with the announced lead where announced, the common sections, the retention group with one subsection per provider and the relay-wide subsection, contact and changes, operator sections) and the terms (opening with the same provider list, the common terms, provider terms groups, operator terms), each dated with the latest date among the parts it shows.
+- [ ] 2.6 Compose and render the policy and the contributed terms
+  - Compose the privacy policy (opening with the provider list, one group per provider with the announced lead where announced, the common sections, the retention group with one subsection per provider and the relay-wide subsection, contact and changes, operator sections) and the terms only from contributions (provider terms groups in provider order, then operator terms sections), none when nothing contributes terms; each page is dated with the latest date among the parts it shows. Compose both before rendering, so the operator's footer knows whether the relay serves terms.
   - Render through the shell: an `h1` title, top-level parts as `h2` sections, groups with `h3` subsections, every string escaped, elements separated by line breaks, then the closing line.
-  - Done when a fixture with Strava offered, intervals.icu announced and two contributed providers and operator parts (pairwise-distinct names, the latest date on the second operator part) renders in the designed order on both pages with the right dates; for one link setting, the announced Strava group's rendering equals the offered one with only the announced lead removed (2.5); a hostile heading, paragraph, item and operator name appear only escaped; and composing twice yields identical bytes. No wording or brand-phrase test is added for these pages. Named mutations: reversing contributed order; dating by the common date alone; dropping the announced lead; rendering anything else differently when announced; removing escaping from headings.
-  - _Requirements: 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 6.9, 7.1, 7.3, 8.4_
+  - Done when a fixture with Strava offered, intervals.icu announced and two contributed providers and operator parts with terms (pairwise-distinct names, the latest date on the second operator part) renders in the designed order on both pages with the right dates; the same fixture without contributed terms yields no terms page and footers without a terms link; for one link setting, the announced Strava group's rendering equals the offered one with only the announced lead removed (2.5); a hostile heading, paragraph, item and operator name appear only escaped; and composing twice yields identical bytes. No wording or brand-phrase test is added for these pages. Named mutations: reversing contributed order; dating by the common date alone; returning an empty terms page instead of none; dropping the announced lead; rendering anything else differently when announced; removing escaping from headings.
+  - _Requirements: 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 6.7, 7.1, 7.2, 7.4, 8.4_
   - _Depends: 1, 2.3, 2.4, 2.5_
 
 - [ ] 3. Integration: seam, assembly and routes
@@ -128,33 +128,33 @@ Ground rules:
   - _Requirements: 8.1, 8.2, 8.5_
   - _Depends: 2.3_
 
-- [ ] 3.2 Assemble both pages once at start-up
-  - Build the operator value once from the operator configuration, including its terms address, and hand it to the Strava services.
-  - Decide the applying providers (Strava while configured or announced, with the default link setting when only announced; intervals.icu only while announced; then contributions in installation order), compose both pages once, and keep them on the services; keep nothing when no provider applies.
+- [ ] 3.2 Assemble the pages once at start-up
+  - Build the operator value from the operator configuration, including its terms address; after composing, take the operator the composition returns (which knows whether the relay serves terms) as the services' operator and replace the Strava services' operator with it before routes are built.
+  - Decide the applying providers (Strava while configured or announced, with the default link setting when only announced; intervals.icu only while announced; then contributions in installation order), compose the policy and any contributed terms once, and keep them on the services; keep nothing when no provider applies.
   - Refuse to start when only contributed groups apply and the operator name or support contact is missing, naming the first contributing wrapper and the variable.
   - Expected-value change, named here: the app surface pin in `relay/tests/test_seam.py` (the designed services fields) gains the operator and the pages.
-  - Done when, through the app factory, with only `strava` announced the Strava group shows the `activity` link setting's text after the announced lead (4.2); the services hold no pages with nothing applying, the composed pages with Strava configured or `intervals` announced, and the capabilities' targets are unchanged by announcing; and the wrapper-only case is refused naming the wrapper and `FITDOCS_RELAY_OPERATOR_NAME`. Named mutations: including intervals.icu when not announced; listing announced providers among the targets; building the announced Strava group with the `relay` link setting; falling back to a blank operator.
+  - Done when, through the app factory, with only `strava` announced the Strava group shows the `activity` link setting's text after the announced lead (4.2); the services hold no pages with nothing applying, the composed pages with Strava configured or `intervals` announced, and the capabilities' targets are unchanged by announcing; with a wrapper contributing terms, the Strava services' operator serves terms; and the wrapper-only case is refused naming the wrapper and `FITDOCS_RELAY_OPERATOR_NAME`. Named mutations: including intervals.icu when not announced; listing announced providers among the targets; building the announced Strava group with the `relay` link setting; falling back to a blank operator.
   - _Requirements: 1.8, 2.1, 2.6, 2.7, 3.2, 4.2, 8.3_
   - _Depends: 2.2, 2.6, 3.1_
 
-- [ ] 3.3 Serve `/privacy` and `/terms` and retire Strava's own privacy route
-  - Serve the assembled pages from fixed bytes, without store access, readiness or client counting; the handler answers HEAD itself with 405, the page headers and `Allow: GET`; reserve `/terms`.
+- [ ] 3.3 Serve `/privacy`, and `/terms` when contributed, and retire Strava's own privacy route
+  - Serve the assembled pages from fixed bytes, without store access, readiness or client counting, adding the `/terms` route only when terms were composed; the handler answers HEAD itself with 405, the page headers and `Allow: GET`; reserve `/terms`.
   - Retire Strava's privacy route and page function; move the Strava privacy-page tests to the composed page, changing only imports, setup and where they look for the Strava group (4.4). The shared Strava test world (`make_world` in `relay/tests/test_strava_routes.py`), which builds its app from the services and core routes without the app factory, gains the legal pages through the same assembly the app factory uses, so `/privacy` is served in every Strava world.
   - Expected-behaviour changes under 1.5, named here: in `relay/tests/test_strava_pages_routes.py`, the page-route list and the not-ready, store-unreachable, client-limited and shared-client-count tests stop using `/privacy` and use another Strava page path, and so do the wrong-secret webhook test's closing 429 check and the page-status test's `/privacy` case (which answers 200 from the composed page instead); the route-table literal pins (`RESERVED_PREFIXES`) gain `/terms`; in `docs/relay.md`, the Strava routes table drops the `/privacy` row and the "Pages." bullet under the Strava routes stops listing `/privacy` among the pages that answer "Not available" (task 4.1 documents both pages in their own section); the routes-table binding group in `relay/tests/strava/test_policy_docs.py` (the table-equals-code test, its was-read guard and its three mutation tests) is deleted rather than updated.
-  - Done when, through the app factory: with nothing applying both paths answer `not-offered`; announcing `intervals` serves both pages while `/v1/targets/intervals/connect` and `/connect/intervals` still answer as unoffered paths (2.7); both pages answer 200 with the page headers and no cookie while the store is unreachable and readiness is false; HEAD answers 405 with `Allow: GET` and the page headers; and with `FITDOCS_RELAY_TERMS_URL` set every Strava page and both legal pages link that address instead of `/terms` while `/terms` is still served (1.7). Named mutations: gating the pages on readiness; letting HEAD reach the page; building the operator without its terms address.
-  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 2.7, 4.4, 9.1_
+  - Done when, through the app factory: with nothing applying both paths answer `not-offered`; announcing `intervals` serves `/privacy`, answers `/terms` as unoffered, and leaves `/v1/targets/intervals/connect` and `/connect/intervals` unoffered (2.7); a test wrapper contributing terms makes `/terms` answer 200 and every page link it; the served pages answer 200 with the page headers and no cookie while the store is unreachable and readiness is false; HEAD answers 405 with `Allow: GET` and the page headers; and with `FITDOCS_RELAY_TERMS_URL` set every Strava page and the served legal pages link that address (1.7). Named mutations: gating the pages on readiness; letting HEAD reach the page; adding `/terms` without composed terms; building the operator without its terms address.
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 2.7, 4.4, 7.2, 9.1_
   - _Depends: 3.2_
 
 - [ ] 3.4 Prove wrapper contributions end to end
-  - Through the app factory and the serve command with test wrappers: a contributed provider and operator part appear in installation order on both pages; a wrapper marking its provider announced gets the announced lead and list entry; a wrapper contributing nothing leaves both pages byte-identical to the pages without it; a malformed contribution and a wrapper-only provider with no operator values both exit 2 naming the wrapper.
+  - Through the app factory and the serve command with test wrappers: contributed providers and operator parts appear in installation order on the policy, and contributed terms on the terms page; a wrapper marking its provider announced gets the announced lead and list entry; a wrapper contributing nothing leaves the pages byte-identical to the pages without it; a malformed contribution and a wrapper-only provider with no operator values both exit 2 naming the wrapper.
   - Done when those five scenarios pass through `create_app`, and the two refusals pass through `fitdocs-relay serve` with exit 2 and the wrapper named on standard error. The byte-identity test dies on the composer emitting an empty operator section; the serve-refusal test dies on raising the wrapper-only refusal as a configuration error instead of a seam error (which would exit 1).
-  - _Requirements: 1.8, 2.8, 8.2, 8.3, 8.4_
+  - _Requirements: 1.8, 2.8, 7.1, 8.2, 8.3, 8.4_
   - _Depends: 3.3_
 
 - [ ] 4. Documentation and records
 
 - [ ] 4.1 Document the pages
-  - Add `docs/relay.md` "Privacy policy and terms" before the Strava target as design.md's documentation outline gives it: when the pages are served and their routes, the addresses for a platform application, both pages' order and common headings, announcing, the operator's own addresses, what a wrapper contributes and must keep true, the operator obligations, and that the text is not legal advice; point the Strava "Privacy policy and consent" subsection at it without changing its section list.
+  - Add `docs/relay.md` "Privacy policy and terms" before the Strava target as design.md's documentation outline gives it: when the pages are served and their routes (the terms only when a deployment contributes them), the addresses for a platform application, the policy's order and common headings, announcing, the operator's own addresses, that the relay ships no terms or operator commitments, what a wrapper contributes and must keep true, the operator obligations, and that the text is not legal advice; point the Strava "Privacy policy and consent" subsection at it without changing its section list.
   - Add the default relay's terms address beside its policy address in `docs/connectors.md`.
   - Add no documentation test; delete, rather than update, any existing docs test either edit would turn red.
   - Done when the section and the connectors line are written as design.md's documentation outline gives them, and a read of the changed docs and pages against the code, recorded in the report, finds them accurate and finds "Compatible with Strava" as the only Strava brand phrase in documentation, no Garmin section text, nothing from Garmin's developer documentation, no statement about any application or agreement with Garmin, and no AI product or agent named.
@@ -162,7 +162,7 @@ Ground rules:
 
 - [ ] 4.2 Record the change in the relay changelog and the extended specs
   - Add the relay changelog's additive entry under Unreleased: the pages served without a target, `/terms`, announcing, the two rows, the operator variables accepted without a target, deploy contract unchanged.
-  - Append one amendment each, at the next free number at landing (today relay-server 2, strava-publish 1, relay-intervals 1): the seam's contribution and version, the rows, the reserved path, the pages served without a target, and the existing relay-server test expectations tasks 2.2 and 3.2 changed (the whole-config comparison, the app surface pin) (relay-server); the policy text moved into the composition, the terms link on every page, the policy page served while the store is unreachable, and every existing Strava test expectation tasks 2.2, 3.1 and 3.3 changed (strava-publish); the composition and the intervals.icu group delivered here, which relay-intervals moves into its own package and owns from then on (relay-intervals). Each amendment names the tests that pin what it states and the documentation tests this feature deleted.
+  - Append one amendment each, at the next free number at landing (today relay-server 2, strava-publish 1, relay-intervals 1): the seam's contribution and version, the rows, the reserved path, the pages served without a target, and the existing relay-server test expectations tasks 2.2 and 3.2 changed (the whole-config comparison, the app surface pin) (relay-server); the policy text moved into the composition, the terms link on every page while terms exist, the policy page served while the store is unreachable, and every existing Strava test expectation tasks 2.2, 3.1 and 3.3 changed (strava-publish); the composition and the intervals.icu group delivered here, which relay-intervals moves into its own package and owns from then on (relay-intervals). Each amendment names the tests that pin what it states and the documentation tests this feature deleted.
   - Done when the changelog entry and the three amendments are written, and each amendment names only tests that exist on the branch or, for a deleted documentation test, existed on `main` before this feature.
   - _Requirements: 8.5, 9.1, 9.7_
 
@@ -170,5 +170,5 @@ Ground rules:
   - Run the full relay suite on both database backends, the root suite, ruff, ruff format and mypy after rebasing onto `main`.
   - Classify every acceptance criterion as pinned (naming the test and the mutation it dies on), preserved-only (naming the existing test), verified by reading (wording and documentation criteria, naming what was read), or unpinned (stating so, with the mutation run that shows it).
   - Read both rendered pages once for each configuration the tests use, checking every sentence against design.md's Supporting References, what the relay does, the wording rules and the public-text rule.
-  - Done when the suites are green after the rebase, the sweep lists all 53 criteria with no unexplained gap, and the sweep and the page reading are recorded in the task's report.
+  - Done when the suites are green after the rebase, the sweep lists all 51 criteria with no unexplained gap, and the sweep and the page reading are recorded in the task's report.
   - _Requirements: 3.3, 6.7, 9.6_
