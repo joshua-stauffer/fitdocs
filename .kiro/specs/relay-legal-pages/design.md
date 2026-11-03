@@ -293,7 +293,7 @@ nothing applies, `LegalPages` is `None` and neither path has a route.
 | 2.1 | Built-in section only while configured or announced | AppAssembly | `_legal_pages` | Start-up |
 | 2.2 | Announce setting | LegalConfig, Contract | `ENV_ANNOUNCED_PROVIDERS` | — |
 | 2.3 | Unknown or repeated announce refused | LegalConfig | `ConfigError` | — |
-| 2.4 | Announced statement and list entry | LegalText, Composer | `ANNOUNCED_LEAD`, `provider_list` | — |
+| 2.4 | Announced statement and list entry | LegalText, Composer | `ANNOUNCED_LEAD_FORMAT`, `ANNOUNCED_ENTRY_FORMAT` | — |
 | 2.5 | Configuring drops only the statement | Composer, StravaGroup | `strava_pages(announced=)` | — |
 | 2.6 | intervals.icu only when announced | AppAssembly, IntervalsGroup | `intervals_pages` | — |
 | 2.7 | Announcing adds no route or capability | AppAssembly | `services.targets` unchanged | — |
@@ -309,7 +309,7 @@ nothing applies, `LegalPages` is `None` and neither path has a route.
 | 5.1 | intervals.icu group content | IntervalsGroup | `intervals_pages` | — |
 | 5.2 | Agrees with relay-intervals; relay route only | IntervalsGroup | text (Supporting References) | — |
 | 5.3 | Direct route does not involve the relay | IntervalsGroup | "Your choices" text | — |
-| 6.1 | Common opening | LegalText, Composer | `POLICY_OPENING`, `provider_list` | — |
+| 6.1 | Common opening | LegalText, Composer | `POLICY_OPENING_BEFORE`, `POLICY_OPENING_AFTER`, `compose_policy` | — |
 | 6.2 | Security | LegalText | `POLICY_SECURITY` | — |
 | 6.3 | Breach | LegalText | `POLICY_BREACH` | — |
 | 6.4 | Rights and how to use them | LegalText | `POLICY_RIGHTS` | — |
@@ -321,7 +321,7 @@ nothing applies, `LegalPages` is `None` and neither path has a route.
 | 6.10 | Text change without new date fails tests | LegalText tests | text-date histories | — |
 | 7.1 | Terms order | Composer | `compose_terms` | — |
 | 7.2 | Common terms content | LegalText | `TERMS_COMMON` | — |
-| 7.3 | Same providers; links the policy | Composer, PageShell | `provider_list`, `footer` | — |
+| 7.3 | Same providers; links the policy | Composer, PageShell | `compose_terms`, `footer` | — |
 | 7.4 | No legal entity, law or jurisdiction in fixed text | LegalText | text | — |
 | 8.1 | Contribution kinds | LegalContent, Seam | `LegalContribution` | — |
 | 8.2 | Malformed contribution refused | LegalContent, AppAssembly | `contribution_problem`, `SeamError` | Start-up |
@@ -836,7 +836,7 @@ group).
 **## intervals.icu**
 - ### What fitdocs sends: "When you publish a workout, your fitdocs sends the relay the workout's sport, its start time, elapsed time and distance (leaving out any that the workout's page does not record), the name and description to set, an identifier fitdocs made for the publication, the identifiers of up to two intervals.icu activities that fitdocs already knows for the workout, and, only when you have enabled uploads and no activity matches, the workout's file. Each request carries the relay token that identifies you to the relay."
 - ### What the relay receives from intervals.icu and keeps: "When you connect, intervals.icu gives the relay an access token for your account. The relay keeps the token encrypted, with a keyed hash of your intervals.icu athlete identifier (not the identifier itself), so that one intervals.icu account is connected to one relay account at a time. It keeps nothing else from intervals.icu: no activities, activity identifiers, athlete identifiers, names, profile details or copies of any answer, and no record of which activity a workout was posted to. Anything else intervals.icu returns to a request is used inside that request and then dropped."
-- ### What the relay sends to intervals.icu: "When you connect, the relay sends intervals.icu the authorization code it received, to exchange it for a token, and asks only for permission to read and write your activities. To act on your account it sends your token in the header of each request. For each workout you publish, it sets the name and description of the first activity fitdocs named that intervals.icu accepts the change for; when none does, it may ask intervals.icu to list your activities over the dates around the workout, to find the one that carries the publication's identifier or matches the workout's start time and its distance or duration, and set that activity's name and description. Only with uploads enabled, and only when no activity matches, it uploads the workout's file once, with the publication's identifier as the upload's external identifier, and sets the name and description of the activity the upload creates. When a disconnect request reaches it and its call budget allows, it asks intervals.icu to revoke the token. It changes no other field and deletes nothing on intervals.icu. It reads activities for no other purpose."
+- ### What the relay sends to intervals.icu: "When you connect, the relay sends intervals.icu the authorization code it received, to exchange it for a token, and asks only for permission to read and write your activities; if the connection is then refused, it asks intervals.icu once, when its call budget allows, to revoke any token the exchange returned. To act on your account it sends your token in the header of each request. For each workout you publish, it sets the name and description of the first activity fitdocs named that intervals.icu accepts the change for; when none does, it may ask intervals.icu to list your activities over the dates around the workout, to find the one that carries the publication's identifier or matches the workout's start time and its distance or duration, and set that activity's name and description. Only with uploads enabled, and only when no activity matches, it uploads the workout's file once, with the publication's identifier as the upload's external identifier, and sets the name and description of the activity the upload creates. When a disconnect request reaches it and its call budget allows, it asks intervals.icu to revoke the token. It changes no other field and deletes nothing on intervals.icu. It reads activities for no other purpose."
 - ### What the relay returns to fitdocs: "For each workout that the relay posts or uploads, it returns to your fitdocs the identifier of the intervals.icu activity the post landed on, and your fitdocs writes a link to that activity into the workout's page. It returns nothing else that intervals.icu supplied. The relay does not record the identifier it returned."
 - ### Deletion: "The relay deletes your intervals.icu token and the keyed hash of your account at once in each of these cases: you disconnect; intervals.icu refuses the token the next time the relay uses it, as it does once you have revoked the relay's access in your intervals.icu settings; your relay account is deleted; or the same intervals.icu account is connected from another relay account."
 - ### Your choices: "The command fitdocs disconnect withdraws the connection: when the relay's call budget allows, it also asks intervals.icu to revoke the relay's access. Revoking the relay's access in your intervals.icu settings also ends the connection; the relay then deletes your token the next time intervals.icu refuses it. Connecting intervals.icu directly with your own API key, as fitdocs also allows, does not involve this relay. You can use fitdocs without this relay."
@@ -849,11 +849,11 @@ group).
 **## Your rights**
 - P: "You have the right to see, export and delete what this relay holds about you, and to withdraw your consent at any time."
 - Bullets:
-  - "To withdraw your consent for a platform and delete what the relay keeps for it, run fitdocs disconnect for that connection, or revoke the relay's access in that platform's own settings, as its section above describes."
+  - "To withdraw your consent for a platform and have the relay delete what it keeps for it at once, run fitdocs disconnect for that connection. Revoking the relay's access in a platform's own settings also withdraws your consent; that platform's section above says when the relay then deletes what it keeps."
   - "To get a copy of what the relay holds about you, or to have your relay account and everything the relay holds for it deleted, ask the operator at the support contact shown on this page."
   - "Withdrawing your consent stops the relay acting for you. It does not undo what the relay already did, such as a post it made."
 
-**## Artificial intelligence**: "The relay does not process the data it receives with artificial intelligence or machine learning, does not use that data to train such a system, and sends it nowhere except as this policy describes."
+**## Artificial intelligence**: "The relay does not process the data it receives with artificial intelligence or machine learning, does not use that data to train such a system, and sends it nowhere except as this policy describes. What each platform does with what the relay sends it is governed by that platform's own policy."
 
 **## How long the relay keeps data**
 - Lead P: "The relay keeps each kind of data no longer than stated here."
@@ -863,14 +863,14 @@ group).
 - ### Across the relay — Bullets:
   - "Your relay account's identifier, label and creation time, and for each of its relay tokens the identifier, keyed hash, label and the times it was created and revoked, revoked tokens included: kept until your relay account is deleted, and then deleted at once."
   - "A connect session: it expires ten minutes after it starts at the latest, and the relay deletes expired sessions the next time it stores a short-lived record."
-  - "Request and call counts: kept per relay token, per relay account or per keyed hash of the client's network address (never the address itself), in fixed time windows; the relay deletes a window's count the next time it counts after the window has ended."
+  - "Request and call counts: kept per relay token, per relay account or per keyed hash of the client's network address (never the address itself), in fixed time windows. Once its window has ended, a count may be deleted; the relay removes ended counts as it records new counts of the same kind."
   - "Log records: they name a relay token only by its identifier and carry nothing listed under Security; how long they are kept is the operator's choice."
 
 **## Contact**: "Questions about this policy or your data go to the operator's support contact shown on this page." + ContactLine
 
-**## Changes to this policy**: "The operator may change this policy. The version at this address is the one in force, and the date at the end of this page is when its text last changed."
+**## Changes to this policy**: "The operator may change this policy, and what it shows also follows how the operator has configured the relay. The version at this address is the one in force. The date at the end of this page is the latest date on which any of its text was written."
 
-Operator policy sections (contributed), then the closing paragraph "Last changed: {date}."
+Operator policy sections (contributed), then the closing paragraph "Text dated {date}." (`CLOSING_FORMAT`)
 
 ### Terms of use (title "Terms of use")
 
@@ -893,11 +893,11 @@ Operator policy sections (contributed), then the closing paragraph "Last changed
 
 **## Ending**: "You can stop using the relay at any time: disconnect each platform with fitdocs disconnect, or revoke the relay's access in the platform's settings. The operator may revoke your access to the relay at any time. The privacy policy says what then happens to your data."
 
-**## Changes to these terms**: "The operator may change these terms. The version at this address is the one in force, and the date at the end of this page is when its text last changed."
+**## Changes to these terms**: "The operator may change these terms, and what they show also follows how the operator has configured the relay. The version at this address is the one in force. The date at the end of this page is the latest date on which any of its text was written."
 
 **## Contact**: "Questions about these terms go to the operator's support contact shown on this page." + ContactLine
 
-Provider terms groups (contributed), operator terms sections (contributed), then "Last changed: {date}."
+Provider terms groups (contributed), operator terms sections (contributed), then "Text dated {date}."
 
 ### Contract rows
 

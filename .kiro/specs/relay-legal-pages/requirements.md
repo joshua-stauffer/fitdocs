@@ -2,11 +2,11 @@
 
 ## Project Description (Input)
 **Who has the problem.** The operator of a fitdocs relay with a public URL,
-and the maintainer applying for developer access on the hosted relay's
-behalf. Strava (for the publish relay), intervals.icu (for the OAuth
-application `relay-intervals` is gated on) and Garmin (whose push-tier
-request form requires one) each ask for a privacy policy URL before they
-approve an application. Garmin's public agreement also asks for end-user
+who needs a policy address to give each platform's developer program.
+Strava (for the publish relay) and intervals.icu (for the OAuth application
+`relay-intervals` is gated on) ask for a privacy policy URL before they
+approve an application, and Garmin's public push-tier request form makes one
+a required field. Garmin's public agreement also asks for end-user
 terms carrying protections for the platform's benefit, a conspicuous policy
 with withdrawable consent before collection, access/export/deletion rights,
 and an AI transparency statement.
@@ -72,7 +72,7 @@ before the platform has issued credentials, and the page says plainly that
 the connection is not offered yet. The common sections state the
 operator, security, breach notice, the athlete's rights and how to use
 them, an AI statement, retention for each provider, contact, and the date
-the text last changed. Strava's statements move into the composition word
+the latest date any of the page's text was written. Strava's statements move into the composition word
 for word; the intervals.icu relay route's section is written now; the
 hosted deployment adds its own provider and operator sections through the
 extension seam.
@@ -178,18 +178,18 @@ extension seam.
 2. The common security section shall state that platform tokens are encrypted before they are stored, that relay tokens are kept only as an identifier and a keyed hash, and that the relay's logs carry no token, authorization code, platform response, request body or client network address.
 3. The common breach section shall state that if a breach affects an athlete's data the operator will notify each affected platform, within any time that platform's group states, and shall promise no notice the relay has no means to give.
 4. The common rights section shall state the athlete's rights to access, export and delete what the relay holds about them, and how to exercise each: `fitdocs disconnect` for a connection, revoking access in the platform's own settings, and a request at the operator's support contact for a copy of what the relay holds about them or for deletion of their relay account and everything it holds.
-5. The common AI section shall state that the relay processes none of the data it receives with artificial intelligence or machine learning, uses none of it to train such a system, and passes none of it to one.
-6. The common retention section shall state, for each applying provider, how long the relay keeps that provider's data, as the provider declares it, and, for the relay as a whole: that relay-token records (identifier, keyed hash, label and times, revoked tokens included) are kept until the relay account is deleted, that a connect session lasts at most ten minutes, that request and call counters hold only counts, kept against a relay token, a relay account or a keyed hash of the client's network address (never the address itself) and deleted once their window has passed, when the relay next counts, and that how long log records are kept is the operator's choice.
+5. The common AI section shall state that the relay processes none of the data it receives with artificial intelligence or machine learning, uses none of it to train such a system, and sends it nowhere except as the policy describes, and that what each platform does with what the relay sends it is governed by that platform's own policy.
+6. The common retention section shall state, for each applying provider, how long the relay keeps that provider's data, as the provider declares it, and, for the relay as a whole: that relay-token records (identifier, keyed hash, label and times, revoked tokens included) are kept until the relay account is deleted, that a connect session lasts at most ten minutes, that request and call counters hold only counts, kept against a relay token, a relay account or a keyed hash of the client's network address (never the address itself), each of which may be deleted once its window has ended, and that how long log records are kept is the operator's choice.
 7. Every retention statement shall name a trigger on which the relay deletes the data, or say only that the data may be deleted; no statement shall promise a deletion the relay does not perform.
-8. The common contact and changes section shall show the operator's support contact, say that the policy at this address is the one in force, and say that the operator may change it.
-9. The common closing shall state the date the policy's text last changed: the later of the date of the fixed fitdocs text and the latest date any contributed section declares.
+8. The common contact and changes section shall show the operator's support contact, say that the policy at this address is the one in force, say that the operator may change it, and say that what it shows also follows the relay's configuration.
+9. The common closing shall state the latest date on which any text the page shows was written: the later of the date of the fixed fitdocs text it shows and the latest date any contributed section it shows declares.
 10. If the fixed fitdocs text of either page changes without its date changing, the relay's tests shall fail.
 
 ### Requirement 7: The Terms Page
 **Objective:** As the operator, and on behalf of the platforms the relay connects to, I want end-user terms that carry the common disclaimers and the protections each platform expects, so that the platforms that require terms with each user can be satisfied by one page.
 
 #### Acceptance Criteria
-1. The relay server shall compose the terms in this order: a common opening naming the operator, saying what the relay is, and saying that connecting a platform through the relay accepts these terms; the common terms; clauses a provider or a deployment contributes, in the order Requirement 3 criterion 1 gives providers, then a deployment's own clauses; the common closing with the date the terms' text last changed.
+1. The relay server shall compose the terms in this order: a common opening naming the operator, saying what the relay is, and saying that connecting a platform through the relay accepts these terms; the common terms; clauses a provider or a deployment contributes, in the order Requirement 3 criterion 1 gives providers, then a deployment's own clauses; the common closing with the latest date on which any text the terms page shows was written.
 2. The common terms shall state: the athlete's responsibilities (to connect only accounts they control, to follow each platform's own terms, and not to misuse the relay); that the relay is provided as is, without warranty, and may change or stop; a limitation of the operator's liability to the extent the law allows; that each platform the page lists is not a party to these terms, gives no warranty for the relay and bears no liability to the athlete for it, and may rely on and enforce the clauses written for its benefit; how the athlete ends use (disconnecting) and that the operator may revoke relay access; that the terms may change; and the support contact.
 3. The terms shall list the same providers, under the same rule (Requirement 2), as the privacy policy, and shall link the privacy policy.
 4. The fixed terms shall name no legal entity, governing law or jurisdiction; such clauses appear only when a deployment contributes them.

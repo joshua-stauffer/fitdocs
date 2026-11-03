@@ -20,8 +20,8 @@ Garmin's public agreement (FRM-0952 Rev. B) also asks for:
 
 The relay today serves one Strava-only policy, and only while Strava is
 configured. It has no terms page, and a deployment cannot add a section.
-So the hosted relay cannot point any of the three applications at a policy
-that covers what it will actually do. This blocks every other item in the
+So the hosted relay has no policy address that covers what it will actually
+do, to give any platform that asks for one. This blocks every other item in the
 extension.
 
 ## Current State
@@ -56,7 +56,7 @@ extension.
   objects (`contract.py:57,146-148`), but they can only add token issuance.
 - **The hosted relay is not answering yet** at its address (checked
   2026-11-03). Getting it live is the hosted deployment's job, and a
-  prerequisite for any of the three applications to cite the URL.
+  prerequisite for any platform's form to cite the URL.
 
 ## Desired Outcome
 
