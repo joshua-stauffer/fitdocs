@@ -2,8 +2,8 @@
 id: 2026-11-02-strava-publish-link-record-orphan-race
 title: "A publish finishing after disconnect or account change can leave a link record the relay promises to delete"
 status: open
-importance: medium
-importance_why: "The privacy policy says link records are deleted at once; a race leaves one that /go/ resolves against the wrong account."
+importance: low
+importance_why: "Maintainer 2026-11-04: not worth fixing now. A disconnect must commit in the gap between two adjacent database calls, at low volume; the leftover row holds only fitdocs facts and no longer resolves anything once /go/ is gone."
 effort: M
 kind: bug
 area: "relay storage, relay/src/fitdocs_relay/strava/publish.py, relay/src/fitdocs_relay/storage/sqlite.py, postgres.py"

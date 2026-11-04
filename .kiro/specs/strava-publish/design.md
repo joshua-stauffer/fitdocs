@@ -1984,6 +1984,13 @@ exchanges decoded by the fitdocs suite.
   without the Strava variables behaves as before. Existing fitdocs
   configurations are unchanged; a Strava instance is opt-in.
 
+## Amendment note (2026-11-04): requirements Amendment 1
+
+Requirements Amendment 1 removes `/go/`, `/robots.txt`, the `relay` link setting
+and the budget's link headroom, and adds an optional terms address and what
+`fitdocs disconnect` says. Where the text above describes those, the amendment
+governs; the sections are kept as the record of what was designed.
+
 ## Amendment note (2026-11-02): controller rulings made while implementing
 
 Recorded by task 7.6 from the rulings in `tasks.md` Implementation Notes under

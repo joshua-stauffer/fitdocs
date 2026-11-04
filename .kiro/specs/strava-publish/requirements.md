@@ -354,3 +354,22 @@ meaning):
 #### Acceptance Criteria
 1. The repository shall provide a live-check procedure for the maintainer to carry out against the maintainer's own Strava application and account (connect, publish an update, follow the link, disconnect), stating beforehand that it writes to that real account, and a record template for its results.
 2. No implementation, review or validation session shall carry out any step of the live check or any other step that reaches the real Strava API or a relay connected to it; the record template shall be filled only with the fitdocs codes the maintainer reports, never with Strava Data, and the live check shall never run in the test suite or in CI.
+
+## Amendment 1 (2026-11-04): no relay link route, terms acceptance, and what `fitdocs disconnect` says (maintainer)
+
+fitdocs always writes the Strava address the relay returns, so nothing needs a link served by the relay. The maintainer removed `/go/`, which answered anyone holding a publication id by using the owner's Strava access, and removed the `relay` link setting with it. Existing criteria and approvals are preserved except as stated. No version constant moves: `/go/` and `FITDOCS_RELAY_STRAVA_LINKS` are in no released relay, so `DEPLOY_CONTRACT_VERSION` stays 1.
+
+- Requirement 3 criterion 2: where a terms address is configured, the connect page also shows "By connecting, you accept the terms of use." directly before the control, with those words linking to the terms. Where none is configured, the page is unchanged.
+- Requirement 9 criterion 5 is retired: no share of a window is held back for links.
+- Requirement 10:
+  - Criteria 2, 3, 4 and 5 are retired. The relay serves no `/go/` route and no `/robots.txt`, whose only rule was about `/go/`.
+  - Criteria 1 and 6 stay: the relay still records each publication, and still rejects a publication id recorded for another principal.
+  - Criterion 7 becomes: the relay server shall carry the Strava address of the activity in each answer whose outcome is posted or uploaded. Where an answer carries no address, fitdocs writes no link.
+- Requirement 11 gains criterion 11: when `fitdocs disconnect NAME` runs for a Strava instance and the relay answers success, the fitdocs CLI shall also state that the relay deleted the connection and what it kept for it.
+- Requirement 12 criterion 5: "the link" leaves the list of routes.
+- Requirement 13 criterion 1: the link setting leaves the table, and an optional terms address joins it (`FITDOCS_RELAY_TERMS_URL`, `https` only, no default).
+- Requirement 16:
+  - Criteria 1 and 2: "under its link setting" is dropped, because there is one setting. The built-in policy's wording otherwise stays; it gains no deletion mechanics.
+  - Criterion 3: where a terms address is configured, every page's footer also links it, after the privacy policy. Where none is configured, footers are unchanged.
+
+Testing follows the maintainer's code-only rule: no new test reads documentation, and served text is tested for structure only. A documentation-binding test that this change turns red is deleted, not updated.

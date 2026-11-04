@@ -4035,7 +4035,8 @@ Amendment numbers are the next free number at landing.
   - the OAuth connect flow, with encrypted rotating tokens;
   - resolve-by-start-time on every publish, then PUT or a single upload;
   - the link setting: the activity's Strava address by default, or the
-    `/go/` redirect link;
+    `/go/` redirect link *(removed 2026-11-04, strava-publish Amendment 1: the
+    relay always returns the Strava address)*;
   - the deauthorization webhook and revoke;
   - the rate-limit budget, and nothing else from Strava crossing the relay;
   - the fitdocs relay target, with `OAUTH_BROWSER` driven.
