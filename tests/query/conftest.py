@@ -180,7 +180,14 @@ measured_on = 2021-09-01
             app, ["sync", str(source), "--out", str(root), "--no-prompt"]
         )
         assert synced.exit_code == 0, synced.output
-        pages = tuple((root / "workouts").glob("*.md"))
+        # The glob also finds workouts/AGENTS.md, which has no front matter;
+        # choose the first workout page by name rather than by directory order.
+        pages = sorted(
+            page
+            for page in (root / "workouts").glob("*.md")
+            if page.name != "AGENTS.md"
+        )
+        assert len(pages) >= 2, "the sync wrote the run and the ride"
         tagged = pages[0]
         tag = (
             "effort: race\n"
@@ -191,6 +198,7 @@ measured_on = 2021-09-01
         original = tagged.read_text(encoding="utf-8")
         assert "effort:" not in original
         tagged.write_text(original.replace("---\n", "---\n" + tag, 1), encoding="utf-8")
+        assert "effort: race\n" in tagged.read_text(encoding="utf-8"), tagged.name
         indexed = CliRunner().invoke(app, ["index", "--out", str(root)])
         assert indexed.exit_code == 0, indexed.output
         location = resolve_index_location(root, os.environ, home)
