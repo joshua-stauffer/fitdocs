@@ -215,10 +215,10 @@ jobs:
           name: dist
           path: dist
 
-      # Pinned to the immutable release tag v1.14.2 -- verified via
-      # `gh api repos/pypa/gh-action-pypi-publish/git/ref/tags/v1.14.2`
-      # (reports SHA a892a5a61159132606e93a2fa6f4358831b04d26) and
-      # `gh api repos/pypa/gh-action-pypi-publish/releases/tags/v1.14.2`
+      # Pinned to the immutable release tag v1.14.3 -- verified via
+      # `gh api repos/pypa/gh-action-pypi-publish/git/ref/tags/v1.14.3`
+      # (reports SHA aef6c9b6e301dc803e1bc9133e9ce67ae9b0906b) and
+      # `gh api repos/pypa/gh-action-pypi-publish/releases/tags/v1.14.3`
       # (reports `"immutable": true` on that release), never the floating
       # `release/v1` alias. Uses trusted publishing (no `password:` input),
       # so this step alone needs `id-token: write` above. `skip-existing` is
