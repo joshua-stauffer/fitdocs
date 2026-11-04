@@ -580,12 +580,13 @@ def failed_upload(w: World) -> None:
 
 
 def test_a_failed_upload_with_one_match_updates_it_on_the_reserved_calls(
-    store: Storage,
+    store: Storage, database_target: Target
 ) -> None:
     # share 11 holds the first listing and the reservation: the second listing
     # and the update are counted nowhere, or this would be refused
     w = build(store, limits=Limits(24, 24, 22, 22))
     connect(w, "ann")
+    before = stored_rows(database_target)
     failed_upload(w)
     script_list(w, entry(111, sport_type="Swim"), entry())
     script_update(w, reply(200, {}))
@@ -594,6 +595,7 @@ def test_a_failed_upload_with_one_match_updates_it_on_the_reserved_calls(
     assert result.activity_page == f"{WEB}/activities/987654321012"
     assert len(w.hits(listing_url())) == 2
     assert len(w.uploads()) == 1
+    assert_only_budget_changed(before, stored_rows(database_target), PUB_ID)
 
 
 def test_a_failed_upload_with_several_matches_is_ambiguous(world: World) -> None:

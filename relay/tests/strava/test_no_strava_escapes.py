@@ -522,9 +522,12 @@ def test_nothing_strava_returns_escapes_the_relay_but_the_landed_link(
     assert outcomes.count("uploaded") == 1
     assert {"unavailable", "rate_limited", "unconfirmed"} <= set(outcomes)
     rich = seen.snapshots[0]
-    stored = " ".join(" ".join(rows) for rows in rich.values())
-    assert [pid for pid in DRIVEN_PUBLICATION_IDS if pid in stored] == []
     assert rich["target_connections"], "the connected snapshot holds no connection"
+    # Every snapshot: an id sent after the first one can only show in a later one.
+    assert len(seen.snapshots) == 4
+    for dumped in seen.snapshots:
+        stored = " ".join(" ".join(rows) for rows in dumped.values())
+        assert [pid for pid in DRIVEN_PUBLICATION_IDS if pid in stored] == []
 
     # --- Req 12.1: answers carry the link and nothing else of Strava's -----
     linked = [(a.outcome, a.data[LINK_FIELD]) for a in codes if LINK_FIELD in a.data]
