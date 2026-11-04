@@ -1,7 +1,7 @@
 ---
 id: 2026-11-03-relay-dependency-floors-admit-cves
 title: The relay's dependency floors admit known CVEs in starlette, cryptography and h11 (the lockfile is clean)
-status: open
+status: done
 importance: medium
 importance_why: Any install of the relay package that resolves from its floors instead of relay/uv.lock can get vulnerable versions, including h11 request smuggling, which matters more once the extension adds 10 MB webhook routes.
 effort: S
@@ -90,3 +90,6 @@ Done means the floors exclude every advisory above, and relay CI is green.
 
 - Whether the `<51` cap on cryptography should move. 51.x is not assessed
   here.
+
+## Resolution
+Done 2026-11-04: `starlette>=1.3.1,<2`, `cryptography>=50.0.0,<51`, and a direct `h11>=0.16`. `uv lock` moved no version. OSV was re-queried the same day and reports 0 advisories at each new floor, and at `uvicorn` 0.30.0, whose floor stays. `uv pip compile --resolution lowest-direct` resolves to exactly those floors. The `<51` cap on cryptography is unchanged: 51.x is still not assessed, and nothing requires it yet.
