@@ -10,12 +10,6 @@ order: 3
 **Which devices does it work with?**
 Anything that records a `.fit` file, which covers most Garmin, Coros, Wahoo, Suunto, Hammerhead, and Stryd devices, plus Zwift and the Apple Watch (exported through an app like HealthFit). For sleep, HRV, and resting heart rate, it also reads an Apple Health export, Garmin's data export, and intervals.icu wellness. GPX and TCX aren't supported. When tested, they carried nothing a `.fit` file doesn't.
 
-**Does it download my activities from Garmin or Strava?**
-No. Both Garmin and Strava have adopted increasingly unfriendly API terms, and fitdocs doesn’t read directly from either of them. We recommend syncing your data through intervals.icu. It’s free and community-supported, its API terms are friendly to developers, and it syncs with most major fitness hardware. Once the data is in intervals.icu, use the fitdocs connector to sync it directly into your wiki. Connect your device to intervals.icu directly rather than through Strava, because intervals.icu doesn’t share the files of activities it got from Strava. For files you already have from anywhere else, the `folder` connector reads any folder, or you can drop them in the inbox. See [Pulling from intervals.icu](guides/connectors.md).
-
-**Does it upload anything?**
-No. fitdocs makes network requests in only two cases: map tiles, which only reveal your approximate location, are cached, and can be turned off; and a connector you set up, which only reads from your own account. See [Privacy and the network](guides/privacy-and-network.md).
-
 **Do I need an LLM?**
 No. fitdocs is a normal command-line tool, and the pages are readable on their own. It's designed to work *well* with an LLM, with any provider or a local model. See [Working with an LLM](llm/index.md).
 
