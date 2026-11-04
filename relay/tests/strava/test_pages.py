@@ -17,8 +17,10 @@ CONTACT = "help-sentinel@operator.example"
 POLICY_URL = "https://operator.example/own-policy"
 AUTH_URL = "https://oauth.example/authorize?client=1&state=abc"
 USER_CODE = "KQ7-M2X"
-OPERATOR = Operator("Operator Sentinel", CONTACT, None)
-OWN = Operator("Operator Sentinel", CONTACT, POLICY_URL)
+TERMS_URL = "https://operator.example/own-terms"
+OPERATOR = Operator("Operator Sentinel", CONTACT, None, None)
+OWN = Operator("Operator Sentinel", CONTACT, POLICY_URL, None)
+WITH_TERMS = Operator("Operator Sentinel", CONTACT, POLICY_URL, TERMS_URL)
 
 BuildPage = Callable[[Operator], Page]
 
@@ -62,11 +64,18 @@ def test_the_page_list_is_the_design_list() -> None:
 # --- escaping ---------------------------------------------------------------
 
 
-@pytest.mark.parametrize("field", ["name", "contact", "policy_url"])
+@pytest.mark.parametrize("field", ["name", "contact", "policy_url", "terms_url"])
 def test_operator_values_are_escaped_on_every_page(field: str) -> None:
-    values = {"name": "N", "contact": "C", "policy_url": "https://p.example/"}
+    values = {
+        "name": "N",
+        "contact": "C",
+        "policy_url": "https://p.example/",
+        "terms_url": "https://t.example/",
+    }
     values[field] = HOSTILE
-    operator = Operator(values["name"], values["contact"], values["policy_url"])
+    operator = Operator(
+        values["name"], values["contact"], values["policy_url"], values["terms_url"]
+    )
     built = _all_pages(operator)
     for name, page in built.items():
         assert "<b id='h'>" not in page.html, name
@@ -76,6 +85,7 @@ def test_operator_values_are_escaped_on_every_page(field: str) -> None:
         "name": ["privacy"],
         "contact": ALL_NAMES,
         "policy_url": ALL_NAMES,
+        "terms_url": ALL_NAMES,
     }[field]
     for name in shown:
         assert escape(HOSTILE, quote=True) in built[name].html, name
@@ -117,6 +127,52 @@ def test_operators_own_policy_address_replaces_the_built_in_one(name: str) -> No
     hrefs = re.findall(r'href="([^"]*)"', page.html)
     assert POLICY_URL in hrefs
     assert "/privacy" not in hrefs
+
+
+# --- the terms address ------------------------------------------------------
+
+
+def _hrefs(html: str) -> list[str]:
+    return re.findall(r'href="([^"]*)"', html)
+
+
+@pytest.mark.parametrize("name", ALL_NAMES)
+def test_a_terms_address_is_linked_in_every_footer_after_the_privacy_link(
+    name: str,
+) -> None:
+    html = _all_pages(WITH_TERMS)[name].html
+    footer = html[html.index("<footer>") :]
+    assert _hrefs(footer) == [POLICY_URL, TERMS_URL]
+
+
+@pytest.mark.parametrize("name", ALL_NAMES)
+def test_without_a_terms_address_every_page_has_no_terms_text(name: str) -> None:
+    html = _all_pages(OWN)[name].html
+    assert "terms" not in html.lower()
+
+
+def test_the_connect_page_asks_acceptance_directly_before_the_control() -> None:
+    html = pages.connect_page(
+        user_code=USER_CODE, authorize_url=AUTH_URL, operator=WITH_TERMS
+    ).html
+    sentence = re.search(
+        r"<p>By connecting, you accept the "
+        r'<a href="([^"]*)">terms of use</a>\.</p>',
+        html,
+    )
+    assert sentence is not None
+    assert sentence.group(1) == TERMS_URL
+    assert html.index('<p><a class="connect"') == sentence.end()
+    assert html.count("By connecting") == 1
+
+
+def test_a_terms_address_on_the_connect_page_is_escaped() -> None:
+    operator = Operator("Operator Sentinel", CONTACT, None, 'https://t.example/"&<')
+    html = pages.connect_page(
+        user_code=USER_CODE, authorize_url=AUTH_URL, operator=operator
+    ).html
+    assert 'href="https://t.example/&quot;&amp;&lt;"' in html
+    assert 'https://t.example/"&<' not in html
 
 
 # --- the connect page -------------------------------------------------------

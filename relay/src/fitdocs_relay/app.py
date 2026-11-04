@@ -469,6 +469,7 @@ def _build_strava(
             name=targets.operator_name,
             support_contact=targets.support_contact,
             policy_url=targets.privacy_policy_url,
+            terms_url=targets.terms_url,
         ),
     )
 

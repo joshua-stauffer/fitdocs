@@ -24,6 +24,7 @@ KEYS = P + "ENCRYPTION_KEYS"
 OPERATOR = P + "OPERATOR_NAME"
 CONTACT = P + "SUPPORT_CONTACT"
 POLICY = P + "PRIVACY_POLICY_URL"
+TERMS = P + "TERMS_URL"
 CLIENT_ID = P + "STRAVA_CLIENT_ID"
 CLIENT_SECRET = P + "STRAVA_CLIENT_SECRET"
 WEBHOOK = P + "STRAVA_WEBHOOK_TOKEN"
@@ -94,6 +95,7 @@ def test_the_client_id_enables_the_target_with_every_default() -> None:
     assert cfg.targets.operator_name == "Example Operator"
     assert cfg.targets.support_contact == "help@example.org"
     assert cfg.targets.privacy_policy_url is None
+    assert cfg.targets.terms_url is None
 
 
 def test_every_setting_lands_in_its_own_field() -> None:
@@ -105,6 +107,7 @@ def test_every_setting_lands_in_its_own_field() -> None:
                 OPERATOR: "Op 2",
                 CONTACT: "https://example.org/contact",
                 POLICY: "https://example.org/privacy",
+                TERMS: "https://example.org/terms/",
                 API_URL: "http://localhost:9001/api",
                 OAUTH_URL: "https://oauth.example.org/o/",
                 WEB_URL: "http://[::1]:9002",
@@ -119,6 +122,7 @@ def test_every_setting_lands_in_its_own_field() -> None:
     assert cfg.targets.operator_name == "Op 2"
     assert cfg.targets.support_contact == "https://example.org/contact"
     assert cfg.targets.privacy_policy_url == "https://example.org/privacy"
+    assert cfg.targets.terms_url == "https://example.org/terms"
     assert cfg.strava.api_url == "http://localhost:9001/api"
     assert cfg.strava.oauth_url == "https://oauth.example.org/o"
     assert cfg.strava.web_url == "http://[::1]:9002"
@@ -418,6 +422,14 @@ REFUSALS: list[tuple[str, dict[str, str], str, str]] = [
         HTTPS_REASON,
     ),
     ("policy-empty", {POLICY: ""}, POLICY, "must not be empty"),
+    ("terms-http", {TERMS: f"http://example.org/{SECRET}"}, TERMS, HTTPS_REASON),
+    (
+        "terms-loopback-http",
+        {TERMS: f"http://localhost/{SECRET}"},
+        TERMS,
+        HTTPS_REASON,
+    ),
+    ("terms-empty", {TERMS: ""}, TERMS, "must not be empty"),
     (
         "api-url-http",
         {API_URL: f"http://example.org/{SECRET}"},
@@ -472,6 +484,7 @@ NOT_PLANTED = frozenset(
         "operator-empty",
         "client-secret-empty",
         "policy-empty",
+        "terms-empty",
         "web-url-empty",
         "rate-three-numbers",
         "rate-space",
@@ -547,6 +560,7 @@ LITERAL_GROUP = [
     "FITDOCS_RELAY_OPERATOR_NAME",
     "FITDOCS_RELAY_SUPPORT_CONTACT",
     "FITDOCS_RELAY_PRIVACY_POLICY_URL",
+    "FITDOCS_RELAY_TERMS_URL",
     "FITDOCS_RELAY_STRAVA_CLIENT_SECRET",
     "FITDOCS_RELAY_STRAVA_WEBHOOK_TOKEN",
     "FITDOCS_RELAY_STRAVA_API_URL",
@@ -562,7 +576,7 @@ def test_the_group_constants_are_the_literal_group_and_the_client_id() -> None:
         *LITERAL_GROUP,
         "FITDOCS_RELAY_STRAVA_CLIENT_ID",
     }
-    assert len(TARGETS_VARIABLES + STRAVA_VARIABLES) == 13
+    assert len(TARGETS_VARIABLES + STRAVA_VARIABLES) == 14
 
 
 @pytest.mark.parametrize("name", LITERAL_GROUP)
@@ -597,7 +611,7 @@ def test_existing_refusals_come_before_the_strava_ones() -> None:
 def test_every_variable_of_the_group_is_a_contract_row() -> None:
     names = {v.name for v in ENVIRONMENT}
     assert set(TARGETS_VARIABLES + STRAVA_VARIABLES) <= names
-    assert len(TARGETS_VARIABLES + STRAVA_VARIABLES) == 13
+    assert len(TARGETS_VARIABLES + STRAVA_VARIABLES) == 14
 
 
 # --- both sides of every bound ---------------------------------------------
@@ -701,7 +715,9 @@ def test_every_trailing_slash_of_a_base_address_is_dropped() -> None:
 def test_all_bad_values_are_refused_one_at_a_time_in_the_contract_tables_order() -> (
     None
 ):
-    valid = env({POLICY: "https://example.org/privacy"})
+    valid = env(
+        {POLICY: "https://example.org/privacy", TERMS: "https://example.org/terms"}
+    )
     bad = {name: "a b" for name in valid if name not in BASE}
     bad[OPERATOR] = "\x07"
     environ = {**BASE, **bad}

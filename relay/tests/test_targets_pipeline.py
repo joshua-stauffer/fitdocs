@@ -252,6 +252,24 @@ def test_the_operator_carries_the_configured_policy_address(
     assert services.strava.operator.policy_url == "https://policy.example.org/p"
 
 
+def test_the_operator_carries_the_configured_terms_address(
+    database_target: Any,
+    open_full_storage: Callable[[], Storage],
+    outbound: ScriptedOutbound,
+) -> None:
+    config = replace(
+        load_config(
+            strava_env({"FITDOCS_RELAY_TERMS_URL": "https://terms.example.org/t"})
+        ),
+        database=database_target,
+    )
+    services = make_services(
+        config, open_full_storage(), clock=clock, outbound=outbound
+    )
+    assert services.strava is not None
+    assert services.strava.operator.terms_url == "https://terms.example.org/t"
+
+
 # --- the services are wired from the configuration and the injected parts ----
 
 DAY = 86_400

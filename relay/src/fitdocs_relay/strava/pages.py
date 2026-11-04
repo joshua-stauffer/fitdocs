@@ -49,6 +49,7 @@ class Operator:
     name: str
     support_contact: str
     policy_url: str | None
+    terms_url: str | None
 
 
 def _e(value: str) -> str:
@@ -61,9 +62,15 @@ def policy_address(operator: Operator) -> str:
 
 
 def _footer(operator: Operator) -> str:
+    terms = (
+        f'<p><a href="{_e(operator.terms_url)}">Terms of use</a></p>'
+        if operator.terms_url
+        else ""
+    )
     return (
         "<footer>"
         f'<p><a href="{_e(policy_address(operator))}">Privacy policy</a></p>'
+        f"{terms}"
         f"<p>Support: {_e(operator.support_contact)}</p>"
         "</footer>"
     )
@@ -88,11 +95,18 @@ def _message(
 
 def connect_page(*, user_code: str, authorize_url: str, operator: Operator) -> Page:
     consent = "".join(f"<p>{_e(p)}</p>" for p in consent_text())
+    terms = (
+        "<p>By connecting, you accept the "
+        f'<a href="{_e(operator.terms_url)}">terms of use</a>.</p>'
+        if operator.terms_url
+        else ""
+    )
     body = (
         f'<p class="code">{_e(user_code)}</p>'
         "<p>Continue only if the terminal where you started fitdocs shows "
         "this same code.</p>"
         f'<section id="consent">{consent}</section>'
+        f"{terms}"
         f'<p><a class="connect" href="{_e(authorize_url)}" '
         'style="display:inline-block;box-sizing:border-box;'
         f"height:{CONNECT_CONTROL_HEIGHT_PX}px;line-height:{CONNECT_CONTROL_HEIGHT_PX}px;"

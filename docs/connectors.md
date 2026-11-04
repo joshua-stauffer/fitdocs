@@ -1023,7 +1023,8 @@ fitdocs disconnect strava --local-only
 token, asking the relay to end the Strava connection. When the relay confirms,
 or reports the token as unknown or revoked, fitdocs removes the instance's
 credentials file and prints `strava: disconnected.`, the file it removed and
-the relay's code. A token the relay reports as unknown or revoked also prints a
+the relay's code. When the relay confirms, it also prints a note that the relay
+deleted the connection and what it kept for it. A token the relay reports as unknown or revoked also prints a
 note that the relay no longer knows the token and that a remaining Strava
 connection can be revoked in Strava's settings. If the relay cannot confirm,
 the file is kept exactly as it was and the command prints the code, fitdocs's

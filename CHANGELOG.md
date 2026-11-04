@@ -64,8 +64,9 @@ recorded as one.
   to stop the browser opening.
 - Disconnecting a Strava instance: `fitdocs disconnect NAME` for a Strava
   instance asks the relay to end the connection first. It removes the stored
-  credentials file once the relay confirms it, or answers that it no longer
-  knows the token (fitdocs then notes that a remaining connection can be
+  credentials file once the relay confirms it (fitdocs then notes that the
+  relay deleted the connection and what it kept for it), or answers that it no
+  longer knows the token (fitdocs then notes that a remaining connection can be
   revoked in Strava's settings), and keeps the file on any other answer or
   when the relay cannot be reached. `--local-only` removes the file without
   contacting the relay; the connection then stays at the relay until the

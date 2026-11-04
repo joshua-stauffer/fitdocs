@@ -221,6 +221,7 @@ the process exits with code 2.
 | `FITDOCS_RELAY_OPERATOR_NAME` | with `FITDOCS_RELAY_STRAVA_CLIENT_ID` | — | no | The relay's operator, as the pages name them; 1-100 printable characters |
 | `FITDOCS_RELAY_SUPPORT_CONTACT` | with `FITDOCS_RELAY_STRAVA_CLIENT_ID` | — | no | An email address or `https` address where athletes reach the operator |
 | `FITDOCS_RELAY_PRIVACY_POLICY_URL` | no | the relay's /privacy | no | An `https` address of the operator's own policy |
+| `FITDOCS_RELAY_TERMS_URL` | no | — | no | An `https` address of the operator's terms of use; the pages link it |
 | `FITDOCS_RELAY_STRAVA_CLIENT_ID` | no | — | no | The Strava application's client id (digits); setting it enables the Strava target |
 | `FITDOCS_RELAY_STRAVA_CLIENT_SECRET` | with `FITDOCS_RELAY_STRAVA_CLIENT_ID` | — | yes | The application's client secret |
 | `FITDOCS_RELAY_STRAVA_WEBHOOK_TOKEN` | with `FITDOCS_RELAY_STRAVA_CLIENT_ID` | — | yes | 32-128 characters of `[A-Za-z0-9_-]`; the webhook path secret and verify token |
@@ -654,6 +655,11 @@ the athlete's Strava access, what it returns to fitdocs
 and what it will never do, before the "Connect with Strava" control. The page
 shows the user code and tells the athlete to continue only if their terminal
 shows the same one.
+
+To publish terms of use, set `FITDOCS_RELAY_TERMS_URL` to an `https` address:
+every page's footer then links it after the privacy policy, and the connect page
+says "By connecting, you accept the terms of use." directly before the control.
+Unset, the pages are unchanged and the relay has no terms of its own.
 
 ### Operator obligations
 

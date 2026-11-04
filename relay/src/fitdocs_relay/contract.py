@@ -60,6 +60,7 @@ ENV_ENCRYPTION_KEYS: Final = ENV_PREFIX + "ENCRYPTION_KEYS"
 ENV_OPERATOR_NAME: Final = ENV_PREFIX + "OPERATOR_NAME"
 ENV_SUPPORT_CONTACT: Final = ENV_PREFIX + "SUPPORT_CONTACT"
 ENV_PRIVACY_POLICY_URL: Final = ENV_PREFIX + "PRIVACY_POLICY_URL"
+ENV_TERMS_URL: Final = ENV_PREFIX + "TERMS_URL"
 ENV_STRAVA_CLIENT_ID: Final = ENV_PREFIX + "STRAVA_CLIENT_ID"
 ENV_STRAVA_CLIENT_SECRET: Final = ENV_PREFIX + "STRAVA_CLIENT_SECRET"
 ENV_STRAVA_WEBHOOK_TOKEN: Final = ENV_PREFIX + "STRAVA_WEBHOOK_TOKEN"
@@ -188,6 +189,13 @@ ENVIRONMENT: Final[tuple[EnvVar, ...]] = (
         "the relay's /privacy",
         False,
         "An `https` address of the operator's own policy",
+    ),
+    EnvVar(
+        ENV_TERMS_URL,
+        False,
+        None,
+        False,
+        "An `https` address of the operator's terms of use; the pages link it",
     ),
     EnvVar(
         ENV_STRAVA_CLIENT_ID,

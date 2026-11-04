@@ -615,6 +615,7 @@ _STRAVA_NOTE_UNKNOWN = (
     "the relay no longer knows this token; a remaining Strava connection can "
     "be revoked in Strava's settings"
 )
+_STRAVA_NOTE_DELETED = "the relay deleted this connection and what it kept for it"
 _STRAVA_LOCAL_ONLY_NOTE = (
     "the Strava connection stays at the relay until this instance is connected "
     "and disconnected again, or access is revoked in Strava's settings"
@@ -633,7 +634,7 @@ _STRAVA_OTHER_ROUTE_CODES = _OTHER_ROUTE_CODES | {
 @pytest.mark.parametrize(
     ("code", "note"),
     [
-        (RelayCode.OK, None),
+        (RelayCode.OK, _STRAVA_NOTE_DELETED),
         (RelayCode.TOKEN_UNKNOWN, _STRAVA_NOTE_UNKNOWN),
         (RelayCode.TOKEN_REVOKED, _STRAVA_NOTE_UNKNOWN),
     ],

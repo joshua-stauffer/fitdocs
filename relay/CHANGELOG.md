@@ -19,7 +19,7 @@ breaking change for deployments is marked `**Breaking for deployments:**`.
   them. Required with the client id: `FITDOCS_RELAY_STRAVA_CLIENT_SECRET`,
   `FITDOCS_RELAY_STRAVA_WEBHOOK_TOKEN`, `FITDOCS_RELAY_PUBLIC_URL`,
   `FITDOCS_RELAY_ENCRYPTION_KEYS`, `FITDOCS_RELAY_OPERATOR_NAME` and
-  `FITDOCS_RELAY_SUPPORT_CONTACT`. Optional: `FITDOCS_RELAY_PRIVACY_POLICY_URL`,
+  `FITDOCS_RELAY_SUPPORT_CONTACT`. Optional: `FITDOCS_RELAY_PRIVACY_POLICY_URL`, `FITDOCS_RELAY_TERMS_URL`,
   `FITDOCS_RELAY_STRAVA_API_URL`, `FITDOCS_RELAY_STRAVA_OAUTH_URL`,
   `FITDOCS_RELAY_STRAVA_WEB_URL`, `FITDOCS_RELAY_STRAVA_RATE_LIMIT` and
   `FITDOCS_RELAY_STRAVA_READ_RATE_LIMIT`. A variable of the target set without
@@ -38,6 +38,12 @@ breaking change for deployments is marked `**Breaking for deployments:**`.
   budget tables on SQLite and PostgreSQL. The change is additive: no 0.1.0
   table or column changes. Every relay needs it: until it is applied,
   `/readyz` reports `schema-behind` and `migrate --check` exits `3`.
+- Terms address. The optional `FITDOCS_RELAY_TERMS_URL` (`https`, no default,
+  not secret) adds a "Terms of use" link to every Strava page's footer, after
+  the privacy link, and a sentence accepting the terms directly before the
+  connect page's control. The consent and the built-in policy are unchanged, and
+  with the variable unset every page is as before. Additive: the deploy
+  contract version stays 1.
 - Keeps. For the Strava target the relay keeps, per connection, the encrypted
   tokens, the time the access token expires and the keyed account hash, and
   the call counts. A publish that lands leaves nothing about the workout.

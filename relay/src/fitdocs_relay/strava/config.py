@@ -29,6 +29,7 @@ from fitdocs_relay.contract import (
     ENV_STRAVA_WEB_URL,
     ENV_STRAVA_WEBHOOK_TOKEN,
     ENV_SUPPORT_CONTACT,
+    ENV_TERMS_URL,
     ENVIRONMENT,
     EnvVar,
 )
@@ -40,6 +41,7 @@ TARGETS_VARIABLES: Final = (
     ENV_OPERATOR_NAME,
     ENV_SUPPORT_CONTACT,
     ENV_PRIVACY_POLICY_URL,
+    ENV_TERMS_URL,
 )
 STRAVA_VARIABLES: Final = (
     ENV_STRAVA_CLIENT_ID,
@@ -73,6 +75,7 @@ class TargetsConfig:
     operator_name: str
     support_contact: str
     privacy_policy_url: str | None
+    terms_url: str | None
 
 
 @dataclass(frozen=True)
@@ -232,7 +235,16 @@ def load_targets_config(
         if ENV_PRIVACY_POLICY_URL in environ
         else None
     )
-    return TargetsConfig(public_url, keys, operator_name, support_contact, policy)
+    terms = (
+        _web_address(
+            ENV_TERMS_URL, _require(environ, ENV_TERMS_URL), loopback_http=False
+        )
+        if ENV_TERMS_URL in environ
+        else None
+    )
+    return TargetsConfig(
+        public_url, keys, operator_name, support_contact, policy, terms
+    )
 
 
 _CLIENT_ID = re.compile(r"[0-9]{1,20}")

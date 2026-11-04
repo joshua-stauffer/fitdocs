@@ -10,9 +10,10 @@ stored token and never the environment override. ``ok``, ``token-unknown`` and
 byte-identical and returns the code with a fitdocs-written explanation and
 next step. Nothing the relay sent beyond its code is carried into a result.
 
-A browser-consent instance does the same through ``withdraw_consent``; the
-answers ``token-unknown`` and ``token-revoked`` remove the file with a note
-that a remaining connection can be revoked in Strava's settings.
+A browser-consent instance does the same through ``withdraw_consent``; ``ok``
+removes the file with a note that the relay deleted the connection and what it
+kept for it, and the answers ``token-unknown`` and ``token-revoked`` remove it
+with a note that a remaining connection can be revoked in Strava's settings.
 
 ``local_only``, and the personal-key and login styles, remove the file with no
 request and say the credential stays valid where it was issued. Only the named
@@ -54,6 +55,9 @@ SERVICE_NOTE: Final = "the credential remains valid at the service"
 CONSENT_LOCAL_ONLY_NOTE: Final = (
     "the Strava connection stays at the relay until this instance is connected "
     "and disconnected again, or access is revoked in Strava's settings"
+)
+CONSENT_DELETED_NOTE: Final = (
+    "the relay deleted this connection and what it kept for it"
 )
 CONSENT_UNKNOWN_NOTE: Final = (
     "the relay no longer knows this token; a remaining Strava connection can "
@@ -207,12 +211,11 @@ def _revoke_then_remove(
             next_step=_next_step(instance.name),
         )
     store.remove(instance.name)
-    forgotten = (
-        CONSENT_UNKNOWN_NOTE
-        if instance.connector.auth_style is AuthStyle.OAUTH_BROWSER
-        and code is not RelayCode.OK
-        else None
-    )
+    forgotten: str | None = None
+    if instance.connector.auth_style is AuthStyle.OAUTH_BROWSER:
+        forgotten = (
+            CONSENT_DELETED_NOTE if code is RelayCode.OK else CONSENT_UNKNOWN_NOTE
+        )
     return _removed(
         instance,
         store,
