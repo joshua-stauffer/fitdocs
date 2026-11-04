@@ -1,7 +1,7 @@
 ---
 id: 2026-11-02-strava-publish-link-record-orphan-race
 title: "A publish finishing after disconnect or account change can leave a link record the relay promises to delete"
-status: open
+status: dropped
 importance: low
 importance_why: "Maintainer 2026-11-04: not worth fixing now. A disconnect must commit in the gap between two adjacent database calls, at low volume; the leftover row holds only fitdocs facts and no longer resolves anything once /go/ is gone."
 effort: M
@@ -36,3 +36,6 @@ Req 11.5 and 3.11 and the privacy policy's "deleted at once" are not strictly tr
 1. Write the sequence as a failing test in relay/tests/conformance/ on both backends.
 2. Amend the design with the conditional-put signature, then implement in sqlite.py and postgres.py in the put's transaction.
 3. Also add the missing conformance test for two principals racing `put_publication` on one new id.
+
+## Resolution
+Dropped 2026-11-04: moot. strava-publish Amendment 1 removes publication records from the relay (maintainer), so there is no record to orphan and `put_publication` no longer exists.

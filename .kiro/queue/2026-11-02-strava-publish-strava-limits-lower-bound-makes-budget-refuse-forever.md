@@ -34,3 +34,6 @@ Silent permanent refusal from a config the relay accepts.
 ## How to pick it up
 1. Write tests with read limits 1, 2 and 19 showing the refusals.
 2. Raise the lower bound (at least the reservation times two) or refuse at startup naming the minimum; document it in docs/relay.md.
+
+## Update 2026-11-04
+strava-publish Amendment 1 removed `/go/` and `/robots.txt` from the relay, and with them its publication records. Read the evidence above with that in mind; what it says about those routes no longer applies.

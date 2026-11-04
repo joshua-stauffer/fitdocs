@@ -28,11 +28,11 @@ relay ships no tooling for answering such requests ("Out of scope: ... an operat
 holds about one athlete"). The operator commands today are `principal
 create|list|delete`, `token mint|list|revoke` and the Strava/key commands
 (`docs/relay.md` "Operator commands"); none prints a principal's connections,
-publication records, budget counts or wrapper records.
+budget counts or wrapper records.
 
 ## Why it matters
 Each access or export request needs hand-written SQL against
-`principals`, `tokens`, `target_connections`, `target_publications`,
+`principals`, `tokens`, `target_connections`,
 `budget_counts` and `records`, on SQLite or PostgreSQL. Done by hand, a
 request can easily print a secret (a sealed token or a keyed hash) or miss a
 table. Platform developer terms commonly expect these rights; Garmin's

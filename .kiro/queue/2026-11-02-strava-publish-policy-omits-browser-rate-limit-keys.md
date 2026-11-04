@@ -33,3 +33,6 @@ The policy is incomplete against its own requirement; operators publish it as th
 ## How to pick it up
 1. Read the design's Pages and Policy section; pick which heading carries a sentence (the headings are fixed, so fold into an existing one or amend the heading list).
 2. Update policy.py and the test that pins the policy text.
+
+## Update 2026-11-04
+strava-publish Amendment 1 removed `/go/` and `/robots.txt` from the relay, and with them its publication records. Read the evidence above with that in mind; what it says about those routes no longer applies.

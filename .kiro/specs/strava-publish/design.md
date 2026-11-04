@@ -1986,9 +1986,10 @@ exchanges decoded by the fitdocs suite.
 
 ## Amendment note (2026-11-04): requirements Amendment 1
 
-Requirements Amendment 1 removes `/go/`, `/robots.txt`, the `relay` link setting
-and the budget's link headroom, and adds an optional terms address and what
-`fitdocs disconnect` says. Where the text above describes those, the amendment
+Requirements Amendment 1 removes `/go/`, `/robots.txt`, the `relay` link setting,
+the budget's link headroom and the relay's publication records (with the check
+that rejected an id recorded for another principal, and `put_publication`), and
+adds an optional terms address and what `fitdocs disconnect` says. Where the text above describes those, the amendment
 governs; the sections are kept as the record of what was designed.
 
 ## Amendment note (2026-11-02): controller rulings made while implementing

@@ -29,3 +29,6 @@ The policy understates when data is deleted; low risk because deletion happens a
 
 ## How to pick it up
 Read the `_SHARED["Deletion"]` entry, add the two clauses in plain words, and update the test that pins the policy sentences.
+
+## Update 2026-11-04
+strava-publish Amendment 1 removed `/go/` and `/robots.txt` from the relay, and with them its publication records. Read the evidence above with that in mind; what it says about those routes no longer applies.

@@ -367,7 +367,7 @@ fitdocs always writes the Strava address the relay returns, so nothing needs a l
   - Criterion 7 becomes: the relay server shall carry the Strava address of the activity in each answer whose outcome is posted or uploaded. Where an answer carries no address, fitdocs writes no new link, and a page keeps any link it already recorded.
 - Requirement 3 criteria 10 and 11, Requirement 11 criteria 5, 6 and 8, and Requirement 14 criterion 1: "link records" leave these criteria. Criterion 3.11's replacement of a connection stays; there is nothing further to delete when the account differs.
 - Requirement 12 criterion 3: the relay's only lasting records for the Strava target are the encrypted tokens and the keyed account hash.
-- Requirement 14 criterion 3: `0002_target_custody` is edited in place rather than followed by a new change, because no relay carrying it was ever released. The schema version stays 2. A database already at version 2 keeps an empty table that nothing reads.
+- Requirement 14 criterion 3: `0002_target_custody` is edited in place rather than followed by a new change, because no relay carrying it was ever released. The schema version stays 2. A database already at version 2 keeps a table that nothing reads or writes.
 - Requirement 11 gains criterion 11: when `fitdocs disconnect NAME` runs for a Strava instance and the relay answers success, the fitdocs CLI shall also state that the relay deleted the connection and what it kept for it.
 - Requirement 12 criterion 5: "the link" leaves the list of routes.
 - Requirement 13 criterion 1: the link setting leaves the table, and an optional terms address joins it (`FITDOCS_RELAY_TERMS_URL`, `https` only, no default).

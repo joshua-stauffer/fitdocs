@@ -28,3 +28,6 @@ An extension route could collide with a reserved prefix undetected.
 
 ## How to pick it up
 Look at how extension routes are mounted (see 2026-11-01-relay-extension-http-errors-become-envelope.md); enforce at mount time or relabel.
+
+## Update 2026-11-04
+strava-publish Amendment 1 removed `/go/` and `/robots.txt` from the relay, and with them its publication records. Read the evidence above with that in mind; what it says about those routes no longer applies.
