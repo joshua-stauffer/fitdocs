@@ -23,27 +23,21 @@ from fitdocs import cli
 from fitdocs.connectors import disconnect
 from fitdocs.connectors.credentials import env_var_name
 from fitdocs.connectors.errors import ConnectorSettingsError
-from fitdocs.connectors.protocol import PublishCode, PublishRequest, SettingsContext
-from fitdocs.connectors.relay import DEFAULT_RELAY_URL, RelayReply, RelaySettings
+from fitdocs.connectors.protocol import PublishCode, SettingsContext
+from fitdocs.connectors.relay import DEFAULT_RELAY_URL
 from fitdocs.connectors.relay_codes import RelayCode
 from fitdocs.connectors.relay_targets import (
-    LINK_PREFIX,
     MAX_DESCRIPTION_CHARS,
     MAX_FIT_BYTES,
     MAX_TITLE_CHARS,
     PUBLISH_OUTCOMES,
     UPLOAD_OUTCOMES,
-    link_path,
 )
 from fitdocs.connectors.strava import (
     PUBLISH_MAPPING,
-    STRAVA_LINK_LABEL,
     UPLOAD_MAPPING,
     StravaConnector,
-    StravaSettings,
-    _link,
 )
-from fitdocs.publish.request import valid_link
 
 _DOC = Path(__file__).resolve().parents[2] / "docs" / "connectors.md"
 _ID = "0123456789abcdef0123456789abcdef"
@@ -206,59 +200,6 @@ def test_the_stated_limits_are_the_codecs() -> None:
     assert "over 16 MiB" in page
     assert f"over {MAX_TITLE_CHARS} characters" in page
     assert f"over {MAX_DESCRIPTION_CHARS} characters" in page
-
-
-# --- the link ---------------------------------------------------------------
-
-
-def _request() -> PublishRequest:
-    class _Request:
-        publication_id = _ID
-
-    return _Request()  # type: ignore[return-value]
-
-
-def _settings(url: str) -> StravaSettings:
-    return StravaSettings("relay", False, RelaySettings(url=url))
-
-
-def test_the_link_section_matches_how_the_link_is_composed() -> None:
-    page = _flat(_subsection("The View on Strava link"))
-    assert f"`{LINK_PREFIX}`" in page
-    assert "the activity's page on Strava" in page
-    assert STRAVA_LINK_LABEL in page
-
-    composed = _link(_reply({}), _settings("https://relay.example"), _request())
-    assert composed == "https://relay.example" + link_path(_ID)
-    assert composed == "https://relay.example" + LINK_PREFIX + _ID
-    assert valid_link(composed)
-    assert (
-        _link(
-            _reply({"link": "https://x.example/a"}),
-            _settings("https://r.example"),
-            _request(),
-        )
-        == "https://x.example/a"
-    )
-
-
-def test_a_loopback_http_relay_gives_no_link_and_the_page_says_so() -> None:
-    page = _flat(_subsection("The View on Strava link"))
-    assert "loopback `http` address" in page
-    assert 'there is no "View on Strava" link' in page
-    # Built at run time: the neutral scan reads this file and an IPv6
-    # literal written contiguously confuses its URL pattern.
-    for host in ("localhost", "127.0.0.1", "[::1]"):
-        url = f"http{':'}//{host}:8080"
-        link = _link(_reply({}), _settings(url), _request())
-        assert link is not None and link.startswith("http://")
-        assert not valid_link(link), url
-
-
-def _reply(data: dict[str, object]) -> RelayReply:
-    return RelayReply(
-        code=RelayCode.OK, data=data, outcome="posted", retry_after_s=None
-    )
 
 
 # --- wording ---------------------------------------------------------------

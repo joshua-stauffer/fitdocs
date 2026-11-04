@@ -30,7 +30,7 @@ from fitdocs_relay.storage.interface import (
 )
 from fitdocs_relay.strava.api import Grant, StravaApi
 from fitdocs_relay.strava.budget import StravaBudget
-from fitdocs_relay.strava.config import Limits, LinkSetting, StravaConfig
+from fitdocs_relay.strava.config import Limits, StravaConfig
 from fitdocs_relay.strava.custody import (
     LEASE_POLL_S,
     LEASE_S,
@@ -56,7 +56,6 @@ CONFIG = StravaConfig(
     oauth_url=OAUTH,
     web_url="https://web.example",
     limits=LIMITS,
-    links=LinkSetting.ACTIVITY,
 )
 PEPPER = b"custody-test-pepper-0123456789abcdef"
 ATHLETE = "90210123"
@@ -361,24 +360,6 @@ def test_a_refresh_spends_one_read_of_the_budget_or_the_links_share(
     assert counts["strava:p:ann:read:900"] == 1
 
 
-def test_a_refresh_for_a_link_is_charged_against_the_links_headroom(
-    store: Storage,
-) -> None:
-    # read_15m=5: the headroom leaves 4 for links, floor(5 * 0.8)
-    w = build(store, limits=Limits(HUGE, HUGE, 5, HUGE))
-    for principal in ("bea", "bea", "cat", "cat"):  # each holds 2, floor(5 x .5 x .8)
-        assert w.budget.spend(principal, for_link=True).allowed
-    connect(w)
-    # the application window now holds 4: a link refresh is refused ...
-    assert (
-        w.custody.access_token("ann", deadline=w.deadline(), for_link=True)
-        is PublishCode.RATE_LIMITED
-    )
-    # ... where a non-link one still fits
-    w.outbound.expect("POST", TOKEN_URL, reply(200, refreshed()))
-    assert usable(w.custody.access_token("ann", deadline=w.deadline())) == NEW_ACCESS
-
-
 def test_a_deadline_already_passed_ends_before_any_spend_or_call(
     database_target: Target, world: World
 ) -> None:
@@ -497,7 +478,7 @@ def test_a_refresh_that_raises_gives_the_lease_back(world: World) -> None:
 
 
 class ExplodingBudget:
-    def spend(self, principal_id: str, *, for_link: bool = False) -> object:
+    def spend(self, principal_id: str) -> object:
         raise RuntimeError("storage is down")
 
 
@@ -874,21 +855,6 @@ def test_withdraw_makes_no_call_when_the_budget_refuses_and_still_deletes(
     connect(w)
     w.custody.withdraw("ann")
     assert w.outbound.calls == []
-    assert store.get_connection("ann", "strava") is None
-
-
-def test_withdraws_revoke_is_not_charged_against_the_links_headroom(
-    store: Storage,
-) -> None:
-    w = build(store, limits=Limits(HUGE, HUGE, 5, HUGE))
-    for principal in ("bea", "bea", "cat", "cat"):
-        assert w.budget.spend(principal, for_link=True).allowed
-    connect(w)
-    # the links' headroom is used up, a plain read still fits
-    assert not w.budget.spend("ann", for_link=True).allowed
-    w.outbound.expect("POST", REVOKE_URL, reply(200, {}))
-    w.custody.withdraw("ann")
-    assert w.revoke_calls() == 1
     assert store.get_connection("ann", "strava") is None
 
 

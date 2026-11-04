@@ -29,7 +29,7 @@ from fitdocs_relay.storage.interface import (
 )
 from fitdocs_relay.strava.api import StravaApi
 from fitdocs_relay.strava.budget import StravaBudget
-from fitdocs_relay.strava.config import Limits, LinkSetting, StravaConfig
+from fitdocs_relay.strava.config import Limits, StravaConfig
 from fitdocs_relay.strava.connect import (
     CLAIM_COOKIE,
     CONNECT_EXPIRES_IN_S,
@@ -59,7 +59,6 @@ CONFIG = StravaConfig(
     oauth_url=OAUTH,
     web_url="https://web.example",
     limits=Limits(HUGE, HUGE, HUGE, HUGE),
-    links=LinkSetting.ACTIVITY,
 )
 PEPPER = b"connect-test-pepper-0123456789abcdefghijklmnop"
 FULL = "read,activity:read_all,activity:write"

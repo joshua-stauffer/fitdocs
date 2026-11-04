@@ -897,11 +897,11 @@ def test_a_network_error_answering_the_upload_is_unconfirmed(world: World) -> No
 # --- counting in the upload flow ---
 
 
-def test_the_refresh_is_counted_without_the_link_headroom_in_an_upload(
+def test_the_refresh_is_counted_against_the_publishing_ceiling_in_an_upload(
     store: Storage,
 ) -> None:
-    # ann's share is one call: the publishing ceiling admits the refresh, the
-    # link ceiling (which keeps headroom back) does not; then the list is refused.
+    # ann's share is one call: the publishing ceiling admits the refresh; then
+    # the list is refused.
     w = build(store, limits=TIGHTER)
     connect(w, "ann", expires=NEAR)
     w.outbound.expect(

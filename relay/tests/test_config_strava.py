@@ -14,7 +14,6 @@ from fitdocs_relay.strava.config import (
     STRAVA_VARIABLES,
     TARGETS_VARIABLES,
     Limits,
-    LinkSetting,
 )
 
 P = "FITDOCS_RELAY_"
@@ -31,7 +30,6 @@ WEBHOOK = P + "STRAVA_WEBHOOK_TOKEN"
 API_URL = P + "STRAVA_API_URL"
 OAUTH_URL = P + "STRAVA_OAUTH_URL"
 WEB_URL = P + "STRAVA_WEB_URL"
-LINKS = P + "STRAVA_LINKS"
 RATE = P + "STRAVA_RATE_LIMIT"
 READ_RATE = P + "STRAVA_READ_RATE_LIMIT"
 
@@ -89,7 +87,6 @@ def test_the_client_id_enables_the_target_with_every_default() -> None:
     assert cfg.strava.api_url == "https://www.strava.com/api/v3"
     assert cfg.strava.oauth_url == "https://www.strava.com/oauth"
     assert cfg.strava.web_url == "https://www.strava.com"
-    assert cfg.strava.links is LinkSetting.ACTIVITY
     assert cfg.strava.limits == Limits(200, 2000, 100, 1000)
     assert cfg.targets is not None
     assert cfg.targets.public_url == "https://relay.example.org"
@@ -111,7 +108,6 @@ def test_every_setting_lands_in_its_own_field() -> None:
                 API_URL: "http://localhost:9001/api",
                 OAUTH_URL: "https://oauth.example.org/o/",
                 WEB_URL: "http://[::1]:9002",
-                LINKS: "relay",
                 RATE: "11,22",
                 READ_RATE: "3,4",
             }
@@ -126,7 +122,6 @@ def test_every_setting_lands_in_its_own_field() -> None:
     assert cfg.strava.api_url == "http://localhost:9001/api"
     assert cfg.strava.oauth_url == "https://oauth.example.org/o"
     assert cfg.strava.web_url == "http://[::1]:9002"
-    assert cfg.strava.links is LinkSetting.RELAY
     assert cfg.strava.limits == Limits(11, 22, 3, 4)
 
 
@@ -403,7 +398,6 @@ REFUSALS: list[tuple[str, dict[str, str], str, str]] = [
     ("rate-short-above-range", {RATE: "1000001,5"}, RATE, LIMIT_REASON),
     ("rate-day-zero", {RATE: "1,0"}, RATE, LIMIT_REASON),
     ("client-id-hex-letters", {CLIENT_ID: "12abcdef"}, CLIENT_ID, "must be digits"),
-    ("links-padded", {LINKS: " relay"}, LINKS, "must be activity or relay"),
     (
         "webhook-token-dot",
         {WEBHOOK: SECRET + "." + "x" * 20},
@@ -443,9 +437,6 @@ REFUSALS: list[tuple[str, dict[str, str], str, str]] = [
         LOOPBACK_REASON,
     ),
     ("web-url-empty", {WEB_URL: ""}, WEB_URL, "must not be empty"),
-    ("links-other", {LINKS: f"both{SECRET}"}, LINKS, "must be activity or relay"),
-    ("links-case", {LINKS: "Activity"}, LINKS, "must be activity or relay"),
-    ("links-empty", {LINKS: ""}, LINKS, "must not be empty"),
     ("rate-one-number", {RATE: f"{SECRET}"}, RATE, LIMIT_REASON),
     ("rate-three-numbers", {RATE: "1,2,3"}, RATE, LIMIT_REASON),
     ("rate-letters", {RATE: f"1,{SECRET}"}, RATE, LIMIT_REASON),
@@ -465,7 +456,7 @@ REFUSALS: list[tuple[str, dict[str, str], str, str]] = [
 # rate-three-numbers), a range or an order (rate-zero, rate-negative,
 # rate-too-big, rate-short-above-day, read-rate-short-above-day), a repeated id
 # (keys-duplicate-id), a near-miss literal whose fault is its exact text
-# (links-case, links-padded, rate-space), a non-ASCII digit lookalike
+# (rate-space), a non-ASCII digit lookalike
 # (rate-non-ascii-digits, client-id-non-ascii-digits), and a value that is
 # malformed by its shape alone (contact-no-local, contact-empty-domain-label,
 # contact-trailing-dot, contact-empty-middle-label, rate-one-number-digits,
@@ -482,8 +473,6 @@ NOT_PLANTED = frozenset(
         "client-secret-empty",
         "policy-empty",
         "web-url-empty",
-        "links-case",
-        "links-empty",
         "rate-three-numbers",
         "rate-space",
         "rate-zero",
@@ -502,7 +491,6 @@ NOT_PLANTED = frozenset(
         "rate-short-above-range",
         "rate-day-zero",
         "client-id-hex-letters",
-        "links-padded",
     }
 )
 
@@ -564,7 +552,6 @@ LITERAL_GROUP = [
     "FITDOCS_RELAY_STRAVA_API_URL",
     "FITDOCS_RELAY_STRAVA_OAUTH_URL",
     "FITDOCS_RELAY_STRAVA_WEB_URL",
-    "FITDOCS_RELAY_STRAVA_LINKS",
     "FITDOCS_RELAY_STRAVA_RATE_LIMIT",
     "FITDOCS_RELAY_STRAVA_READ_RATE_LIMIT",
 ]
@@ -575,7 +562,7 @@ def test_the_group_constants_are_the_literal_group_and_the_client_id() -> None:
         *LITERAL_GROUP,
         "FITDOCS_RELAY_STRAVA_CLIENT_ID",
     }
-    assert len(TARGETS_VARIABLES + STRAVA_VARIABLES) == 14
+    assert len(TARGETS_VARIABLES + STRAVA_VARIABLES) == 13
 
 
 @pytest.mark.parametrize("name", LITERAL_GROUP)
@@ -591,8 +578,8 @@ def test_any_other_variable_without_the_client_id_is_refused(name: str) -> None:
 def test_a_valid_looking_variable_alone_is_still_refused_without_the_client_id() -> (
     None
 ):
-    environ = {**BASE, LINKS: "relay"}
-    assert str(refusal(environ)) == f"{LINKS}: is only valid with {CLIENT_ID}"
+    environ = {**BASE, RATE: "11,22"}
+    assert str(refusal(environ)) == f"{RATE}: is only valid with {CLIENT_ID}"
 
 
 def test_the_whole_strava_set_minus_the_client_id_is_refused_on_the_first_name() -> (
@@ -610,7 +597,7 @@ def test_existing_refusals_come_before_the_strava_ones() -> None:
 def test_every_variable_of_the_group_is_a_contract_row() -> None:
     names = {v.name for v in ENVIRONMENT}
     assert set(TARGETS_VARIABLES + STRAVA_VARIABLES) <= names
-    assert len(TARGETS_VARIABLES + STRAVA_VARIABLES) == 14
+    assert len(TARGETS_VARIABLES + STRAVA_VARIABLES) == 13
 
 
 # --- both sides of every bound ---------------------------------------------
@@ -725,3 +712,19 @@ def test_all_bad_values_are_refused_one_at_a_time_in_the_contract_tables_order()
         environ[name] = valid[name]
     assert order == [v.name for v in ENVIRONMENT if v.name in bad]
     assert load_config(environ).strava is not None
+
+
+REMOVED_LINKS = P + "STRAVA_LINKS"  # the link setting, in no released relay
+
+
+@pytest.mark.parametrize("value", ["activity", "relay", ""])
+@pytest.mark.parametrize("enabled", [True, False])
+def test_the_removed_link_setting_is_an_unknown_reserved_variable(
+    value: str, enabled: bool
+) -> None:
+    environ = {**(env() if enabled else BASE), REMOVED_LINKS: value}
+    error = refusal(environ)
+    assert error.variable == REMOVED_LINKS
+    assert str(error) == (
+        f"{REMOVED_LINKS}: unknown variable with the reserved prefix {P}"
+    )

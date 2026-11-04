@@ -1,7 +1,6 @@
 """The fitdocs-written HTML pages of the Strava target.
 
-Imports the standard library and `strava.policy` only at run time;
-`LinkSetting` is imported for typing alone. Every operator-configured or
+Imports the standard library and `strava.policy` only. Every operator-configured or
 generated string that a page interpolates passes through `_e` (the values are
 configuration or values fitdocs generated or validated; Requirements 12.4,
 16.3). Fixed wording is escaped like every other text; only the markup, the
@@ -13,12 +12,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from html import escape
-from typing import TYPE_CHECKING, Final
+from typing import Final
 
 from fitdocs_relay.strava.policy import consent_text, policy_sections
-
-if TYPE_CHECKING:
-    from fitdocs_relay.strava.config import LinkSetting
 
 BUILT_IN_POLICY_PATH: Final = "/privacy"
 CONNECT_CONTROL_HEIGHT_PX: Final = 48
@@ -90,10 +86,8 @@ def _message(
     return _document(title, body, operator, status)
 
 
-def connect_page(
-    *, user_code: str, authorize_url: str, operator: Operator, links: LinkSetting
-) -> Page:
-    consent = "".join(f"<p>{_e(p)}</p>" for p in consent_text(links))
+def connect_page(*, user_code: str, authorize_url: str, operator: Operator) -> Page:
+    consent = "".join(f"<p>{_e(p)}</p>" for p in consent_text())
     body = (
         f'<p class="code">{_e(user_code)}</p>'
         "<p>Continue only if the terminal where you started fitdocs shows "
@@ -153,18 +147,6 @@ def refused_page(operator: Operator) -> Page:
     )
 
 
-def not_found_page(operator: Operator) -> Page:
-    return _message(
-        404,
-        "Not found",
-        (
-            "This link does not lead to an activity.",
-            "Check that your account is connected and that the workout was published.",
-        ),
-        operator,
-    )
-
-
 def try_later_page(operator: Operator) -> Page:
     return _message(
         429,
@@ -183,9 +165,9 @@ def unavailable_page(operator: Operator) -> Page:
     )
 
 
-def privacy_page(operator: Operator, links: LinkSetting) -> Page:
+def privacy_page(operator: Operator) -> Page:
     parts: list[str] = []
-    for heading, text in policy_sections(links):
+    for heading, text in policy_sections():
         extra = ""
         if heading == "The relay's operator":
             extra = f"<p>Operator: {_e(operator.name)}</p>"

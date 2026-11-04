@@ -66,7 +66,6 @@ ENV_STRAVA_WEBHOOK_TOKEN: Final = ENV_PREFIX + "STRAVA_WEBHOOK_TOKEN"
 ENV_STRAVA_API_URL: Final = ENV_PREFIX + "STRAVA_API_URL"
 ENV_STRAVA_OAUTH_URL: Final = ENV_PREFIX + "STRAVA_OAUTH_URL"
 ENV_STRAVA_WEB_URL: Final = ENV_PREFIX + "STRAVA_WEB_URL"
-ENV_STRAVA_LINKS: Final = ENV_PREFIX + "STRAVA_LINKS"
 ENV_STRAVA_RATE_LIMIT: Final = ENV_PREFIX + "STRAVA_RATE_LIMIT"
 ENV_STRAVA_READ_RATE_LIMIT: Final = ENV_PREFIX + "STRAVA_READ_RATE_LIMIT"
 
@@ -234,15 +233,6 @@ ENVIRONMENT: Final[tuple[EnvVar, ...]] = (
         "https://www.strava.com",
         False,
         "Base of activity pages (`/activities/<id>`)",
-    ),
-    EnvVar(
-        ENV_STRAVA_LINKS,
-        False,
-        "activity",
-        False,
-        "The link setting: `activity` puts the activity's address "
-        "`<web URL>/activities/<id>` in every posted or uploaded answer; `relay` "
-        "puts none, and pages link to `/go/<publication id>`",
     ),
     EnvVar(
         ENV_STRAVA_RATE_LIMIT,

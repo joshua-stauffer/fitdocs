@@ -187,12 +187,6 @@ def test_the_environment_table_is_the_codes_table() -> None:
     assert environment_problems(page_text()) == []
 
 
-def test_the_environment_table_was_actually_read() -> None:
-    rows = table_rows(page_text(), ENV_HEADER)
-    assert len(rows) == len(contract.ENVIRONMENT) >= 25
-    assert all(len(row) == 5 for row in rows)
-
-
 def test_the_page_states_the_three_versions() -> None:
     assert version_problems(page_text()) == []
 

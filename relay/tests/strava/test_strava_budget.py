@@ -54,12 +54,10 @@ def counts(target: Target) -> dict[str, int]:
     }
 
 
-def allowed_run(
-    b: StravaBudget, principal: str, limit: int, *, for_link: bool = False
-) -> int:
+def allowed_run(b: StravaBudget, principal: str, limit: int) -> int:
     """How many single reads `principal` gets before the first refusal."""
     n = 0
-    while n <= limit and b.spend(principal, for_link=for_link).allowed:
+    while n <= limit and b.spend(principal).allowed:
         n += 1
     return n
 
@@ -160,63 +158,6 @@ def test_the_application_window_is_the_whole_limit_shared_by_principals(
     assert refused.retry_after_s is not None and refused.retry_after_s > 0
 
 
-# --- link headroom ---------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    ("name", "limit", "application", "own"),
-    [("read_15m", 12, 9, 4), ("read_day", 14, 11, 5)],
-)
-def test_a_link_stops_at_the_application_headroom_while_a_publish_goes_on(
-    store: Storage, name: str, limit: int, application: int, own: int
-) -> None:
-    b, _ = budget(store, limits(**{name: limit}))
-    spent = [allowed_run(b, p, limit, for_link=True) for p in ("p1", "p2")]
-    assert spent == [own, own]
-    for _ in range(application - 2 * own):  # the application's last link calls
-        assert b.spend("p3", for_link=True) == ALLOWED
-    refused = b.spend("p4", for_link=True)
-    assert refused.allowed is False
-    assert refused.retry_after_s is not None and refused.retry_after_s > 0
-    # p4 has used nothing, and a publish is not held to the headroom
-    assert b.spend("p4") == ALLOWED
-
-
-@pytest.mark.parametrize(
-    ("name", "limit", "own", "share"),
-    [
-        ("read_15m", 12, 4, 6),
-        ("read_day", 14, 5, 7),
-        # odd limits: floor(n x 0.5 x 0.8) differs from floor(floor(n x 0.5) x 0.8)
-        ("read_15m", 13, 5, 6),
-        ("read_day", 15, 6, 7),
-    ],
-)
-def test_a_principals_links_stop_at_its_own_headroom_while_its_publish_goes_on(
-    store: Storage, name: str, limit: int, own: int, share: int
-) -> None:
-    b, _ = budget(store, limits(**{name: limit}))
-    assert allowed_run(b, "p1", limit, for_link=True) == own
-    # the application is far from its headroom: only p1's own is spent
-    assert b.spend("p1").allowed is True
-    assert 1 + own + allowed_run(b, "p1", limit) == share
-    assert b.spend("p2", for_link=True) == ALLOWED
-
-
-def test_the_headroom_leaves_the_overall_windows_alone(store: Storage) -> None:
-    b, _ = budget(store, limits(overall_15m=10))
-    assert allowed_run(b, "p1", 10, for_link=True) == 5
-
-
-def test_a_link_whose_headroom_is_zero_is_never_allowed_and_names_no_wait(
-    database_target: Target, store: Storage
-) -> None:
-    b, _ = budget(store, limits(read_15m=2))  # floor(2 x 0.5 x 0.8) = 0
-    assert b.spend("p1", for_link=True) == BudgetDecision(False, None)
-    assert counts(database_target) == {}
-    assert b.spend("p1") == ALLOWED
-
-
 # --- the upload reservation ------------------------------------------------
 
 
@@ -297,7 +238,6 @@ def test_a_quarter_hour_mark_blocks_the_rest_of_that_quarter_hour_only(
     assert counts(database_target) == {"strava:all:900": 30, "strava:read:900": 20}
     # 800 s to the end of the quarter hour (NOW is 100 s into it)
     assert b.spend("p1") == BudgetDecision(False, 800)
-    assert b.spend("p2", for_link=True) == BudgetDecision(False, 800)
     assert b.spend("p3", CallKind.UPLOAD) == BudgetDecision(False, 800)
     assert b.reserve_upload("p4", reads=0) == BudgetDecision(False, 800)
     clock.now = NOW + 800

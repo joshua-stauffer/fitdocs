@@ -227,7 +227,6 @@ the process exits with code 2.
 | `FITDOCS_RELAY_STRAVA_API_URL` | no | `https://www.strava.com/api/v3` | no | Strava's API base |
 | `FITDOCS_RELAY_STRAVA_OAUTH_URL` | no | `https://www.strava.com/oauth` | no | Strava's OAuth base (authorize, token, revoke) |
 | `FITDOCS_RELAY_STRAVA_WEB_URL` | no | `https://www.strava.com` | no | Base of activity pages (`/activities/<id>`) |
-| `FITDOCS_RELAY_STRAVA_LINKS` | no | `activity` | no | The link setting: `activity` puts the activity's address `<web URL>/activities/<id>` in every posted or uploaded answer; `relay` puts none, and pages link to `/go/<publication id>` |
 | `FITDOCS_RELAY_STRAVA_RATE_LIMIT` | no | `200,2000` | no | Overall limit per 15 minutes and per day |
 | `FITDOCS_RELAY_STRAVA_READ_RATE_LIMIT` | no | `100,1000` | no | Non-upload limit per 15 minutes and per day |
 
@@ -564,7 +563,7 @@ create it again.
 
 The routes are served only while the target is configured. `FITDOCS_RELAY_PUBLIC_URL`
 must be the address fitdocs instances configure as their relay's `url`: the
-connect page, its callback and the link are all served there, and the callback
+connect page and its callback are served there, and the callback
 address Strava is given is built from it.
 
 | Path | Method | Answers |
@@ -577,8 +576,6 @@ address Strava is given is built from it.
 | `/connect/strava` | GET | The connect page, with the consent text and the "Connect with Strava" control. |
 | `/strava/callback` | GET | Where Strava sends the athlete back to; a page telling them to return to the terminal. |
 | `/privacy` | GET | The privacy policy page. |
-| `/robots.txt` | GET | Plain text. |
-| `/go/<publication id>` | GET | A redirect to the activity's page on Strava, or a page. |
 | `/strava/webhook/<webhook token>` | GET, POST | Subscription validation and events. |
 
 - **Envelope routes.** The five `/v1/targets/strava/` routes speak the
@@ -586,24 +583,16 @@ address Strava is given is built from it.
   `targets`. Only while the Strava target is configured does the upload route
   accept a request of up to 22 MiB (a workout file of at most 16 MiB, in
   base64); every other route keeps the 64 KiB limit.
-- **Pages.** The connect page, its callback, `/privacy`, `/go/` and
-  `/robots.txt` are served outside the envelope. Each HTML page carries the
+- **Pages.** The connect page, its callback and `/privacy` are served outside the
+  envelope. Each HTML page carries the
   operator's support contact, a restrictive content security policy, no
-  referrer and no caching; `/robots.txt` is plain text without those headers.
-  A page route answers `405` with `Allow: GET` to HEAD,
+  referrer and no caching. A page route answers `405` with `Allow: GET` to HEAD,
   so a link previewer can neither claim a connection nor run the callback. While
   the relay is not ready, or its database cannot be reached, a page answers a
   fitdocs-written "Not available" page.
-- **The link setting.** `FITDOCS_RELAY_STRAVA_LINKS` chooses what fitdocs writes
-  into a workout's page. Under `activity` every posted or uploaded answer
-  carries the activity's address, `<web URL>/activities/<id>`, so the person's
-  browser goes straight to Strava. Under `relay` the answer carries no address
-  and the page links to `/go/<publication id>` on the relay (a publication id is
-  32 lowercase hexadecimal characters); the relay looks the activity up when
-  the link is opened and redirects the browser to it, and keeps no address of its
-  own. `/go/` is served under both settings. A link that cannot be resolved
-  answers a page, never an error from Strava.
-- `/robots.txt` disallows `/go/` for every crawler.
+- **The activity address.** Every posted or uploaded answer carries the
+  activity's address, `<web URL>/activities/<id>`, and fitdocs writes it into the
+  workout's page.
 - **The webhook.** A request whose path secret is wrong answers `not-offered`.
   A validation request with the right verify token is answered with Strava's
   challenge as `{"hub.challenge": ...}`. An event is acknowledged with an empty
@@ -651,22 +640,20 @@ then gets `token-revoked`), when:
 The relay serves its policy at `<public address>/privacy`. Give that address as
 the privacy policy of the Strava application. To publish your own policy
 instead, set `FITDOCS_RELAY_PRIVACY_POLICY_URL`; the relay's pages then link
-that address and `/privacy` stays served. The text is fixed by fitdocs and
-differs between the two link settings in one section and one consent paragraph
-only. The policy has these sections, in this order:
+that address and `/privacy` stays served. The text is fixed by fitdocs. The policy has these sections, in this order:
 
 - **The relay's operator** names the operator and says the relay publishes workouts to Strava on the athlete's behalf.
 - **What fitdocs sends** lists the workout facts, name and description, the publication identifier and, with uploads enabled, the file.
 - **What the relay receives from Strava and keeps** lists the encrypted tokens, the keyed account hash and the publication facts, and says nothing else is kept.
 - **What the relay sends to Strava** lists the code exchange, token renewal, the activity listing, the name and description update, uploads and revocation.
-- **What the relay returns to fitdocs** says what the link setting returns: the activity's address under `activity`, nothing that Strava supplied under `relay`.
+- **What the relay returns to fitdocs** says the relay returns the activity's address and nothing else that Strava supplied.
 - **Deletion** lists four of the cases above: disconnecting, a deauthorization, a refused renewal and a deleted relay account. It does not list a connection moved to another principal.
 - **Your choices** names `fitdocs disconnect` and revoking access in Strava's settings.
 - **Security** says tokens are encrypted and not logged, and that a breach affecting an athlete's data is notified to Strava within 24 hours.
 - **Contact** shows the operator's support contact.
 
 The connect page shows the consent text, which says what the relay will do with
-the athlete's Strava access, what it returns to fitdocs under the link setting
+the athlete's Strava access, what it returns to fitdocs
 and what it will never do, before the "Connect with Strava" control. The page
 shows the user code and tells the athlete to continue only if their terminal
 shows the same one.
@@ -731,7 +718,7 @@ Every route may also answer `request-malformed`, `request-too-large`,
 `{"retry_after_s": n}`. Capabilities lists the served envelope versions, whether
 a registration provider is installed, and the target ids the relay offers.
 `/x/<name>/...` routes belong to a wrapper and are served outside the envelope.
-So are the Strava target's HTML pages, `/robots.txt` and the `/go/` redirect, and
+So are the Strava target's HTML pages and
 the webhook's challenge echo and its empty `200`.
 
 ### Answer shape

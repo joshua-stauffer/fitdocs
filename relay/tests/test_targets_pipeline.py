@@ -167,9 +167,7 @@ def test_the_route_table_constants_are_the_designed_literals() -> None:
         "/x/",
         "/connect/",
         "/strava/",
-        "/go/",
         "/privacy",
-        "/robots.txt",
     )
     assert routes_module.ROUTE_BODY_LIMITS == {UPLOAD_PATH: 22 * MIB}
     assert target_route(STRAVA, ACTION_UPLOAD) == UPLOAD_PATH

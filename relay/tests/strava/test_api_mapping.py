@@ -25,7 +25,7 @@ from fitdocs_relay.strava.api import (
     classify,
     daily_spent,
 )
-from fitdocs_relay.strava.config import Limits, LinkSetting, StravaConfig
+from fitdocs_relay.strava.config import Limits, StravaConfig
 
 CLIENT_ID = "4711"
 CLIENT_SECRET = "client-secret-SENTINEL"
@@ -41,7 +41,6 @@ CONFIG = StravaConfig(
     oauth_url=OAUTH,
     web_url="https://web.example",
     limits=LIMITS,
-    links=LinkSetting.ACTIVITY,
 )
 
 ACCESS = "access-tok-AAA"

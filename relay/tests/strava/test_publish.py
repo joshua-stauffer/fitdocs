@@ -23,7 +23,7 @@ from fitdocs_relay.shared.relay_targets import PublishFacts
 from fitdocs_relay.storage.interface import NewPrincipal, Publication, Storage
 from fitdocs_relay.strava.api import Failure, Grant, Step, StravaApi
 from fitdocs_relay.strava.budget import StravaBudget
-from fitdocs_relay.strava.config import Limits, LinkSetting, StravaConfig
+from fitdocs_relay.strava.config import Limits, StravaConfig
 from fitdocs_relay.strava.custody import Custody
 from fitdocs_relay.strava.publish import (
     CALL_TIMEOUT_S,
@@ -48,7 +48,6 @@ CONFIG = StravaConfig(
     oauth_url=OAUTH,
     web_url=WEB,
     limits=Limits(HUGE, HUGE, HUGE, HUGE),
-    links=LinkSetting.ACTIVITY,
 )
 PEPPER = b"publish-test-pepper-0123456789abcdef"
 KEYRING = Keyring((EncryptionKey("newk", bytes(range(32))),))
@@ -883,9 +882,9 @@ def test_the_update_is_counted_as_a_non_upload_call(store: Storage) -> None:
     assert len(w.updates()) == 1
 
 
-def test_the_refresh_is_counted_without_the_link_headroom(store: Storage) -> None:
-    # ann's share is one call: the publishing ceiling admits the refresh, the
-    # link ceiling (which keeps headroom back) does not; then the list is refused.
+def test_the_refresh_is_counted_against_the_publishing_ceiling(store: Storage) -> None:
+    # ann's share is one call: the publishing ceiling admits the refresh; then
+    # the list is refused.
     w = build(store, limits=TIGHTER)
     connect(w, expires=NEAR)
     w.outbound.expect(

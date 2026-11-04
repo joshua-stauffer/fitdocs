@@ -77,9 +77,7 @@ RESERVED_PREFIXES: Final = (
     "/x/",
     "/connect/",
     "/strava/",
-    "/go/",
     "/privacy",
-    "/robots.txt",
 )
 # A route absent from this table is read under `MAX_REQUEST_BYTES`.
 ROUTE_BODY_LIMITS: Final[dict[str, int]] = {

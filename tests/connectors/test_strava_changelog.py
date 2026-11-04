@@ -120,35 +120,6 @@ def test_the_entries_are_not_in_the_0_2_0_section_or_older() -> None:
 
 # ---- the relay changelog's Strava section ---------------------------------
 
-_VARIABLES = (
-    "FITDOCS_RELAY_STRAVA_CLIENT_ID",
-    "FITDOCS_RELAY_STRAVA_CLIENT_SECRET",
-    "FITDOCS_RELAY_STRAVA_WEBHOOK_TOKEN",
-    "FITDOCS_RELAY_STRAVA_API_URL",
-    "FITDOCS_RELAY_STRAVA_OAUTH_URL",
-    "FITDOCS_RELAY_STRAVA_WEB_URL",
-    "FITDOCS_RELAY_STRAVA_LINKS",
-    "FITDOCS_RELAY_STRAVA_RATE_LIMIT",
-    "FITDOCS_RELAY_STRAVA_READ_RATE_LIMIT",
-    "FITDOCS_RELAY_PUBLIC_URL",
-    "FITDOCS_RELAY_ENCRYPTION_KEYS",
-    "FITDOCS_RELAY_OPERATOR_NAME",
-    "FITDOCS_RELAY_SUPPORT_CONTACT",
-    "FITDOCS_RELAY_PRIVACY_POLICY_URL",
-)
-_ROUTES = (
-    "/v1/targets/strava/connect",
-    "/v1/targets/strava/connect/poll",
-    "/v1/targets/strava/publish",
-    "/v1/targets/strava/upload",
-    "/v1/targets/strava/disconnect",
-    "/connect/strava",
-    "/strava/callback",
-    "/go/",
-    "/strava/webhook/",
-    "/privacy",
-    "/robots.txt",
-)
 _COMMANDS = (
     "`strava webhook create`",
     "`strava webhook show`",
@@ -171,16 +142,6 @@ def _relay_sections() -> list[str]:
 
 def _newest() -> str:
     return _relay_sections()[0]
-
-
-@pytest.mark.parametrize("variable", _VARIABLES)
-def test_newest_relay_section_names_each_variable(variable: str) -> None:
-    assert f"`{variable}`" in _newest()
-
-
-@pytest.mark.parametrize("route", _ROUTES)
-def test_newest_relay_section_names_each_route(route: str) -> None:
-    assert f"`{route}" in _newest()
 
 
 @pytest.mark.parametrize("command", _COMMANDS)

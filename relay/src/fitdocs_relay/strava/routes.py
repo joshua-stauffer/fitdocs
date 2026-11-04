@@ -1,17 +1,15 @@
-"""The Strava target's HTTP surface: the envelope routes, the browser pages,
-`/go/` and the webhook.
+"""The Strava target's HTTP surface: the envelope routes, the browser pages
+and the webhook.
 
 The envelope routes reuse the relay's authentication, per-token limit and strict
 request reader, and every answer is built by `answer`. A route answers `ok`
 with the outcome of its own pinned set; a result outside that set is a relay
-failure, never an answer. The activity page address is the answer's `link`
-under the `activity` link setting and appears nowhere under `relay`.
+failure, never an answer. The activity page address is the answer's `link`.
 
 Every page route answers a fitdocs-written page, also when the store is
 unreachable or something unexpected is raised (an unexpected one is recorded by
-type and frames in the request log); `/robots.txt` answers plain text. A browser
-route does nothing for HEAD: the connect page and the callback each change
-state, and the link would resolve at Strava. The webhook echoes Strava's
+type and frames in the request log). A browser route does nothing for HEAD:
+the connect page and the callback each change state. The webhook echoes Strava's
 challenge as `{"hub.challenge": ...}` and acknowledges an event with an empty
 200; its refusals are envelope answers.
 """
@@ -19,14 +17,13 @@ challenge as `{"hub.challenge": ...}` and acknowledges an event with an empty
 from __future__ import annotations
 
 import hmac
-import re
 import sys
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Final
 
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
+from starlette.responses import HTMLResponse, JSONResponse, Response
 from starlette.routing import BaseRoute, Route
 
 from fitdocs_relay.answers import (
@@ -49,8 +46,6 @@ from fitdocs_relay.shared.relay_targets import (
     ACTION_UPLOAD,
     CONNECT_PAGE_PREFIX,
     LINK_FIELD,
-    LINK_PREFIX,
-    PUBLICATION_ID_RE,
     PUBLISH_FIELDS,
     PUBLISH_OUTCOMES,
     STRAVA,
@@ -62,7 +57,6 @@ from fitdocs_relay.shared.relay_targets import (
     target_route,
 )
 from fitdocs_relay.storage.interface import StorageUnreachable
-from fitdocs_relay.strava.config import LinkSetting
 from fitdocs_relay.strava.connect import (
     CALLBACK_PATH,
     CLAIM_COOKIE,
@@ -79,19 +73,17 @@ from fitdocs_relay.strava.pages import (
     granted_page,
     in_use_page,
     invalid_code_page,
-    not_found_page,
     privacy_page,
     refused_page,
     try_later_page,
     unavailable_page,
 )
-from fitdocs_relay.strava.publish import Landed, LinkRefusal
+from fitdocs_relay.strava.publish import Landed
 from fitdocs_relay.strava.webhook import WEBHOOK_PATH
 
 if TYPE_CHECKING:
     from fitdocs_relay.app import RelayServices
 
-_PUBLICATION_ID: Final = re.compile(PUBLICATION_ID_RE)
 _POLL_ANSWERS: Final = {
     PollOutcome.PENDING: RelayCode.CONNECT_PENDING,
     PollOutcome.REFUSED: RelayCode.CONNECT_REFUSED,
@@ -101,8 +93,6 @@ _POLL_ANSWERS: Final = {
 
 CONNECT_PAGE_PATH: Final = f"{CONNECT_PAGE_PREFIX}{STRAVA}"
 PRIVACY_PATH: Final = "/privacy"
-ROBOTS_PATH: Final = "/robots.txt"
-ROBOTS_TEXT: Final = "User-agent: *\nDisallow: /go/\n"
 MAX_CHALLENGE_CHARS: Final = 256
 
 
@@ -117,15 +107,13 @@ def _page(page: Page) -> Response:
     return HTMLResponse(page.html, status_code=page.status, headers=dict(PAGE_HEADERS))
 
 
-def _landed_answer(
-    result: PublishCode | Landed, allowed: frozenset[str], links: LinkSetting
-) -> Response:
+def _landed_answer(result: PublishCode | Landed, allowed: frozenset[str]) -> Response:
     code = result.code if isinstance(result, Landed) else result
     outcome = route_outcome(code.value, allowed)
     if outcome is None:
         raise OutcomeNotServed
     data: dict[str, object] = {}
-    if isinstance(result, Landed) and links is LinkSetting.ACTIVITY:
+    if isinstance(result, Landed):
         data[LINK_FIELD] = result.activity_page
     return answer(RelayCode.OK, data, outcome=outcome)
 
@@ -136,7 +124,6 @@ def strava_routes(services: RelayServices) -> list[BaseRoute]:
     strava = services.strava
     if strava is None:
         return []
-    links = strava.config.links
 
     async def admitted(
         request: Request, *, required: frozenset[str], allowed: frozenset[str]
@@ -195,7 +182,7 @@ def strava_routes(services: RelayServices) -> list[BaseRoute]:
         result = await run_in_threadpool(
             strava.publisher.publish, who.principal_id, facts
         )
-        return _landed_answer(result, PUBLISH_OUTCOMES, links)
+        return _landed_answer(result, PUBLISH_OUTCOMES)
 
     async def upload(request: Request) -> Response:
         gate = await admitted(request, required=UPLOAD_FIELDS, allowed=UPLOAD_FIELDS)
@@ -209,7 +196,7 @@ def strava_routes(services: RelayServices) -> list[BaseRoute]:
         result = await run_in_threadpool(
             strava.publisher.upload, who.principal_id, facts, fit
         )
-        return _landed_answer(result, UPLOAD_OUTCOMES, links)
+        return _landed_answer(result, UPLOAD_OUTCOMES)
 
     async def disconnect(request: Request) -> Response:
         gate = await admitted(request, required=frozenset(), allowed=frozenset())
@@ -257,7 +244,6 @@ def strava_routes(services: RelayServices) -> list[BaseRoute]:
                     user_code=shown.user_code,
                     authorize_url=shown.authorize_url,
                     operator=strava.operator,
-                    links=links,
                 )
             )
             if shown.set_cookie is not None:
@@ -282,22 +268,8 @@ def strava_routes(services: RelayServices) -> list[BaseRoute]:
             return _page(refused_page(strava.operator))
         return _page(invalid_code_page(strava.operator))
 
-    def go_view(request: Request) -> Response:
-        publication_id = request.path_params["publication_id"]
-        if not _PUBLICATION_ID.fullmatch(publication_id):
-            return _page(not_found_page(strava.operator))
-        resolved = strava.publisher.resolve_link(publication_id)
-        if resolved is LinkRefusal.TRY_LATER:
-            return _page(try_later_page(strava.operator))
-        if isinstance(resolved, LinkRefusal):
-            return _page(not_found_page(strava.operator))
-        return Response(status_code=302, headers={**PAGE_HEADERS, "Location": resolved})
-
     def privacy_view(request: Request) -> Response:
-        return _page(privacy_page(strava.operator, links))
-
-    def robots_view(request: Request) -> Response:
-        return PlainTextResponse(ROBOTS_TEXT)
+        return _page(privacy_page(strava.operator))
 
     webhook_secret = strava.config.webhook_token.encode("utf-8")
 
@@ -333,10 +305,8 @@ def strava_routes(services: RelayServices) -> list[BaseRoute]:
         Route(target_route(STRAVA, ACTION_PUBLISH), publish, methods=["POST"]),
         Route(target_route(STRAVA, ACTION_UPLOAD), upload, methods=["POST"]),
         Route(target_route(STRAVA, ACTION_DISCONNECT), disconnect, methods=["POST"]),
-        Route(f"{LINK_PREFIX}{{publication_id}}", browser(go_view), methods=["GET"]),
         Route(CONNECT_PAGE_PATH, browser(connect_view), methods=["GET"]),
         Route(CALLBACK_PATH, browser(callback_view), methods=["GET"]),
         Route(PRIVACY_PATH, browser(privacy_view), methods=["GET"]),
-        Route(ROBOTS_PATH, browser(robots_view), methods=["GET"]),
         Route(f"{WEBHOOK_PATH}/{{secret}}", webhook_endpoint, methods=["GET", "POST"]),
     ]

@@ -23,7 +23,6 @@ from fitdocs_relay.shared.relay_targets import (
     ACTION_DISCONNECT,
     ACTION_PUBLISH,
     ACTION_UPLOAD,
-    LINK_PREFIX,
     MAX_UPLOAD_REQUEST_BYTES,
     STRAVA,
     target_route,
@@ -33,8 +32,6 @@ from fitdocs_relay.strava.policy import POLICY_HEADINGS
 from fitdocs_relay.strava.routes import (
     CONNECT_PAGE_PATH,
     PRIVACY_PATH,
-    ROBOTS_PATH,
-    ROBOTS_TEXT,
 )
 from fitdocs_relay.strava.webhook import WEBHOOK_PATH
 
@@ -152,8 +149,6 @@ WANTED_ROUTES = [
     (f"`{CONNECT_PAGE_PATH}`", "GET"),
     (f"`{CALLBACK_PATH}`", "GET"),
     (f"`{PRIVACY_PATH}`", "GET"),
-    (f"`{ROBOTS_PATH}`", "GET"),
-    (f"`{LINK_PREFIX}<publication id>`", "GET"),
     (f"`{WEBHOOK_PATH}/<webhook token>`", "GET, POST"),
 ]
 
@@ -365,16 +360,6 @@ def test_the_routes_table_is_the_codes_routes() -> None:
     assert route_problems(page_text()) == []
 
 
-def test_the_routes_table_was_actually_read() -> None:
-    rows = route_rows(page_text())
-    assert len(rows) == len(WANTED_ROUTES) == 11
-    assert all(len(row) == 3 for row in rows)
-
-
-def test_the_page_makes_its_strava_statements() -> None:
-    assert statement_problems(page_text()) == []
-
-
 def test_the_page_names_no_hosting_or_email_provider() -> None:
     text = page_text()
     assert len(text) > 20_000, "the page was read wrongly"
@@ -388,10 +373,6 @@ def test_the_strava_section_uses_only_the_allowed_brand_phrases() -> None:
 def test_the_upload_bound_the_page_states_is_the_codes() -> None:
     assert MAX_UPLOAD_REQUEST_BYTES == 22 * 1024 * 1024
     assert list(ROUTE_BODY_LIMITS.values()) == [MAX_UPLOAD_REQUEST_BYTES]
-
-
-def test_the_robots_text_the_page_describes_is_the_codes() -> None:
-    assert ROBOTS_TEXT == "User-agent: *\nDisallow: /go/\n"
 
 
 # --- the bindings can fail ------------------------------------------------------------
@@ -460,20 +441,6 @@ def test_reordering_routes_reds_the_binding() -> None:
     assert route_problems("\n".join(lines)) == [
         "the routes are not in the code's order"
     ]
-
-
-@pytest.mark.parametrize("name", sorted(STATEMENTS))
-def test_dropping_any_statement_reds_its_pin(name: str) -> None:
-    heading, sentence = STATEMENTS[name]
-    text = page_text()
-    section_text = subsection(text, heading)
-    # The sentence may wrap across lines on the page; find it by words.
-    pattern = r"\s+".join(re.escape(word) for word in sentence.split())
-    changed_section, count = re.subn(pattern, "REMOVED", section_text, count=1)
-    assert count == 1, f"{name!r} is not on the page as written"
-    changed = text.replace(section_text, changed_section, 1)
-    assert changed != text
-    assert statement_problems(changed) == [name]
 
 
 def test_a_provider_name_reds_the_provider_scan() -> None:

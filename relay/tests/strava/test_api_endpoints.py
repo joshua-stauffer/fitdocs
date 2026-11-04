@@ -26,7 +26,7 @@ from fitdocs_relay.strava.api import (
     SubscriptionState,
     UploadState,
 )
-from fitdocs_relay.strava.config import Limits, LinkSetting, StravaConfig
+from fitdocs_relay.strava.config import Limits, StravaConfig
 
 CLIENT_ID = "4711"
 CLIENT_SECRET = "client-secret-SENTINEL"
@@ -40,7 +40,6 @@ CONFIG = StravaConfig(
     oauth_url="https://oauth.example/oauth",
     web_url="https://web.example",
     limits=Limits(overall_15m=200, overall_day=2000, read_15m=100, read_day=1000),
-    links=LinkSetting.ACTIVITY,
 )
 ACCESS = "access-tok-AAA"
 SENTINEL = "STRAVA-ERROR-TEXT-SENTINEL"

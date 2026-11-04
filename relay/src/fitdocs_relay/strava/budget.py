@@ -2,8 +2,7 @@
 
 The application's overall and non-upload ("read") limits, per quarter hour and
 per day, are counted in the configured database, each call also against the
-calling principal's share of them (Requirements 9.2, 9.7). Resolving links
-leaves a share of the non-upload windows unspent (9.5), an upload is reserved
+calling principal's share of them (Requirements 9.2, 9.7). An upload is reserved
 together with the calls its flow may follow it with (9.3), and a window Strava
 says is spent is marked so (9.4).
 """
@@ -23,7 +22,6 @@ SHORT_WINDOW_S: Final = 900
 DAY_WINDOW_S: Final = 86400
 
 PRINCIPAL_SHARE: Final = 0.5
-LINK_HEADROOM: Final = 0.2
 
 
 class CallKind(StrEnum):
@@ -69,7 +67,6 @@ class StravaBudget:
         *,
         uploads: int,
         reads: int,
-        for_link: bool,
     ) -> tuple[BudgetCharge, ...]:
         """The charges of `uploads` upload calls and `reads` non-upload calls.
 
@@ -81,15 +78,10 @@ class StravaBudget:
                 continue
             for window_s in (SHORT_WINDOW_S, DAY_WINDOW_S):
                 limit = self._limit(scope, window_s)
-                headroom = for_link and scope == "read"
-                application = _floor_of(limit, 1 - LINK_HEADROOM) if headroom else limit
-                if headroom:
-                    own = _floor_of(limit, PRINCIPAL_SHARE, 1 - LINK_HEADROOM)
-                else:
-                    own = max(1, _floor_of(limit, PRINCIPAL_SHARE))
+                own = max(1, _floor_of(limit, PRINCIPAL_SHARE))
                 charges.append(
                     BudgetCharge(
-                        application_key(scope, window_s), window_s, application, amount
+                        application_key(scope, window_s), window_s, limit, amount
                     )
                 )
                 charges.append(
@@ -115,7 +107,6 @@ class StravaBudget:
         kind: CallKind = CallKind.READ,
         *,
         count: int = 1,
-        for_link: bool = False,
     ) -> BudgetDecision:
         """Count `count` calls of `kind`, or none when any window would pass."""
         if count < 1:
@@ -126,7 +117,6 @@ class StravaBudget:
                 principal_id,
                 uploads=count if upload else 0,
                 reads=0 if upload else count,
-                for_link=for_link,
             )
         )
 
@@ -134,9 +124,7 @@ class StravaBudget:
         """Count one upload and `reads` non-upload calls, all or none."""
         if reads < 0:
             raise ValueError("a reservation holds zero reads or more")
-        return self._spend(
-            self._charges(principal_id, uploads=1, reads=reads, for_link=False)
-        )
+        return self._spend(self._charges(principal_id, uploads=1, reads=reads))
 
     def mark_spent(self, *, daily: bool) -> None:
         """Raise the application's quarter-hour overall and non-upload windows

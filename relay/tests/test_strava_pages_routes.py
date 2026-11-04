@@ -1,4 +1,4 @@
-"""The Strava browser pages, the link and the webhook (strava-publish 4.3).
+"""The Strava browser pages and the webhook (strava-publish 4.3).
 
 Run on both backends.
 
@@ -21,12 +21,6 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 from tests.strava.scripted_strava import reply
 from tests.strava.test_connect import FULL, grant_body
-from tests.strava.test_publish import (
-    ACTIVITY_ID,
-    LIST_URL,
-    UPDATE_URL,
-    entry,
-)
 from tests.test_strava_routes import (  # noqa: F401  (fixtures)
     GO_PATH,
     OAUTH,
@@ -48,10 +42,9 @@ from fitdocs_relay.shared.relay_targets import (
 )
 from fitdocs_relay.storage.interface import StorageUnreachable
 from fitdocs_relay.strava.api import Grant
-from fitdocs_relay.strava.config import LinkSetting
 from fitdocs_relay.strava.connect import CLAIM_COOKIE, ShowConsent
-from fitdocs_relay.strava.pages import PAGE_HEADERS, privacy_page
-from fitdocs_relay.strava.policy import POLICY_HEADINGS, consent_text
+from fitdocs_relay.strava.pages import PAGE_HEADERS
+from fitdocs_relay.strava.policy import POLICY_HEADINGS
 from fitdocs_relay.strava.webhook import MAX_EVENT_BYTES
 
 SECRET = "t" * 40  # the webhook secret of tests.test_config_strava.env
@@ -67,7 +60,7 @@ DEAUTH = json.dumps(
         "updates": {"authorized": "false"},
     }
 ).encode()
-PAGE_ROUTES = ["/privacy", "/robots.txt", CONNECT_PAGE, CALLBACK, GO_PATH]
+PAGE_ROUTES = ["/privacy", CONNECT_PAGE, CALLBACK]
 
 
 def cookie_header(value: str) -> dict[str, str]:
@@ -296,70 +289,15 @@ def test_the_page_routes_share_one_client_count(
 ) -> None:
     w = make_world(client_limit=2)
     assert w.client.get("/privacy").status_code == 200
-    assert w.client.get("/robots.txt").status_code == 200
+    assert w.client.get(CALLBACK).status_code == 404  # the invalid-code page
     assert w.client.get("/privacy").status_code == 429
-
-
-# --- /go/ --------------------------------------------------------------------
-
-
-def posted(w: World) -> None:
-    w.connect()
-    w.script_list(entry())
-    w.outbound.expect("PUT", UPDATE_URL, reply(200, {}))
-    assert decoded(w.post(PUBLISH_PATH, publish_body())).outcome == "posted"
-
-
-def test_the_redirect_carries_only_location_and_the_page_headers(
-    world: World,
-) -> None:
-    posted(world)
-    world.script_list(entry())
-    sent = world.client.get(GO_PATH, follow_redirects=False)
-    assert sent.status_code == 302
-    assert set(sent.headers) == {
-        "location",
-        "content-length",
-        *(name.lower() for name in PAGE_HEADERS),
-    }
-    assert sent.content == b""
-
-
-def test_every_go_refusal_carries_the_page_headers(world: World) -> None:
-    posted(world)
-    world.outbound.expect("GET", LIST_URL, reply(429))
-    answers = {
-        "limited": world.client.get(GO_PATH),
-        "unknown": world.client.get("/go/" + "b" * 32),
-        "malformed": world.client.get("/go/NOT-AN-ID"),
-    }
-    assert [a.status_code for a in answers.values()] == [429, 404, 404]
-    for sent in answers.values():
-        assert sent.headers["content-type"].startswith("text/html")
-        assert_page_headers(sent)
-
-
-@pytest.mark.parametrize("failure", [StorageUnreachable(), RuntimeError(SENTINEL)])
-def test_a_failure_resolving_the_link_is_the_unavailable_page_with_page_headers(
-    world: World, monkeypatch: pytest.MonkeyPatch, failure: Exception
-) -> None:
-    def fail(publication_id: str) -> str:
-        raise failure
-
-    monkeypatch.setattr(world.strava().publisher, "resolve_link", fail)
-    sent = world.client.get(GO_PATH, follow_redirects=False)
-    assert sent.status_code == 503
-    assert sent.headers["content-type"].startswith("text/html")
-    assert "Not available" in sent.text and SENTINEL not in sent.text
-    assert "location" not in sent.headers
-    assert_page_headers(sent)
 
 
 def test_head_does_nothing_on_any_page_route(
     world: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     calls: list[str] = []
-    flow, publisher = world.strava().connect, world.strava().publisher
+    flow = world.strava().connect
     real_page = flow.page
 
     def spy(name: str) -> Callable[..., Any]:
@@ -369,12 +307,10 @@ def test_head_does_nothing_on_any_page_route(
 
         return record
 
-    monkeypatch.setattr(publisher, "resolve_link", spy("resolve_link"))
     monkeypatch.setattr(flow, "callback", spy("callback"))
     started = started_session(world)
     monkeypatch.setattr(flow, "page", spy("page"))
     for path in (
-        GO_PATH,
         f"{CONNECT_PAGE}?code={started.user_code}",
         f"{CALLBACK}?state=s",
     ):
@@ -389,7 +325,7 @@ def test_head_does_nothing_on_any_page_route(
     assert first.status_code == 200 and "set-cookie" in first.headers
 
 
-# --- /privacy and /robots.txt ------------------------------------------------
+# --- /privacy ------------------------------------------------
 
 
 def test_the_privacy_page_is_served_with_the_policy_and_the_operator(
@@ -402,39 +338,6 @@ def test_the_privacy_page_is_served_with_the_policy_and_the_operator(
         assert html.escape(heading) in sent.text
     operator = world.strava().operator
     assert operator.name in sent.text and operator.support_contact in sent.text
-
-
-@pytest.mark.parametrize("links", ["activity", "relay"])
-def test_the_pages_follow_the_configured_link_setting(
-    make_world: Callable[..., World], links: str
-) -> None:
-    w = make_world(links=links)
-    setting = LinkSetting(links)
-    other = (
-        LinkSetting.RELAY if setting is LinkSetting.ACTIVITY else LinkSetting.ACTIVITY
-    )
-    operator = w.strava().operator
-    assert privacy_page(operator, setting).html != privacy_page(operator, other).html
-    assert w.client.get("/privacy").text == privacy_page(operator, setting).html
-    started = started_session(w)
-    shown = open_page(w, started.user_code).text
-    own = [html.escape(p) for p in consent_text(setting)]
-    foreign = [
-        html.escape(p) for p in consent_text(other) if p not in consent_text(setting)
-    ]
-    assert foreign  # the two settings do differ in the consent text
-    assert all(p in shown for p in own)
-    assert not any(p in shown for p in foreign)
-
-
-@pytest.mark.parametrize("links", ["activity", "relay"])
-def test_robots_disallows_the_link_while_strava_is_configured(
-    make_world: Callable[..., World], links: str
-) -> None:
-    sent = make_world(links=links).client.get("/robots.txt")
-    assert sent.status_code == 200
-    assert sent.headers["content-type"].startswith("text/plain")
-    assert sent.text == "User-agent: *\nDisallow: /go/\n"
 
 
 @pytest.mark.parametrize(
@@ -526,21 +429,10 @@ def test_no_page_carries_a_sentinel_the_scripted_strava_returned(
             headers=cookie_header(cookie3),
         )
     )
-    # the link, over a listing whose every field carries the sentinel
-    posted(world)
-    hostile_entry = {**entry(), "name": SENTINEL, "description": SENTINEL}
-    world.script_list(hostile_entry)
-    pages.append(world.client.get(GO_PATH, follow_redirects=False))
-    world.script_list(hostile_entry, {**entry(ACTIVITY_ID + 1), "name": SENTINEL})
-    pages.append(world.client.get(GO_PATH, follow_redirects=False))
-    world.outbound.expect(
-        "GET", LIST_URL, reply(500, SENTINEL.encode(), {"X-Note": SENTINEL})
-    )
-    pages.append(world.client.get(GO_PATH, follow_redirects=False))
     pages.append(world.client.get("/privacy"))
     # every scripted answer was served, so the sentinel did reach the relay
     assert world.outbound.unserved() == 0
-    assert [p.status_code for p in pages] == [200, 200, 200, 302, 404, 404, 200]
+    assert [p.status_code for p in pages] == [200, 200, 200, 200]
     assert "Connected" in pages[0].text and "Not connected" in pages[1].text
     assert "Not connected" in pages[2].text
     for sent in pages:

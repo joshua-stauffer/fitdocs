@@ -21,16 +21,14 @@ breaking change for deployments is marked `**Breaking for deployments:**`.
   `FITDOCS_RELAY_ENCRYPTION_KEYS`, `FITDOCS_RELAY_OPERATOR_NAME` and
   `FITDOCS_RELAY_SUPPORT_CONTACT`. Optional: `FITDOCS_RELAY_PRIVACY_POLICY_URL`,
   `FITDOCS_RELAY_STRAVA_API_URL`, `FITDOCS_RELAY_STRAVA_OAUTH_URL`,
-  `FITDOCS_RELAY_STRAVA_WEB_URL`, `FITDOCS_RELAY_STRAVA_LINKS` (`activity`,
-  the default, or `relay`), `FITDOCS_RELAY_STRAVA_RATE_LIMIT` and
+  `FITDOCS_RELAY_STRAVA_WEB_URL`, `FITDOCS_RELAY_STRAVA_RATE_LIMIT` and
   `FITDOCS_RELAY_STRAVA_READ_RATE_LIMIT`. A variable of the target set without
   the client id is a configuration error naming the variable.
 - Routes. Envelope routes `/v1/targets/strava/connect`,
   `/v1/targets/strava/connect/poll`, `/v1/targets/strava/publish`,
   `/v1/targets/strava/upload` and `/v1/targets/strava/disconnect`; pages
-  `/connect/strava`, `/strava/callback`, `/go/` followed by a publication id,
-  `/privacy` and `/robots.txt`; and `/strava/webhook/` followed by the webhook
-  secret, which Strava calls.
+  `/connect/strava`, `/strava/callback` and `/privacy`; and `/strava/webhook/`
+  followed by the webhook secret, which Strava calls.
 - Commands. `strava webhook create`, `strava webhook show` and
   `strava webhook delete` manage the webhook subscription; `reencrypt`
   re-encrypts stored Strava tokens under the current encryption key; and

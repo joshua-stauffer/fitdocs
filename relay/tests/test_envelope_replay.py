@@ -248,31 +248,22 @@ def _a_connection_to_revoke(setup: StravaSetup) -> None:
     setup.outbound.expect("POST", REVOKE_URL, reply(200, {}))
 
 
-# scenario name -> (the relay's link setting, the state the request meets)
-STRAVA_SCENARIOS: dict[str, tuple[str, Callable[[StravaSetup], None]]] = {
-    "nothing": ("activity", _nothing),
-    "session-awaiting-browser": ("activity", _a_session_awaiting_the_browser),
-    "session-granted": ("activity", _a_granted_session),
-    "session-declined": ("activity", _a_declined_session),
-    "connected-one-match": ("activity", _a_connection_and_one_match),
-    "connected-one-match-relay-links": ("relay", _a_connection_and_one_match),
-    "connected-no-match": ("activity", _a_connection_and_no_match),
-    "connected-no-facts": ("activity", _a_connection),
-    "connected-two-matches": ("activity", _a_connection_and_two_matches),
-    "connected-strava-limit": ("activity", _a_connection_and_a_strava_limit),
-    "connected-new-upload": (
-        "activity",
-        lambda setup: _uploads(setup, reply(200, {"id": UPLOAD_ID, "activity_id": 1})),
+# scenario name -> the state the request meets
+STRAVA_SCENARIOS: dict[str, Callable[[StravaSetup], None]] = {
+    "nothing": _nothing,
+    "session-awaiting-browser": _a_session_awaiting_the_browser,
+    "session-granted": _a_granted_session,
+    "session-declined": _a_declined_session,
+    "connected-one-match": _a_connection_and_one_match,
+    "connected-no-match": _a_connection_and_no_match,
+    "connected-no-facts": _a_connection,
+    "connected-two-matches": _a_connection_and_two_matches,
+    "connected-strava-limit": _a_connection_and_a_strava_limit,
+    "connected-new-upload": lambda setup: _uploads(
+        setup, reply(200, {"id": UPLOAD_ID, "activity_id": 1})
     ),
-    "connected-new-upload-relay-links": (
-        "relay",
-        lambda setup: _uploads(setup, reply(200, {"id": UPLOAD_ID, "activity_id": 1})),
-    ),
-    "connected-upload-unconfirmed": (
-        "activity",
-        lambda setup: _uploads(setup, reply(500)),
-    ),
-    "connected-to-revoke": ("activity", _a_connection_to_revoke),
+    "connected-upload-unconfirmed": lambda setup: _uploads(setup, reply(500)),
+    "connected-to-revoke": _a_connection_to_revoke,
 }
 
 
@@ -324,20 +315,19 @@ def verifier(token_id: str, secret: str) -> str:
 
 
 def config_for(
-    target: Target, *, client_limit: int, links: str | None = None
+    target: Target, *, client_limit: int, strava: bool = False
 ) -> RelayConfig:
     environ = {
         "FITDOCS_RELAY_DATABASE_URL": "sqlite:///unused.db",
         "FITDOCS_RELAY_TOKEN_PEPPER": PEPPER,
     }
-    if links is not None:
+    if strava:
         environ = strava_env(
             {
                 "FITDOCS_RELAY_TOKEN_PEPPER": PEPPER,
                 "FITDOCS_RELAY_STRAVA_API_URL": STRAVA_API,
                 "FITDOCS_RELAY_STRAVA_OAUTH_URL": STRAVA_OAUTH,
                 "FITDOCS_RELAY_STRAVA_WEB_URL": STRAVA_WEB,
-                "FITDOCS_RELAY_STRAVA_LINKS": links,
                 "FITDOCS_RELAY_STRAVA_RATE_LIMIT": HUGE_LIMIT,
                 "FITDOCS_RELAY_STRAVA_READ_RATE_LIMIT": HUGE_LIMIT,
             }
@@ -367,7 +357,7 @@ def started_client(
     opened: list[Storage] = []
 
     def start_strava(scenario: str) -> TestClient:
-        links, prepare = STRAVA_SCENARIOS[scenario]
+        prepare = STRAVA_SCENARIOS[scenario]
         store = open_storage(database_target)
         opened.append(store)
         migrate(store, now=1)
@@ -388,7 +378,7 @@ def started_client(
         outbound = ScriptedOutbound()
         scripted_outbounds.append(outbound)
         services = make_services(
-            config_for(database_target, client_limit=HIGH, links=links),
+            config_for(database_target, client_limit=HIGH, strava=True),
             store,
             clock=lambda: START_TIME,
             outbound=outbound,
@@ -515,7 +505,7 @@ def test_every_route_is_recorded_on_a_request_it_serves(
     store = open_storage(database_target)
     try:
         app = create_app(
-            config_for(database_target, client_limit=HIGH, links="activity"),
+            config_for(database_target, client_limit=HIGH, strava=True),
             storage=store,
         )
         routes = [
@@ -583,16 +573,16 @@ def test_the_publish_and_upload_routes_record_the_outcomes_they_can_give() -> No
     assert upload <= UPLOAD_OUTCOMES
 
 
-def test_a_posted_answer_is_recorded_under_each_link_setting() -> None:
+def test_a_posted_answer_is_recorded_with_the_activity_link() -> None:
     link = f"{STRAVA_WEB}/activities/1"
     for action in (ACTION_PUBLISH, ACTION_UPLOAD):
-        data = {
-            e["state"]["scenario"]: answered(e)["data"]
+        data = [
+            answered(e)["data"]
             for e in strava_exchanges(action)
             if answered(e).get("outcome") in ("posted", "uploaded")
-        }
-        assert {k for k, v in data.items() if v == {"link": link}}
-        assert {k for k, v in data.items() if v == {}}
+        ]
+        assert data
+        assert all(d == {"link": link} for d in data)
 
 
 def test_the_recording_names_no_real_strava_host() -> None:

@@ -11,7 +11,6 @@ import ipaddress
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from enum import StrEnum
 from typing import Final
 from urllib.parse import urlsplit
 
@@ -24,7 +23,6 @@ from fitdocs_relay.contract import (
     ENV_STRAVA_API_URL,
     ENV_STRAVA_CLIENT_ID,
     ENV_STRAVA_CLIENT_SECRET,
-    ENV_STRAVA_LINKS,
     ENV_STRAVA_OAUTH_URL,
     ENV_STRAVA_RATE_LIMIT,
     ENV_STRAVA_READ_RATE_LIMIT,
@@ -50,7 +48,6 @@ STRAVA_VARIABLES: Final = (
     ENV_STRAVA_API_URL,
     ENV_STRAVA_OAUTH_URL,
     ENV_STRAVA_WEB_URL,
-    ENV_STRAVA_LINKS,
     ENV_STRAVA_RATE_LIMIT,
     ENV_STRAVA_READ_RATE_LIMIT,
 )
@@ -78,11 +75,6 @@ class TargetsConfig:
     privacy_policy_url: str | None
 
 
-class LinkSetting(StrEnum):
-    ACTIVITY = "activity"
-    RELAY = "relay"
-
-
 @dataclass(frozen=True)
 class StravaConfig:
     client_id: str
@@ -92,7 +84,6 @@ class StravaConfig:
     oauth_url: str
     web_url: str
     limits: Limits
-    links: LinkSetting
 
 
 def _fail(variable: str, reason: str) -> ConfigError:
@@ -307,11 +298,6 @@ def load_strava_config(environ: Mapping[str, str]) -> StravaConfig | None:
     api_url = address(ENV_STRAVA_API_URL)
     oauth_url = address(ENV_STRAVA_OAUTH_URL)
     web_url = address(ENV_STRAVA_WEB_URL)
-    raw_links = _value(environ, ENV_STRAVA_LINKS)
-    try:
-        links = LinkSetting(raw_links)
-    except ValueError:
-        raise _fail(ENV_STRAVA_LINKS, "must be activity or relay") from None
     overall = _limit_pair(ENV_STRAVA_RATE_LIMIT, _value(environ, ENV_STRAVA_RATE_LIMIT))
     read = _limit_pair(
         ENV_STRAVA_READ_RATE_LIMIT, _value(environ, ENV_STRAVA_READ_RATE_LIMIT)
@@ -324,5 +310,4 @@ def load_strava_config(environ: Mapping[str, str]) -> StravaConfig | None:
         oauth_url=oauth_url,
         web_url=web_url,
         limits=Limits(overall[0], overall[1], read[0], read[1]),
-        links=links,
     )

@@ -25,7 +25,6 @@ from fitdocs.connectors.relay_envelope import EnvelopeError
 from fitdocs.connectors.relay_targets import (
     PublishFacts,
     connect_page_path,
-    link_path,
     parse_publish_fields,
     parse_upload_fields,
     publish_fields,
@@ -89,7 +88,6 @@ def test_constants_are_pinned() -> None:
         "disconnect",
     )
     assert rt.CONNECT_PAGE_PREFIX == "/connect/"
-    assert rt.LINK_PREFIX == "/go/"
     assert rt.LINK_FIELD == "link"
     assert rt.PUBLICATION_ID_RE == r"^[0-9a-f]{32}$"
     assert rt.SPORT_RE == r"^[A-Z][A-Za-z]{0,31}$"
@@ -186,7 +184,6 @@ def test_paths() -> None:
     for action in ("connect", "connect/poll", "publish", "upload", "disconnect"):
         assert target_route("strava", action) == f"/v1/targets/strava/{action}"
     assert connect_page_path("strava", "BCDF-GHJK") == "/connect/strava?code=BCDF-GHJK"
-    assert link_path(PID) == f"/go/{PID}"
 
 
 @pytest.mark.parametrize(
@@ -199,11 +196,6 @@ def test_paths() -> None:
         lambda: connect_page_path("strava", "bcdf-ghjk"),
         lambda: connect_page_path("strava", "BCDF-GHJK&x=1"),
         lambda: connect_page_path("a/b", "BCDF-GHJK"),
-        lambda: link_path(PID.upper()),
-        lambda: link_path(PID + "0"),
-        lambda: link_path(PID + "\n"),
-        lambda: link_path(None),  # type: ignore[arg-type]
-        lambda: link_path(7),  # type: ignore[arg-type]
     ],
 )
 def test_malformed_path_parts_are_refused(call: Callable[[], object]) -> None:
@@ -499,7 +491,6 @@ def test_sampled_errors_do_not_interpolate_the_input() -> None:
         lambda: parse_publish_fields({**pub(), secret: 1}),
         lambda: target_route(secret, "publish"),
         lambda: connect_page_path("strava", secret),
-        lambda: link_path(secret),
     ):
         assert secret not in refused(call)
 

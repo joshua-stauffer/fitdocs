@@ -54,7 +54,6 @@ _PRESENTED = "fdr1_" + "a" * 16 + "_" + "a" * 52
 _ISSUED = "fdr1_" + "b" * 16 + "_" + "b" * 52
 _POLL_SECRET = "a" * 43
 _LINK = "https://strava.example.invalid/activities/1"
-_RELAY_LINK = _BASE + "/go/" + "0" * 32
 _PUBLISH_ROUTE = "/v1/targets/strava/publish"
 
 _PREFIX = "strava-"
@@ -219,18 +218,12 @@ class _Case:
 
 _PUBLISH: dict[str, _Case] = {
     "strava-publish-posted": _Case(PublishResult(PublishCode.POSTED, _LINK)),
-    "strava-publish-posted-relay-links": _Case(
-        PublishResult(PublishCode.POSTED, _RELAY_LINK)
-    ),
     "strava-publish-not-found": _Case(PublishResult(PublishCode.NOT_FOUND)),
     "strava-publish-ambiguous": _Case(PublishResult(PublishCode.AMBIGUOUS)),
     "strava-publish-rate-limited": _Case(PublishResult(PublishCode.RATE_LIMITED)),
     "strava-publish-not-connected": _Case(PublishResult(PublishCode.NOT_CONNECTED)),
     "strava-upload-uploaded": _Case(
         PublishResult(PublishCode.UPLOADED, _LINK), upload=True
-    ),
-    "strava-upload-uploaded-relay-links": _Case(
-        PublishResult(PublishCode.UPLOADED, _RELAY_LINK), upload=True
     ),
     "strava-upload-posted": _Case(
         PublishResult(PublishCode.POSTED, _LINK), upload=True
@@ -365,6 +358,6 @@ def test_the_recorded_not_offered_answer_reaches_the_mapping_rows(
 def test_every_recorded_strava_exchange_has_a_decode_case() -> None:
     covered = set(_CONSENT) | set(_PUBLISH) | set(_PUBLISH_CLIENT_ONLY)
     recorded = {e["name"] for e in EXCHANGES}
-    assert len(recorded) == len(EXCHANGES) >= 20
+    assert len(recorded) == len(EXCHANGES) >= 18
     assert recorded - covered == set(), "a recorded exchange has no decode case"
     assert covered - recorded == set(), "a decode case has no recorded exchange"

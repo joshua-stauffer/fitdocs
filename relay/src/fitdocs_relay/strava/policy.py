@@ -1,17 +1,12 @@
 """The relay's privacy policy sections and consent text (fixed fitdocs wording).
 
-Imports the standard library only at run time; `LinkSetting` is imported for
-typing alone.
-The two link settings differ in exactly one policy section and one consent
-paragraph (Requirements 10.7, 16.1, 16.2).
+Imports the standard library only. The fixed wording says what the relay
+returns to fitdocs: the Strava address of the activity (Requirements 16.1, 16.2).
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Final
-
-if TYPE_CHECKING:
-    from fitdocs_relay.strava.config import LinkSetting
+from typing import Final
 
 POLICY_HEADINGS: Final[tuple[str, ...]] = (
     "The relay's operator",
@@ -25,26 +20,17 @@ POLICY_HEADINGS: Final[tuple[str, ...]] = (
     "Contact",
 )
 
-_RETURNS_ACTIVITY: Final = (
+_RETURNS: Final = (
     "For each workout that fitdocs publishes and the relay posts or uploads, "
     "the relay returns to your fitdocs the Strava address of the activity it "
     "landed on, and your fitdocs writes that address into the workout's page. "
     "It returns nothing else that Strava supplied. The relay does not record "
     "the address it returned."
 )
-_RETURNS_RELAY: Final = (
-    "The relay returns nothing that Strava supplied to your fitdocs. The "
-    "link on a workout's page points at the relay, which finds the activity "
-    "when the link is opened and sends the browser there; it does not record "
-    "what it found."
-)
-_CONSENT_RETURNS_ACTIVITY: Final = (
+_CONSENT_RETURNS: Final = (
     "The relay returns the Strava address of each activity a post lands on "
     "to your fitdocs, which writes it into the workout's page. It returns "
     "nothing else that Strava supplied."
-)
-_CONSENT_RETURNS_RELAY: Final = (
-    "The relay returns nothing that Strava supplied to your fitdocs."
 )
 
 _SHARED: Final[dict[str, str]] = {
@@ -114,22 +100,12 @@ _SHARED: Final[dict[str, str]] = {
 }
 
 
-def _returns(links: LinkSetting, *, consent: bool) -> str:
-    setting = links.value
-    if setting == "activity":
-        return _CONSENT_RETURNS_ACTIVITY if consent else _RETURNS_ACTIVITY
-    if setting == "relay":
-        return _CONSENT_RETURNS_RELAY if consent else _RETURNS_RELAY
-    raise ValueError(f"unknown link setting: {setting!r}")
-
-
-def policy_sections(links: LinkSetting) -> tuple[tuple[str, str], ...]:
+def policy_sections() -> tuple[tuple[str, str], ...]:
     """(heading, text) for every policy section, in `POLICY_HEADINGS` order."""
-    returns = _returns(links, consent=False)
     return tuple(
         (
             heading,
-            returns
+            _RETURNS
             if heading == "What the relay returns to fitdocs"
             else _SHARED[heading],
         )
@@ -137,7 +113,7 @@ def policy_sections(links: LinkSetting) -> tuple[tuple[str, str], ...]:
     )
 
 
-def consent_text(links: LinkSetting) -> tuple[str, ...]:
+def consent_text() -> tuple[str, ...]:
     """The paragraphs shown on the connect page before the Connect control."""
     return (
         "By continuing, you let this relay act on your Strava account for "
@@ -145,7 +121,7 @@ def consent_text(links: LinkSetting) -> tuple[str, ...]:
         "find the matching activity by start time, sport, distance and "
         "duration, set its name and description, and, only if you have "
         "enabled uploads, create one from the workout's file.",
-        _returns(links, consent=True),
+        _CONSENT_RETURNS,
         "The relay will never read your activities for another purpose, "
         "store or show them, share this access, or change anything else on "
         "your account.",

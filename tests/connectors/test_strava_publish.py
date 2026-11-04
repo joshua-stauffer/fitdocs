@@ -37,7 +37,7 @@ from fitdocs.connectors.protocol import (
     PublishResult,
     TokenSet,
 )
-from fitdocs.connectors.relay import RelaySettings
+from fitdocs.connectors.relay import RelayReply, RelaySettings
 from fitdocs.connectors.relay_codes import RELAY_CODES, CodeOrigin, RelayCode
 from fitdocs.connectors.relay_envelope import Answer, encode_answer
 from fitdocs.connectors.relay_targets import (
@@ -54,6 +54,7 @@ from fitdocs.connectors.strava import (
     UPLOAD_MAPPING,
     StravaConnector,
     StravaSettings,
+    _link,
 )
 from fitdocs.docmerge import extract_regions
 from fitdocs.publish.engine import run_publish
@@ -216,7 +217,7 @@ def _body(request: HttpRequest) -> dict[str, object]:
 
 def test_the_publish_request_is_one_literal_post_with_the_token() -> None:
     result, transport = _publish([_ok("posted")])
-    assert result == PublishResult(PublishCode.POSTED, _BASE + "/go/" + _ID)
+    assert result == PublishResult(PublishCode.POSTED, None)
     assert len(transport.requests) == 1
     request = transport.requests[0]
     assert request.method == "POST"
@@ -736,7 +737,7 @@ def test_a_string_link_is_the_link(
 
 
 @pytest.mark.parametrize(("outcome", "via_upload"), _LANDED_CALLS)
-def test_no_link_is_the_relays_go_address_on_the_bound_url(
+def test_an_answer_without_the_link_field_gives_no_link(
     outcome: str, via_upload: bool, tmp_path: Path
 ) -> None:
     result = _landed(
@@ -747,7 +748,19 @@ def test_no_link_is_the_relays_go_address_on_the_bound_url(
         url=_BASE + "/api",
         request=_request(recorded_link="https://old.example/recorded"),
     )
-    assert result.link == _BASE + "/api/go/" + _ID
+    assert result.code is PublishCode(outcome)
+    assert result.link is None
+
+
+def test_the_link_of_a_reply_is_its_string_field_and_otherwise_none() -> None:
+    def reply(data: dict[str, object]) -> RelayReply:
+        return RelayReply(
+            code=RelayCode.OK, data=data, outcome="posted", retry_after_s=None
+        )
+
+    assert _link(reply({"link": "https://s.example/a/9"})) == "https://s.example/a/9"
+    assert _link(reply({})) is None
+    assert _link(reply({"other": "https://s.example/a/9"})) is None
 
 
 @pytest.mark.parametrize("value", [5, None, ["x"], {"a": "b"}, True, 1.5])
@@ -779,14 +792,10 @@ def test_a_non_landed_upload_answer_carries_no_link(tmp_path: Path) -> None:
     assert result == PublishResult(PublishCode.UNCONFIRMED)
 
 
-def test_a_loopback_relay_without_a_link_is_refused_by_publish_core(
+def test_a_non_https_link_from_the_relay_is_refused_by_publish_core(
     tmp_path: Path,
 ) -> None:
-    loopback = "http://localhost:8765"
-    assert (
-        _landed("posted", False, {}, tmp_path, url=loopback).link
-        == loopback + "/go/" + _ID
-    )
+    loopback = "http://localhost:8765/activities/9"
     refused = _run_through_the_engine(tmp_path / "refused", loopback)
     assert refused.code is PublishCode.POSTED
     assert refused.link is None
@@ -794,11 +803,12 @@ def test_a_loopback_relay_without_a_link_is_refused_by_publish_core(
     assert "View on Strava" not in refused.region
     assert refused.requests == 1
 
-    kept = _run_through_the_engine(tmp_path / "kept", _BASE)
+    link = "https://www.strava.com/activities/9"
+    kept = _run_through_the_engine(tmp_path / "kept", link)
     assert kept.code is PublishCode.POSTED
-    assert kept.link == _BASE + "/go/" + _id(900 + 1)
+    assert kept.link == link
     assert kept.link_refused is False
-    assert "[View on Strava](" + _BASE + "/go/" in kept.region
+    assert f"[View on Strava]({link})" in kept.region
 
 
 class _EngineOutcome:
@@ -817,12 +827,12 @@ class _EngineOutcome:
         self.requests = requests
 
 
-def _run_through_the_engine(root: Path, relay_url: str) -> _EngineOutcome:
+def _run_through_the_engine(root: Path, link: str) -> _EngineOutcome:
     root.mkdir()
     env = Env(root)
     page = env.write("a.md")
-    transport = FakeTransport([_ok("posted")])
-    session = _session(transport, url=relay_url)
+    transport = FakeTransport([_ok("posted", {"link": link})])
+    session = _session(transport)
     connector = StravaConnector()
 
     def open_target(name: str) -> TargetChannel:

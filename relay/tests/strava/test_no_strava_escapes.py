@@ -4,14 +4,14 @@
 One scripted Strava plants a sentinel in every free-text field and every header
 it returns, and distinctive activity and athlete ids.
 The relay is driven through connect (start, page, callback, poll), a refresh,
-publish, upload, a `/go/` link, the operator's subscription commands, a
-disconnect and a webhook deauthorization, on both backends under both link
-settings. Afterwards the sentinel and the planted ids are searched for in the envelope
-answers, the pages, the operator-command reports, the log records the relay
-wrote and the rows of every table (a snapshot taken while connected, one after
-the disconnect and two after the webhook events). The authorization states,
-claim cookies, poll secrets, connection tokens, client secret and webhook
-secret are searched for in the log records.
+publish, upload, the operator's subscription commands, a disconnect and a
+webhook deauthorization, on both backends. Afterwards the sentinel and the
+planted ids are searched for in the envelope answers, the pages, the
+operator-command reports, the log records the relay wrote and the rows of every
+table (a snapshot taken while connected, one after the disconnect and two after
+the webhook events). The authorization states, claim cookies, poll secrets,
+connection tokens, client secret and webhook secret are searched for in the log
+records.
 """
 
 # ruff: noqa: F811
@@ -51,7 +51,6 @@ from tests.strava.test_publish_upload import (
 from tests.test_strava_pages_routes import cookie_header
 from tests.test_strava_routes import (  # noqa: F401  (make_world is a fixture)
     FIT,
-    GO_PATH,
     PUBLISH_PATH,
     ROUTES,
     UPLOAD_PATH,
@@ -93,7 +92,6 @@ HOSTILE_HEADERS = {
     "Set-Cookie": f"strava={SENTINEL}",
 }
 IDS = [ACTIVITY_ID, NEW_ID, DECOY_ID, ATHLETE_ID, UPLOAD_ID, SUBSCRIPTION_ID]
-SETTINGS = ["activity", "relay"]
 
 
 def strava_says(status: int, body: object) -> Any:
@@ -180,10 +178,9 @@ def log_text(records: list[logging.LogRecord]) -> str:
 
 
 class Scenario:
-    def __init__(self, w: World, target: Any, links: str) -> None:
+    def __init__(self, w: World, target: Any) -> None:
         self.w = w
         self.target = target
-        self.links = links
         self.seen = Seen()
         self.connection_token = ""
 
@@ -398,20 +395,7 @@ def drive(s: Scenario, monkeypatch: pytest.MonkeyPatch) -> None:
     s.envelope(UPLOAD_PATH, upload_fields(boom, FIT))
     monkeypatch.setattr(type(w.outbound), "__call__", real_call)
 
-    # --- the link: a click, a listing that fails, an unknown publication ---
-    w.outbound.expect(
-        "GET",
-        LIST_URL,
-        strava_says(
-            200,
-            [hostile_entry(ACTIVITY_ID), hostile_entry(DECOY_ID, sport_type="Ride")],
-        ),
-    )
-    s.page(GO_PATH)
-    w.outbound.expect("GET", LIST_URL, strava_says(500, SENTINEL.encode()))
-    s.page(GO_PATH)
-    s.page("/go/" + "9" * 32)
-    for path in ("/privacy", "/robots.txt", f"{CONNECT_PAGE}?code=NOSUCHCODE"):
+    for path in ("/privacy", f"{CONNECT_PAGE}?code=NOSUCHCODE"):
         s.page(path)
     s.snapshot()  # the connected state: sealed tokens, publications, budget
 
@@ -501,17 +485,15 @@ def headers_text(sent: Any) -> str:
     return "\n".join(f"{name}: {value}" for name, value in sent.headers.items())
 
 
-@pytest.mark.parametrize("links", SETTINGS)
 def test_nothing_strava_returns_escapes_the_relay_but_the_landed_link(
     make_world: Callable[..., World],
     database_target: Any,
     caplog: pytest.LogCaptureFixture,
     monkeypatch: pytest.MonkeyPatch,
-    links: str,
 ) -> None:
-    w = make_world(links=links)
+    w = make_world()
     caplog.set_level(logging.DEBUG)
-    scenario = Scenario(w, database_target, links)
+    scenario = Scenario(w, database_target)
     drive(scenario, monkeypatch)
     seen = scenario.seen
     secrets = [*seen.secrets, w.strava().config.client_secret, HOOK_SECRET]
@@ -531,14 +513,11 @@ def test_nothing_strava_returns_escapes_the_relay_but_the_landed_link(
 
     # --- Req 12.1: answers carry the link and nothing else of Strava's -----
     linked = [(a.outcome, a.data[LINK_FIELD]) for a in codes if LINK_FIELD in a.data]
-    if links == "activity":
-        assert linked == [
-            ("posted", f"{WEB}/activities/{ACTIVITY_ID}"),
-            ("uploaded", f"{WEB}/activities/{NEW_ID}"),
-            ("posted", f"{WEB}/activities/{ACTIVITY_ID}"),
-        ]
-    else:
-        assert linked == []
+    assert linked == [
+        ("posted", f"{WEB}/activities/{ACTIVITY_ID}"),
+        ("uploaded", f"{WEB}/activities/{NEW_ID}"),
+        ("posted", f"{WEB}/activities/{ACTIVITY_ID}"),
+    ]
     for sent, answer in zip(envelopes, codes, strict=True):
         assert set(answer.data) <= {
             LINK_FIELD,
@@ -554,17 +533,10 @@ def test_nothing_strava_returns_escapes_the_relay_but_the_landed_link(
             assert text.count(link) == 1
             text = text.replace(link, "")
         assert leaks(words + identifiers, text + headers_text(sent)) == []
-    redirects = [sent for _, sent in seen.responses if sent.status_code == 302]
-    assert [r.headers["location"] for r in redirects] == [
-        f"{WEB}/activities/{ACTIVITY_ID}"
-    ]  # the click reached the activity: the link check below is not vacuous
     for kind, sent in seen.responses:
         if kind == "envelope":
             continue
         text = sent.text + headers_text(sent)
-        if sent.status_code == 302:  # the redirect is the link, by design
-            assert sent.text == ""
-            text = sent.text + headers_text(sent).replace(sent.headers["location"], "")
         assert leaks(words + identifiers, text) == []
     for line in seen.reports:
         assert leaks(words + identifiers, line) == []

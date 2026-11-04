@@ -1008,22 +1008,11 @@ The upload request:
 
 When a publish lands (`posted` or `uploaded`), fitdocs records a link for the
 page, which its published region shows as "View on Strava", provided the link
-is valid (below). Where the link comes from depends on the relay's link
-setting:
-
-- **`activity`** (the relay's default): the link is the activity's page on
-  Strava, which the relay put in its answer.
-- **`relay`**: the relay's answer carries no link, and fitdocs
-  composes the link as the relay instance's `url` followed by `/go/` and the
-  page's publication id. Opening that address makes the relay find the
-  activity at that moment and send the browser to its page on Strava; if the
-  activity cannot be found it shows a page saying so, and sends the browser
-  nowhere.
-
-When the relay's link setting is `relay` and the relay instance's `url` is a
-loopback `http` address (the form for testing a local relay), there is no
-"View on Strava" link: the post still lands and the code is `posted` or `uploaded`, but a link
-must be `https`, so fitdocs refuses to record it and the page carries no link.
+is valid (below). The link is the activity's page on Strava, which the relay put
+in its answer. Where an answer carries no link, fitdocs records none and the page
+carries no link. A link must be `https`; fitdocs refuses to record any other
+and the page then carries no link, though the post still lands and the code is
+`posted` or `uploaded`.
 
 ### Disconnecting a Strava instance
 

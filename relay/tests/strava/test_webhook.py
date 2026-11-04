@@ -22,7 +22,7 @@ from fitdocs_relay.crypto import EncryptionKey, Keyring
 from fitdocs_relay.storage.interface import NewPrincipal, NewToken, Storage
 from fitdocs_relay.strava.api import MAX_ATHLETE_ID, Grant, StravaApi
 from fitdocs_relay.strava.budget import StravaBudget
-from fitdocs_relay.strava.config import Limits, LinkSetting, StravaConfig
+from fitdocs_relay.strava.config import Limits, StravaConfig
 from fitdocs_relay.strava.custody import Custody
 from fitdocs_relay.strava.webhook import MAX_EVENT_BYTES, Webhook
 
@@ -39,7 +39,6 @@ CONFIG = StravaConfig(
     oauth_url="https://oauth.example/oauth",
     web_url="https://web.example",
     limits=Limits(HUGE, HUGE, HUGE, HUGE),
-    links=LinkSetting.ACTIVITY,
 )
 DECOYS = {
     "d-true": "True",

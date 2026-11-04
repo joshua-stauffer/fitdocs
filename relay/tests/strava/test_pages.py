@@ -6,12 +6,10 @@ import re
 from collections.abc import Callable
 from html import escape
 from html.parser import HTMLParser
-from typing import Any, cast
 
 import pytest
 
 from fitdocs_relay.strava import pages, policy
-from fitdocs_relay.strava.config import LinkSetting
 from fitdocs_relay.strava.pages import Operator, Page
 
 HOSTILE = "x\"><b id='h'>&amp;"
@@ -29,18 +27,17 @@ SIMPLE: dict[str, BuildPage] = {
     "invalid_code": pages.invalid_code_page,
     "granted": pages.granted_page,
     "refused": pages.refused_page,
-    "not_found": pages.not_found_page,
     "try_later": pages.try_later_page,
     "unavailable": pages.unavailable_page,
 }
 
 
-def _all_pages(operator: Operator, links: LinkSetting) -> dict[str, Page]:
+def _all_pages(operator: Operator) -> dict[str, Page]:
     built = {name: build(operator) for name, build in SIMPLE.items()}
     built["connect"] = pages.connect_page(
-        user_code=USER_CODE, authorize_url=AUTH_URL, operator=operator, links=links
+        user_code=USER_CODE, authorize_url=AUTH_URL, operator=operator
     )
-    built["privacy"] = pages.privacy_page(operator, links)
+    built["privacy"] = pages.privacy_page(operator)
     return built
 
 
@@ -48,14 +45,13 @@ ALL_NAMES = [*SIMPLE, "connect", "privacy"]
 
 
 def test_the_page_list_is_the_design_list() -> None:
-    assert sorted(_all_pages(OPERATOR, LinkSetting.ACTIVITY)) == sorted(
+    assert sorted(_all_pages(OPERATOR)) == sorted(
         [
             "connect",
             "in_use",
             "invalid_code",
             "granted",
             "refused",
-            "not_found",
             "try_later",
             "unavailable",
             "privacy",
@@ -66,15 +62,12 @@ def test_the_page_list_is_the_design_list() -> None:
 # --- escaping ---------------------------------------------------------------
 
 
-@pytest.mark.parametrize("links", list(LinkSetting))
 @pytest.mark.parametrize("field", ["name", "contact", "policy_url"])
-def test_operator_values_are_escaped_on_every_page(
-    field: str, links: LinkSetting
-) -> None:
+def test_operator_values_are_escaped_on_every_page(field: str) -> None:
     values = {"name": "N", "contact": "C", "policy_url": "https://p.example/"}
     values[field] = HOSTILE
     operator = Operator(values["name"], values["contact"], values["policy_url"])
-    built = _all_pages(operator, links)
+    built = _all_pages(operator)
     for name, page in built.items():
         assert "<b id='h'>" not in page.html, name
         assert 'x"><b' not in page.html, name
@@ -95,7 +88,6 @@ def test_user_code_and_authorize_url_are_escaped() -> None:
         user_code=hostile_code,
         authorize_url=hostile_url,
         operator=OPERATOR,
-        links=LinkSetting.ACTIVITY,
     )
     assert "<b id='c'>" not in page.html
     assert "<i id='u'>" not in page.html
@@ -109,19 +101,19 @@ def test_user_code_and_authorize_url_are_escaped() -> None:
 @pytest.mark.parametrize("operator", [OPERATOR, OWN])
 @pytest.mark.parametrize("name", ALL_NAMES)
 def test_each_page_carries_the_support_contact(name: str, operator: Operator) -> None:
-    page = _all_pages(operator, LinkSetting.RELAY)[name]
+    page = _all_pages(operator)[name]
     assert page.html.count(CONTACT) >= 1
 
 
 @pytest.mark.parametrize("name", ALL_NAMES)
 def test_built_in_policy_link_is_used_without_an_operator_address(name: str) -> None:
-    page = _all_pages(OPERATOR, LinkSetting.ACTIVITY)[name]
+    page = _all_pages(OPERATOR)[name]
     assert re.findall(r'href="([^"]*)"', page.html).count("/privacy") == 1
 
 
 @pytest.mark.parametrize("name", ALL_NAMES)
 def test_operators_own_policy_address_replaces_the_built_in_one(name: str) -> None:
-    page = _all_pages(OWN, LinkSetting.ACTIVITY)[name]
+    page = _all_pages(OWN)[name]
     hrefs = re.findall(r'href="([^"]*)"', page.html)
     assert POLICY_URL in hrefs
     assert "/privacy" not in hrefs
@@ -130,15 +122,15 @@ def test_operators_own_policy_address_replaces_the_built_in_one(name: str) -> No
 # --- the connect page -------------------------------------------------------
 
 
-def _connect(links: LinkSetting = LinkSetting.ACTIVITY) -> str:
+def _connect() -> str:
     return pages.connect_page(
-        user_code=USER_CODE, authorize_url=AUTH_URL, operator=OWN, links=links
+        user_code=USER_CODE, authorize_url=AUTH_URL, operator=OWN
     ).html
 
 
 def test_the_connect_page_is_in_the_stated_order() -> None:
     html = _connect()
-    consent = [escape(p) for p in policy.consent_text(LinkSetting.ACTIVITY)]
+    consent = [escape(p) for p in policy.consent_text()]
     markers = [
         USER_CODE,
         "this same code",
@@ -177,12 +169,11 @@ def _visible(html: str) -> str:
     return re.sub(r"<[^>]*>", "\n", html)
 
 
-@pytest.mark.parametrize("links", list(LinkSetting))
 @pytest.mark.parametrize("name", ALL_NAMES)
 def test_the_only_brand_phrase_is_connect_with_strava_on_the_connect_page(
-    name: str, links: LinkSetting
+    name: str,
 ) -> None:
-    html = _all_pages(OPERATOR, links)[name].html
+    html = _all_pages(OPERATOR)[name].html
     text = _visible(html)
     found = _BRANDISH.findall(text)
     assert found == (["Connect with Strava"] if name == "connect" else [])
@@ -196,33 +187,24 @@ def test_the_brand_scan_can_see_a_planted_phrase() -> None:
     assert _STRAVA_THEN_CAPITAL.findall("Strava Connect") == ["Strava C"]
 
 
-# --- link-setting texts -----------------------------------------------------
+# --- consent and policy texts -----------------------------------------------
 
 ACTIVITY_CONSENT = (
     "The relay returns the Strava address of each activity a post lands on "
     "to your fitdocs, which writes it into the workout's page. It returns "
     "nothing else that Strava supplied."
 )
-RELAY_CONSENT = "The relay returns nothing that Strava supplied to your fitdocs."
 
 
-def test_consent_text_is_one_fixed_text_per_link_setting() -> None:
-    activity = policy.consent_text(LinkSetting.ACTIVITY)
-    relay = policy.consent_text(LinkSetting.RELAY)
-    assert ACTIVITY_CONSENT in activity
-    assert RELAY_CONSENT in relay
-    assert ACTIVITY_CONSENT not in relay
-    assert RELAY_CONSENT not in activity
-    assert activity == policy.consent_text(LinkSetting.ACTIVITY)
-    # The settings differ in that one paragraph and nowhere else.
-    assert [p for p in activity if p != ACTIVITY_CONSENT] == [
-        p for p in relay if p != RELAY_CONSENT
-    ]
-    assert len(activity) == len(relay) == 4
+def test_consent_text_is_one_fixed_text() -> None:
+    consent = policy.consent_text()
+    assert ACTIVITY_CONSENT in consent
+    assert consent == policy.consent_text()
+    assert len(consent) == 4
 
 
 def test_consent_text_states_what_the_relay_will_and_will_not_do() -> None:
-    text = " ".join(policy.consent_text(LinkSetting.ACTIVITY))
+    text = " ".join(policy.consent_text())
     for needed in (
         "start time, sport, distance and duration",
         "name and description",
@@ -235,13 +217,8 @@ def test_consent_text_states_what_the_relay_will_and_will_not_do() -> None:
         assert needed in text, needed
 
 
-def test_the_connect_page_shows_its_settings_consent_text() -> None:
-    activity = _connect(LinkSetting.ACTIVITY)
-    relay = _connect(LinkSetting.RELAY)
-    assert (
-        escape(ACTIVITY_CONSENT) in activity and escape(RELAY_CONSENT) not in activity
-    )
-    assert escape(RELAY_CONSENT) in relay and escape(ACTIVITY_CONSENT) not in relay
+def test_the_connect_page_shows_the_consent_text() -> None:
+    assert escape(ACTIVITY_CONSENT) in _connect()
 
 
 EXPECTED_HEADINGS = (
@@ -260,46 +237,24 @@ RETURNS = "What the relay returns to fitdocs"
 
 def test_policy_sections_are_the_designed_headings_in_order() -> None:
     assert policy.POLICY_HEADINGS == EXPECTED_HEADINGS
-    for links in LinkSetting:
-        sections = policy.policy_sections(links)
-        assert tuple(h for h, _ in sections) == EXPECTED_HEADINGS
-        assert all(text.strip() for _, text in sections)
+    sections = policy.policy_sections()
+    assert tuple(h for h, _ in sections) == EXPECTED_HEADINGS
+    assert all(text.strip() for _, text in sections)
 
 
-def test_only_the_returns_section_follows_the_link_setting() -> None:
-    activity = dict(policy.policy_sections(LinkSetting.ACTIVITY))
-    relay = dict(policy.policy_sections(LinkSetting.RELAY))
-    assert activity[RETURNS] != relay[RETURNS]
-    assert "Strava address of the activity it landed on" in activity[RETURNS]
-    assert "It returns nothing else that Strava supplied." in activity[RETURNS]
-    assert "nothing that Strava supplied to your fitdocs" not in activity[RETURNS]
-    assert "returns nothing that Strava supplied to your fitdocs" in relay[RETURNS]
-    assert "Strava address" not in relay[RETURNS]
-    others = [h for h in EXPECTED_HEADINGS if h != RETURNS]
-    assert [activity[h] for h in others] == [relay[h] for h in others]
-    assert len({activity[h] for h in others}) == len(others)
+def test_the_returns_section_says_the_relay_returns_the_activity_address() -> None:
+    returns = dict(policy.policy_sections())[RETURNS]
+    assert "Strava address of the activity it landed on" in returns
+    assert "It returns nothing else that Strava supplied." in returns
 
 
-def test_an_unknown_link_setting_is_refused() -> None:
-    class Odd:
-        value = "other"
-
-    with pytest.raises(ValueError, match="unknown link setting"):
-        policy.policy_sections(cast(Any, Odd()))
-    with pytest.raises(ValueError, match="unknown link setting"):
-        policy.consent_text(cast(Any, Odd()))
-
-
-@pytest.mark.parametrize("links", list(LinkSetting))
-def test_the_privacy_page_lists_the_sections_in_order_and_names_the_operator(
-    links: LinkSetting,
-) -> None:
-    html = pages.privacy_page(OPERATOR, links).html
+def test_the_privacy_page_lists_the_sections_in_order_and_names_the_operator() -> None:
+    html = pages.privacy_page(OPERATOR).html
     headings = [h.replace("&#x27;", "'") for h in re.findall(r"<h2>(.*?)</h2>", html)]
     assert tuple(headings) == EXPECTED_HEADINGS
     assert html.count("Operator: Operator Sentinel") == 1
     assert html.count(f"Support contact: {CONTACT}") == 1
-    for _, text in policy.policy_sections(links):
+    for _, text in policy.policy_sections():
         assert escape(text) in html
 
 
@@ -387,19 +342,13 @@ SHARED_POLICY = {
         "operator's support contact shown on this page."
     ),
 }
-RETURNS_ACTIVITY = (
+RETURNS_TEXT = (
     "For each workout that fitdocs publishes and the relay posts "
     "or uploads, the relay returns to your fitdocs the Strava "
     "address of the activity it landed on, and your fitdocs writes "
     "that address into the workout's page. It returns nothing else "
     "that Strava supplied. The relay does not record the address "
     "it returned."
-)
-RETURNS_RELAY = (
-    "The relay returns nothing that Strava supplied to your "
-    "fitdocs. The link on a workout's page points at the relay, "
-    "which finds the activity when the link is opened and sends "
-    "the browser there; it does not record what it found."
 )
 CONSENT_FIRST = (
     "By continuing, you let this relay act on your Strava account "
@@ -420,36 +369,17 @@ CONSENT_FOURTH = (
 )
 
 
-def _policy_text(links: LinkSetting, heading: str) -> str:
-    return dict(policy.policy_sections(links))[heading]
-
-
-@pytest.mark.parametrize(
-    ("links", "returns"),
-    [(LinkSetting.ACTIVITY, RETURNS_ACTIVITY), (LinkSetting.RELAY, RETURNS_RELAY)],
-)
-def test_every_policy_section_is_pinned_word_for_word(
-    links: LinkSetting, returns: str
-) -> None:
-    expected = {**SHARED_POLICY, RETURNS: returns}
-    assert policy.policy_sections(links) == tuple(
+def test_every_policy_section_is_pinned_word_for_word() -> None:
+    expected = {**SHARED_POLICY, RETURNS: RETURNS_TEXT}
+    assert policy.policy_sections() == tuple(
         (heading, expected[heading]) for heading in EXPECTED_HEADINGS
     )
 
 
-@pytest.mark.parametrize(
-    ("links", "returns"),
-    [
-        (LinkSetting.ACTIVITY, ACTIVITY_CONSENT),
-        (LinkSetting.RELAY, RELAY_CONSENT),
-    ],
-)
-def test_every_consent_paragraph_is_pinned_word_for_word(
-    links: LinkSetting, returns: str
-) -> None:
-    assert policy.consent_text(links) == (
+def test_every_consent_paragraph_is_pinned_word_for_word() -> None:
+    assert policy.consent_text() == (
         CONSENT_FIRST,
-        returns,
+        ACTIVITY_CONSENT,
         CONSENT_THIRD,
         CONSENT_FOURTH,
     )
@@ -459,14 +389,13 @@ def test_every_consent_paragraph_is_pinned_word_for_word(
 
 
 def test_page_statuses() -> None:
-    built = _all_pages(OPERATOR, LinkSetting.ACTIVITY)
+    built = _all_pages(OPERATOR)
     assert {name: page.status for name, page in built.items()} == {
         "connect": 200,
         "in_use": 409,
         "invalid_code": 404,
         "granted": 200,
         "refused": 200,
-        "not_found": 404,
         "try_later": 429,
         "unavailable": 503,
         "privacy": 200,
@@ -545,13 +474,6 @@ SIMPLE_TEXT: dict[str, tuple[str, list[str]]] = {
             "To try again, start again from fitdocs.",
         ],
     ),
-    "not_found": (
-        "Not found",
-        [
-            "This link does not lead to an activity.",
-            "Check that your account is connected and that the workout was published.",
-        ],
-    ),
     "try_later": (
         "Try again later",
         ["Too many requests just now.", "Wait a little and open the link again."],
@@ -571,15 +493,9 @@ def test_each_simple_page_shows_exactly_its_title_and_paragraphs(name: str) -> N
     assert parsed.lines == [title, *paragraphs, *FOOTER]
 
 
-@pytest.mark.parametrize(
-    ("links", "returns"),
-    [(LinkSetting.ACTIVITY, ACTIVITY_CONSENT), (LinkSetting.RELAY, RELAY_CONSENT)],
-)
-def test_the_connect_page_shows_exactly_its_text(
-    links: LinkSetting, returns: str
-) -> None:
+def test_the_connect_page_shows_exactly_its_text() -> None:
     html = pages.connect_page(
-        user_code=USER_CODE, authorize_url=AUTH_URL, operator=OPERATOR, links=links
+        user_code=USER_CODE, authorize_url=AUTH_URL, operator=OPERATOR
     ).html
     parsed = _parsed(html)
     assert "".join(parsed.title) == "Connect fitdocs"
@@ -588,7 +504,7 @@ def test_the_connect_page_shows_exactly_its_text(
         USER_CODE,
         "Continue only if the terminal where you started fitdocs shows this same code.",
         CONSENT_FIRST,
-        returns,
+        ACTIVITY_CONSENT,
         CONSENT_THIRD,
         CONSENT_FOURTH,
         "Connect with Strava",
@@ -596,16 +512,10 @@ def test_the_connect_page_shows_exactly_its_text(
     ]
 
 
-@pytest.mark.parametrize(
-    ("links", "returns"),
-    [(LinkSetting.ACTIVITY, RETURNS_ACTIVITY), (LinkSetting.RELAY, RETURNS_RELAY)],
-)
-def test_the_privacy_page_shows_exactly_its_text(
-    links: LinkSetting, returns: str
-) -> None:
-    parsed = _parsed(pages.privacy_page(OPERATOR, links).html)
+def test_the_privacy_page_shows_exactly_its_text() -> None:
+    parsed = _parsed(pages.privacy_page(OPERATOR).html)
     assert "".join(parsed.title) == "Privacy policy"
-    expected = {**SHARED_POLICY, RETURNS: returns}
+    expected = {**SHARED_POLICY, RETURNS: RETURNS_TEXT}
     lines = ["Privacy policy"]
     for heading in EXPECTED_HEADINGS:
         lines += [heading, expected[heading]]

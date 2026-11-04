@@ -106,7 +106,7 @@ _RELAY_SERVER_ROWS: list[tuple[str, bool, str | None, bool, str]] = [
     ),
 ]
 
-# strava-publish's fourteen rows, from its design.md with two deviations: the
+# strava-publish's thirteen rows, from its design.md with two deviations: the
 # ENCRYPTION_KEYS meaning adds "and distinct" after the id pattern, and the
 # PRIVACY_POLICY_URL default is the plain text "the relay's /privacy" without
 # the code span design.md puts around `/privacy`.
@@ -207,16 +207,6 @@ _STRAVA_ROWS: list[tuple[str, bool, str | None, bool, str, tuple[str, ...]]] = [
         (),
     ),
     (
-        "FITDOCS_RELAY_STRAVA_LINKS",
-        False,
-        "activity",
-        False,
-        "The link setting: `activity` puts the activity's address "
-        "`<web URL>/activities/<id>` in every posted or uploaded answer; `relay` "
-        "puts none, and pages link to `/go/<publication id>`",
-        (),
-    ),
-    (
         "FITDOCS_RELAY_STRAVA_RATE_LIMIT",
         False,
         "200,2000",
@@ -256,7 +246,7 @@ def test_environment_table_is_pinned_whole() -> None:
         for v in contract.ENVIRONMENT
     ]
     assert actual == PINNED_ENVIRONMENT
-    assert len(PINNED_ENVIRONMENT) == 25, "the pin lost rows"
+    assert len(PINNED_ENVIRONMENT) == 24, "the pin lost rows"
     assert contract.ENV_PREFIX == "FITDOCS_RELAY_"
 
 

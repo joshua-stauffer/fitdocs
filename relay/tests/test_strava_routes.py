@@ -1,4 +1,4 @@
-"""The Strava envelope routes and `/go/` (strava-publish 4.2), on both backends.
+"""The Strava envelope routes (strava-publish 4.2), on both backends.
 
 Every app here is `build_app` over `core_routes` with real services built by
 `make_services`; Strava is the scripted outbound, so a request nobody scripted
@@ -55,7 +55,6 @@ from fitdocs_relay.shared.relay_targets import (
     PUBLISH_OUTCOMES,
     STRAVA,
     UPLOAD_OUTCOMES,
-    link_path,
     publish_fields,
     target_route,
     upload_fields,
@@ -68,7 +67,8 @@ from fitdocs_relay.strava.connect import (
     CONNECTION_TOKEN_LABEL,
     ShowConsent,
 )
-from fitdocs_relay.strava.pages import PAGE_HEADERS
+from fitdocs_relay.strava.publish import Landed
+from fitdocs_relay.strava.routes import _landed_answer
 
 OAUTH = "https://oauth.example/oauth"
 NOW = 1_700_000_040
@@ -87,7 +87,7 @@ ROUTES = {
 }
 PUBLISH_PATH = ROUTES[ACTION_PUBLISH]
 UPLOAD_PATH = ROUTES[ACTION_UPLOAD]
-GO_PATH = link_path(PUB_ID)
+GO_PATH = f"/go/{PUB_ID}"  # a route the relay no longer serves
 FIT = b"\x0e\x10\x00\x00\x00\x00\x00\x00.FIT-route-test-payload"  # a FIT header
 POST_ROUTES = pytest.mark.parametrize("action", list(ROUTES))
 P = PublishCode
@@ -136,7 +136,6 @@ def make_world(
     def make(
         *,
         strava: bool = True,
-        links: str = "activity",
         token_limit: int | None = None,
         client_limit: int | None = None,
     ) -> World:
@@ -146,7 +145,6 @@ def make_world(
                     "FITDOCS_RELAY_STRAVA_API_URL": API,
                     "FITDOCS_RELAY_STRAVA_OAUTH_URL": OAUTH,
                     "FITDOCS_RELAY_STRAVA_WEB_URL": WEB,
-                    "FITDOCS_RELAY_STRAVA_LINKS": links,
                     "FITDOCS_RELAY_STRAVA_RATE_LIMIT": HUGE,
                     "FITDOCS_RELAY_STRAVA_READ_RATE_LIMIT": HUGE,
                 }
@@ -406,18 +404,6 @@ def test_publish_posts_and_answers_ok_posted_with_the_activity_link(
     assert answer.data == {LINK_FIELD: f"{WEB}/activities/{ACTIVITY_ID}"}
 
 
-def test_publish_posted_carries_no_link_under_the_relay_setting(
-    make_world: Callable[..., World],
-) -> None:
-    w = make_world(links="relay")
-    w.connect()
-    w.script_list(entry())
-    w.outbound.expect("PUT", UPDATE_URL, reply(200, {}))
-    answer = decoded(w.post(PUBLISH_PATH, publish_body()))
-    assert (answer.code, answer.outcome) == (RelayCode.OK, "posted")
-    assert answer.data == {}
-
-
 def test_publish_with_no_match_answers_not_found_and_no_link(world: World) -> None:
     world.connect()
     world.script_list()
@@ -576,16 +562,6 @@ def test_upload_creates_the_activity_and_answers_uploaded_with_its_link(
     assert FIT in sent_up.request.body  # the decoded file, not the request text
 
 
-def test_upload_uploaded_carries_no_link_under_the_relay_setting(
-    make_world: Callable[..., World],
-) -> None:
-    w = make_world(links="relay")
-    w.connect()
-    script_new_upload(w)
-    answer = decoded(w.post(UPLOAD_PATH, upload_body()))
-    assert (answer.code, answer.outcome, answer.data) == (RelayCode.OK, "uploaded", {})
-
-
 def test_upload_that_updates_a_match_answers_posted_with_the_link(
     world: World,
 ) -> None:
@@ -595,17 +571,6 @@ def test_upload_that_updates_a_match_answers_posted_with_the_link(
     answer = decoded(world.post(UPLOAD_PATH, upload_body()))
     assert answer.outcome == "posted"
     assert answer.data == {LINK_FIELD: f"{WEB}/activities/{ACTIVITY_ID}"}
-
-
-def test_upload_posted_carries_no_link_under_the_relay_setting(
-    make_world: Callable[..., World],
-) -> None:
-    w = make_world(links="relay")
-    w.connect()
-    w.script_list(entry())
-    w.outbound.expect("PUT", UPDATE_URL, reply(200, {}))
-    answer = decoded(w.post(UPLOAD_PATH, upload_body()))
-    assert (answer.outcome, answer.data) == ("posted", {})
 
 
 def test_an_unconfirmed_upload_is_an_upload_outcome_without_a_link(
@@ -744,78 +709,38 @@ def test_disconnect_takes_an_empty_request_only(world: World) -> None:
     assert world.store.get_connection(world.principal, STRAVA) is not None
 
 
-# --- /go/ -------------------------------------------------------------------
+def test_a_landed_result_answers_with_the_activity_link_and_a_bare_code_without() -> (
+    None
+):
+    link = f"{WEB}/activities/{ACTIVITY_ID}"
+    landed = _landed_answer(Landed(P.POSTED, link), PUBLISH_OUTCOMES)
+    answer = decode_answer(bytes(landed.body))
+    assert (answer.code, answer.outcome, answer.data) == (
+        RelayCode.OK,
+        "posted",
+        {LINK_FIELD: link},
+    )
+    bare = decode_answer(bytes(_landed_answer(P.NOT_FOUND, PUBLISH_OUTCOMES).body))
+    assert (bare.outcome, bare.data) == ("not_found", {})
 
 
-@pytest.mark.parametrize("links", ["activity", "relay"])
-def test_go_redirects_to_the_activity_under_either_link_setting(
-    make_world: Callable[..., World], links: str
+# --- the routes the relay does not serve -----------------------------------
+
+
+@pytest.mark.parametrize("path", [GO_PATH, "/robots.txt"])
+def test_the_removed_page_routes_reach_no_page_and_make_no_strava_call(
+    world: World, path: str
 ) -> None:
-    w = make_world(links=links)
-    w.connect()
-    w.script_list(entry())
-    w.outbound.expect("PUT", UPDATE_URL, reply(200, {}))
-    assert decoded(w.post(PUBLISH_PATH, publish_body())).outcome == "posted"
-    w.script_list(entry())
-    sent = w.client.get(GO_PATH, follow_redirects=False)
-    assert sent.status_code == 302
-    assert sent.headers["location"] == f"{WEB}/activities/{ACTIVITY_ID}"
-    for name, value in PAGE_HEADERS.items():
-        assert sent.headers[name] == value
-    assert sent.content == b""
-
-
-def test_go_of_an_unknown_publication_is_the_not_found_page_with_no_call(
-    world: World,
-) -> None:
-    sent = world.client.get(GO_PATH, follow_redirects=False)
-    assert sent.status_code == 404
-    assert "location" not in sent.headers
-    assert sent.headers["content-type"].startswith("text/html")
-    assert world.outbound.calls == []
-
-
-def test_go_of_a_malformed_id_is_not_found_without_a_lookup(
-    world: World, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    looked_up: list[str] = []
-
-    def spy(publication_id: str) -> str:
-        looked_up.append(publication_id)
-        return "https://elsewhere.example/"
-
-    monkeypatch.setattr(world.strava().publisher, "resolve_link", spy)
-    sent = world.client.get("/go/NOT-AN-ID", follow_redirects=False)
-    assert sent.status_code == 404
-    assert looked_up == []
-    # the same spy is reached by a well-formed id, so the lookup was available
-    world.client.get(GO_PATH, follow_redirects=False)
-    assert looked_up == [PUB_ID]
-
-
-def test_go_when_strava_limits_the_lookup_is_the_try_later_page(world: World) -> None:
+    # A publication exists, so a /go/ route that still resolved would have
+    # something to resolve and a call to make.
     world.connect()
     world.script_list(entry())
     world.outbound.expect("PUT", UPDATE_URL, reply(200, {}))
     assert decoded(world.post(PUBLISH_PATH, publish_body())).outcome == "posted"
-    world.outbound.expect("GET", LIST_URL, reply(429))
-    sent = world.client.get(GO_PATH, follow_redirects=False)
-    assert sent.status_code == 429
+    made = len(world.outbound.calls)
+    world.script_list(entry())  # scripted, so a lookup would not raise
+    sent = world.client.get(path, follow_redirects=False)
+    assert sent.status_code == 404
+    assert decoded(sent).code is RelayCode.NOT_OFFERED
     assert "location" not in sent.headers
-
-
-def test_go_while_the_relay_is_not_ready_is_the_unavailable_page(
-    world: World,
-) -> None:
-    world.services.ready = False
-    sent = world.client.get(GO_PATH, follow_redirects=False)
-    assert sent.status_code == 503
-    assert world.outbound.calls == []
-
-
-def test_go_is_rate_limited_per_client(make_world: Callable[..., World]) -> None:
-    w = make_world(client_limit=2)
-    statuses = [
-        w.client.get(GO_PATH, follow_redirects=False).status_code for _ in range(3)
-    ]
-    assert statuses == [404, 404, 429]
+    assert len(world.outbound.calls) == made

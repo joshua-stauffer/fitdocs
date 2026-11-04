@@ -29,14 +29,6 @@ is copied into the record, a commit, a queue item or a session.
   token, the public address, the encryption keys, the operator name and the
   support contact). `FITDOCS_RELAY_PUBLIC_URL` is the relay's public address, and the
   relay instance in the fitdocs install uses that same address as its url.
-- The relay's link setting, `FITDOCS_RELAY_STRAVA_LINKS`, decides what the
-  page links to. This check runs under the default, `activity`: the link is
-  the activity's own page address on Strava. Under `relay` the link is the
-  relay's `/go/<publication id>` address instead, and a loopback `http`
-  relay set to `relay` yields no link at all (the row reports the link as
-  refused and the page carries no "View on Strava" link). Steps 2 and 3
-  below are written for `activity`; to cover `relay` as well, repeat them
-  with that setting and record the differences as printed.
 - The relay serving, and its webhook subscription created and confirmed:
   run `fitdocs-relay strava webhook create` (it prints `subscribed` or
   `already subscribed`), then `fitdocs-relay strava webhook show`, which

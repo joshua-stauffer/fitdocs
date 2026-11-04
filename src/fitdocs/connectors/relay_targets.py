@@ -4,8 +4,8 @@ target that runs on the relay (Strava is the first).
 Standard library only, plus relative imports of sibling wire modules: this
 file is byte-copied into the relay, where the same relative imports resolve
 to the copied siblings. Error messages are fixed text that never interpolates
-the input. `target_route`, `connect_page_path` and `link_path` refuse malformed
-parts with `EnvelopeError`.
+the input. `target_route` and `connect_page_path` refuse malformed parts with
+`EnvelopeError`.
 """
 
 from __future__ import annotations
@@ -37,7 +37,6 @@ TARGET_ACTIONS: Final[tuple[str, ...]] = (
     ACTION_DISCONNECT,
 )
 CONNECT_PAGE_PREFIX: Final = "/connect/"
-LINK_PREFIX: Final = "/go/"
 LINK_FIELD: Final = "link"
 PUBLICATION_ID_RE: Final = r"^[0-9a-f]{32}$"
 SPORT_RE: Final = r"^[A-Z][A-Za-z]{0,31}$"
@@ -100,7 +99,6 @@ _MAX_FIT_BASE64_CHARS: Final = 4 * ((MAX_FIT_BYTES + 2) // 3)
 
 _MSG_ROUTE: Final = "not a relay target route"
 _MSG_PAGE: Final = "not a connect page path"
-_MSG_LINK: Final = "not a publication link path"
 _MSG_FIELDS: Final = "the fields are not exactly the expected set"
 _MSG_ID: Final = "the publication id is malformed"
 _MSG_SPORT: Final = "the sport is malformed"
@@ -132,14 +130,6 @@ def connect_page_path(target: str, user_code: str) -> str:
     if not is_target_id(target) or not is_user_code(user_code):
         raise EnvelopeError(_MSG_PAGE)
     return f"{CONNECT_PAGE_PREFIX}{target}?code={user_code}"
-
-
-def link_path(publication_id: str) -> str:
-    if not isinstance(publication_id, str) or not _PUBLICATION_ID.fullmatch(
-        publication_id
-    ):
-        raise EnvelopeError(_MSG_LINK)
-    return f"{LINK_PREFIX}{publication_id}"
 
 
 def route_outcome(outcome: str | None, allowed: frozenset[str]) -> str | None:

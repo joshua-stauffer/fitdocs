@@ -864,31 +864,6 @@
       }
     },
     {
-      "name": "strava-publish-posted-relay-links",
-      "state": {
-        "profile": "strava",
-        "scenario": "connected-one-match-relay-links"
-      },
-      "request": {
-        "method": "POST",
-        "path": "/v1/targets/strava/publish",
-        "headers": {
-          "Authorization": "Bearer fdr1_aaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-          "Content-Type": "application/json"
-        },
-        "body": "{\"publication_id\":\"00000000000000000000000000000000\",\"sport\":\"Run\",\"start\":\"2026-03-01T10:00:00+02:00\",\"elapsed_s\":1800.0,\"distance_m\":5000.0,\"title\":\"Morning run\",\"description\":\"Easy 5k\"}"
-      },
-      "answer": {
-        "status": 200,
-        "headers": {
-          "cache-control": "no-store",
-          "content-length": "55",
-          "content-type": "application/json"
-        },
-        "body": "{\"envelope\":1,\"code\":\"ok\",\"data\":{},\"outcome\":\"posted\"}"
-      }
-    },
-    {
       "name": "strava-publish-not-found",
       "state": {
         "profile": "strava",
@@ -1036,31 +1011,6 @@
           "content-type": "application/json"
         },
         "body": "{\"envelope\":1,\"code\":\"ok\",\"data\":{\"link\":\"https://strava.example.invalid/activities/1\"},\"outcome\":\"uploaded\"}"
-      }
-    },
-    {
-      "name": "strava-upload-uploaded-relay-links",
-      "state": {
-        "profile": "strava",
-        "scenario": "connected-new-upload-relay-links"
-      },
-      "request": {
-        "method": "POST",
-        "path": "/v1/targets/strava/upload",
-        "headers": {
-          "Authorization": "Bearer fdr1_aaaaaaaaaaaaaaaa_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-          "Content-Type": "application/json"
-        },
-        "body": "{\"publication_id\":\"00000000000000000000000000000000\",\"sport\":\"Run\",\"start\":\"2026-03-01T10:00:00+02:00\",\"elapsed_s\":1800.0,\"distance_m\":5000.0,\"title\":\"Morning run\",\"description\":\"Easy 5k\",\"fit\":\"DhAAAAAAAAAuRklULXJlY29yZGVkLWZha2UtcGF5bG9hZA==\"}"
-      },
-      "answer": {
-        "status": 200,
-        "headers": {
-          "cache-control": "no-store",
-          "content-length": "57",
-          "content-type": "application/json"
-        },
-        "body": "{\"envelope\":1,\"code\":\"ok\",\"data\":{},\"outcome\":\"uploaded\"}"
       }
     },
     {

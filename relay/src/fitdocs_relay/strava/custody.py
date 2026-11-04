@@ -133,7 +133,7 @@ class Custody:
         )
 
     def access_token(
-        self, principal_id: str, *, deadline: float, for_link: bool = False
+        self, principal_id: str, *, deadline: float
     ) -> Usable | PublishCode:
         while True:
             connection = self._storage.get_connection(principal_id, STRAVA)
@@ -159,7 +159,7 @@ class Custody:
                 now=now,
             ):
                 return self._refresh_held(
-                    connection, refresh, lease_id, deadline=deadline, for_link=for_link
+                    connection, refresh, lease_id, deadline=deadline
                 )
             if not self._wait_for_new_generation(
                 principal_id, connection.generation, deadline
@@ -186,7 +186,6 @@ class Custody:
         lease_id: str,
         *,
         deadline: float,
-        for_link: bool,
     ) -> Usable | PublishCode:
         who = connection.principal_id
         timeout = min(REFRESH_TIMEOUT_S, deadline - self._monotonic())
@@ -194,7 +193,7 @@ class Custody:
             self._release(who, lease_id)
             return PublishCode.UNAVAILABLE
         try:
-            allowed = self._budget.spend(who, for_link=for_link).allowed
+            allowed = self._budget.spend(who).allowed
             answer = self._api.refresh(refresh, timeout=timeout) if allowed else None
         except BaseException:
             self._release(who, lease_id)

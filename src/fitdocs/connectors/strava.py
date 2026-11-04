@@ -61,7 +61,6 @@ from fitdocs.connectors.relay_targets import (
     UPLOAD_OUTCOMES,
     PublishFacts,
     connect_page_path,
-    link_path,
     publish_fields,
     route_outcome,
     target_route,
@@ -313,7 +312,7 @@ class StravaConnector:
             code = _conclude(reply, UPLOAD_MAPPING, UPLOAD_OUTCOMES)
         if code not in _LINKED:
             return PublishResult(code)
-        return PublishResult(code, _link(reply, settings, request))
+        return PublishResult(code, _link(reply))
 
 
 _LINKED: Final = frozenset({PublishCode.POSTED, PublishCode.UPLOADED})
@@ -331,11 +330,6 @@ def _read_fit(path: Path | None) -> bytes | PublishCode:
         return PublishCode.ACTIVITY_FILE_MISSING
 
 
-def _link(
-    reply: RelayReply, settings: StravaSettings, request: PublishRequest
-) -> str | None:
-    if LINK_FIELD in reply.data:
-        link = reply.data[LINK_FIELD]
-        return link if isinstance(link, str) else None
-    assert settings.relay is not None
-    return settings.relay.url + link_path(request.publication_id)
+def _link(reply: RelayReply) -> str | None:
+    link = reply.data.get(LINK_FIELD)
+    return link if isinstance(link, str) else None
