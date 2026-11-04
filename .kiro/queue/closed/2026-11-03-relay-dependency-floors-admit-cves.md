@@ -92,4 +92,8 @@ Done means the floors exclude every advisory above, and relay CI is green.
   here.
 
 ## Resolution
-Done 2026-11-04: `starlette>=1.3.1,<2`, `cryptography>=50.0.0,<51`, and a direct `h11>=0.16`. `uv lock` moved no version. OSV was re-queried the same day and reports 0 advisories at each new floor, and at `uvicorn` 0.30.0, whose floor stays. `uv pip compile --resolution lowest-direct` resolves to exactly those floors. The `<51` cap on cryptography is unchanged: 51.x is still not assessed, and nothing requires it yet.
+Done 2026-11-04: `starlette>=1.7,<2`, `cryptography>=50.0.0,<51`, and a direct `h11>=0.16`. `uv lock` moved no version.
+
+The item's proposed `starlette>=1.3.1` was the advisory floor, but the relay does not work there. Run against exact floor versions, 15 request-log tests fail on 1.3.1 to 1.6.0 (the record's route is `None`) and pass from 1.7.0. A control with the locked versions separated this from environment artifacts. The old `>=1.0` floor had the same problem, hidden by the lockfile.
+
+Evidence, all the same day: with the relay package installed on starlette 1.7.0, cryptography 50.0.0, h11 0.16.0 and uvicorn 0.30.0, the relay suite gives 6 failed, 2727 passed, and the 6 are the known failures from the missing PostgreSQL extra, the same 6 as with locked versions. OSV reports 0 advisories at each of those versions, so `uvicorn`'s floor stays. The `<51` cap on cryptography is unchanged: 51.x is still not assessed, and nothing requires it yet.

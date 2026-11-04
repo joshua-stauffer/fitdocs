@@ -7,7 +7,8 @@ license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.11"
 dependencies = [
-    "starlette>=1.3.1,<2",
+    # Below 1.7 the request log loses its route; below 1.3.1 are published advisories.
+    "starlette>=1.7,<2",
     "uvicorn>=0.30,<1",
     "cryptography>=50.0.0,<51",
     # Not imported: uvicorn pulls it in. Below 0.16 it accepts malformed chunked

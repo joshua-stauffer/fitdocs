@@ -8,11 +8,12 @@ breaking change for deployments is marked `**Breaking for deployments:**`.
 - Deploy contract version: 1
 - Envelope version: 1
 - Seam version: 1
-- Dependencies. The floors now exclude versions with published advisories:
-  `starlette>=1.3.1`, `cryptography>=50.0.0`, and a new direct floor,
-  `h11>=0.16`, on a package uvicorn pulls in. An image built from `uv.lock`
-  was already on clean versions; this protects an install that resolves from
-  the floors instead.
+- Dependencies. The floors now exclude versions with published advisories and
+  versions the relay does not work on: `starlette>=1.7` (below it, request log
+  records carry no route), `cryptography>=50.0.0`, and a new direct floor,
+  `h11>=0.16`, on a package uvicorn pulls in. An image built from `uv.lock` was
+  already on good versions; this protects an install that resolves from the
+  floors instead.
 - Additive: the Strava target. Apart from migration `0002_target_custody`
   below, which every relay applies whether or not the target is configured, a
   relay with `FITDOCS_RELAY_STRAVA_CLIENT_ID` unset is unchanged: it answers every Strava route `not-offered`, opens no
