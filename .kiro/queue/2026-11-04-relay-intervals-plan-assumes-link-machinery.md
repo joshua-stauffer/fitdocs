@@ -44,4 +44,7 @@ cross-spec review, so fix it there.
 1. Read strava-publish's Amendment 1.
 2. Remove these references from the `relay-intervals` design and tasks during the
    rewrite. Search for `go/`, `robots` and `link setting`.
-3. Done means the plan describes only code that exists.
+3. Add the terms footer link and the acceptance sentence to the plan's connect page,
+   since a hosted deployment's terms apply to each platform.
+4. Done means the plan describes only code that exists, and its connect page matches
+   Strava's.

@@ -1,16 +1,16 @@
 ---
 id: 2026-10-18-query-fixture-tags-first-glob-entry-fails-west-of-utc
-title: Four analytics-query tests fail under a negative-offset TZ because the indexed-root fixture tags whatever workouts/*.md entry the glob returns first
+title: Two analytics-query tests hard-code a UTC page date and fail under a negative-offset TZ
 status: open
 importance: low
-importance_why: Test-only; the suite passes under UTC (CI) and positive offsets, but a contributor west of UTC sees 4 red tests that say nothing about their change.
+importance_why: Test-only; CI runs in UTC, so a contributor west of UTC sees two red tests that say nothing about their change. The flaky half of the original item is fixed.
 effort: S
 kind: bug
 area: analytics-query, tests/query/conftest.py
 created: 2026-10-18
 surfaced_by: second review of chore/q-local-tz (full suite under TZ=America/New_York in a git-archive copy), reproduced by the controller on an origin/main archive
 pinned_at: 1ad6b6f
-resume_command: "do: make tests/query/conftest.py's indexed_root fixture tag a specific workout page (sorted, AGENTS.md excluded, chosen by stem) instead of the first glob entry, then run tests/query under TZ=America/New_York, UTC and Asia/Tokyo [queue: .kiro/queue/2026-10-18-query-fixture-tags-first-glob-entry-fails-west-of-utc.md]"
+resume_command: "do: make tests/query/test_skill_examples.py expect the page date the fixture actually produced, or pin the zone, so that it passes under TZ=UTC, America/New_York and Asia/Tokyo (read .kiro/queue/2026-10-18-query-fixture-tags-first-glob-entry-fails-west-of-utc.md first)"
 context:
   - tests/query/conftest.py
   - tests/query/test_fixtures.py
@@ -54,3 +54,8 @@ page is tagged. Confirm this by printing `pages[0]` under
 2. Choose the page explicitly: sort, skip `AGENTS.md`, and match by sport or
    stem. Assert that the tag landed.
 3. Done when `tests/query` passes under all three zones.
+
+## Update 2026-11-04
+The fixture half is fixed (b8cc3e4f): `indexed_root` now sorts the pages, excludes `AGENTS.md`, and asserts that the tag landed. This item's first assumption was also wrong: the unsorted glob failed on CI too, in UTC, depending on directory order, and that is why it was fixed.
+
+Two tests remain red under `TZ=America/New_York` (2 failed, 38 passed; UTC and Asia/Tokyo pass 40). They are `test_every_skill_sql_fence_runs_and_returns_topic_rows` and `test_thresholds_example_includes_a_historical_closed_period`. Both expect the ride on 2021-09-08 (`tests/query/test_skill_examples.py:281`), but `sync` dates the page 2021-09-07 from the host zone, because the fixture file carries no recorded offset. The same two failed at 61c2ece1, before the fixture fix.

@@ -38,6 +38,8 @@ after Strava went live, the pages would be wrong about it.
 ## Evidence
 - `.kiro/steering/roadmap.md`, "The hosted policy pages describe public code".
 - `.kiro/specs/strava-publish/requirements.md`, "Amendment 1 (2026-11-04)".
+- The behaviour landed in 7d37e032 (`/go/` and the link setting), fb5aacce (publication
+  records) and af26ab4d (terms address and disconnect wording).
 
 ## How to pick it up
 1. Read the amendment and the deployed build's commit.

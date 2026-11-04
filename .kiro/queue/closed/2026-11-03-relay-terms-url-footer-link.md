@@ -1,7 +1,7 @@
 ---
 id: 2026-11-03-relay-terms-url-footer-link
 title: Optional FITDOCS_RELAY_TERMS_URL so the relay's own pages link an operator's terms
-status: open
+status: done
 importance: low
 importance_why: The relay's Strava pages link only the privacy policy; an operator with terms (the hosted deployment) cannot make the relay's footers link them.
 effort: S
@@ -33,7 +33,7 @@ address exists. The maintainer called it optional when shelving the spec.
 
 ## Why it matters
 The hosted deployment publishes terms at `https://api.fitdocs.ai/terms`
-(static, served by Caddy). Without this row, the Strava connect page an
+(static). Without this row, the Strava connect page an
 athlete sees before granting access does not link those terms. Strava does
 not require it, and the hosted deployment's own pages can link the terms.
 Pick this up if the maintainer wants the terms linked from the relay's
@@ -57,3 +57,6 @@ pages too.
    - with the row unset, every page's footer is unchanged;
    - one sentence in `docs/relay.md`, with no documentation test (the
      maintainer's code-only testing rule).
+
+## Resolution
+Done 2026-11-04 in strava-publish Amendment 1 (af26ab4d): `FITDOCS_RELAY_TERMS_URL` is an optional `https` row in the deploy contract; when it is set, every page's footer links it after the privacy policy, and the connect page shows "By connecting, you accept the terms of use." directly before the control. When it is unset the pages are byte-identical, checked across the commit. The `/go/` page this item names no longer exists.
