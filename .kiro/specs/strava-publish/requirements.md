@@ -363,8 +363,11 @@ fitdocs always writes the Strava address the relay returns, so nothing needs a l
 - Requirement 9 criterion 5 is retired: no share of a window is held back for links.
 - Requirement 10:
   - Criteria 2, 3, 4 and 5 are retired. The relay serves no `/go/` route and no `/robots.txt`, whose only rule was about `/go/`.
-  - Criteria 1 and 6 stay: the relay still records each publication, and still rejects a publication id recorded for another principal.
-  - Criterion 7 becomes: the relay server shall carry the Strava address of the activity in each answer whose outcome is posted or uploaded. Where an answer carries no address, fitdocs writes no link.
+  - Criteria 1 and 6 are retired too. The relay keeps no publication record: with no link to resolve, nothing read one except the check that protected it, and a reused id now affects nothing. A publication id still travels with a request, because an upload sends it to Strava as the external identifier.
+  - Criterion 7 becomes: the relay server shall carry the Strava address of the activity in each answer whose outcome is posted or uploaded. Where an answer carries no address, fitdocs writes no new link, and a page keeps any link it already recorded.
+- Requirement 3 criteria 10 and 11, Requirement 11 criteria 5, 6 and 8, and Requirement 14 criterion 1: "link records" leave these criteria. Criterion 3.11's replacement of a connection stays; there is nothing further to delete when the account differs.
+- Requirement 12 criterion 3: the relay's only lasting records for the Strava target are the encrypted tokens and the keyed account hash.
+- Requirement 14 criterion 3: `0002_target_custody` is edited in place rather than followed by a new change, because no relay carrying it was ever released. The schema version stays 2. A database already at version 2 keeps an empty table that nothing reads.
 - Requirement 11 gains criterion 11: when `fitdocs disconnect NAME` runs for a Strava instance and the relay answers success, the fitdocs CLI shall also state that the relay deleted the connection and what it kept for it.
 - Requirement 12 criterion 5: "the link" leaves the list of routes.
 - Requirement 13 criterion 1: the link setting leaves the table, and an optional terms address joins it (`FITDOCS_RELAY_TERMS_URL`, `https` only, no default).

@@ -1,7 +1,7 @@
 ---
 id: 2026-11-01-dependabot-pypi-publish-sigstore-ca
 title: 'Dependabot critical alert: bump pypa/gh-action-pypi-publish before the next release'
-status: open
+status: done
 importance: high
 importance_why: A release cut with the vulnerable action risks failed or unverifiable Trusted Publishing and attestations; the next release is the first that could ship relay-server.
 effort: S
@@ -31,3 +31,6 @@ The next release publishes through this action. If the pinned version is the aff
 1. Read the alert's patched version from the alert page.
 2. Re-pin both uses to the patched release and update the verification comments at :219-221.
 3. Update any test that pins the version string (grep tests for `gh-action-pypi-publish`); done when the alert closes and the workflow tests are green.
+
+## Resolution
+Done 2026-11-04 at 40f989fb. Both publish steps in `.github/workflows/release.yml` pin v1.14.3 and the pin comment records the re-verified tag. `gh api repos/:owner/:repo/dependabot/alerts` reports alert 1 as `fixed`. It landed from a maintainer branch because Dependabot PR #3's `gates` job cannot run without the secret; see `2026-11-04-dependabot-prs-cannot-pass-gates`.
