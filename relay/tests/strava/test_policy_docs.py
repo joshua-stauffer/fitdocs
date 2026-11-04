@@ -3,9 +3,10 @@ Requirements 16.1, 17.2).
 
 The page's `## The Strava target` section must keep its subsections in order and
 its policy summary must list the policy's sections in the policy's order. The
-page must name no hosting or email provider, use only the allowed brand phrases,
-and state the upload bound the code enforces. Each check is a function over page
-text, so the mutations at the foot of the file can feed it an altered page.
+page must name no hosting or email provider and use only the allowed brand
+phrases; those checks are functions over page text, so the mutations at the foot
+of the file can feed them an altered page. The upload bound is checked against
+the code's own constants, not against the page.
 """
 
 from __future__ import annotations

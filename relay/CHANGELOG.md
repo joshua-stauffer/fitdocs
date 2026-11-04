@@ -40,7 +40,7 @@ breaking change for deployments is marked `**Breaking for deployments:**`.
   `/readyz` reports `schema-behind` and `migrate --check` exits `3`.
 - Keeps. For the Strava target the relay keeps, per connection, the encrypted
   tokens, the time the access token expires and the keyed account hash, and
-  the call counts. A publish that lands leaves nothing behind.
+  the call counts. A publish that lands leaves nothing about the workout.
 
 ## 0.1.0 (unreleased)
 

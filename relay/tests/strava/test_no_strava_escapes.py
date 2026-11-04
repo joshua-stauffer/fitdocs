@@ -91,6 +91,20 @@ HOSTILE_HEADERS = {
     "Retry-After": SENTINEL,
     "Set-Cookie": f"strava={SENTINEL}",
 }
+MATCHED_ID = "1" * 32
+FAILED_ID = "2" * 32
+BOOM_ID = "3" * 32
+# every publication id the scenario sends, publish and upload alike
+DRIVEN_PUBLICATION_IDS = (
+    PUB_ID,
+    OTHER_ID,
+    THIRD_ID,
+    FOURTH_ID,
+    FIFTH_ID,
+    MATCHED_ID,
+    FAILED_ID,
+    BOOM_ID,
+)
 IDS = [ACTIVITY_ID, NEW_ID, DECOY_ID, ATHLETE_ID, UPLOAD_ID, SUBSCRIPTION_ID]
 
 
@@ -354,12 +368,12 @@ def drive(s: Scenario, monkeypatch: pytest.MonkeyPatch) -> None:
     )
     s.envelope(UPLOAD_PATH, upload_fields(upload_facts, FIT))
 
-    matched = replace(FACTS, publication_id="1" * 32)
+    matched = replace(FACTS, publication_id=MATCHED_ID)
     w.outbound.expect("GET", LIST_URL, strava_says(200, [hostile_entry(ACTIVITY_ID)]))
     w.outbound.expect("PUT", UPDATE_URL, strava_says(200, {"name": SENTINEL}))
     s.envelope(UPLOAD_PATH, upload_fields(matched, FIT))
 
-    failed = replace(FACTS, publication_id="2" * 32)
+    failed = replace(FACTS, publication_id=FAILED_ID)
     w.outbound.expect("GET", LIST_URL, strava_says(200, []))
     w.outbound.expect(
         "POST", UPLOAD_URL, strava_says(201, {"id": UPLOAD_ID, "error": None})
@@ -379,7 +393,7 @@ def drive(s: Scenario, monkeypatch: pytest.MonkeyPatch) -> None:
     )
     s.envelope(UPLOAD_PATH, upload_fields(failed, FIT))
 
-    boom = replace(FACTS, publication_id="3" * 32)
+    boom = replace(FACTS, publication_id=BOOM_ID)
     w.outbound.expect("GET", LIST_URL, strava_says(200, []))
     w.outbound.expect(
         "POST", UPLOAD_URL, strava_says(201, {"id": UPLOAD_ID, "error": None})
@@ -508,7 +522,8 @@ def test_nothing_strava_returns_escapes_the_relay_but_the_landed_link(
     assert outcomes.count("uploaded") == 1
     assert {"unavailable", "rate_limited", "unconfirmed"} <= set(outcomes)
     rich = seen.snapshots[0]
-    assert not any(PUB_ID in " ".join(rows) for rows in rich.values())
+    stored = " ".join(" ".join(rows) for rows in rich.values())
+    assert [pid for pid in DRIVEN_PUBLICATION_IDS if pid in stored] == []
     assert rich["target_connections"], "the connected snapshot holds no connection"
 
     # --- Req 12.1: answers carry the link and nothing else of Strava's -----

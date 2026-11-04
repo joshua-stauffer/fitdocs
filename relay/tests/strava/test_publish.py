@@ -184,9 +184,7 @@ def build(
         monotonic=mono,
         sleep=lambda seconds: None,
     )
-    publisher = StravaPublisher(
-        store, custody, api, budget, config, clock=lambda: NOW, monotonic=mono
-    )
+    publisher = StravaPublisher(custody, api, budget, config, monotonic=mono)
     return World(publisher, store, outbound, mono, budget, custody)
 
 
@@ -379,10 +377,52 @@ def test_a_landed_publish_leaves_nothing_about_the_workout_in_storage(
     assert landed(world.publisher.publish("ann", FACTS)).code is P.POSTED
 
     assert len(world.updates()) == 1  # the publish really landed
-    after = stored_rows(database_target)
-    assert after != before, "the publish spent budget, so the dump must differ"
+    assert_only_budget_changed(before, stored_rows(database_target), PUB_ID)
+
+
+def assert_only_budget_changed(
+    before: dict[str, list[str]], after: dict[str, list[str]], publication_id: str
+) -> None:
+    """A request that landed spent budget and left no row about the workout."""
+    assert after != before, "the request spent budget, so the dump must differ"
     assert {name for name in after if after[name] != before[name]} == {"budget_counts"}
-    assert PUB_ID not in repr(after)
+    assert publication_id not in repr(after)
+
+
+def test_the_facts_are_checked_before_the_token_is_read(
+    store: Storage, database_target: Target
+) -> None:
+    """With neither fact, no connection is read and no budget is spent: an
+    expiring token is not refreshed, and an unconnected principal still hears
+    ACTIVITY_FACTS_MISSING rather than NOT_CONNECTED."""
+    w = build(store)
+    connect(w, expires=NEAR)
+    facts = replace(FACTS, elapsed_s=None, distance_m=None)
+    before = stored_rows(database_target)
+
+    assert w.publisher.publish("ann", facts) is P.ACTIVITY_FACTS_MISSING
+    assert w.publisher.publish("bea", facts) is P.ACTIVITY_FACTS_MISSING
+
+    assert w.outbound.calls == []  # an expiring token was not refreshed
+    assert stored_rows(database_target) == before
+
+
+def test_a_post_stays_posted_when_the_connection_is_withdrawn_meanwhile(
+    world: World,
+) -> None:
+    script_list(world, entry())
+    script_update(world, reply(200, {}))
+
+    def withdraw(request: OutboundRequest) -> None:
+        if request.url == UPDATE_URL:
+            assert world.store.delete_connection(
+                "ann", "strava", generation=None, now=NOW
+            )
+
+    world.outbound.before_answer = withdraw
+    assert landed(world.publisher.publish("ann", FACTS)).code is P.POSTED
+    assert len(world.updates()) == 1
+    assert world.store.get_connection("ann", "strava") is None  # it was withdrawn
 
 
 def stored_rows(target: Target) -> dict[str, list[str]]:
@@ -637,7 +677,7 @@ def test_a_failure_that_is_not_server_or_network_is_never_repeated(
     assert len(world.updates()) == 1
 
 
-# --- the landed outcome and the record ---------------------------------------
+# --- the landed outcome -------------------------------------------------------
 
 
 def test_a_posted_result_carries_the_updated_activitys_page_address(

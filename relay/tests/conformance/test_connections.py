@@ -390,7 +390,7 @@ def test_delete_by_account_removes_that_accounts_connection_and_nothing_else(
     "PrincipalStore.delete_principal", "TargetConnectionStore.put_connection"
 )
 def test_deleting_a_principal_removes_its_connections_and_only_its_own(
-    database_target: Target, store: Storage
+    store: Storage,
 ) -> None:
     principals(store, "ann", "bea")
     store.put_connection(connection("ann", "acct-X"), now=T2)

@@ -13,6 +13,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 
 import pytest
+from tests.conformance.state_support import Target
 from tests.strava.scripted_strava import Call, reply
 from tests.strava.test_publish import (
     ACCESS,
@@ -35,12 +36,14 @@ from tests.strava.test_publish import (
     WEB,
     Mono,
     TickingOutbound,
+    assert_only_budget_changed,
     entry,
     landed,
     listing_url,
     probe_after,
     script_list,
     script_update,
+    stored_rows,
 )
 from tests.strava.test_publish import (
     World as BaseWorld,
@@ -113,14 +116,7 @@ def build(
         mono.now += seconds + (overshoot.pop(0) if overshoot else 0.0)
 
     publisher = StravaPublisher(
-        store,
-        custody,
-        api,
-        budget,
-        config,
-        clock=lambda: NOW,
-        monotonic=mono,
-        sleep=sleep,
+        custody, api, budget, config, monotonic=mono, sleep=sleep
     )
     return World(publisher, store, outbound, mono, budget, custody, sleeps, overshoot)
 
@@ -206,6 +202,66 @@ def test_both_facts_absent_is_activity_facts_missing_with_no_call(world: World) 
     assert upload(world, facts) is P.ACTIVITY_FACTS_MISSING
     assert world.outbound.calls == []
     assert world.outbound.unserved() == 3
+
+
+def test_the_facts_are_checked_before_the_token_is_read(
+    store: Storage, database_target: Target
+) -> None:
+    w = build(store)
+    connect(w, "ann", expires=NEAR)
+    facts = replace(FACTS, elapsed_s=None, distance_m=None)
+    script_none_then_ready(w)
+    before = stored_rows(database_target)
+
+    assert upload(w, facts) is P.ACTIVITY_FACTS_MISSING
+    assert upload(w, facts, "bea") is P.ACTIVITY_FACTS_MISSING
+
+    assert w.outbound.calls == []  # an expiring token was not refreshed
+    assert stored_rows(database_target) == before
+
+
+def test_a_landed_upload_leaves_nothing_about_the_workout_in_storage(
+    world: World, database_target: Target
+) -> None:
+    before = stored_rows(database_target)
+    assert before["target_connections"], "the precondition: ann is connected"
+    script_none_then_ready(world)
+
+    assert landed(upload(world)).code is P.UPLOADED
+
+    assert len(world.uploads()) == 1  # the upload really landed
+    assert_only_budget_changed(before, stored_rows(database_target), PUB_ID)
+
+
+def test_an_upload_stays_uploaded_when_the_connection_is_withdrawn_meanwhile(
+    world: World,
+) -> None:
+    script_none_then_ready(world)
+
+    def withdraw(request: OutboundRequest) -> None:
+        if request.url == STATUS_URL:
+            assert world.store.delete_connection(
+                "ann", "strava", generation=None, now=NOW
+            )
+
+    world.outbound.before_answer = withdraw
+    assert landed(upload(world)).code is P.UPLOADED
+    assert world.store.get_connection("ann", "strava") is None  # it was withdrawn
+
+
+def test_an_exception_in_the_update_after_a_failed_upload_is_unconfirmed(
+    world: World,
+) -> None:
+    failed_upload(world)
+    script_list(world, entry())
+    script_update(world, reply(200, {}))
+
+    def explode(request: OutboundRequest) -> None:
+        if request.url == UPDATE_URL:
+            raise KeyError(SECRET_TEXT)
+
+    world.outbound.before_answer = explode
+    assert upload(world) is P.UNCONFIRMED
 
 
 def test_a_principal_with_no_connection_is_not_connected_with_no_call(

@@ -218,10 +218,9 @@ class TargetConnectionStore(StorageBase, Protocol):
         """Store the principal's connection to `connection.target`.
 
         Upserts by (principal, target) with generation 1 and no lease. Another
-        principal's connection to the same (target, account) is deleted with
-        its publications and its connection token revoked; when this
-        principal's own account changes, its publications for the target are
-        deleted. Raises `UnknownPrincipal` for a principal that does not exist.
+        principal's connection to the same (target, account) is deleted and its
+        connection token revoked. Raises `UnknownPrincipal` for a principal that
+        does not exist.
         """
         ...
 

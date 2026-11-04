@@ -448,12 +448,10 @@ def _build_strava(
         budget=budget,
         custody=custody,
         publisher=StravaPublisher(
-            store,
             custody,
             api,
             budget,
             strava,
-            clock=clock,
             monotonic=monotonic,
             sleep=sleep,
         ),

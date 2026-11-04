@@ -803,7 +803,7 @@ def test_a_non_https_link_from_the_relay_is_refused_by_publish_core(
     assert "View on Strava" not in refused.region
     assert refused.requests == 1
 
-    link = "https://www.strava.com/activities/9"
+    link = f"{_BASE}/activities/9"
     kept = _run_through_the_engine(tmp_path / "kept", link)
     assert kept.code is PublishCode.POSTED
     assert kept.link == link

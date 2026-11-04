@@ -31,7 +31,6 @@ from typing import Final
 
 from fitdocs_relay.shared.outcomes import PublishCode
 from fitdocs_relay.shared.relay_targets import PublishFacts
-from fitdocs_relay.storage.interface import Storage
 from fitdocs_relay.strava.api import (
     Candidate,
     Failure,
@@ -159,28 +158,24 @@ def activity_page(web_url: str, activity_id: str) -> str:
 class StravaPublisher:
     def __init__(
         self,
-        storage: Storage,
         custody: Custody,
         api: StravaApi,
         budget: StravaBudget,
         config: StravaConfig,
         *,
-        clock: Callable[[], int],
         monotonic: Callable[[], float],
         sleep: Callable[[float], None] = time.sleep,
     ) -> None:
-        self._storage = storage
         self._custody = custody
         self._api = api
         self._budget = budget
         self._web_url = config.web_url
-        self._clock = clock
         self._monotonic = monotonic
         self._sleep = sleep
 
     def publish(self, principal_id: str, facts: PublishFacts) -> PublishCode | Landed:
         deadline = self._monotonic() + PUBLISH_DEADLINE_S
-        refused = self._common_start(principal_id, facts)
+        refused = self._common_start(facts)
         if refused is not None:
             return refused
         access = self._custody.access_token(principal_id, deadline=deadline)
@@ -205,7 +200,7 @@ class StravaPublisher:
         with no match is REJECTED.
         """
         deadline = self._monotonic() + UPLOAD_DEADLINE_S
-        refused = self._common_start(principal_id, facts)
+        refused = self._common_start(facts)
         if refused is not None:
             return refused
         access = self._custody.access_token(principal_id, deadline=deadline)
@@ -330,9 +325,7 @@ class StravaPublisher:
 
     # --- the common start ------------------------------------------------
 
-    def _common_start(
-        self, principal_id: str, facts: PublishFacts
-    ) -> PublishCode | None:
+    def _common_start(self, facts: PublishFacts) -> PublishCode | None:
         if facts.elapsed_s is None and facts.distance_m is None:
             return _P.ACTIVITY_FACTS_MISSING
         return None
