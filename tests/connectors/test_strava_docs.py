@@ -40,7 +40,6 @@ from fitdocs.connectors.strava import (
 )
 
 _DOC = Path(__file__).resolve().parents[2] / "docs" / "connectors.md"
-_ID = "0123456789abcdef0123456789abcdef"
 
 
 def _text() -> str:

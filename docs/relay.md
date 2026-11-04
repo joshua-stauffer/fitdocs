@@ -216,7 +216,7 @@ the process exits with code 2.
 | `FITDOCS_RELAY_SHUTDOWN_GRACE_SECONDS` | no | `20` | no | Graceful-shutdown wait, 0-600 |
 | `FITDOCS_RELAY_LOG_LEVEL` | no | `info` | no | `debug`, `info`, `warning` or `error` |
 | `FITDOCS_RELAY_EXTENSIONS` | no | empty | no | Comma-separated `module:attribute` references to `RelayExtension` objects |
-| `FITDOCS_RELAY_PUBLIC_URL` | with `FITDOCS_RELAY_STRAVA_CLIENT_ID` | — | no | The relay's public base address (`https`, or `http` to loopback); builds the callback `<url>/strava/callback` and page links |
+| `FITDOCS_RELAY_PUBLIC_URL` | with `FITDOCS_RELAY_STRAVA_CLIENT_ID` | — | no | The relay's public base address (`https`, or `http` to loopback); builds the OAuth callback `<url>/strava/callback` and the webhook address `<url>/strava/webhook/<token>` |
 | `FITDOCS_RELAY_ENCRYPTION_KEYS` | with `FITDOCS_RELAY_STRAVA_CLIENT_ID` | — | yes | Comma-separated `<id>:<key>` entries, 1-8; id `[a-z0-9]{1,16}` and distinct, key 32 bytes in unpadded base64url; the first encrypts (`fitdocs-relay new-encryption-key`) |
 | `FITDOCS_RELAY_OPERATOR_NAME` | with `FITDOCS_RELAY_STRAVA_CLIENT_ID` | — | no | The relay's operator, as the pages name them; 1-100 printable characters |
 | `FITDOCS_RELAY_SUPPORT_CONTACT` | with `FITDOCS_RELAY_STRAVA_CLIENT_ID` | — | no | An email address or `https` address where athletes reach the operator |

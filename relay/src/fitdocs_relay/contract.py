@@ -152,7 +152,8 @@ ENVIRONMENT: Final[tuple[EnvVar, ...]] = (
         None,
         False,
         "The relay's public base address (`https`, or `http` to loopback); builds "
-        "the callback `<url>/strava/callback` and page links",
+        "the OAuth callback `<url>/strava/callback` and the webhook address "
+        "`<url>/strava/webhook/<token>`",
         _WITH_ANY_TARGET,
     ),
     EnvVar(

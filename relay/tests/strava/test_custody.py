@@ -348,7 +348,7 @@ def test_the_refresh_is_made_under_a_lease_of_the_documented_length(
     assert lease_until == NOW + LEASE_S
 
 
-def test_a_refresh_spends_one_read_of_the_budget_or_the_links_share(
+def test_a_refresh_spends_one_read_of_the_budget_in_both_counters(
     database_target: Target, world: World
 ) -> None:
     connect(world)

@@ -842,8 +842,7 @@ ignored. A refused key is reported by name.
 The relay instance has to be connected before the Strava instance can be,
 because the relay accepts a Strava connection only from a holder of its token
 ([The token](#the-token) above). The relay instance's `url` must be the
-relay's public address, because the connect page and the page link described
-below are served at that address.
+relay's public address, because the connect page is served at that address.
 
 The default relay (https://api.fitdocs.ai) publishes its privacy policy at
 https://api.fitdocs.ai/privacy.
@@ -1009,10 +1008,9 @@ The upload request:
 When a publish lands (`posted` or `uploaded`), fitdocs records a link for the
 page, which its published region shows as "View on Strava", provided the link
 is valid (below). The link is the activity's page on Strava, which the relay put
-in its answer. Where an answer carries no link, fitdocs records none and the page
-carries no link. A link must be `https`; fitdocs refuses to record any other
-and the page then carries no link, though the post still lands and the code is
-`posted` or `uploaded`.
+in its answer. Where an answer carries no link, or a link that is not `https`, fitdocs
+writes no new link and the page keeps any link it already recorded. The post
+still lands and the code is `posted` or `uploaded`.
 
 ### Disconnecting a Strava instance
 

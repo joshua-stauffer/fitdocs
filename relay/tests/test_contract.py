@@ -119,7 +119,8 @@ _STRAVA_ROWS: list[tuple[str, bool, str | None, bool, str, tuple[str, ...]]] = [
         None,
         False,
         "The relay's public base address (`https`, or `http` to loopback); builds "
-        "the callback `<url>/strava/callback` and page links",
+        "the OAuth callback `<url>/strava/callback` and the webhook address "
+        "`<url>/strava/webhook/<token>`",
         (CLIENT_ID,),
     ),
     (
