@@ -294,7 +294,7 @@ class TargetConnectionStore(StorageBase, Protocol):
     ) -> bool:
         """Delete the connection (when `generation` is given, only if it matches;
         when `lease_id` is given, only if the connection's lease is that one),
-        its publications, and revoke its connection token. A `put_connection`
+        and revoke its connection token. A `put_connection`
         clears the lease, so the lease id held before it no longer matches
         unless it is claimed again."""
         ...
@@ -304,35 +304,6 @@ class TargetConnectionStore(StorageBase, Protocol):
     ) -> bool:
         """As `delete_connection`, for the connection to the account."""
         ...
-
-
-@dataclass(frozen=True)
-class Publication:
-    """A link record: what resolving the link needs; no athlete or activity id."""
-
-    target: str
-    publication_id: str
-    principal_id: str
-    sport: str
-    start_s: float
-    elapsed_s: float | None
-    distance_m: float | None
-
-
-class PublicationStore(StorageBase, Protocol):
-    def put_publication(self, publication: Publication, *, now: int) -> bool:
-        """Upsert by (target, publication id), only for the owning principal.
-
-        False, with nothing changed, when the id belongs to another principal.
-        An owner's put replaces the record's fields and its update time and keeps
-        its creation time. Raises `UnknownPrincipal` for a principal that does not
-        exist.
-        """
-        ...
-
-    def get_publication(
-        self, target: str, publication_id: str
-    ) -> Publication | None: ...
 
 
 @dataclass(frozen=True)
@@ -390,7 +361,6 @@ class Storage(
     SchemaStore,
     ServingStore,
     TargetConnectionStore,
-    PublicationStore,
     BudgetStore,
     Protocol,
 ):

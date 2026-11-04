@@ -29,7 +29,6 @@ from tests.strava.test_publish import (
     PEPPER,
     PUB_ID,
     REFRESH,
-    START,
     TIGHTER,
     TOKEN_URL,
     UPDATE_URL,
@@ -50,7 +49,7 @@ from tests.strava.test_publish import (
 from fitdocs_relay.crypto import EncryptionKey, Keyring
 from fitdocs_relay.outbound import OutboundError, OutboundRequest
 from fitdocs_relay.shared.outcomes import PublishCode
-from fitdocs_relay.storage.interface import NewPrincipal, Publication, Storage
+from fitdocs_relay.storage.interface import NewPrincipal, Storage
 from fitdocs_relay.strava.api import Failure, Grant, Step, StravaApi
 from fitdocs_relay.strava.budget import StravaBudget
 from fitdocs_relay.strava.config import Limits, StravaConfig
@@ -147,12 +146,6 @@ def connect(w: World, principal: str, *, expires: int = FAR) -> None:
     )
 
 
-def put_other(w: World) -> None:
-    assert w.store.put_publication(
-        Publication("strava", PUB_ID, "bea", "Run", 5.0, 1.0, 2.0), now=NOW
-    )
-
-
 def upload(w: World, facts=FACTS, principal: str = "ann"):  # type: ignore[no-untyped-def]
     return w.publisher.upload(principal, facts, FIT)
 
@@ -215,18 +208,6 @@ def test_both_facts_absent_is_activity_facts_missing_with_no_call(world: World) 
     assert world.outbound.unserved() == 3
 
 
-def test_a_publication_id_owned_by_another_principal_is_rejected_with_no_call(
-    world: World,
-) -> None:
-    connect(world, "bea")
-    put_other(world)
-    script_none_then_ready(world)
-    assert upload(world) is P.REJECTED
-    assert world.outbound.calls == []
-    stored = world.store.get_publication("strava", PUB_ID)
-    assert stored is not None and stored.principal_id == "bea"
-
-
 def test_a_principal_with_no_connection_is_not_connected_with_no_call(
     store: Storage,
 ) -> None:
@@ -270,7 +251,6 @@ def test_the_list_column_never_reaches_the_upload(
     assert upload(world) is EXPECTED[(Step.LIST, failure)]
     assert [c.request.url for c in world.outbound.calls] == [listing_url()]
     assert world.outbound.unserved() == 1  # the scripted upload was never served
-    assert world.store.get_publication("strava", PUB_ID) is None
 
 
 def test_a_listing_with_a_malformed_entry_is_unreadable_not_empty(
@@ -299,19 +279,6 @@ def test_two_matches_are_ambiguous_and_never_upload(world: World) -> None:
     script_upload(world, created())
     assert upload(world) is P.AMBIGUOUS
     assert world.uploads() == []
-
-
-def test_a_storage_failure_reading_the_publication_ends_the_request_first(
-    world: World, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    def broken(*args: object, **kwargs: object) -> object:
-        raise RuntimeError(SECRET_TEXT)
-
-    monkeypatch.setattr(world.store, "get_publication", broken)
-    script_none_then_ready(world)
-    with pytest.raises(RuntimeError):
-        upload(world)
-    assert world.outbound.calls == []
 
 
 def test_a_storage_failure_reserving_the_budget_ends_the_request_before_the_upload(
@@ -344,7 +311,6 @@ def test_one_match_is_updated_and_posted_with_no_upload(world: World) -> None:
     assert result.code is P.POSTED
     assert result.activity_page == f"{WEB}/activities/987654321012"
     assert world.uploads() == []
-    assert world.store.get_publication("strava", PUB_ID) is not None
 
 
 @pytest.mark.parametrize(
@@ -450,7 +416,6 @@ def test_the_upload_column_and_the_upload_is_never_repeated(
     assert len(world.uploads()) == 1
     assert world.outbound.unserved() == 2
     assert world.polls() == []
-    assert world.store.get_publication("strava", PUB_ID) is None
     assert spent(world) is (failure is Failure.LIMITED)
 
 
@@ -475,20 +440,16 @@ def test_a_limited_upload_with_a_daily_figure_marks_the_day_spent(
 # --- the status polls ---
 
 
-def test_a_ready_upload_is_uploaded_with_the_created_activitys_page_and_a_record(
+def test_a_ready_upload_is_uploaded_with_the_created_activitys_page(
     world: World,
 ) -> None:
     script_list(world, entry(111, sport_type="Swim"))
     script_upload(world, created())
     script_status(world, ready())
-    assert world.store.get_publication("strava", PUB_ID) is None
     result = landed(upload(world))
     assert result.code is P.UPLOADED
     assert result.activity_page == f"{WEB}/activities/{NEW_ID}"
     assert str(NEW_ID) not in repr(result) and WEB not in repr(result)
-    assert world.store.get_publication("strava", PUB_ID) == Publication(
-        "strava", PUB_ID, "ann", "Run", START.timestamp(), 1800.0, 5000.0
-    )
 
 
 def test_pending_polls_wait_the_interval_before_each_poll_until_ready(
@@ -528,7 +489,6 @@ def test_an_upload_still_pending_after_the_eighth_poll_is_unconfirmed(
     assert upload(world) is P.UNCONFIRMED
     assert len(world.polls()) == 8
     assert world.outbound.unserved() == 1
-    assert world.store.get_publication("strava", PUB_ID) is None
 
 
 def test_an_upload_ready_on_the_eighth_poll_is_uploaded(world: World) -> None:
@@ -551,7 +511,6 @@ def test_the_status_column_is_unconfirmed_for_every_failure(
     script_status(world, answer, ready())
     assert upload(world) is EXPECTED[(Step.UPLOAD_STATUS, failure)] is P.UNCONFIRMED
     assert len(world.polls()) == 1
-    assert world.store.get_publication("strava", PUB_ID) is None
     assert spent(world) is (failure is Failure.LIMITED)
 
 
@@ -579,7 +538,6 @@ def test_a_failed_upload_with_one_match_updates_it_on_the_reserved_calls(
     assert result.activity_page == f"{WEB}/activities/987654321012"
     assert len(w.hits(listing_url())) == 2
     assert len(w.uploads()) == 1
-    assert w.store.get_publication("strava", PUB_ID) is not None
 
 
 def test_a_failed_upload_with_several_matches_is_ambiguous(world: World) -> None:
@@ -587,7 +545,6 @@ def test_a_failed_upload_with_several_matches_is_ambiguous(world: World) -> None
     script_list(world, entry(1), entry(2))
     assert upload(world) is P.AMBIGUOUS
     assert world.hits(UPDATE_URL) == []
-    assert world.store.get_publication("strava", PUB_ID) is None
 
 
 def test_a_failed_upload_with_a_full_listing_is_ambiguous(world: World) -> None:
@@ -607,7 +564,6 @@ def test_a_failed_upload_with_no_match_is_rejected(world: World) -> None:
     script_list(world, entry(111, sport_type="Swim"))
     assert upload(world) is P.REJECTED
     assert len(world.uploads()) == 1
-    assert world.store.get_publication("strava", PUB_ID) is None
 
 
 @pytest.mark.parametrize("failure", list(Failure), ids=lambda f: f.value)
@@ -735,98 +691,7 @@ def test_the_deadline_after_the_second_listing_leaves_no_update(world: World) ->
     assert world.hits(UPDATE_URL) == []
 
 
-# --- the record ---
-
-
-def test_a_connection_withdrawn_before_the_record_leaves_no_record_but_is_uploaded(
-    world: World,
-) -> None:
-    script_none_then_ready(world)
-
-    def withdraw(request: OutboundRequest) -> None:
-        if request.url == STATUS_URL:
-            world.store.delete_connection("ann", "strava", generation=None, now=NOW)
-
-    world.outbound.before_answer = withdraw
-    assert landed(upload(world)).code is P.UPLOADED
-    assert world.store.get_publication("strava", PUB_ID) is None
-
-
-def test_a_record_another_principal_took_during_the_request_is_left_alone(
-    world: World,
-) -> None:
-    script_none_then_ready(world)
-
-    def take(request: OutboundRequest) -> None:
-        if request.url == STATUS_URL:
-            put_other(world)
-
-    world.outbound.before_answer = take
-    assert landed(upload(world)).code is P.UPLOADED
-    stored = world.store.get_publication("strava", PUB_ID)
-    assert stored == Publication("strava", PUB_ID, "bea", "Run", 5.0, 1.0, 2.0)
-
-
-def test_an_absent_fact_is_stored_as_none_not_zero(world: World) -> None:
-    facts = replace(FACTS, distance_m=None)
-    script_list(world)
-    script_upload(world, created())
-    script_status(world, ready())
-    world.publisher.upload("ann", facts, FIT)
-    stored = world.store.get_publication("strava", PUB_ID)
-    assert stored is not None
-    assert stored.distance_m is None and stored.elapsed_s == 1800.0
-
-
 # --- after the upload call ---
-
-
-def test_a_storage_failure_writing_the_record_after_the_upload_is_unconfirmed(
-    world: World, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-) -> None:
-    script_none_then_ready(world)
-
-    def broken(*args: object, **kwargs: object) -> object:
-        raise RuntimeError(SECRET_TEXT)
-
-    monkeypatch.setattr(world.store, "put_publication", broken)
-    with caplog.at_level(logging.DEBUG):
-        assert upload(world) is P.UNCONFIRMED
-    assert len(world.uploads()) == 1
-    assert "RuntimeError" in caplog.text
-    assert SECRET_TEXT not in caplog.text
-    assert all(r.exc_info is None for r in caplog.records)
-
-
-def test_a_storage_failure_reading_the_connection_after_the_upload_is_unconfirmed(
-    world: World, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    script_none_then_ready(world)
-    real = world.store.get_connection
-
-    def broken_once_uploaded(*args: object, **kwargs: object) -> object:
-        if world.uploads():
-            raise RuntimeError(SECRET_TEXT)
-        return real(*args, **kwargs)  # type: ignore[arg-type]
-
-    monkeypatch.setattr(world.store, "get_connection", broken_once_uploaded)
-    assert upload(world) is P.UNCONFIRMED
-    assert len(world.polls()) == 1  # it got as far as the record
-
-
-def test_a_storage_failure_after_a_failed_uploads_update_is_unconfirmed(
-    world: World, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    failed_upload(world)
-    script_list(world, entry())
-    script_update(world, reply(200, {}))
-
-    def broken(*args: object, **kwargs: object) -> object:
-        raise RuntimeError(SECRET_TEXT)
-
-    monkeypatch.setattr(world.store, "put_publication", broken)
-    assert upload(world) is P.UNCONFIRMED
-    assert len(world.hits(UPDATE_URL)) == 1
 
 
 def test_an_unexpected_exception_while_polling_is_unconfirmed_logged_by_type(

@@ -1,5 +1,5 @@
--- 0002_target_custody (PostgreSQL): a principal's connection to a provider target,
--- the activities published through it, and the provider-call budget counts.
+-- 0002_target_custody (PostgreSQL): a principal's connection to a provider target
+-- and the provider-call budget counts.
 -- Times are bigint epoch seconds UTC.
 
 CREATE TABLE target_connections (
@@ -19,23 +19,6 @@ CREATE TABLE target_connections (
     PRIMARY KEY (principal_id, target),
     UNIQUE (target, account_key)
 );
-
-CREATE TABLE target_publications (
-    target TEXT NOT NULL,
-    publication_id TEXT NOT NULL,
-    principal_id TEXT NOT NULL
-        REFERENCES principals (principal_id) ON DELETE CASCADE,
-    sport TEXT NOT NULL,
-    start_s DOUBLE PRECISION NOT NULL,
-    elapsed_s DOUBLE PRECISION,
-    distance_m DOUBLE PRECISION,
-    created_at BIGINT NOT NULL,
-    updated_at BIGINT NOT NULL,
-    PRIMARY KEY (target, publication_id)
-);
-
-CREATE INDEX target_publications_principal_idx
-    ON target_publications (principal_id, target);
 
 CREATE TABLE budget_counts (
     key TEXT NOT NULL,

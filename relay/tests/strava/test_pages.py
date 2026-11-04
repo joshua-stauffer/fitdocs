@@ -287,9 +287,8 @@ SHARED_POLICY = {
         "and a refresh token for your account, with the time the "
         "access token expires. The relay keeps the tokens "
         "encrypted and that time beside them, with a keyed hash of "
-        "your Strava account (not the account identifier itself) "
-        "and the identifiers and match facts that fitdocs sent for "
-        "your publications. It keeps nothing else from Strava: no "
+        "your Strava account (not the account identifier itself). "
+        "It keeps nothing else from Strava: no "
         "activities, activity identifiers, athlete identifiers, "
         "profile details or copies of any answer. Anything else "
         "Strava returns to a request is used inside that request "
@@ -316,9 +315,8 @@ SHARED_POLICY = {
         "purpose."
     ),
     "Deletion": (
-        "The relay deletes your Strava tokens and the records of "
-        "your publications at once in each of these cases: you "
-        "disconnect; Strava reports that you revoked the relay's "
+        "The relay deletes your Strava tokens at once in each of "
+        "these cases: you disconnect; Strava reports that you revoked the relay's "
         "access, in your Strava settings or by removing the "
         "application, which it delivers as a deauthorization "
         "event; Strava refuses to renew the connection's tokens; "

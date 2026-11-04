@@ -14,13 +14,15 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from tests.conformance.state_support import Target, raw
 from tests.strava.scripted_strava import ScriptedOutbound, reply
 
+from fitdocs_relay.config import SqliteTarget
 from fitdocs_relay.crypto import EncryptionKey, Keyring
 from fitdocs_relay.outbound import OutboundError, OutboundRequest
 from fitdocs_relay.shared.outcomes import PublishCode
 from fitdocs_relay.shared.relay_targets import PublishFacts
-from fitdocs_relay.storage.interface import NewPrincipal, Publication, Storage
+from fitdocs_relay.storage.interface import NewPrincipal, Storage
 from fitdocs_relay.strava.api import Failure, Grant, Step, StravaApi
 from fitdocs_relay.strava.budget import StravaBudget
 from fitdocs_relay.strava.config import Limits, StravaConfig
@@ -350,57 +352,56 @@ def test_both_facts_absent_is_activity_facts_missing_with_no_call(
         assert result is P.ACTIVITY_FACTS_MISSING
         assert world.outbound.calls == []
         assert world.outbound.unserved() == 2
-    stored = world.store.get_publication("strava", PUB_ID)
-    assert (stored is not None) is proceeds
 
 
-def put_other(w: World, publication_id: str = PUB_ID) -> None:
-    assert w.store.put_publication(
-        Publication("strava", publication_id, "bea", "Run", 5.0, 1.0, 2.0), now=NOW
-    )
-
-
-def test_a_publication_id_owned_by_another_principal_is_rejected_with_no_call(
-    world: World,
-) -> None:
+def test_two_principals_can_publish_the_same_publication_id(world: World) -> None:
     connect(world, "bea")
-    put_other(world)
-    script_list(world, entry())
-    script_update(world, reply(200, {}))
-    assert world.publisher.publish("ann", FACTS) is P.REJECTED
-    assert world.outbound.calls == []
-    assert world.outbound.unserved() == 2
-    stored = world.store.get_publication("strava", PUB_ID)
-    assert stored is not None and stored.principal_id == "bea"  # unchanged
-    assert stored.elapsed_s == 1.0
+    for _ in ("ann", "bea"):
+        script_list(world, entry())
+        script_update(world, reply(200, {}))
+
+    first = world.publisher.publish("ann", FACTS)
+    second = world.publisher.publish("bea", FACTS)
+
+    assert landed(first).code is P.POSTED
+    assert landed(second).code is P.POSTED
+    assert len(world.updates()) == 2  # each one reached Strava
 
 
-def test_the_ownership_check_runs_before_the_token_is_read(world: World) -> None:
-    # ann has no connection; the other principal's id is still `rejected`
-    world.store.delete_connection("ann", "strava", generation=None, now=NOW)
-    put_other(world)
-    assert world.publisher.publish("ann", FACTS) is P.REJECTED
-
-
-def test_the_facts_check_runs_before_the_ownership_check(world: World) -> None:
-    put_other(world)
-    facts = replace(FACTS, elapsed_s=None, distance_m=None)
-    assert world.publisher.publish("ann", facts) is P.ACTIVITY_FACTS_MISSING
-
-
-def test_an_id_the_principal_owns_is_not_rejected_and_its_record_is_replaced(
-    world: World,
+def test_a_landed_publish_leaves_nothing_about_the_workout_in_storage(
+    world: World, database_target: Target
 ) -> None:
-    assert world.store.put_publication(
-        Publication("strava", PUB_ID, "ann", "Ride", 5.0, 11.0, 22.0), now=NOW
-    )
+    before = stored_rows(database_target)
+    assert before["target_connections"], "the precondition: ann is connected"
     script_list(world, entry())
     script_update(world, reply(200, {}))
+
     assert landed(world.publisher.publish("ann", FACTS)).code is P.POSTED
-    stored = world.store.get_publication("strava", PUB_ID)
-    assert stored == Publication(
-        "strava", PUB_ID, "ann", "Run", START.timestamp(), 1800.0, 5000.0
-    )
+
+    assert len(world.updates()) == 1  # the publish really landed
+    after = stored_rows(database_target)
+    assert after != before, "the publish spent budget, so the dump must differ"
+    assert {name for name in after if after[name] != before[name]} == {"budget_counts"}
+    assert PUB_ID not in repr(after)
+
+
+def stored_rows(target: Target) -> dict[str, list[str]]:
+    """Every row of every table, as `repr` strings, by table name."""
+    if isinstance(target, SqliteTarget):
+        sql = (
+            "SELECT name FROM sqlite_master WHERE type = 'table' "
+            "AND name NOT LIKE 'sqlite_%'"
+        )
+    else:
+        sql = (
+            "SELECT table_name FROM information_schema.tables "
+            "WHERE table_schema = current_schema() AND table_type = 'BASE TABLE'"
+        )
+    names = sorted(str(r[0]) for r in raw(target, sql))
+    return {
+        name: sorted(repr(r) for r in raw(target, f"SELECT * FROM {name}"))
+        for name in names
+    }
 
 
 def test_a_principal_with_no_connection_is_not_connected_with_no_call(
@@ -470,7 +471,6 @@ def test_the_list_column(world: World, failure: Failure) -> None:
     result = world.publisher.publish("ann", FACTS)
     assert result is EXPECTED[(Step.LIST, failure)]
     assert world.urls() == [listing_url()]  # the list was called once, nothing after
-    assert world.store.get_publication("strava", PUB_ID) is None
 
 
 def probe_after(w: World, seconds: int) -> bool:
@@ -524,14 +524,12 @@ def test_no_match_is_not_found_and_nothing_is_updated(world: World) -> None:
     script_list(world)
     assert world.publisher.publish("ann", FACTS) is P.NOT_FOUND
     assert world.urls() == [listing_url()]
-    assert world.store.get_publication("strava", PUB_ID) is None
 
 
 def test_two_matches_are_ambiguous_and_nothing_is_updated(world: World) -> None:
     script_list(world, entry(1), entry(2))
     assert world.publisher.publish("ann", FACTS) is P.AMBIGUOUS
     assert world.urls() == [listing_url()]
-    assert world.store.get_publication("strava", PUB_ID) is None
 
 
 def test_a_full_listing_is_ambiguous_even_when_one_entry_matches(
@@ -591,7 +589,6 @@ def test_the_update_column(world: World, failure: Failure) -> None:
     assert result is EXPECTED[(Step.UPDATE, failure)]
     assert len(world.updates()) == (2 if repeats else 1)
     assert world.outbound.unserved() == (1 if repeats else 2)
-    assert world.store.get_publication("strava", PUB_ID) is None
 
 
 def test_an_update_answered_with_a_2xx_is_posted_whatever_its_body_holds(
@@ -615,7 +612,6 @@ def test_a_repeated_update_that_lands_is_posted_and_is_identical(
     one, two = [c.request for c in world.outbound.calls[1:]]
     assert one == two and one.method == "PUT"
     assert len(world.updates()) == 2
-    assert world.store.get_publication("strava", PUB_ID) is not None
 
 
 @pytest.mark.parametrize(
@@ -664,63 +660,6 @@ def test_the_page_address_is_built_from_the_configured_web_base(store: Storage) 
     script_update(w, reply(200, {}))
     result = landed(w.publisher.publish("ann", FACTS))
     assert result.activity_page == f"http://127.0.0.1:9/activities/{ACTIVITY_ID}"
-
-
-def test_a_landed_post_writes_the_link_record_of_the_page(world: World) -> None:
-    assert world.store.get_publication("strava", PUB_ID) is None
-    script_list(world, entry())
-    script_update(world, reply(200, {}))
-    world.publisher.publish("ann", FACTS)
-    assert world.store.get_publication("strava", PUB_ID) == Publication(
-        "strava", PUB_ID, "ann", "Run", START.timestamp(), 1800.0, 5000.0
-    )
-
-
-def test_an_absent_fact_is_stored_as_none_not_zero(world: World) -> None:
-    facts = replace(FACTS, distance_m=None)
-    script_list(world, entry() | {"distance": None})
-    script_update(world, reply(200, {}))
-    world.publisher.publish("ann", facts)
-    stored = world.store.get_publication("strava", PUB_ID)
-    assert stored is not None
-    assert stored.distance_m is None and stored.elapsed_s == 1800.0
-
-
-def test_a_connection_withdrawn_before_the_record_is_written_leaves_no_record(
-    world: World,
-) -> None:
-    script_list(world, entry())
-    script_update(world, reply(200, {}))
-
-    def withdraw(request: OutboundRequest) -> None:
-        if request.method == "PUT":
-            world.store.delete_connection("ann", "strava", generation=None, now=NOW)
-
-    world.outbound.before_answer = withdraw
-    assert world.store.get_connection("ann", "strava") is not None
-    result = landed(world.publisher.publish("ann", FACTS))
-    assert result.code is P.POSTED  # the activity was updated
-    assert world.store.get_connection("ann", "strava") is None
-    assert world.store.get_publication("strava", PUB_ID) is None
-
-
-def test_a_record_another_principal_took_during_the_request_is_left_alone(
-    world: World,
-) -> None:
-    script_list(world, entry())
-    script_update(world, reply(200, {}))
-
-    def bea_takes_the_id(request: OutboundRequest) -> None:
-        if request.method == "PUT":
-            put_other(world)
-
-    world.outbound.before_answer = bea_takes_the_id
-    assert world.store.get_publication("strava", PUB_ID) is None
-    result = landed(world.publisher.publish("ann", FACTS))
-    assert result.code is P.POSTED
-    assert result.activity_page == f"{WEB}/activities/{ACTIVITY_ID}"
-    stored = world.store.get_publication("strava", PUB_ID)
-    assert stored == Publication("strava", PUB_ID, "bea", "Run", 5.0, 1.0, 2.0)
 
 
 def test_a_landed_publish_logs_neither_the_activity_id_nor_the_page(
@@ -777,7 +716,6 @@ def test_no_update_is_made_once_the_deadline_has_passed(world: World) -> None:
     world.outbound.tick("GET", listing_url(), 20.0)  # exactly the deadline
     assert world.publisher.publish("ann", FACTS) is P.UNAVAILABLE
     assert world.urls() == [listing_url()]
-    assert world.store.get_publication("strava", PUB_ID) is None
 
 
 def test_no_repeat_is_made_once_the_deadline_has_passed(world: World) -> None:
@@ -786,7 +724,6 @@ def test_no_repeat_is_made_once_the_deadline_has_passed(world: World) -> None:
     world.outbound.tick("PUT", UPDATE_URL, 20.0)
     assert world.publisher.publish("ann", FACTS) is P.UNAVAILABLE
     assert len(world.updates()) == 1
-    assert world.store.get_publication("strava", PUB_ID) is None
 
 
 def test_the_repeat_gets_the_time_left(world: World) -> None:

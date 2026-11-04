@@ -76,29 +76,6 @@ def attach_token(
     )
 
 
-def add_publication(
-    target: Target, publication_id: str, principal_id: str, *, on: str = STRAVA
-) -> None:
-    raw(
-        target,
-        "INSERT INTO target_publications (target, publication_id, principal_id, "
-        "sport, start_s, elapsed_s, distance_m, created_at, updated_at) "
-        "VALUES (?, ?, ?, 'run', 1.0, NULL, NULL, 1, 1)",
-        (on, publication_id, principal_id),
-    )
-
-
-def publications(target: Target) -> list[tuple[str, str, str]]:
-    return [
-        (str(t), str(p), str(o))
-        for t, p, o in raw(
-            target,
-            "SELECT target, publication_id, principal_id FROM target_publications "
-            "ORDER BY target, publication_id",
-        )
-    ]
-
-
 def revoked_at(store: Storage, token_id: str) -> int | None:
     record = store.find_token(token_id)
     assert record is not None
@@ -216,7 +193,6 @@ def test_a_rival_is_sought_on_the_puts_target_only(
     store.put_connection(connection("ann", "acct-1"), now=T2)
     store.put_connection(connection("ann", "acct-2", target=OTHER), now=T2)
     attach_token(database_target, "ann", "tok-ann-other", on=OTHER)
-    add_publication(database_target, "pub-ann-other", "ann", on=OTHER)
 
     store.put_connection(connection("bea", "acct-1", target=OTHER), now=T3)
 
@@ -224,7 +200,6 @@ def test_a_rival_is_sought_on_the_puts_target_only(
     assert must_get(store, "ann", OTHER).account_key == "acct-2"
     assert must_get(store, "bea", OTHER).account_key == "acct-1"
     assert revoked_at(store, "tok-ann-other") is None
-    assert publications(database_target) == [(OTHER, "pub-ann-other", "ann")]
 
 
 @pytest.mark.covers("TargetConnectionStore.put_connection")
@@ -237,7 +212,7 @@ def test_a_put_for_an_unknown_principal_is_refused_and_stores_nothing(
 
 
 @pytest.mark.covers("TargetConnectionStore.put_connection")
-def test_another_principals_connection_to_the_account_is_displaced_with_its_records(
+def test_another_principals_connection_to_the_account_is_displaced(
     database_target: Target, store: Storage
 ) -> None:
     principals(store, "ann", "bea", "cy")
@@ -249,9 +224,6 @@ def test_another_principals_connection_to_the_account_is_displaced_with_its_reco
     attach_token(database_target, "ann", "tok-ann")
     attach_token(database_target, "ann", "tok-ann2", on=OTHER)
     attach_token(database_target, "cy", "tok-cy")
-    add_publication(database_target, "pub-a", "ann")
-    add_publication(database_target, "pub-a-other", "ann", on=OTHER)
-    add_publication(database_target, "pub-c", "cy")
     assert must_get(store, "ann").account_key == "acct-X"  # the rival is present
 
     store.put_connection(connection("bea", "acct-X", access="bea-A"), now=T3)
@@ -260,10 +232,6 @@ def test_another_principals_connection_to_the_account_is_displaced_with_its_reco
     assert must_get(store, "bea").tokens.access == "bea-A"
     assert [c.principal_id for c in store.list_connections(STRAVA)] == ["bea", "cy"]
     assert must_get(store, "ann", OTHER).account_key == "acct-X"
-    assert publications(database_target) == [
-        (OTHER, "pub-a-other", "ann"),
-        (STRAVA, "pub-c", "cy"),
-    ]
     assert revoked_at(store, "tok-ann") == T3
     assert revoked_at(store, "tok-ann2") is None
     assert revoked_at(store, "tok-cy") is None
@@ -285,7 +253,7 @@ def test_displacing_a_connection_does_not_restamp_an_already_revoked_token(
 
 
 @pytest.mark.covers("TargetConnectionStore.put_connection")
-def test_a_changed_account_drops_own_publications_and_the_same_account_keeps_them(
+def test_a_changed_account_replaces_the_connection_and_keeps_its_token(
     database_target: Target, store: Storage
 ) -> None:
     principals(store, "ann", "bea")
@@ -294,22 +262,11 @@ def test_a_changed_account_drops_own_publications_and_the_same_account_keeps_the
     store.put_connection(connection("ann", "acct-X", target=OTHER), now=T2)
     store.put_connection(connection("bea", "acct-B"), now=T2)
     attach_token(database_target, "ann", "tok-ann")
-    for publication_id, owner, on in (
-        ("pub-a", "ann", STRAVA),
-        ("pub-a-other", "ann", OTHER),
-        ("pub-b", "bea", STRAVA),
-    ):
-        add_publication(database_target, publication_id, owner, on=on)
 
     store.put_connection(connection("ann", "acct-X", access="again"), now=T3)
-    assert len(publications(database_target)) == 3  # the same account: all kept
 
     store.put_connection(connection("ann", "acct-Z"), now=T4)
 
-    assert publications(database_target) == [
-        (OTHER, "pub-a-other", "ann"),
-        (STRAVA, "pub-b", "bea"),
-    ]
     assert must_get(store, "ann").account_key == "acct-Z"
     assert must_get(store, "ann").token_id == "tok-ann"
     assert revoked_at(store, "tok-ann") is None
@@ -346,7 +303,7 @@ def test_list_orders_by_target_then_principal_in_byte_order_and_filters_by_targe
 @pytest.mark.covers(
     "TargetConnectionStore.delete_connection", "TargetConnectionStore.put_connection"
 )
-def test_delete_removes_the_connection_its_publications_and_revokes_its_token(
+def test_delete_removes_the_connection_and_revokes_its_token(
     database_target: Target, store: Storage
 ) -> None:
     principals(store, "ann", "bea")
@@ -357,9 +314,6 @@ def test_delete_removes_the_connection_its_publications_and_revokes_its_token(
     store.put_connection(connection("bea", "acct-B"), now=T2)
     attach_token(database_target, "ann", "tok-ann")
     attach_token(database_target, "bea", "tok-bea")
-    add_publication(database_target, "pub-a", "ann")
-    add_publication(database_target, "pub-a-other", "ann", on=OTHER)
-    add_publication(database_target, "pub-b", "bea")
 
     assert store.delete_connection("ann", STRAVA, generation=None, now=T3) is True
 
@@ -367,10 +321,6 @@ def test_delete_removes_the_connection_its_publications_and_revokes_its_token(
     assert store.delete_connection("ann", STRAVA, generation=None, now=T3) is False
     assert must_get(store, "ann", OTHER).account_key == "acct-X"
     assert must_get(store, "bea").account_key == "acct-B"
-    assert publications(database_target) == [
-        (OTHER, "pub-a-other", "ann"),
-        (STRAVA, "pub-b", "bea"),
-    ]
     assert revoked_at(store, "tok-ann") == T3
     assert revoked_at(store, "tok-bea") is None
 
@@ -383,18 +333,15 @@ def test_delete_with_a_generation_deletes_only_on_a_match(
     mint(store, "tok-ann", "ann")
     store.put_connection(connection("ann", "acct-X"), now=T2)
     attach_token(database_target, "ann", "tok-ann")
-    add_publication(database_target, "pub-a", "ann")
     raw(database_target, "UPDATE target_connections SET generation = 4")
 
     for wrong in (3, 5, 1):
         assert store.delete_connection("ann", STRAVA, generation=wrong, now=T3) is False
     assert must_get(store, "ann").generation == 4
-    assert publications(database_target) == [(STRAVA, "pub-a", "ann")]
     assert revoked_at(store, "tok-ann") is None
 
     assert store.delete_connection("ann", STRAVA, generation=4, now=T3) is True
     assert store.get_connection("ann", STRAVA) is None
-    assert publications(database_target) == []
     assert revoked_at(store, "tok-ann") == T3
 
 
@@ -424,8 +371,6 @@ def test_delete_by_account_removes_that_accounts_connection_and_nothing_else(
     store.put_connection(connection("bea", "acct-B"), now=T2)
     attach_token(database_target, "ann", "tok-ann")
     attach_token(database_target, "bea", "tok-bea")
-    add_publication(database_target, "pub-a", "ann")
-    add_publication(database_target, "pub-b", "bea")
 
     assert store.delete_connection_by_account(STRAVA, "acct-nope", now=T3) is False
     assert store.delete_connection_by_account("nothing", "acct-X", now=T3) is False
@@ -436,7 +381,6 @@ def test_delete_by_account_removes_that_accounts_connection_and_nothing_else(
     assert store.get_connection("ann", STRAVA) is None
     assert must_get(store, "bea", OTHER).account_key == "acct-X"
     assert must_get(store, "bea").account_key == "acct-B"
-    assert publications(database_target) == [(STRAVA, "pub-b", "bea")]
     assert revoked_at(store, "tok-ann") == T3
     assert revoked_at(store, "tok-bea") is None
     assert store.delete_connection_by_account(STRAVA, "acct-X", now=T3) is False
@@ -452,8 +396,6 @@ def test_deleting_a_principal_removes_its_connections_and_only_its_own(
     store.put_connection(connection("ann", "acct-X"), now=T2)
     store.put_connection(connection("ann", "acct-X", target=OTHER), now=T2)
     store.put_connection(connection("bea", "acct-B"), now=T2)
-    add_publication(database_target, "pub-a", "ann")
-    add_publication(database_target, "pub-b", "bea")
     assert len(store.list_connections(None)) == 3
 
     assert store.delete_principal("ann") is True
@@ -461,7 +403,6 @@ def test_deleting_a_principal_removes_its_connections_and_only_its_own(
     assert [(c.principal_id, c.target) for c in store.list_connections(None)] == [
         ("bea", STRAVA)
     ]
-    assert publications(database_target) == [(STRAVA, "pub-b", "bea")]
 
 
 @pytest.mark.covers(
@@ -964,7 +905,6 @@ def test_a_delete_with_a_generation_a_swap_has_passed_changes_nothing(
     mint(store, "tok-ann", "ann")
     store.put_connection(connection("ann", "acct-A"), now=T1)
     attach_token(database_target, "ann", "tok-ann")
-    add_publication(database_target, "pub-a", "ann")
     assert claim(store, "ann", "L-1", until=T5, now=T2)
     assert swap(store, "ann", lease="L-1", now=T3)  # generation 2
     assert claim(store, "ann", "L-2", generation=2, until=T6, now=T3)
@@ -973,7 +913,6 @@ def test_a_delete_with_a_generation_a_swap_has_passed_changes_nothing(
     assert store.delete_connection("ann", STRAVA, generation=1, now=T4) is False
 
     assert must_get(store, "ann") == before
-    assert publications(database_target) == [(STRAVA, "pub-a", "ann")]
     assert revoked_at(store, "tok-ann") is None
     assert store.delete_connection("ann", STRAVA, generation=2, now=T4) is True
     assert revoked_at(store, "tok-ann") == T4
@@ -992,7 +931,6 @@ def test_a_delete_with_a_lease_id_deletes_only_the_connection_that_lease_holds(
     store.put_connection(connection("ann", "acct-A"), now=T1)
     store.put_connection(connection("bea", "acct-B"), now=T1)
     attach_token(database_target, "ann", "tok-ann")
-    add_publication(database_target, "pub-a", "ann")
     assert claim(store, "ann", "L-1", until=T5, now=T2)
     # another principal holds a live lease with an id ann's row does not hold
     assert claim(store, "bea", "L-0", until=T5, now=T2)
@@ -1015,7 +953,6 @@ def test_a_delete_with_a_lease_id_deletes_only_the_connection_that_lease_holds(
     )
     assert must_get(store, "ann") == held
     assert must_get(store, "bea").lease_id == "L-0"
-    assert publications(database_target) == [(STRAVA, "pub-a", "ann")]
     assert revoked_at(store, "tok-ann") is None
 
     # a reconnection clears the lease: the old holder's id no longer matches,
@@ -1036,11 +973,10 @@ def test_a_delete_with_a_lease_id_deletes_only_the_connection_that_lease_holds(
         is True
     )
     assert store.get_connection("ann", STRAVA) is None
-    assert publications(database_target) == []
 
 
 @pytest.mark.covers("TargetConnectionStore.delete_connection")
-def test_a_delete_with_a_lease_id_removes_the_publications_and_revokes_the_token(
+def test_a_delete_with_a_lease_id_removes_the_connection_and_revokes_the_token(
     database_target: Target, store: Storage
 ) -> None:
     principals(store, "ann", "bea")
@@ -1050,8 +986,6 @@ def test_a_delete_with_a_lease_id_removes_the_publications_and_revokes_the_token
     store.put_connection(connection("bea", "acct-B"), now=T1)
     attach_token(database_target, "ann", "tok-ann")
     attach_token(database_target, "bea", "tok-bea")
-    add_publication(database_target, "pub-a", "ann")
-    add_publication(database_target, "pub-b", "bea")
     assert claim(store, "ann", "L-1", until=T5, now=T2)
     assert claim(store, "bea", "L-1", until=T5, now=T2)  # the same id, another row
 
@@ -1059,7 +993,6 @@ def test_a_delete_with_a_lease_id_removes_the_publications_and_revokes_the_token
 
     assert store.get_connection("ann", STRAVA) is None
     assert must_get(store, "bea").lease_id == "L-1"
-    assert publications(database_target) == [(STRAVA, "pub-b", "bea")]
     assert revoked_at(store, "tok-ann") == T4
     assert revoked_at(store, "tok-bea") is None
 

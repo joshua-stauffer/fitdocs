@@ -17,7 +17,6 @@ from fitdocs_relay.storage.interface import (
     NewPrincipal,
     NewToken,
     Principal,
-    Publication,
     RateDecision,
     RevokeResult,
     SchemaChange,
@@ -55,18 +54,6 @@ _CONNECTION_COLUMNS = (
 )
 
 _Db = psycopg.Connection[tuple[object, ...]]
-
-
-def _publication_from_row(row: tuple[object, ...]) -> Publication:
-    return Publication(
-        target=str(row[0]),
-        publication_id=str(row[1]),
-        principal_id=str(row[2]),
-        sport=str(row[3]),
-        start_s=float(row[4]),  # type: ignore[arg-type]
-        elapsed_s=None if row[5] is None else float(row[5]),  # type: ignore[arg-type]
-        distance_m=None if row[6] is None else float(row[6]),  # type: ignore[arg-type]
-    )
 
 
 def _check_charges(charges: tuple[BudgetCharge, ...], now: int) -> None:
@@ -497,17 +484,6 @@ class PostgresBackend:
                 ).fetchone()
                 if rival is not None:
                     self._remove_connection(db, str(rival[0]), target, now)
-                own = db.execute(
-                    "SELECT account_key FROM target_connections "
-                    "WHERE principal_id = %s AND target = %s FOR UPDATE",
-                    (owner, target),
-                ).fetchone()
-                if own is not None and own[0] != account:
-                    db.execute(
-                        "DELETE FROM target_publications "
-                        "WHERE principal_id = %s AND target = %s",
-                        (owner, target),
-                    )
                 db.execute(
                     "INSERT INTO target_connections (principal_id, target, "
                     "account_key, access_sealed, refresh_sealed, "
@@ -758,7 +734,7 @@ class PostgresBackend:
 
     @staticmethod
     def _remove_connection(db: _Db, principal_id: str, target: str, now: int) -> bool:
-        """Delete a connection and its publications; revoke its token."""
+        """Delete a connection; revoke its token."""
         row = db.execute(
             "DELETE FROM target_connections WHERE principal_id = %s AND target = %s "
             "RETURNING token_id",
@@ -766,10 +742,6 @@ class PostgresBackend:
         ).fetchone()
         if row is None:
             return False
-        db.execute(
-            "DELETE FROM target_publications WHERE principal_id = %s AND target = %s",
-            (principal_id, target),
-        )
         if row[0] is not None:
             db.execute(
                 "UPDATE tokens SET revoked_at = %s "
@@ -777,64 +749,6 @@ class PostgresBackend:
                 (now, row[0]),
             )
         return True
-
-    # --- PublicationStore ----------------------------------------------------
-
-    def put_publication(self, publication: Publication, *, now: int) -> bool:
-        self._check_open()
-
-        def work() -> bool:
-            with self._pool.connection() as db:
-                if (
-                    db.execute(
-                        "SELECT 1 FROM principals WHERE principal_id = %s FOR SHARE",
-                        (publication.principal_id,),
-                    ).fetchone()
-                    is None
-                ):
-                    raise UnknownPrincipal("the principal does not exist")
-                row = db.execute(
-                    "INSERT INTO target_publications (target, publication_id, "
-                    "principal_id, sport, start_s, elapsed_s, distance_m, "
-                    "created_at, updated_at) "
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
-                    "ON CONFLICT (target, publication_id) DO UPDATE SET "
-                    "sport = excluded.sport, start_s = excluded.start_s, "
-                    "elapsed_s = excluded.elapsed_s, "
-                    "distance_m = excluded.distance_m, "
-                    "updated_at = excluded.updated_at "
-                    "WHERE target_publications.principal_id = excluded.principal_id "
-                    "RETURNING 1",
-                    (
-                        publication.target,
-                        publication.publication_id,
-                        publication.principal_id,
-                        publication.sport,
-                        publication.start_s,
-                        publication.elapsed_s,
-                        publication.distance_m,
-                        now,
-                        now,
-                    ),
-                ).fetchone()
-                return row is not None
-
-        return _guarded(work)
-
-    def get_publication(self, target: str, publication_id: str) -> Publication | None:
-        self._check_open()
-
-        def work() -> tuple[object, ...] | None:
-            with self._pool.connection() as db:
-                return db.execute(
-                    "SELECT target, publication_id, principal_id, sport, start_s, "
-                    "elapsed_s, distance_m FROM target_publications "
-                    "WHERE target = %s AND publication_id = %s",
-                    (target, publication_id),
-                ).fetchone()
-
-        row = _guarded(work)
-        return _publication_from_row(row) if row else None
 
     # --- BudgetStore ---------------------------------------------------------
 

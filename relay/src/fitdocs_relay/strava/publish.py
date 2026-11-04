@@ -5,9 +5,8 @@ first (unless the deadline has already passed, when the call is not made and not
 counted) and made with the shorter of the per-call timeout and the time left.
 The publish flow lists around the page's start, picks the one activity the
 strict rule matches, updates its name and description once (repeated once,
-identically, after a server or network failure), and records the publication
-if the connection exists just before the write. A withdrawal after that check
-can still leave a record.
+identically, after a server or network failure). The relay stores nothing about
+a publish that lands.
 
 The upload flow lists the same way. A match is updated exactly as in the publish
 flow. When nothing matches, it reserves its calls in one operation, uploads the
@@ -31,8 +30,8 @@ from types import MappingProxyType
 from typing import Final
 
 from fitdocs_relay.shared.outcomes import PublishCode
-from fitdocs_relay.shared.relay_targets import STRAVA, PublishFacts
-from fitdocs_relay.storage.interface import Publication, Storage
+from fitdocs_relay.shared.relay_targets import PublishFacts
+from fitdocs_relay.storage.interface import Storage
 from fitdocs_relay.strava.api import (
     Candidate,
     Failure,
@@ -272,7 +271,6 @@ class StravaPublisher:
             if state.failed:
                 return self._resolved_again(principal_id, access, facts, deadline)
             if state.activity_id is not None:
-                self._record(principal_id, facts)
                 return Landed(
                     _P.UPLOADED, activity_page(self._web_url, state.activity_id)
                 )
@@ -328,7 +326,6 @@ class StravaPublisher:
         )
         if failure is not None:
             return failure
-        self._record(principal_id, facts)
         return Landed(_P.POSTED, activity_page(self._web_url, found.activity_id))
 
     # --- the common start ------------------------------------------------
@@ -338,9 +335,6 @@ class StravaPublisher:
     ) -> PublishCode | None:
         if facts.elapsed_s is None and facts.distance_m is None:
             return _P.ACTIVITY_FACTS_MISSING
-        known = self._storage.get_publication(STRAVA, facts.publication_id)
-        if known is not None and known.principal_id != principal_id:
-            return _P.REJECTED
         return None
 
     # --- the steps -----------------------------------------------------------
@@ -420,23 +414,3 @@ class StravaPublisher:
         if failure.failure is _F.LIMITED:
             self._budget.mark_spent(daily=failure.daily_spent)
         return STEP_OUTCOMES[(failure.step, failure.failure)]
-
-    def _record(self, principal_id: str, facts: PublishFacts) -> None:
-        """Write the link record if the connection still exists just before the
-        write. A connection withdrawn before that check leaves no record; one
-        withdrawn between the check and the write can still leave one (closing
-        that gap needs a storage-level write, not done here)."""
-        if self._storage.get_connection(principal_id, STRAVA) is None:
-            return
-        self._storage.put_publication(
-            Publication(
-                STRAVA,
-                facts.publication_id,
-                principal_id,
-                facts.sport,
-                facts.start.timestamp(),
-                facts.elapsed_s,
-                facts.distance_m,
-            ),
-            now=self._clock(),
-        )

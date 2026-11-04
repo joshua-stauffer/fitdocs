@@ -609,14 +609,13 @@ address Strava is given is built from it.
 For each connection the relay keeps the athlete's Strava access and refresh
 tokens, encrypted, with the time the access token expires; a keyed hash of the
 Strava account (not the identifier itself); the relay token issued for the connection,
-only as its identifier and keyed hash; and, for each publication, the identifier fitdocs made for it and
-the match facts fitdocs sent (start, sport, distance and duration). It keeps
-no activity, no Strava activity or athlete identifier, no profile detail and no
+only as its identifier and keyed hash. It keeps
+no publication, no activity, no Strava activity or athlete identifier, no profile detail and no
 copy of any Strava answer, and it writes no Strava token, authorization code or
 response into its logs. A connect session lives for at most ten minutes. The call
 counters hold counts only.
 
-The relay deletes a connection and its publication records at once, and
+The relay deletes a connection at once, and
 revokes the connection's relay token (it stays listed as revoked, and fitdocs
 then gets `token-revoked`), when:
 
@@ -631,9 +630,7 @@ then gets `token-revoked`), when:
 - The principal is deleted (`principal delete`), which deletes its tokens
   outright as well.
 - The same Strava account is connected again from another principal: the
-  connection moves, and the earlier one is deleted. Connecting a different
-  Strava account from a principal that already has one deletes the
-  principal's earlier publication records.
+  connection moves, and the earlier one is deleted.
 
 ### Privacy policy and consent
 
@@ -644,7 +641,7 @@ that address and `/privacy` stays served. The text is fixed by fitdocs. The poli
 
 - **The relay's operator** names the operator and says the relay publishes workouts to Strava on the athlete's behalf.
 - **What fitdocs sends** lists the workout facts, name and description, the publication identifier and, with uploads enabled, the file.
-- **What the relay receives from Strava and keeps** lists the encrypted tokens, the keyed account hash and the publication facts, and says nothing else is kept.
+- **What the relay receives from Strava and keeps** lists the encrypted tokens, the keyed account hash, and says nothing else is kept.
 - **What the relay sends to Strava** lists the code exchange, token renewal, the activity listing, the name and description update, uploads and revocation.
 - **What the relay returns to fitdocs** says the relay returns the activity's address and nothing else that Strava supplied.
 - **Deletion** lists four of the cases above: disconnecting, a deauthorization, a refused renewal and a deleted relay account. It does not list a connection moved to another principal.

@@ -97,14 +97,6 @@ def world(database_target: Target, open_full_storage: Callable[[], Storage]) -> 
         assert store.issue_connection_token(
             pid, "strava", NewToken(f"tok-{pid}", "v", None), now=NOW
         )
-        for n in (1, 2):
-            raw(
-                database_target,
-                "INSERT INTO target_publications (target, publication_id, "
-                "principal_id, sport, start_s, elapsed_s, distance_m, created_at, "
-                "updated_at) VALUES ('strava', ?, ?, 'run', 1.0, NULL, NULL, 1, 1)",
-                (f"pub-{pid}-{n}", pid),
-            )
     # accounts whose ids are what a lax reading of an owner would produce
     for pid, athlete in DECOYS.items():
         store.create_principal(NewPrincipal(pid, None), now=1)
@@ -190,12 +182,11 @@ def test_the_token_is_compared_in_constant_time(
 # --- a deauthorization ------------------------------------------------------
 
 
-def test_a_deauthorization_deletes_the_connection_its_links_and_its_token(
+def test_a_deauthorization_deletes_the_connection_and_revokes_its_token(
     world: World,
 ) -> None:
     before = world.dump()
     assert world.store.get_connection("ann", "strava") is not None
-    assert len(before["target_publications"]) == 4
     token = world.store.find_token("tok-ann")
     assert token is not None and token.revoked_at is None
     ann_connection = _rows(
@@ -204,19 +195,10 @@ def test_a_deauthorization_deletes_the_connection_its_links_and_its_token(
     ann_token = _rows(world, "SELECT * FROM tokens WHERE token_id = ?", "tok-ann")
     assert len(ann_connection) == 1 and len(ann_token) == 1
     assert len(before["target_connections"]) == 2 + len(DECOYS)
-    ann_links = _rows(
-        world,
-        "SELECT * FROM target_publications WHERE publication_id IN (?, ?)",
-        "pub-ann-1",
-        "pub-ann-2",
-    )
-    assert len(ann_links) == 2
 
     world.webhook.event(event())
 
     assert world.store.get_connection("ann", "strava") is None
-    pubs = raw(world.target, "SELECT publication_id FROM target_publications")
-    assert sorted(str(p[0]) for p in pubs) == ["pub-bea-1", "pub-bea-2"]
     token = world.store.find_token("tok-ann")
     assert token is not None and token.revoked_at == NOW
     # the other account is untouched, down to its token
@@ -224,7 +206,7 @@ def test_a_deauthorization_deletes_the_connection_its_links_and_its_token(
     bea = world.store.find_token("tok-bea")
     assert bea is not None and bea.revoked_at is None
     after = world.dump()
-    changed = {"target_connections", "target_publications", "tokens"}
+    changed = {"target_connections", "tokens"}
     assert set(after) == set(before) and changed <= set(before)
     for name in set(before) - changed:
         assert after[name] == before[name], name
@@ -234,12 +216,6 @@ def test_a_deauthorization_deletes_the_connection_its_links_and_its_token(
     ) == (ann_connection)
     assert len(after["target_connections"]) == len(before["target_connections"]) - 1
     assert set(after["target_connections"]) <= set(before["target_connections"])
-    # exactly her two links are gone
-    assert set(before["target_publications"]) - set(
-        after["target_publications"]
-    ) == set(ann_links)
-    assert set(after["target_publications"]) < set(before["target_publications"])
-    assert len(after["target_publications"]) == 2
     # only her token's row differs
     ann_token_after = _rows(world, "SELECT * FROM tokens WHERE token_id = ?", "tok-ann")
     assert len(ann_token_after) == 1 and ann_token_after != ann_token
@@ -337,7 +313,7 @@ def test_every_other_event_is_acknowledged_and_changes_no_table(
 ) -> None:
     body = IGNORED[name]()
     before = world.dump()
-    assert before["target_connections"] and before["target_publications"]
+    assert before["target_connections"]
     assert world.store.get_connection("ann", "strava") is not None
 
     world.webhook.event(body)

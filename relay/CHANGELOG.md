@@ -34,10 +34,13 @@ breaking change for deployments is marked `**Breaking for deployments:**`.
   re-encrypts stored Strava tokens under the current encryption key; and
   `new-encryption-key` prints a fresh key for
   `FITDOCS_RELAY_ENCRYPTION_KEYS`.
-- Schema. Migration `0002_target_custody` adds the connection, publication and
+- Schema. Migration `0002_target_custody` adds the connection and
   budget tables on SQLite and PostgreSQL. The change is additive: no 0.1.0
   table or column changes. Every relay needs it: until it is applied,
   `/readyz` reports `schema-behind` and `migrate --check` exits `3`.
+- Keeps. For the Strava target the relay keeps, per connection, the encrypted
+  tokens, the time the access token expires and the keyed account hash, and
+  the call counts. A publish that lands leaves nothing behind.
 
 ## 0.1.0 (unreleased)
 

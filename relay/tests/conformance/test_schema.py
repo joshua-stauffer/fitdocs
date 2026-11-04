@@ -116,6 +116,19 @@ def test_a_fresh_migrate_reaches_the_expected_version(
 
 
 @pytest.mark.covers("SchemaStore.schema_state", "SchemaStore.apply_schema_change")
+def test_a_migrated_schema_has_no_publication_table_and_is_at_version_two(
+    schema_store: SchemaStore, database_target: Target
+) -> None:
+    migrate(schema_store, now=NOW)
+
+    tables = table_names(database_target)
+    assert "target_connections" in tables  # the same query finds a table that exists
+    assert "target_publications" not in tables
+    assert [v for v, _name, _at in version_rows(database_target)] == [1, 2]
+    assert schema_store.schema_state().expected == 2
+
+
+@pytest.mark.covers("SchemaStore.schema_state", "SchemaStore.apply_schema_change")
 def test_a_second_migrate_changes_nothing(
     schema_store: SchemaStore, database_target: Target
 ) -> None:
@@ -386,7 +399,6 @@ DESIGNED_TABLES = [
     "records",
     "relay_schema",
     "target_connections",
-    "target_publications",
     "tokens",
 ]
 
@@ -435,17 +447,6 @@ SQLITE_COLUMNS = {
         (10, "created_at", "INTEGER", 1, None, 0, 0),
         (11, "updated_at", "INTEGER", 1, None, 0, 0),
     ],
-    "target_publications": [
-        (0, "target", "TEXT", 1, None, 1, 0),
-        (1, "publication_id", "TEXT", 1, None, 2, 0),
-        (2, "principal_id", "TEXT", 1, None, 0, 0),
-        (3, "sport", "TEXT", 1, None, 0, 0),
-        (4, "start_s", "REAL", 1, None, 0, 0),
-        (5, "elapsed_s", "REAL", 0, None, 0, 0),
-        (6, "distance_m", "REAL", 0, None, 0, 0),
-        (7, "created_at", "INTEGER", 1, None, 0, 0),
-        (8, "updated_at", "INTEGER", 1, None, 0, 0),
-    ],
     "tokens": [
         (0, "token_id", "TEXT", 1, None, 1, 0),
         (1, "principal_id", "TEXT", 1, None, 0, 0),
@@ -475,10 +476,6 @@ SQLITE_INDEXES = {
         ("sqlite_autoindex_target_connections_1", 1, "pk", 0),
         ("sqlite_autoindex_target_connections_2", 1, "u", 0),
     ],
-    "target_publications": [
-        ("sqlite_autoindex_target_publications_1", 1, "pk", 0),
-        ("target_publications_principal_idx", 0, "c", 0),
-    ],
     "tokens": [
         ("sqlite_autoindex_tokens_1", 1, "pk", 0),
         ("tokens_principal_id_idx", 0, "c", 0),
@@ -490,8 +487,6 @@ SQLITE_INDEX_COLUMNS = {
     "sqlite_autoindex_budget_counts_1": ["key", "window_start"],
     "sqlite_autoindex_target_connections_1": ["principal_id", "target"],
     "sqlite_autoindex_target_connections_2": ["target", "account_key"],
-    "sqlite_autoindex_target_publications_1": ["target", "publication_id"],
-    "target_publications_principal_idx": ["principal_id", "target"],
     "sqlite_autoindex_principals_1": ["principal_id"],
     "rate_counts_window_end_idx": ["window_end"],
     "sqlite_autoindex_rate_counts_1": ["key", "window_start"],
@@ -514,7 +509,6 @@ _CASCADE_TO_PRINCIPALS = (
 SQLITE_FOREIGN_KEYS = {
     "budget_counts": [_CASCADE_TO_PRINCIPALS],
     "target_connections": [_CASCADE_TO_PRINCIPALS],
-    "target_publications": [_CASCADE_TO_PRINCIPALS],
     "tokens": [
         (
             0,
@@ -578,31 +572,6 @@ POSTGRES_COLUMNS = [
     ("target_connections", "token_id", "text", "YES", None, "NO", "NEVER"),
     ("target_connections", "created_at", "bigint", "NO", None, "NO", "NEVER"),
     ("target_connections", "updated_at", "bigint", "NO", None, "NO", "NEVER"),
-    ("target_publications", "target", "text", "NO", None, "NO", "NEVER"),
-    ("target_publications", "publication_id", "text", "NO", None, "NO", "NEVER"),
-    ("target_publications", "principal_id", "text", "NO", None, "NO", "NEVER"),
-    ("target_publications", "sport", "text", "NO", None, "NO", "NEVER"),
-    ("target_publications", "start_s", "double precision", "NO", None, "NO", "NEVER"),
-    (
-        "target_publications",
-        "elapsed_s",
-        "double precision",
-        "YES",
-        None,
-        "NO",
-        "NEVER",
-    ),
-    (
-        "target_publications",
-        "distance_m",
-        "double precision",
-        "YES",
-        None,
-        "NO",
-        "NEVER",
-    ),
-    ("target_publications", "created_at", "bigint", "NO", None, "NO", "NEVER"),
-    ("target_publications", "updated_at", "bigint", "NO", None, "NO", "NEVER"),
     ("tokens", "token_id", "text", "NO", None, "NO", "NEVER"),
     ("tokens", "principal_id", "text", "NO", None, "NO", "NEVER"),
     ("tokens", "verifier", "text", "NO", None, "NO", "NEVER"),
@@ -625,8 +594,6 @@ POSTGRES_CONSTRAINTS = [
     ("target_connections", "f", _PG_CASCADE),
     ("target_connections", "p", "PRIMARY KEY (principal_id, target)"),
     ("target_connections", "u", "UNIQUE (target, account_key)"),
-    ("target_publications", "f", _PG_CASCADE),
-    ("target_publications", "p", "PRIMARY KEY (target, publication_id)"),
     (
         "tokens",
         "f",
@@ -718,28 +685,6 @@ POSTGRES_INDEXES = [
         True,
         "btree",
     ),
-    (
-        "target_publications",
-        "target_publications_pkey",
-        True,
-        True,
-        "target",
-        True,
-        2,
-        True,
-        "btree",
-    ),
-    (
-        "target_publications",
-        "target_publications_principal_idx",
-        False,
-        False,
-        "principal_id",
-        True,
-        2,
-        True,
-        "btree",
-    ),
     ("tokens", "tokens_pkey", True, True, "token_id", True, 1, True, "btree"),
     (
         "tokens",
@@ -770,9 +715,6 @@ POSTGRES_RELATIONS = [
     ("target_connections", "r"),
     ("target_connections_pkey", "i"),
     ("target_connections_target_account_key_key", "i"),
-    ("target_publications", "r"),
-    ("target_publications_pkey", "i"),
-    ("target_publications_principal_idx", "i"),
     ("tokens", "r"),
     ("tokens_pkey", "i"),
     ("tokens_principal_id_idx", "i"),
@@ -816,7 +758,7 @@ def _check_sqlite_model(target: SqliteTarget) -> None:
     definitions = raw(
         target, "SELECT name, sql FROM sqlite_master WHERE sql IS NOT NULL"
     )
-    assert len(definitions) == 13  # 8 tables and 5 created indexes carry text
+    assert len(definitions) == 11  # 7 tables and 4 created indexes carry text
     for name, text in definitions:
         for clause in SQLITE_FORBIDDEN_CLAUSES:
             assert clause not in text.upper(), (name, clause)

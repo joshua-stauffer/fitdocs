@@ -26,7 +26,6 @@ from starlette.requests import Request
 from starlette.responses import Response
 from starlette.routing import Route
 from starlette.testclient import TestClient
-from tests.conformance.state_support import raw
 from tests.strava.scripted_strava import ScriptedOutbound, UnscriptedCall, reply
 from tests.strava.test_publish import API, FACTS, LIST_URL
 from tests.strava.test_publish_upload import FIT, STATUS_URL, UPLOAD_ID, UPLOAD_URL
@@ -497,7 +496,7 @@ def test_the_built_publisher_reads_its_deadline_from_the_injected_monotonic(
     assert outbound.calls == []
 
 
-def test_the_built_publisher_polls_with_the_injected_sleep_and_stamps_by_its_clock(
+def test_the_built_publisher_polls_with_the_injected_sleep(
     database_target: Any,
     open_full_storage: Callable[[], Storage],
     outbound: ScriptedOutbound,
@@ -524,9 +523,6 @@ def test_the_built_publisher_polls_with_the_injected_sleep_and_stamps_by_its_clo
     landed = strava.publisher.upload("ann", FACTS, FIT)
     assert isinstance(landed, Landed) and landed.code is PublishCode.UPLOADED
     assert sleeps.slept == [UPLOAD_POLL_INTERVAL_S] * 2
-    assert raw(database_target, "SELECT created_at FROM target_publications") == [
-        (clock(),)
-    ]
 
 
 # --- the body limit, per route ----------------------------------------------

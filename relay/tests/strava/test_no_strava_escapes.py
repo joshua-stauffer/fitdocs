@@ -397,7 +397,7 @@ def drive(s: Scenario, monkeypatch: pytest.MonkeyPatch) -> None:
 
     for path in ("/privacy", f"{CONNECT_PAGE}?code=NOSUCHCODE"):
         s.page(path)
-    s.snapshot()  # the connected state: sealed tokens, publications, budget
+    s.snapshot()  # the connected state: sealed tokens, budget
 
     # --- the operator's subscription commands -------------------------------
     cfg = w.strava().config
@@ -508,7 +508,7 @@ def test_nothing_strava_returns_escapes_the_relay_but_the_landed_link(
     assert outcomes.count("uploaded") == 1
     assert {"unavailable", "rate_limited", "unconfirmed"} <= set(outcomes)
     rich = seen.snapshots[0]
-    assert any(PUB_ID in " ".join(rows) for rows in rich.values())
+    assert not any(PUB_ID in " ".join(rows) for rows in rich.values())
     assert rich["target_connections"], "the connected snapshot holds no connection"
 
     # --- Req 12.1: answers carry the link and nothing else of Strava's -----
