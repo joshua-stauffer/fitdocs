@@ -10,7 +10,7 @@
 
 ## Tasks
 
-- [ ] 1. Foundation
+- [x] 1. Foundation
 
 - [x] 1.1 Move the service-neutral scan to its own test file
   - Move the `NeutralScan` guard and its tests out of the connector documentation test file, unchanged, into a test file of its own.
@@ -25,7 +25,7 @@
   - _Requirements: 4.7_
   - _Boundary: retry_rate_limits_
 
-- [ ] 2. The Garmin wellness format
+- [x] 2. The Garmin wellness format
 
 - [x] 2.1 (P) Read the delivery into wellness values
   - Add the delivery envelope's recognition and the day reader beside the existing Garmin formats, sharing the existing sleep derivation by naming the respiration field it reads.
@@ -44,7 +44,7 @@
   - _Requirements: 10.1, 10.8, 14.4, 14.6_
   - _Boundary: PERSONAL_FORMAT_
 
-- [ ] 3. The connector: declaration and activities
+- [x] 3. The connector: declaration and activities
 
 - [x] 3.1 (P) Declare and register the connector, and verify a key
   - Add the Garmin connector with its one secret credential field, the two capabilities, API-key auth, and settings that accept nothing and ignore unknown keys. Register it after Strava, and keep it out of `__all__`.
@@ -89,7 +89,7 @@
   - Done when tests cover every row of the design's archive table, a member named like a path traversal writes nothing, a CRC failure, a bomb-sized member stopped by the read bound, and the consecutive count stopping and resetting.
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 6.1, 6.2, 6.3, 6.5, 6.6, 6.7, 6.8_
 
-- [ ] 4. The connector: wellness
+- [x] 4. The connector: wellness
 
 - [x] 4.1 List wellness
   - Start from the given date, else the oldest activity's date, else one year before the pull, and cover everything from there through the day after the pull's UTC date in one listing.
@@ -111,7 +111,7 @@
   - Done when tests cover each status, show nothing delivered and the mark unmoved after a failure part-way through a listing, and show deliveries from an earlier pull kept.
   - _Requirements: 11.3, 11.4, 11.5, 11.6_
 
-- [ ] 5. Integration
+- [x] 5. Integration
 
 - [x] 5.1 Run activities through the real pull engine
   - Script a Garmin behind the real pull engine, ledger, inbox and drain.
@@ -130,7 +130,7 @@
   - Done when the sweep passes with no network access and fails when a marker is deliberately written to a report.
   - _Requirements: 3.7, 7.1, 7.3, 7.4, 7.5, 14.3_
 
-- [ ] 6. Documentation and records
+- [x] 6. Documentation and records
 
 - [x] 6.1 Write the connector's documentation
   - Add the Garmin section to the connectors page: creating a key, the settings table, `fitdocs connect`, the environment override and enabling wellness; expiry and renewal; the terms quoted, the non-affiliation line and no permission claimed; the first pull, the limit, resuming and `--since`, and that wellness has no such limit; what the first `sync` does to an existing wiki and its two controls; what the connector does not do; and the `sources` hint for intervals users.

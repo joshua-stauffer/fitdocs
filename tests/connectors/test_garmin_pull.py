@@ -702,9 +702,10 @@ def _failure_text(result: object) -> dict[str, str]:
 
 
 def _watch_raises(monkeypatch: pytest.MonkeyPatch) -> list[Exception]:
-    """Every exception the connector's pull operations raise, as raised. The
-    engine redacts what it reports, so its report cannot show a raw secret in
-    an exception's message (Req 7.3); this list can."""
+    """Every exception ``list_activities``, ``fetch_activity`` and
+    ``list_wellness`` raise, as raised. The engine redacts what it reports, so
+    its report cannot show a raw secret in an exception's message (Req 7.3);
+    this list can."""
     raised: list[Exception] = []
 
     def watched(real: Callable[..., object]) -> Callable[..., object]:

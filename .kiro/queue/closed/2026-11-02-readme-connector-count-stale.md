@@ -1,7 +1,7 @@
 ---
 id: 2026-11-02-readme-connector-count-stale
 title: README says fitdocs ships two connectors; relay makes three
-status: open
+status: done
 importance: low
 importance_why: The README's Connectors paragraph is false since relay-server landed.
 effort: XS

@@ -1,4 +1,4 @@
-"""The Garmin wellness listing and package (garmin-connector tasks 4.1, 4.2, 4.3).
+"""The Garmin wellness listing, package and CLI runs (garmin-connector 4.1-4.3, 5.2).
 
 Everything runs against a routing transport: no network, a synthetic key, a
 synthetic token. Each answer is built for the route it is sent to, so a test

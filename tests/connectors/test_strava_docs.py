@@ -6,7 +6,7 @@ The two mapping tables are parsed from the page and compared with
 ``PUBLISH_MAPPING`` and ``UPLOAD_MAPPING`` in both directions; the settings
 table with the connector's own parsing; the quoted command output and notes
 with the code that prints them; the limits with the codec's constants. The
-heading rows and the neutral-scan entry live in ``test_docs.py``.
+neutral-scan entry lives in ``test_neutral_scan.py``.
 """
 
 from __future__ import annotations

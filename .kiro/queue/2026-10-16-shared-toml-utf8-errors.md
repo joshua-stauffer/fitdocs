@@ -80,6 +80,8 @@ All 459 open queue frontmatters and matching bodies were inspected on
 command item concerns a different exception class and is tracked separately.
 The roadmap has no open item for this reader normalization.
 
+Also, from garmin-connector task 3.4 review (2026-11-05): a non-UTF-8 connector ledger raises `UnicodeDecodeError` rather than `LedgerError`, and `_pull_one` catches only `LedgerError`, so `run_pull` raises. `src/fitdocs/connectors/ledger.py:482-488`. Observed in that reviewer's scratch run.
+
 ## How to pick it up
 
 1. Read the two reader docstrings and athlete-benchmarks error contracts,

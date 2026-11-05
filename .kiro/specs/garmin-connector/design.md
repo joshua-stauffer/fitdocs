@@ -149,7 +149,7 @@ sequenceDiagram
     E->>E: compute watermark, save ledger
 ```
 
-The remainder is never older than the watermark this pull computes (at most it ties with it, which the engine's `>=` filter still lists), and a newer watermark already standing does not move, so its window is unchanged; either way the next plain pull's `since` (watermark less `lookback_days`) lists it. A `--since` older than an existing watermark does not self-resume, so the deferral's reason says to repeat the same `--since`.
+The remainder is never older than the watermark this pull computes (at most it ties with it, which the connector's `>=` filter still lists), and a newer watermark already standing does not move, so its window is unchanged; either way the next plain pull's `since` (watermark less `lookback_days`) lists it. A `--since` older than an existing watermark does not self-resume, so the deferral's reason says to repeat the same `--since`.
 
 ### A rate-limited request
 
