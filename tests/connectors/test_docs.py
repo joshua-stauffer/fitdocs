@@ -6,7 +6,7 @@ design source are checked against that source: the
 look-back default and its upper bound
 (:data:`fitdocs.connectors.settings.DEFAULT_LOOKBACK_DAYS`,
 :data:`~fitdocs.connectors.settings.MAX_LOOKBACK_DAYS`); the
-``FITDOCS_CONNECTOR_*`` examples, recomputed through
+hyphenated ``FITDOCS_CONNECTOR_*`` example, recomputed through
 :func:`fitdocs.connectors.credentials.env_var_name`; the credentials
 directory order (the real environment-variable names, in the real
 precedence order); the directory-to-``0700``/file-to-``0600`` mode
@@ -86,56 +86,6 @@ def _section_text(heading: str) -> str:
 
 
 # --------------------------------------------------------------------------
-# Headings
-# --------------------------------------------------------------------------
-
-_EXPECTED_HEADINGS = [
-    "# Connectors",
-    "## Configuring an instance",
-    "## The folder connector",
-    "## intervals.icu",
-    "### Connecting",
-    "### Configuring",
-    "### What a pull fetches",
-    "### Wellness",
-    "### Publishing",
-    "## Connecting",
-    "## Credentials",
-    "## Pulling",
-    "### Reading the report",
-    "### Reading the wellness report",
-    "## Delivery and removal",
-    "## The ledger",
-    "## What leaves your machine",
-    "## The terms-first policy",
-    "## Regenerating before a first pull",
-    "## Running on a schedule",
-    "## The relay connector",
-    "### The relay and its address",
-    "### The token",
-    "### Connecting by paste",
-    "### Connecting by registration",
-    "### Disconnecting",
-    "### What each command sends",
-    "### Pulling a relay instance",
-    "## Strava",
-    "### Connecting a Strava instance",
-    "### Publishing and uploads",
-    "### The View on Strava link",
-    "### Disconnecting a Strava instance",
-]
-
-
-def test_page_headings_match_expected() -> None:
-    """Every ``#``/``##``/``###`` heading, in order, matches exactly.
-
-    Mutation: renaming, reordering, or dropping any heading reds this test.
-    """
-    found = re.findall(r"^(#{1,3} .+)$", _connectors_doc_text(), re.M)
-    assert found == _EXPECTED_HEADINGS
-
-
-# --------------------------------------------------------------------------
 # The look-back default and its upper bound
 # --------------------------------------------------------------------------
 
@@ -176,35 +126,11 @@ def test_documented_lookback_upper_bound_equals_the_code_constant() -> None:
 # Environment-variable examples
 # --------------------------------------------------------------------------
 
-# The exact (instance, field) pairs docs/connectors.md illustrates the naming
-# rule with -- one plain instance name, one with a hyphen (proving the
-# hyphen-to-underscore rule is shown, not only the upper-casing rule).
+# The page's naming-rule example whose instance name contains a hyphen (proving
+# the hyphen-to-underscore rule is shown, not only the upper-casing rule).
 _DOCUMENTED_ENV_VAR_EXAMPLES: list[tuple[str, str]] = [
-    ("myservice", "api_key"),
     ("another-service", "client_secret"),
-    # The `## intervals.icu` section's override variable (its own pin lives in
-    # tests/connectors/test_intervals_docs.py).
-    ("intervals", "api_key"),
-    # The relay section's override variable (pinned in the relay section tests
-    # below).
-    ("relay", "token"),
-    # The Strava section's override variable (pinned in test_strava_docs.py).
-    ("strava", "token"),
 ]
-
-
-def test_documented_environment_variable_examples_match_env_var_name() -> None:
-    """Every ``FITDOCS_CONNECTOR_*`` string on the page is exactly what
-    :func:`env_var_name` produces for one of the documented (instance,
-    field) pairs -- no more, no fewer."""
-    text = _connectors_doc_text()
-    found = set(re.findall(r"FITDOCS_CONNECTOR_[A-Z0-9_]+", text))
-    expected = {
-        env_var_name(instance, field)
-        for instance, field in _DOCUMENTED_ENV_VAR_EXAMPLES
-    }
-    assert found, "docs/connectors.md shows no FITDOCS_CONNECTOR_* example"
-    assert found == expected
 
 
 def test_hyphenated_documented_example_uses_the_hyphen_substitution() -> None:

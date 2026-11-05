@@ -1037,3 +1037,190 @@ instance is connected and disconnected again, or access is revoked in
 Strava's settings. Without a stored file, the command says there is nothing to
 disconnect and exits `0`; a set `FITDOCS_CONNECTOR_STRAVA_TOKEN` is never
 revoked and remains set.
+
+## Garmin
+
+`garmin` is the connector for a Garmin Connect account. It pulls: it lists the
+activities of the account a personal API key belongs to and fetches each one's
+original `.fit` file, byte for byte as Garmin stored it, with daily wellness
+available when enabled below. It only reads. It never uploads to Garmin or
+changes anything there, and it has no publish side.
+
+fitdocs is not affiliated with or endorsed by Garmin. The name Garmin is used
+only descriptively, to say which service the connector reads, and fitdocs claims
+no permission from Garmin of any kind. What you may do with a key is set by
+Garmin's own terms, quoted [below](#garmins-terms).
+
+### Connecting a Garmin instance
+
+1. In Garmin Connect, create a personal API key for the Connect Personal API.
+   Garmin describes the key and its expiry in the
+   [Personal API FAQ](https://developer.garmin.com/gc-developer-program/personal/personal-faq/).
+   Garmin shows the key once, when you create it, so copy it then.
+2. In `<data-root>/fitdocs.toml`, add the instance. An empty table is enough,
+   because every key of it is optional:
+
+   ```toml
+   [connectors.garmin]
+   wellness = true   # optional; false by default
+   ```
+
+   `fitdocs connect garmin` exits `2` with "not a configured connector
+   instance" until the table exists.
+3. Run `fitdocs connect garmin`. fitdocs asks for the key without echoing it,
+   makes one request to Garmin to exchange the key for a token and check that
+   Garmin accepts it, discards the token, and saves the key to the credentials
+   store described under [Credentials](#credentials). Garmin states a key's
+   expiry only on Garmin Connect, so fitdocs records none.
+
+At a terminal that is not interactive, `fitdocs connect` exits `2` instead of
+prompting and names the variable below.
+
+The connector takes no settings of its own. It reads only the keys every
+instance has, from [Configuring an instance](#configuring-an-instance):
+
+| Key | Use for Garmin |
+| --- | --- |
+| `connector` | `"garmin"`. An instance named `garmin` can omit it, because this key defaults to the instance's own name. |
+| `lookback_days` | As described there, for a pull that has a watermark. |
+| `wellness` | `true` to pull daily wellness with the activities ([Wellness](#wellness-from-garmin) below). |
+
+An instance key it does not recognize is ignored. The connector takes no
+address, account name or credential from this file, and the pacing and the
+per-pull limit below are fixed: no setting changes them.
+
+To supply the key without storing it, set the override variable for an
+instance named `garmin`:
+
+```
+FITDOCS_CONNECTOR_GARMIN_API_KEY
+```
+
+An instance with another name builds the variable from its own name by the
+rule under [Credentials](#credentials).
+
+The key goes only to Garmin's token call. Each pull exchanges it for a token
+that lasts about a day, holds that token in memory for the pull and never
+stores it.
+
+### Expiry and renewal
+
+A key expires after the period you chose when you created it: 30, 90, 180 or
+365 days. Garmin sends a reminder before then. Garmin shows a key only once, so
+a lost key cannot be looked up again. To renew, create a new key on Garmin
+Connect and run `fitdocs connect garmin` again, which replaces the stored key.
+A key that Garmin refuses, because it is wrong, expired or deleted, ends the
+pull with a message that says so and names that step.
+
+### Garmin's terms
+
+You accept Garmin's own terms when you create a key; fitdocs is not a party to
+them. Garmin's terms say a key is "personal to you", and that it is for
+"applications, services, or tools that you develop or operate for your own
+use". fitdocs runs on your machine, with your key, to read your own account,
+and the key goes only to Garmin. fitdocs does not claim that Garmin has
+approved this use and cannot tell you how Garmin reads those words, so read the
+terms you are shown before you accept them. The same terms say Garmin may
+throttle or restrict access and may revoke a key. If Garmin refuses a listing or a download, the pull stops, says
+that Garmin refused the request, and does not repeat it; check the key's status
+on Garmin Connect.
+
+### What a first pull does
+
+A pull with no watermark and no `--since` takes your whole activity history,
+oldest first. fitdocs waits one second between requests and, when Garmin says
+it is limiting requests, waits for the time Garmin states (up to five minutes)
+or else 30 seconds to four minutes, before trying again. If that does not
+clear it, the pull stops, says Garmin is limiting requests, and the next pull
+resumes where this one stopped. A pull prints no progress while it runs, so a
+long wait looks like a pause. A pull fetches at most 200 activities, about 4
+minutes of downloads. When more remain, the report has one deferred entry that
+says how many, and the next plain `fitdocs pull` continues from where the last
+one stopped and fetches nothing already recorded. An account of 1,000 activities
+therefore takes five pulls.
+
+`fitdocs pull garmin --since YYYY-MM-DD` lists only the activities from the
+start of that local day, under the same pacing and limit. On an instance that
+has pulled before, a `--since` backfill does not move the watermark back, so
+it continues only when you run it again with the same `--since`; a plain pull
+will not finish it. A plain pull after a first pull that stopped at the limit
+needs no `--since`.
+
+Wellness has no such limit. With `wellness = true`, the first pull covers the
+whole range in one go: from the start of your history, or from `--since`, to
+today. A year of wellness takes about 27 requests across its record types, so
+twelve years is about 330 requests, 6 to 8 minutes. If a wellness request fails, the
+next pull starts that range again.
+
+### Wellness from Garmin
+
+`wellness = true` adds Garmin's daily summaries, sleep, heart rate variability
+and weight to the wellness series, under the source `garmin-personal` and
+attributed to Garmin: resting, minimum and maximum heart rate, steps, sleep
+and its stages, respiration, blood oxygen, stress, body battery, weight and
+overnight heart rate variability. A metric Garmin has no value for stays
+absent; it is never recorded as zero. See the
+[wellness guide](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/wellness.md)
+for how sources are ordered.
+
+### What the first sync does to an existing wiki
+
+A Garmin original ranks first as a page's base file under the default
+`[identity] precedence`. So the first `fitdocs sync` after a pull, on a wiki
+that already holds pages built from other copies of the same activities (a
+phone app's copy, say), makes the Garmin original the main file of each such
+page. Those pages re-render. Some may move, because the page's name follows its
+base file, and some may change their time, when the other copy's clock was
+shifted by hours. Regions you own are kept, as for any re-render. A wiki whose pages predate
+cross-source identity needs `fitdocs regen` before the first pull, or the Garmin
+file starts a second page instead; see
+[Regenerating before a first pull](#regenerating-before-a-first-pull).
+
+You have two controls:
+
+- Run `fitdocs pull garmin` without `--sync`. The files wait in the inbox until
+  you run `fitdocs sync`, so you choose when the pages change.
+- Set `[identity] precedence` to keep the base you have. For a wiki built from
+  phone copies, this ranks them first:
+
+  ```toml
+  [identity]
+  precedence = ["phone_copy", "original", "unknown"]
+  ```
+
+  This list names no `original:<manufacturer>` entry, so every original ranks
+  alike, below a phone copy. On a page whose base is a phone copy, the Garmin
+  file then joins as an extra. A page whose base is another original (a Stryd
+  file, say) is still ranked against the Garmin file by the tie-breaks under
+  [`[identity]`](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/configuration.md#identity-source-precedence),
+  and the Garmin file can win; to keep that base, list its
+  `original:<manufacturer>` entry first. See the same section for the
+  vocabulary.
+
+### What the Garmin connector does not do
+
+- Activities that came from another app as a GPX or TCX upload have no `.fit`
+  original. They are skipped, and the report says why.
+- An activity whose download holds several FIT files is skipped, and the report
+  names how many it found.
+- Women's health, courses and training are not pulled.
+- VO2max is not read.
+- Accounts on Garmin's China service are not supported.
+- It does not publish: it never writes to Garmin.
+
+### Moving from intervals.icu
+
+If you pull Garmin activities through the [intervals.icu](#intervalsicu)
+connector, stop that connector fetching Garmin's copies once this one is
+connected, so each activity arrives once. `GARMIN_CONNECT` is the default value
+of its `sources` setting ([Configuring](#configuring)), so name only the sources
+you still want instead:
+
+```toml
+[connectors.intervals]
+sources = ["WAHOO", "ZWIFT"]
+```
+
+Choose the names to match the copies you still want from intervals.icu.
+`sources` cannot be empty, so if you want nothing else from that instance,
+delete its table.
