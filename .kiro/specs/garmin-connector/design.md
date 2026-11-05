@@ -108,7 +108,7 @@ tests/wellness/test_garmin_personal.py  # the delivery format: recognition, metr
 - `src/fitdocs/wellness/formats/garmin.py`: `PERSONAL_SOURCE`, `PERSONAL_FORMAT`, the reader; `_sleep` takes the respiration field name.
 - `src/fitdocs/wellness/registry.py`: add the source and format.
 - `tests/connectors/test_boundary.py`: the module list and import pins.
-- `tests/connectors/test_intervals.py`, `tests/connectors/test_relay.py`: the registry order literal.
+- `tests/connectors/test_intervals.py`, `tests/connectors/test_relay.py`, `tests/connectors/test_strava_publish.py`: the registry order literal.
 - `tests/connectors/test_http.py`: the new option.
 - `tests/wellness/test_registered_formats.py`, `tests/wellness/test_engine.py`, `tests/test_cli_derive.py`, `tests/hr_benchmarks/test_engine.py`: source and format literals.
 - `tests/wellness/builders_garmin.py`: delivery builders.
@@ -227,6 +227,20 @@ A wait is allowed when fewer than 4 repeats of this request have happened, any s
 - Constants, all fixed: `REQUEST_SPACING_S = 1.0`, `RATE_LIMIT_WAITS_S = (30.0, 60.0, 120.0, 240.0)`, `MAX_STATED_WAIT_S = 300.0`, `MAX_WAITS_PER_PULL_S = 900.0`, `LISTING_PAGE = 200`, `ACTIVITIES_PER_PULL = 200`, `WELLNESS_DAYS_PER_PULL = 1096`, `DAILY_WINDOW_DAYS = 365`, `SLEEP_WINDOW_DAYS = 31`, `HRV_WINDOW_DAYS = 28`, `WEIGHT_WINDOW_DAYS = 365`, `CONSECUTIVE_FAILURE_STOP = 5`, `MAX_FILE_BYTES = MAX_RESPONSE_BYTES`.
 - HRV's 28 days: Garmin states no limit for this route and third parties report 28, so this errs short.
 
+##### Service routes
+
+Every route is on `API_BASE = https://personal.connectapi.garmin.com`. Dates are `YYYY-MM-DD`. Data routes send `Authorization: Bearer <token>` and `Accept: application/json`, except the file route. These come from Garmin's public OpenAPI spec and client; the token, listing, file, daily, sleep and weight routes were also measured. HRV's success body is from the spec only.
+
+| Route | Request | Parameters | Success body | Date field |
+|---|---|---|---|---|
+| Token | `POST /personalapitoken-service/personal-api/personal-api-key/token` | Empty body; `Authorization: ApiKey <key>`, `Accept: */*` | The token as bare text | None |
+| Listing | `GET /activitylist-service/activities/search/activities` | `start`, `limit`, `sortOrder=asc`; with a start time, also `startDate`, `endDate` | A JSON list | `startTimeGMT` |
+| File | `GET /download-service/files/activity/{activityId}` | `Accept: application/zip, application/x-zip-compressed, application/octet-stream` | ZIP bytes | None |
+| Daily | `GET /usersummary-service/v2/dailysummaries` | `startDate`, `endDate` | `{"data": [...]}` | `calendarDate` |
+| Sleep | `GET /sleep-service/sleep/dailySleepSummariesByDate` | `startDate`, `endDate` | A JSON list | `calendarDate` |
+| HRV | `GET /hrv-service/hrv/daily/{fromDate}/{toDate}` | Dates in the path | `{"hrvSummaries": [...]}`, or 204 for no data | `calendarDate` |
+| Weight | `GET /weight-service/weight/range/{startDate}/{endDate}` | `includeAll=true` | `{"dailyWeightSummaries": [...]}` | `summaryDate` |
+
 ##### Service Interface
 ```python
 class GarminConnector:
@@ -243,7 +257,7 @@ class GarminConnector:
 - `POST` with an empty body, `Accept: */*`, `secret_headers={"Authorization": session.secret(f"ApiKey {key}")}`, `single_attempt=True`.
 - A 200 whose body matches three dot-separated base64url segments, at most 16 KiB, is the token. It is registered with `session.secret` in both bare and `Bearer` form before any use, and is never decoded.
 - `verify` mints and discards. A pull mints on first need and caches the bearer in `_PullState`.
-- A pull makes one token request at most. If it fails with a `ConnectorError`, `_PullState` keeps that error, and wellness raises it again with no second request (7.2, 11.2).
+- A pull makes one token request at most. If it fails with a `ConnectorError`, or with a transport failure (converted to one), `_PullState` keeps that error, and wellness raises it again with no second request (7.2, 11.2).
 
 **Pacing and waits (`_get`)**
 - Before each request, including the token: `session.sleep(REQUEST_SPACING_S)` unless it is the pull's first.
@@ -258,6 +272,7 @@ class GarminConnector:
 - Entries are deduped by id.
 - `load_ledger(session.data_root, session.instance, connector_id="garmin")`, then keep every final entry plus the first `ACTIVITIES_PER_PULL` not final in start order. A `LedgerError` becomes a `ConnectorError`.
 - `Listing(activities, deferred=(ListingDeferral(session.instance, reason),))` when any remain. The reason gives the count and says the next `fitdocs pull` continues, and that a pull started with `--since` continues only with the same `--since`.
+- **Accepted edge:** the connector reads the ledger on disk, while the engine's sweep result stays in memory until the instance ends. An entry whose pending delivery was just lost therefore looks final to the connector, and the engine fetches it again, so one pull can occasionally exceed 200 (4.2). Fixing it needs an engine change, which is out of boundary, and the only effect is a slightly longer pull.
 
 **`_remote_activity`**
 - `remote_id = str(activityId)` for a positive non-bool int; otherwise a `ConnectorError` naming the entry's position.
@@ -367,7 +382,7 @@ Activities raise `AuthFailure` where wellness must not run, because the engine s
 | Token at connect | 5xx, other, not a token | `AuthFailure(UNAVAILABLE)` naming the status, or "not understood" | Connect fails |
 | Token in a pull | 401, 403 | `AuthFailure(REJECTED)` | Instance ends, no wellness |
 | Token in a pull | 429 | `AuthFailure(RATE_LIMITED)` | Instance ends, no wellness |
-| Token in a pull | 5xx, other, not a token | `ConnectorError` | Activities end, wellness then fails the same way |
+| Token in a pull | 5xx, other, not a token, transport failure | `ConnectorError`, kept in `_PullState` | Activities end, wellness raises the same error with no second request |
 | Listing or file | 401 | `AuthFailure(REJECTED)` | Instance ends, no wellness |
 | Listing or file | 403 | `AuthFailure(REJECTED)`, refused wording. `BLOCKED`'s next step says report a bug, so it is not used | Instance ends, no wellness |
 | Listing or file | 429 past the waits | `AuthFailure(RATE_LIMITED)` | Instance ends, no wellness |
@@ -409,7 +424,7 @@ All tests run offline with `FakeTransport` and synthesized FIT and ZIP bytes (14
 
 ### Guards
 - `tests/connectors/test_boundary.py` includes `garmin`. The raw-substring clock scan means no attribute spelled `..._time.timestamp()` or `datetime.timedelta`-like text in the module (`.kiro/queue/2026-11-01-connectors-clock-scan-substring-false-positive.md`).
-- `NeutralScan` moves unchanged and is green on the moved file. It then gains entries for `personal.connectapi.garmin.com` (the connector and its tests), and for the Garmin hosts the docs link to (`docs/connectors.md#garmin` only).
+- `NeutralScan` moves unchanged and is green on the moved file. It then gains entries for `personal.connectapi.garmin.com` (the connector and its test files), and for the Garmin hosts the docs link to (location key `docs/connectors.md#Garmin` only: keys are exact and case-sensitive, and name the heading).
 
 ## Security Considerations
 - The key and the token are registered with the redactor before first use, and sent only as `secret_headers`, which the transport never forwards to a redirect target.
