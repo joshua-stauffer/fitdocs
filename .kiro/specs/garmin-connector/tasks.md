@@ -154,7 +154,7 @@
 
 - [ ] 7. Validation
 
-- [ ] 7.1 Validate the whole feature
+- [x] 7.1 Validate the whole feature
   - Run the full project validation, the forbidden-strings gate armed, and the branch's CI.
   - Confirm no version constant, CLI count or `__all__` count moved, no runtime dependency was added, and no file carries anything from the sources Req 14.1 forbids.
   - Done when validation is green with evidence recorded, and the branch is ready to merge.
@@ -171,3 +171,4 @@
 ## Implementation Notes
 
 - 3.4: controller ruling: stop at the cut rather than keep every final, or the watermark strands deferred history. Amends design 'Listing'.
+- 7.1: validated at 24231051. Branch CI green with the forbidden-strings gate armed: ci gates, py3.12, py3.13, relay, specs. A local full run stopped at 26,520 passed on a bytecode-hygiene failure caused by a concurrent `fitdocs --help` in the same worktree; that test and the five git-dependent ones passed on re-run, and the remaining top-level files passed in an isolated copy. No version constant, CLI count, `__all__` count or dependency moved. Clock, zone and test-order runs were clean.

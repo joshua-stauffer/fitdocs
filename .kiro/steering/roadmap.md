@@ -4780,11 +4780,9 @@ task 6.3 (the spec's live check, 7.2, is still the maintainer's).
 
 #### Specs (dependency order)
 
-- [ ] garmin-connector — **implemented 2026-11-05, with 7.2 outstanding** (the live
-  check is the maintainer's own, so the spec is not complete; validation 7.1 is
-  also still to run); **spec written 2026-11-05** (`tasks-generated`, all approvals
+- [ ] garmin-connector — **implemented and validated 2026-11-05, with 7.2 outstanding** (the live
+  check is the maintainer's own, so the spec is not complete); **spec written 2026-11-05** (`tasks-generated`, all approvals
   set; 14 requirements / 97 criteria, 7 majors / 20 tasks). A built-in connector for Garmin's Personal API: activity and
   daily wellness pull with the athlete's own key. Dependencies: none.
 
-Next: `/kiro-validate-impl garmin-connector` (task 7.1), then the maintainer's live
-check (7.2).
+Next: the maintainer's live check (task 7.2), and reading Garmin's Terms of Use before the connector ships.
