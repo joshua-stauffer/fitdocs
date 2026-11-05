@@ -207,7 +207,7 @@ connectors.
 
 - Auth and the session token: key to token, refused-key wording.
 - Activities: paged listing, fetch, ZIP handling, per-run cap, pacing.
-- Wellness pull: slices, day merge, packaging.
+- Wellness pull: windows, day merge, packaging.
 - Wellness format: parser, source registration, metric mapping.
 - Docs and the terms gate.
 

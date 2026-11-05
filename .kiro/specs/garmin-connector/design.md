@@ -96,7 +96,7 @@ No new dependency. Garmin's own client is not used (`research.md`).
 src/fitdocs/connectors/garmin.py        # GarminConnector: declaration, token, listing, pacing, fetch, wellness
 tests/connectors/test_garmin.py         # declaration, verify, pacing, rate-limit waits, listing, per-pull limit
 tests/connectors/test_garmin_fetch.py   # ZIP handling and download failure mapping
-tests/connectors/test_garmin_wellness.py # wellness slices, day merge, packaging, wellness failures
+tests/connectors/test_garmin_wellness.py # wellness windows, day merge, packaging, wellness failures
 tests/connectors/test_garmin_pull.py    # end to end through the real pull engine, inbox and drain
 tests/connectors/test_neutral_scan.py   # NeutralScan, moved unchanged from test_docs.py, then garmin's entry added
 tests/wellness/test_garmin_personal.py  # the delivery format: recognition, metric mapping, absence, merge
