@@ -133,7 +133,7 @@
 - [ ] 6. Documentation and records
 
 - [ ] 6.1 Write the connector's documentation
-  - Add the Garmin section to the connectors page: creating a key, the settings table, `fitdocs connect`, the environment override and enabling wellness; expiry and renewal; the terms quoted, the non-affiliation line and no permission claimed; the first pull, the limit, resuming and `--since`; what the first `sync` does to an existing wiki and its two controls; what the connector does not do; and the `sources` hint for intervals users.
+  - Add the Garmin section to the connectors page: creating a key, the settings table, `fitdocs connect`, the environment override and enabling wellness; expiry and renewal; the terms quoted, the non-affiliation line and no permission claimed; the first pull, the limit, resuming and `--since`, and that wellness has no such limit; what the first `sync` does to an existing wiki and its two controls; what the connector does not do; and the `sources` hint for intervals users.
   - Add the Garmin hosts this section links to into the neutral scan's table under the exact key `docs/connectors.md#Garmin`. Delete any documentation-binding test this turns red.
   - Done when the section states every point in Requirement 12.1 to 12.8, and the neutral scan passes.
   - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5, 12.6, 12.7, 12.8, 14.4_

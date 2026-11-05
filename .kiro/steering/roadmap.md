@@ -4752,7 +4752,7 @@ All carried by `garmin-connector`, at landing.
 - [ ] wellness-store: one more source and format. Canonical order changes and
   series rebuild once.
 - [ ] steering: `tech.md`'s `fitdocs pull` sentence, which covers token renewal
-  only in login style, and `structure.md`'s connector list.
+  only in login style.
 
 #### Direct Implementation Candidates
 

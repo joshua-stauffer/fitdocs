@@ -207,7 +207,7 @@ a record in any other form leaves the value absent.
 2. If an instance's activity pull ended for any other reason, the fitdocs CLI shall still run that instance's wellness pull.
 3. If Garmin answers a wellness request as unauthorized, the fitdocs CLI shall end the instance's pull and report a rejected key with the step to create a new key and reconnect, and shall not repeat the request.
 4. If Garmin answers a wellness request as forbidden, the fitdocs CLI shall end the wellness pull and report that Garmin refused the request, that Garmin's terms let it restrict access, and that setting `wellness = false` stops the request.
-5. If a wellness request is still rate-limited after the waits of Requirement 4, still meets a server error after the transport's bounded retries, or is answered with any other status that is not success, the fitdocs CLI shall end the wellness pull, stating which and that the next pull resumes where this one stopped.
+5. If a wellness request is still rate-limited after the waits of Requirement 4, still meets a server error after the transport's bounded retries, or is answered with any other status that is not success, the fitdocs CLI shall end the wellness pull, stating which and that the next pull starts the wellness listing again.
 6. If a wellness pull ends early, the fitdocs CLI shall keep every wellness delivery already made and recorded by earlier pulls, deliver no day from the listing it could not finish, and leave the wellness mark where it was.
 
 ### Requirement 12: Documentation and the Terms
