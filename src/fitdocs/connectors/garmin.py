@@ -4,31 +4,38 @@ Pulls a Garmin account's activities and daily wellness with the athlete's own
 Connect Personal API key. This module is the one module in the connectors
 package that names the Personal API host (the service-neutral scan admits it
 here and in its own tests only). It imports only the standard library and
-``fitdocs.connectors.{errors,http,ledger,protocol,secrets}``, builds no HTTP client
-of its own, and reads no clock.
+``fitdocs.connectors.{delivery,errors,http,ledger,protocol,secrets}``,
+builds no HTTP client of its own, and reads no clock.
 
 Task 3.1 declares the connector and implements the key check. Task 3.2 adds
 the per-pull state (one token, spacing, rate-limit waits) and the one helper
 every Garmin GET goes through. Task 3.3 adds the activity listing and task 3.4
-the per-pull limit. The other three pull operations are placeholders that raise a named
-:class:`ConnectorError` and make no request, because the registry requires
-them once the capabilities are declared; later tasks replace them.
+the per-pull limit, and task 3.5 the activity download. The other two pull
+operations are placeholders that raise a named :class:`ConnectorError` and
+make no request, because the registry requires them once the capabilities are
+declared; later tasks replace them.
 """
 
 from __future__ import annotations
 
+import io
 import json
+import lzma
 import math
 import re
+import zipfile
+import zlib
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from typing import Final
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 from weakref import WeakKeyDictionary
 
+from fitdocs.connectors.delivery import is_fit
 from fitdocs.connectors.errors import AuthFailure, AuthFailureKind, ConnectorError
 from fitdocs.connectors.http import (
+    MAX_RESPONSE_BYTES,
     HttpClient,
     HttpResponse,
     TransportError,
@@ -40,6 +47,8 @@ from fitdocs.connectors.protocol import (
     Capability,
     ConnectorSession,
     CredentialField,
+    Declined,
+    Fetched,
     FetchResult,
     Granted,
     Listing,
@@ -348,6 +357,120 @@ def _limit(
     return Listing(tuple(ordered[:cut]), (ListingDeferral(session.instance, reason),))
 
 
+FILE_PATH: Final[str] = "/download-service/files/activity/"
+FILE_ACCEPT: Final[str] = (
+    "application/zip, application/x-zip-compressed, application/octet-stream"
+)
+MAX_FILE_BYTES: Final[int] = MAX_RESPONSE_BYTES
+CONSECUTIVE_FAILURE_STOP: Final[int] = 5
+DOCUMENT_SNIFF_BYTES: Final[int] = 1024
+UTF8_BOM: Final[bytes] = b"\xef\xbb\xbf"
+FILE_REFUSED_MESSAGE: Final[str] = (
+    "Garmin refused the activity download (HTTP 403). Garmin's terms let it "
+    "restrict access; check the key's status on Garmin Connect."
+)
+NO_FILE_MESSAGE: Final[str] = "Garmin holds no file for this activity"
+NO_FIT_MESSAGE: Final[str] = "Garmin's download for this activity holds no FIT file"
+NOT_FIT_MESSAGE: Final[str] = (
+    "Garmin's download for this activity holds no FIT file, only {formats}"
+)
+SEVERAL_FIT_MESSAGE: Final[str] = (
+    "Garmin's download for this activity holds {count} FIT files, so it is not "
+    "clear which is the original"
+)
+ARCHIVE_UNREADABLE_MESSAGE: Final[str] = (
+    "Garmin's download for this activity could not be read as a ZIP archive; the "
+    "next pull tries it again"
+)
+FILE_TOO_LARGE_MESSAGE: Final[str] = (
+    "A FIT file in Garmin's download for this activity is larger than {limit} "
+    "bytes; the next pull tries it again"
+)
+FILE_UNAVAILABLE_MESSAGE: Final[str] = (
+    "Garmin is unavailable (HTTP {status}) for this activity's download; the "
+    "next pull tries it again"
+)
+FILE_OTHER_MESSAGE: Final[str] = (
+    "Garmin answered this activity's download with an unexpected status "
+    "(HTTP {status}); the next pull tries it again"
+)
+UNAVAILABLE_STOP_MESSAGE: Final[str] = (
+    f"Garmin appears unavailable: {CONSECUTIVE_FAILURE_STOP} downloads in a row "
+    "met a server error or could not reach it; the next pull resumes where this "
+    "one stopped"
+)
+
+
+class GarminDownloadError(Exception):
+    """One activity's download failed (Req 5.6, 6.5, 6.7). Deliberately not a
+    :class:`ConnectorError` or :class:`AuthFailure`: the engine ends an
+    instance for those and fails only the one activity for anything else. The
+    message is the connector's own wording and never quotes Garmin."""
+
+
+def _document_format(data: bytes) -> str | None:
+    """``"GPX"`` or ``"TCX"`` when the first :data:`DOCUMENT_SNIFF_BYTES`
+    bytes, less a UTF-8 byte-order mark and leading whitespace, begin with
+    ``<`` and hold that format's root element (case-insensitively); else
+    ``None`` (Req 5.4). A copy of the intervals connector's, which this module
+    may not import."""
+    head = data[:DOCUMENT_SNIFF_BYTES].removeprefix(UTF8_BOM).lstrip().lower()
+    if not head.startswith(b"<"):
+        return None
+    if b"<gpx" in head:
+        return "GPX"
+    if b"<trainingcenterdatabase" in head:
+        return "TCX"
+    return None
+
+
+def _read_archive(body: bytes) -> FetchResult:
+    """The one FIT member of a downloaded ZIP archive, or why there is not one
+    (Req 5.2-5.7). Members are classified from their first
+    :data:`DOCUMENT_SNIFF_BYTES` bytes, in memory: a member's name is never
+    read, never used as a path, and nothing is extracted or written. A member
+    longer than that is read further only when it is the archive's one FIT
+    member, and then to at most :data:`MAX_FILE_BYTES` + 1 bytes."""
+    limit = MAX_FILE_BYTES
+    try:
+        with zipfile.ZipFile(io.BytesIO(body)) as archive:
+            fit_members: list[zipfile.ZipInfo] = []
+            formats: set[str] = set()
+            for info in archive.infolist():
+                with archive.open(info) as member:
+                    head = member.read(DOCUMENT_SNIFF_BYTES)
+                if is_fit(head):
+                    fit_members.append(info)
+                else:
+                    document = _document_format(head)
+                    if document is not None:
+                        formats.add(document)
+            if len(fit_members) > 1:
+                return Declined(SEVERAL_FIT_MESSAGE.format(count=len(fit_members)))
+            if not fit_members:
+                if formats:
+                    return Declined(
+                        NOT_FIT_MESSAGE.format(formats=" and ".join(sorted(formats)))
+                    )
+                return Declined(NO_FIT_MESSAGE)
+            with archive.open(fit_members[0]) as member:
+                data = member.read(limit + 1)
+    except (
+        zipfile.BadZipFile,
+        zlib.error,
+        EOFError,
+        RuntimeError,
+        NotImplementedError,
+        OSError,
+        ValueError,
+        lzma.LZMAError,
+    ):
+        raise GarminDownloadError(ARCHIVE_UNREADABLE_MESSAGE) from None
+    if len(data) > limit:
+        raise GarminDownloadError(FILE_TOO_LARGE_MESSAGE.format(limit=limit))
+    return Fetched(data)
+
+
 def _not_built(operation: str) -> ConnectorError:
     return ConnectorError(NOT_BUILT_MESSAGE.format(operation=operation))
 
@@ -530,7 +653,44 @@ class GarminConnector:
     def fetch_activity(
         self, session: ConnectorSession, activity: RemoteActivity
     ) -> FetchResult:
-        raise _not_built("the activity download")
+        """The activity's original FIT file from Garmin's ZIP download (Req
+        5.1-5.7, 6.1-6.3, 6.5-6.8). A 401, a 403 or a 429 past the waits ends the
+        instance; a server error, a transport failure, an unreadable archive or
+        any other status fails this one activity, and the fifth download in a
+        row that met a server error or a transport failure ends the activity
+        pull. Any other answer to the download, but for a 429 past the waits,
+        resets that count."""
+        state = self._state(session)
+        url = f"{API_BASE}{FILE_PATH}{quote(activity.remote_id, safe='')}"
+        try:
+            response = self._get(session, url, {"Accept": FILE_ACCEPT})
+        except TransportError:
+            self._count_failure(state)
+            raise
+        status = response.status
+        if 500 <= status < 600:
+            self._count_failure(state)
+            raise GarminDownloadError(FILE_UNAVAILABLE_MESSAGE.format(status=status))
+        state.consecutive_failures = 0
+        if status == 200:
+            return _read_archive(response.body)
+        if status == 404:
+            return Declined(NO_FILE_MESSAGE)
+        if status == 401:
+            raise AuthFailure(
+                AuthFailureKind.REJECTED, REJECTED_MESSAGE.format(status=401)
+            )
+        if status == 403:
+            raise AuthFailure(AuthFailureKind.REJECTED, FILE_REFUSED_MESSAGE)
+        raise GarminDownloadError(FILE_OTHER_MESSAGE.format(status=status))
+
+    @staticmethod
+    def _count_failure(state: _PullState) -> None:
+        """One more download in a row that met a server error or could not
+        reach Garmin; the fifth ends the activity pull (Req 6.6)."""
+        state.consecutive_failures += 1
+        if state.consecutive_failures >= CONSECUTIVE_FAILURE_STOP:
+            raise ConnectorError(UNAVAILABLE_STOP_MESSAGE)
 
     def list_wellness(
         self, session: ConnectorSession, oldest: date | None

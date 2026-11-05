@@ -82,7 +82,7 @@
   - Done when tests show exactly 200 offered from a larger history, final entries not counted, an activity with no start not raising and sorting last, the deferral text carrying the count, and no deferral at or under the limit.
   - _Requirements: 4.2, 4.3, 4.6_
 
-- [ ] 3.5 Download and read the archive
+- [x] 3.5 Download and read the archive
   - Use the design's "Service routes" table, and extend the module's import pin with the delivery module for the FIT check. Download with the zip `Accept` types and classify members from their first bytes, never by name. Hand over exactly one FIT member's bytes unchanged, whatever else the archive holds.
   - Decline several FIT members with the count, no FIT member with GPX or TCX named when present, an empty archive as holding no FIT file, and a 404 as holding no file.
   - An unreadable archive or an over-size FIT member is a per-activity failure. A server error past the transport's retries, or a transport failure, is a per-activity failure, and the fifth in a row ends the activity pull. A success resets the count. Other statuses are per-activity failures naming the status. 401, 403 and 429 end the instance.

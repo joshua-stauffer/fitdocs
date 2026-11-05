@@ -287,7 +287,7 @@ class GarminConnector:
 
 | Archive | Outcome |
 |---|---|
-| Not readable as a ZIP (`BadZipFile`, `zlib.error`, `EOFError`, `RuntimeError`, `NotImplementedError`, `OSError`) | `GarminDownloadError`: failed, retried next pull |
+| Not readable as a ZIP (`BadZipFile`, `zlib.error`, `EOFError`, `RuntimeError`, which covers `NotImplementedError`, `OSError`, `ValueError`, `lzma.LZMAError`) | `GarminDownloadError`: failed, retried next pull |
 | Exactly one FIT member, with or without others | `Fetched(bytes)` |
 | Several FIT members | `Declined` naming the count |
 | No FIT member, GPX or TCX present | `Declined` naming the format |
@@ -391,7 +391,8 @@ Activities raise `AuthFailure` where wellness must not run, because the engine s
 | Listing | 5xx past the transport | `ConnectorError(UNAVAILABLE)` | Activities end, wellness runs |
 | Listing | Other, malformed | `ConnectorError` naming the status or problem | Activities end, wellness runs |
 | File | 404 | `Declined`, no file | Skipped, recorded |
-| File | 5xx or transport failure past the retries | `GarminDownloadError`, or `ConnectorError` on the fifth in a row | One failed, or activities end |
+| File | 5xx past the retries | `GarminDownloadError`, or `ConnectorError` on the fifth in a row | One failed, or activities end |
+| File | Transport failure past the retries | The `TransportError` again, or `ConnectorError` on the fifth in a row | One failed, or activities end |
 | File | Other | `GarminDownloadError` naming the status | One failed |
 | Wellness | 401 | `AuthFailure(REJECTED)` | Wellness ends |
 | Wellness | 403 | `AuthFailure(REJECTED)`, refused wording naming `wellness = false` | Wellness ends |

@@ -358,6 +358,7 @@ _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
     ),
     "fitdocs.connectors.garmin": frozenset(
         {
+            "fitdocs.connectors.delivery",
             "fitdocs.connectors.errors",
             "fitdocs.connectors.http",
             "fitdocs.connectors.ledger",
