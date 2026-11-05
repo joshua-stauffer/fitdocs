@@ -62,7 +62,9 @@ a record in any other form leaves the value absent.
     retries, a single-attempt mode, credential headers never sent to a redirect
     target), the FIT-header backstop, delivery into `<inbox>/<instance>/`, the
     deferred and skipped report channels, and the `connect` and `pull` commands.
-    This spec amends none of that behavior.
+    This spec changes none of that behavior for any existing connector; it adds
+    one opt-in transport option so that Requirement 4's waits are not preceded by
+    the transport's own short retries.
   - `activity-identity` and `channel-merge` decide which page a delivered file
     belongs to and which file is its base, from the file's own content. A Garmin
     original ranks first under the default precedence, so pulling into an existing
@@ -144,7 +146,7 @@ a record in any other form leaves the value absent.
 3. If a listing or download request is still rate-limited after the waits of Requirement 4, or the token request during a pull is answered as rate-limited, the fitdocs CLI shall end that instance's pull, stating that Garmin is limiting requests and that the next pull resumes where this one stopped.
 4. If a listing request still meets a server error after the transport's bounded retries, the fitdocs CLI shall end that instance's pull, stating that Garmin is unavailable and that the next pull resumes where this one stopped.
 5. If a download request still meets a server error after the transport's bounded retries, the Garmin connector shall report that activity's fetch as failed, naming the status, and shall continue with the instance's remaining activities.
-6. If five consecutive downloads in one pull meet a server error, the fitdocs CLI shall end that instance's pull, stating that Garmin appears unavailable and that the next pull resumes where this one stopped.
+6. If five consecutive downloads in one pull meet a server error or cannot reach Garmin, the fitdocs CLI shall end that instance's pull, stating that Garmin appears unavailable and that the next pull resumes where this one stopped.
 7. If a listing request is answered with any other status that is not success, the fitdocs CLI shall end that instance's pull naming the status; if a download request is, the Garmin connector shall report that activity's fetch as failed, naming the status, and shall continue.
 8. The Garmin connector shall report statuses and its own wording, and shall never print or record a response body from Garmin.
 
@@ -188,7 +190,7 @@ a record in any other form leaves the value absent.
 2. When the fitdocs CLI reads a delivery, it shall take resting, minimum and maximum heart rate, steps, average stress level, the highest and lowest body battery, and average SpO2 from the day's daily summary, respiration from the day's sleep summary, and the last-night HRV average, read as RMSSD, from the day's HRV summary.
 3. When the fitdocs CLI reads a day's sleep summary, it shall derive total sleep and the deep, light, REM and awake stages the same way it does for the Garmin export, and shall read no sleep metric when the stage total is not positive.
 4. When the fitdocs CLI reads a day's weight records, it shall take the day's latest weight, converted from grams to kilograms.
-5. If a value is missing, null or outside the metric's accepted range, the fitdocs CLI shall leave that metric absent for that day, never zero or a default.
+5. If a value is missing, null, not a number or outside the metric's accepted range, or its record is not in the expected form, the fitdocs CLI shall leave that metric absent for that day, never zero or a default, and shall still read the day's other values.
 6. The fitdocs CLI shall not read VO2max from a delivery, and shall keep each day's records whole in the archived delivery, so that a later version can read more of them with no new pull.
 7. The fitdocs CLI shall never read Garmin's hydration figures as the subjective hydration rating.
 8. Where the Garmin export and this source both supply a day's metric, the fitdocs CLI shall keep both source values and shall leave the export's value canonical, so that existing canonical values do not change.
@@ -220,7 +222,7 @@ a record in any other form leaves the value absent.
 6. The fitdocs documentation shall state that on an existing wiki the first `sync` after a pull makes a Garmin original the main file of pages built from other copies, so that those pages re-render, some may move or change time, and regions the athlete owns are kept; it shall name `pull` without `--sync` as the way to hold files back and `[identity] precedence` as the way to keep an existing base.
 7. The fitdocs documentation shall state what the connector does not do: uploads from other apps are skipped as GPX or TCX, an archive holding several FIT files is skipped by name, women's health, courses and training are not pulled, VO2max is not read, and accounts on Garmin's China service are not supported.
 8. The fitdocs documentation shall state that an athlete moving from intervals.icu can stop fetching Garmin's copies there through that connector's `sources` setting.
-9. The fitdocs documentation shall correct every statement this connector makes false, including the terms-first policy's list of connectors, the list of built-in connectors and the wellness source order, and shall add a changelog entry with the settings-schema note and the action an athlete takes.
+9. The fitdocs documentation shall correct every statement this connector makes false, including the terms-first policy's list of connectors, the list of built-in connectors and the wellness source order, and shall add a changelog entry with the settings-schema note and the action an athlete takes; the website guide shall change at the release that ships the connector, because publishing the site is separate from releasing the tool.
 
 ### Requirement 13: The Live Check
 **Objective:** As the maintainer, I want the finished connector exercised against my own account before release, so that nothing ships on a guess about a service fitdocs cannot test offline.
