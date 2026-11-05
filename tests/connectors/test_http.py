@@ -8,7 +8,8 @@ import io
 import math
 import urllib.error
 import urllib.request
-from typing import Any
+from collections.abc import Callable
+from typing import Any, Literal
 
 import pytest
 
@@ -509,6 +510,275 @@ def test_data_mode_propagates_the_final_transport_error_after_exhausting_attempt
 
     assert len(transport.requests) == 3
     assert sleeps == [2.0, 4.0]
+
+
+# --- DATA mode: opting out of 429 retries (garmin-connector Req 4.7) ---------
+
+_RATE_URL = "https://svc.example/data"
+
+
+def test_retry_rate_limits_defaults_to_true_on_the_request_and_the_get_helper() -> None:
+    import dataclasses
+    import inspect
+
+    request_default = {f.name: f.default for f in dataclasses.fields(HttpRequest)}
+    get_default = inspect.signature(HttpClient.get).parameters["retry_rate_limits"]
+
+    assert request_default["retry_rate_limits"] is True
+    assert get_default.default is True
+    assert get_default.kind is inspect.Parameter.KEYWORD_ONLY
+
+
+@pytest.mark.parametrize("retry_after", [None, "7"])
+def test_get_with_retry_rate_limits_off_returns_a_429_after_one_attempt(
+    retry_after: str | None,
+) -> None:
+    headers = {} if retry_after is None else {"retry-after": retry_after}
+    # A second scripted outcome makes a wrongly issued retry observable as a
+    # second request instead of an exhausted-script error.
+    transport = FakeTransport([_response(429, headers), _response(200)])
+    client, sleeps = _client(transport, mode=CallMode.DATA)
+
+    response = client.get(_RATE_URL, retry_rate_limits=False)
+
+    assert response.status == 429
+    assert len(transport.requests) == 1
+    assert sleeps == []
+
+
+def test_get_carries_the_option_into_the_request_the_transport_receives() -> None:
+    off_transport = FakeTransport([_response(200)])
+    off_client, _ = _client(off_transport, mode=CallMode.DATA)
+    on_transport = FakeTransport([_response(200)])
+    on_client, _ = _client(on_transport, mode=CallMode.DATA)
+
+    off_client.get(_RATE_URL, retry_rate_limits=False)
+    on_client.get(_RATE_URL)
+
+    assert off_transport.requests[0].retry_rate_limits is False
+    assert on_transport.requests[0].retry_rate_limits is True
+
+
+@pytest.mark.parametrize("status", [500, 502, 503, 504])
+def test_get_with_retry_rate_limits_off_still_retries_a_5xx_with_the_same_waits(
+    status: int,
+) -> None:
+    transport = FakeTransport([_response(status)] * 3)
+    client, sleeps = _client(transport, mode=CallMode.DATA)
+
+    response = client.get(_RATE_URL, retry_rate_limits=False)
+
+    assert response.status == status
+    assert len(transport.requests) == MAX_DATA_ATTEMPTS
+    assert sleeps == [2.0, 4.0]
+
+
+def test_get_with_retry_rate_limits_off_recovers_from_a_503_then_a_200() -> None:
+    transport = FakeTransport([_response(503), _response(200)])
+    client, sleeps = _client(transport, mode=CallMode.DATA)
+
+    response = client.get(_RATE_URL, retry_rate_limits=False)
+
+    assert response.status == 200
+    assert len(transport.requests) == 2
+    assert sleeps == [2.0]
+
+
+def test_get_with_retry_rate_limits_off_returns_the_429_with_its_headers_and_body() -> (
+    None
+):
+    stated = HttpResponse(status=429, headers={"retry-after": "7"}, body=b"slow down")
+    transport = FakeTransport([stated, _response(200)])
+    client, sleeps = _client(transport, mode=CallMode.DATA)
+
+    response = client.get(_RATE_URL, retry_rate_limits=False)
+
+    assert response.status == 429
+    assert response.headers == {"retry-after": "7"}
+    assert response.body == b"slow down"
+    assert len(transport.requests) == 1
+    assert sleeps == []
+
+
+def test_get_with_retry_rate_limits_off_honors_a_503_retry_after() -> None:
+    transport = FakeTransport([_response(503, {"retry-after": "7"}), _response(200)])
+    client, sleeps = _client(transport, mode=CallMode.DATA)
+
+    response = client.get(_RATE_URL, retry_rate_limits=False)
+
+    assert response.status == 200
+    assert len(transport.requests) == 2
+    assert sleeps == [7.0]
+
+
+def test_get_with_retry_rate_limits_off_returns_a_503_with_retry_after_over_cap() -> (
+    None
+):
+    over_cap = str(int(http_module.MAX_RETRY_AFTER_SECONDS) + 60)
+    stated = _response(503, {"retry-after": over_cap})
+    transport = FakeTransport([stated, _response(200)])
+    client, sleeps = _client(transport, mode=CallMode.DATA)
+
+    response = client.get(_RATE_URL, retry_rate_limits=False)
+
+    assert response.status == 503
+    assert response.headers == {"retry-after": over_cap}
+    assert len(transport.requests) == 1
+    assert sleeps == []
+
+
+@pytest.mark.parametrize("method", ["GET", "POST", "PUT"])
+def test_send_with_retry_rate_limits_off_returns_a_429_for_every_method(
+    method: Literal["GET", "POST", "PUT"],
+) -> None:
+    transport = FakeTransport([_response(429), _response(200)])
+    client, sleeps = _client(transport, mode=CallMode.DATA)
+
+    response = client.send(
+        HttpRequest(method=method, url=_RATE_URL, retry_rate_limits=False)
+    )
+
+    assert response.status == 429
+    assert len(transport.requests) == 1
+    assert sleeps == []
+
+
+def test_get_with_retry_rate_limits_off_returns_a_429_with_secrets_set() -> None:
+    transport = FakeTransport([_response(429), _response(200)])
+    client, sleeps = _client(transport, mode=CallMode.DATA)
+
+    response = client.get(
+        _RATE_URL,
+        headers={"a": "b"},
+        secret_headers={"Authorization": Secret("k")},
+        url_is_secret=True,
+        retry_rate_limits=False,
+    )
+
+    assert response.status == 429
+    assert len(transport.requests) == 1
+    assert sleeps == []
+
+
+def test_get_with_retry_rate_limits_off_still_retries_a_network_error() -> None:
+    transport = FakeTransport(
+        [
+            TransportError("boom1: https://svc.example/data"),
+            TransportError("boom2: https://svc.example/data"),
+            TransportError("boom3: https://svc.example/data"),
+        ]
+    )
+    client, sleeps = _client(transport, mode=CallMode.DATA)
+
+    with pytest.raises(TransportError, match="boom3"):
+        client.get(_RATE_URL, retry_rate_limits=False)
+
+    assert len(transport.requests) == MAX_DATA_ATTEMPTS
+    assert sleeps == [2.0, 4.0]
+
+
+@pytest.mark.parametrize(
+    "first",
+    [_response(503), TransportError("boom1: https://svc.example/data")],
+    ids=["503", "network-error"],
+)
+def test_get_with_retry_rate_limits_off_returns_a_429_met_on_a_later_attempt(
+    first: HttpResponse | TransportError,
+) -> None:
+    transport = FakeTransport([first, _response(429), _response(200)])
+    client, sleeps = _client(transport, mode=CallMode.DATA)
+
+    response = client.get(_RATE_URL, retry_rate_limits=False)
+
+    assert response.status == 429
+    assert len(transport.requests) == 2
+    assert sleeps == [2.0]
+
+
+_ONE_ATTEMPT_FIRST = [
+    pytest.param(_response(429), id="429"),
+    pytest.param(_response(503), id="503"),
+    pytest.param(TransportError("boom: https://svc.example/data"), id="network-error"),
+]
+
+
+def _assert_one_attempt(
+    transport: FakeTransport,
+    sleeps: list[float],
+    call: Callable[[HttpClient], HttpResponse],
+    client: HttpClient,
+    first: HttpResponse | TransportError,
+) -> None:
+    if isinstance(first, TransportError):
+        with pytest.raises(TransportError, match="boom"):
+            call(client)
+    else:
+        assert call(client).status == first.status
+    assert len(transport.requests) == 1
+    assert sleeps == []
+
+
+@pytest.mark.parametrize("first", _ONE_ATTEMPT_FIRST)
+def test_auth_mode_get_with_retry_rate_limits_off_makes_one_attempt(
+    first: HttpResponse | TransportError,
+) -> None:
+    transport = FakeTransport([first, _response(200)])
+    client, sleeps = _client(transport, mode=CallMode.AUTH)
+
+    _assert_one_attempt(
+        transport,
+        sleeps,
+        lambda c: c.get(_RATE_URL, retry_rate_limits=False),
+        client,
+        first,
+    )
+
+
+@pytest.mark.parametrize("first", _ONE_ATTEMPT_FIRST)
+def test_single_attempt_post_with_retry_rate_limits_off_makes_one_attempt(
+    first: HttpResponse | TransportError,
+) -> None:
+    transport = FakeTransport([first, _response(200)])
+    client, sleeps = _client(transport, mode=CallMode.DATA)
+
+    _assert_one_attempt(
+        transport,
+        sleeps,
+        lambda c: c.send(
+            HttpRequest(
+                method="POST",
+                url=_RATE_URL,
+                single_attempt=True,
+                retry_rate_limits=False,
+            )
+        ),
+        client,
+        first,
+    )
+
+
+def test_get_by_default_retries_a_429_on_the_unchanged_sequence() -> None:
+    transport = FakeTransport([_response(429), _response(429), _response(429)])
+    client, sleeps = _client(transport, mode=CallMode.DATA)
+
+    response = client.get(_RATE_URL)
+
+    assert response.status == 429
+    assert len(transport.requests) == MAX_DATA_ATTEMPTS
+    assert sleeps == [2.0, 4.0]
+
+
+def test_get_by_default_honors_a_429_retry_after_then_returns_the_next_response() -> (
+    None
+):
+    transport = FakeTransport([_response(429, {"retry-after": "7"}), _response(200)])
+    client, sleeps = _client(transport, mode=CallMode.DATA)
+
+    response = client.get(_RATE_URL)
+
+    assert response.status == 200
+    assert len(transport.requests) == 2
+    assert sleeps == [7.0]
 
 
 def test_data_mode_429_with_no_retry_after_uses_backoff() -> None:

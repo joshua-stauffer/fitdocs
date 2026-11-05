@@ -37,7 +37,10 @@ the response, and never retries a rejection (Req 9.4, 9.5). In
 :attr:`CallMode.DATA` it retries a network failure or a retryable status up
 to :data:`MAX_DATA_ATTEMPTS` times, honoring the service's stated
 ``Retry-After`` when it is within :data:`MAX_RETRY_AFTER_SECONDS`, else
-:data:`BACKOFF_SECONDS` (Req 9.3).
+:data:`BACKOFF_SECONDS` (Req 9.3). A request built with
+``retry_rate_limits=False`` is not retried on a 429: the response is
+returned to the caller, and the request is otherwise retried exactly as
+above.
 
 **No module here reads the system clock** (package-wide rule, see
 ``connectors/__init__.py``): an HTTP-date ``Retry-After`` is not measured
@@ -99,7 +102,10 @@ class HttpRequest:
     download location, never named in a failure message (Req 10.4).
     ``single_attempt`` marks a non-idempotent request: the client sends it to
     the transport exactly once, in either mode, whatever the status or
-    network failure (publish-core Req 10.1, 10.2)."""
+    network failure (publish-core Req 10.1, 10.2). ``retry_rate_limits=False``
+    opts a DATA-mode request out of retrying a 429 only: the client does not
+    retry a 429, returning it to the caller, while a 5xx or a network failure
+    keeps its bounded retries (garmin-connector Req 4.7)."""
 
     method: Literal["GET", "POST", "PUT"]
     url: str
@@ -108,6 +114,7 @@ class HttpRequest:
     body: bytes | None = None
     url_is_secret: bool = False
     single_attempt: bool = False
+    retry_rate_limits: bool = True
 
 
 @dataclass(frozen=True)
@@ -315,6 +322,8 @@ class HttpClient:
 
             if response.status not in RETRYABLE_STATUSES:
                 return response
+            if response.status == 429 and not request.retry_rate_limits:
+                return response
             if attempt == MAX_DATA_ATTEMPTS:
                 return response
             wait = self._retry_wait(response, attempt)
@@ -330,6 +339,7 @@ class HttpClient:
         headers: Mapping[str, str] | None = None,
         secret_headers: Mapping[str, Secret] | None = None,
         url_is_secret: bool = False,
+        retry_rate_limits: bool = True,
     ) -> HttpResponse:
         return self.send(
             HttpRequest(
@@ -338,6 +348,7 @@ class HttpClient:
                 headers=headers or {},
                 secret_headers=secret_headers or {},
                 url_is_secret=url_is_secret,
+                retry_rate_limits=retry_rate_limits,
             )
         )
 

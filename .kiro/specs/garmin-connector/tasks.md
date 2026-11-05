@@ -18,7 +18,7 @@
   - Done when the same scan tests pass from the new file, none remain in the old one, and the real-tree scan still flags an unadmitted host.
   - _Requirements: 14.4_
 
-- [ ] 1.2 Add the opt-in transport option for rate-limit retries
+- [x] 1.2 Add the opt-in transport option for rate-limit retries
   - Add the `retry_rate_limits` request option, defaulting to today's behavior, and the matching keyword on the client's GET helper.
   - When it is off, a 429 returns after one attempt, while server errors and transport errors keep their bounded retries.
   - Done when tests show a 429 returned at once with the option off, a 503 still retried with it off, and an unchanged retry sequence with the default; each test fails if the check is removed or the default flips.
