@@ -30,12 +30,14 @@ strava-publish's four new protocol names (pinned by
 vocabularies, the transport layer, the typed failures, the secret and its
 redactor, and the registration operations. The built-in
 connectors (``FolderConnector``, ``IntervalsConnector`` for an
-intervals.icu account, ``RelayConnector`` for a fitdocs relay, and
-``StravaConnector`` for Strava through a relay) are
+intervals.icu account, ``RelayConnector`` for a fitdocs relay,
+``StravaConnector`` for Strava through a relay, and ``GarminConnector`` for
+Garmin's Connect Personal API) are
 deliberately not published here -- internal, like
 ``fitdocs.load``'s ``ThresholdCalculator`` -- but each is registered under its
 id at import time, below, so ``get("folder")``, ``get("intervals")``,
-``get("relay")`` and ``get("strava")`` answer without any settings file naming them.
+``get("relay")``, ``get("strava")`` and ``get("garmin")`` answer without any
+settings file naming them.
 """
 
 from __future__ import annotations
@@ -48,6 +50,7 @@ from fitdocs.connectors.errors import (
     NotConnectedError,
 )
 from fitdocs.connectors.folder import FolderConnector
+from fitdocs.connectors.garmin import GarminConnector
 from fitdocs.connectors.http import (
     CallMode,
     HttpClient,
@@ -189,11 +192,13 @@ __all__ = [
 ]
 
 # The built-in connectors: registered at import time so `get("folder")`,
-# `get("intervals")`, `get("relay")` and `get("strava")` answer whether or not
-# any settings file names them. None of `FolderConnector`,
-# `IntervalsConnector`, `RelayConnector` and `StravaConnector` is in `__all__`
+# `get("intervals")`, `get("relay")`, `get("strava")` and `get("garmin")`
+# answer whether or not any settings file names them. None of `FolderConnector`,
+# `IntervalsConnector`, `RelayConnector`, `StravaConnector` and
+# `GarminConnector` is in `__all__`
 # above (internal, like `ThresholdCalculator`).
 register(FolderConnector())
 register(IntervalsConnector())
 register(RelayConnector())
 register(StravaConnector())
+register(GarminConnector())

@@ -48,6 +48,15 @@ NEUTRAL_SCAN_EXEMPTIONS: dict[str, frozenset[str]] = {
             "docs/connectors.md#intervals.icu",
         }
     ),
+    "personal.connectapi.garmin.com": frozenset(
+        {
+            "src/fitdocs/connectors/garmin.py",
+            "tests/connectors/test_garmin.py",
+            "tests/connectors/test_garmin_fetch.py",
+            "tests/connectors/test_garmin_wellness.py",
+            "tests/connectors/test_garmin_pull.py",
+        }
+    ),
     "api.fitdocs.ai": frozenset(
         {
             "src/fitdocs/connectors/relay.py",

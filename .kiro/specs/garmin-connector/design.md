@@ -257,13 +257,13 @@ class GarminConnector:
 - `POST` with an empty body, `Accept: */*`, `secret_headers={"Authorization": session.secret(f"ApiKey {key}")}`, `single_attempt=True`.
 - A 200 whose body matches three dot-separated base64url segments, at most 16 KiB, is the token. It is registered with `session.secret` in both bare and `Bearer` form before any use, and is never decoded.
 - `verify` mints and discards. A pull mints on first need and caches the bearer in `_PullState`.
-- A pull makes one token request at most. If it fails with a `ConnectorError`, or with a transport failure (converted to one), `_PullState` keeps that error, and wellness raises it again with no second request (7.2, 11.2).
+- A pull makes one token request at most. If it fails, with a `ConnectorError`, an `AuthFailure`, or a transport failure (converted to a `ConnectorError`), `_PullState` keeps that failure, and a later request raises the same object again with no second request (7.2, 11.2).
 
 **Pacing and waits (`_get`)**
 - Before each request, including the token: `session.sleep(REQUEST_SPACING_S)` unless it is the pull's first.
 - Calls `session.http.get(..., retry_rate_limits=False)`.
 - On 429, reads the stated wait through `auth_failure_from(response).retry_after_s` and applies the rule in "A rate-limited request". Waits go through `session.sleep`, never the clock, and add to `_PullState.waited_s`.
-- When no wait is allowed, raises `AuthFailure(RATE_LIMITED, RATE_LIMITED_MESSAGE, retry_after)`.
+- When no wait is allowed, raises `AuthFailure(RATE_LIMITED, PULL_RATE_LIMITED_MESSAGE, retry_after)`. `verify` keeps its own `RATE_LIMITED_MESSAGE`.
 
 **Listing (`list_activities`)**
 - `sortOrder=asc`, `limit=200`, `start` advancing, until a short page. New arrivals land at the end, so `asc` is the stable order.
@@ -300,12 +300,12 @@ Members are classified from their first bytes: `is_fit` for FIT, and a local `_d
 @dataclass
 class _PullState:
     bearer: Secret | None = None
-    mint_error: ConnectorError | None = None
+    mint_error: ConnectorError | AuthFailure | None = None
     used: bool = False
     waited_s: float = 0.0
     consecutive_failures: int = 0
 ```
-Held in `WeakKeyDictionary[HttpClient, _PullState]` on the connector. It is keyed by the session's client, so it dies with the pull. Nothing in it is ever written to disk.
+Held in `WeakKeyDictionary[HttpClient, _PullState]` on the connector. It is keyed by the session's client, so after a successful mint it goes with the pull's client. A failed mint's kept error retains the client through its traceback frames until the process ends, which is harmless in a one-shot pull. Nothing in it is ever written to disk.
 
 **Wellness (`list_wellness`, `package_wellness`)**
 - `first = oldest`; when `None`, the oldest activity's date (one listing request with `limit=1` and both date filters), or one year before the pull when there is none.

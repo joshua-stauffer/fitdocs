@@ -89,6 +89,7 @@ CONNECTORS_MODULE_NAMES: Final[tuple[str, ...]] = (
     "fitdocs.connectors.disconnect",
     "fitdocs.connectors.errors",
     "fitdocs.connectors.folder",
+    "fitdocs.connectors.garmin",
     "fitdocs.connectors.http",
     "fitdocs.connectors.intervals",
     "fitdocs.connectors.ledger",
@@ -286,6 +287,7 @@ _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
         {
             "fitdocs.connectors.errors",
             "fitdocs.connectors.folder",
+            "fitdocs.connectors.garmin",
             "fitdocs.connectors.http",
             "fitdocs.connectors.intervals",
             "fitdocs.connectors.protocol",
@@ -352,6 +354,14 @@ _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
             "fitdocs.inbox",
             "fitdocs.connectors.errors",
             "fitdocs.connectors.protocol",
+        }
+    ),
+    "fitdocs.connectors.garmin": frozenset(
+        {
+            "fitdocs.connectors.errors",
+            "fitdocs.connectors.http",
+            "fitdocs.connectors.protocol",
+            "fitdocs.connectors.secrets",
         }
     ),
     "fitdocs.connectors.http": frozenset(

@@ -46,7 +46,7 @@
 
 - [ ] 3. The connector: declaration and activities
 
-- [ ] 3.1 (P) Declare and register the connector, and verify a key
+- [x] 3.1 (P) Declare and register the connector, and verify a key
   - Add the Garmin connector with its one secret credential field, the two capabilities, API-key auth, and settings that accept nothing and ignore unknown keys. Register it after Strava, and keep it out of `__all__`.
   - Verification makes exactly one token request with the given key and discards the token. It reports absent scopes and no expiry, and maps refused, rate-limited, unavailable and not-a-token answers per the design's error table, never quoting a body.
   - The registry requires the pull operations once the capabilities are declared, so define the four as stubs raising a named connector error; 3.3, 3.5, 4.1 and 4.2 replace them.
@@ -58,7 +58,7 @@
   - _Boundary: GarminConnector_
   - _Depends: 1.1_
 
-- [ ] 3.2 Add the per-pull state, pacing and rate-limit waits
+- [x] 3.2 Add the per-pull state, pacing and rate-limit waits
   - Hold the per-pull state on the connector, keyed by the session's client: the token, the first-request flag, the waits so far, the consecutive failure count, and any token failure.
   - Mint at most one token per pull, on first need and in a single attempt. A failed mint, including a transport failure converted to the kept connector error, raises the same error again with no second request. Register the token and its header form as secrets before use, and never store them.
   - Send every Garmin GET through one helper that spaces distinct requests by 1 second through the injected sleep and turns the transport's 429 retries off.
