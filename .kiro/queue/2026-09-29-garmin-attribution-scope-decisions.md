@@ -91,6 +91,12 @@ daily health summaries as `wellness-interchange` files with source
 personal tokens. Garmin-sourced pages and wellness values become routine
 rather than incidental, so (a) and (b) matter more.
 
+*(2026-11-05: the route is now Phase 15's built-in Personal-key connector, with
+its own wellness format and the origin `garmin`. Garmin-sourced data still
+becomes routine. Whether the Brand Guidelines bind Personal API use at all is
+unstated, since they sit with the business program. The attribution line ships
+regardless.)*
+
 The current public API Brand Guidelines (v6.30.2025) still say:
 - "The Garmin attribution must be visible in every image." This bears on
   (a), chart SVGs.

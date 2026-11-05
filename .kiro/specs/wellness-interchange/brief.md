@@ -1,5 +1,9 @@
 # Brief: wellness-interchange
 
+> **Deferred 2026-11-05 (maintainer).** Do not spec now; revisit when a connector plugin needs to deliver wellness. Phase 15 (`.kiro/specs/garmin-connector/brief.md`) replaced the Garmin
+> push-tier route this brief served. See the note at the top of Phase 14's
+> extension in `.kiro/steering/roadmap.md`. The rest of this brief is kept as a record.
+
 ## Problem
 
 Wellness enters fitdocs only through source-specific formats: Apple Health

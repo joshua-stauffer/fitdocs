@@ -42,7 +42,7 @@ future model fit all start at the first FIT.
 - `DI_CONNECT/DI-Connect-Fitness/*_summarizedActivities.json`: 1,067
   activities; 898 have an `activity` FIT (`garmin-fit-index.json`); the 169
   without one are all `deviceId: 0`, `activityType: "other"`.
-- Sample GPX header: `joshua@joshuastauffer.com_27650511204_2014-01-17-161739.gpx`,
+- Sample GPX header: `<account>_<id>_2014-01-17-161739.gpx`,
   `<time>2014-01-17T21:17:39Z</time>`, `<trkpt>` present, no `hr` extension.
 
 ## How to pick it up
@@ -54,3 +54,10 @@ future model fit all start at the first FIT.
    GPX→FIT converter is not (the Python garmin-fit-sdk has no encoder).
 3. Done when either a reader lands with provenance naming the format, or
    the roadmap line carries the explicit "FIT-less GPX is also out" decision.
+
+## Update (2026-11-05): the Personal API serves these files
+
+Phase 15's connector will see the same 169 activities: Garmin's Personal API lists
+them as type `other` and downloads each as a ZIP holding the `.gpx`. The connector
+declines them as non-FIT (one download and one skipped line each, once). If this
+item later decides to read GPX, the connector is one more route to the same files.

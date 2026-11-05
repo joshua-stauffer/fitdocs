@@ -1,5 +1,9 @@
 # Brief: relay-held-files
 
+> **Shelved 2026-11-05 (maintainer).** Do not spec or implement. Phase 15 (`.kiro/specs/garmin-connector/brief.md`) replaced the Garmin
+> push-tier route this brief served. See the note at the top of Phase 14's
+> extension in `.kiro/steering/roadmap.md`. The rest of this brief is kept as a record.
+
 ## Problem
 
 Push-only sources deliver when the athlete is offline, but fitdocs pulls

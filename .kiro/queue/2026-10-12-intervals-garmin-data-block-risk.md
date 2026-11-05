@@ -172,3 +172,15 @@ no cut-off date yet (#890). Once the block lands, the detection question
 becomes what the intervals connector reports for those activities. Close
 this item when that is decided, or when the block lands with the new routes
 live.
+
+## Update (2026-11-05): the route changed
+
+The maintainer replaced the 2026-11-03 route. Phase 15's built-in `garmin`
+connector (`.kiro/specs/garmin-connector/brief.md`) pulls with the athlete's own
+Personal API key, and the hosted push-tier route is shelved. A live check found
+full history and files byte-identical to the device originals, so this connector
+is better than the intervals.icu copy even before any block. This item still owns
+detection only, and it matters less once the connector lands. An athlete on the
+new connector can set `sources` so intervals.icu no longer fetches
+`GARMIN_CONNECT`. Close this item when the block lands, or when the maintainer
+decides detection is not worth building.

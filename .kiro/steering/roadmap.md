@@ -1470,7 +1470,8 @@ Rejected:
   intervals.icu's developer said Garmin-origin data will stop flowing
   through its API. Garmin now comes through the hosted relay and through a
   connector plugin with a personal token. A password login stays
-  rejected.)*
+  rejected. Revised 2026-11-05 by Phase 15: a built-in connector with the
+  athlete's own Personal API key; the hosted route is shelved.)*
 - *A Garmin export-zip importer as the only path.* Robust, but a manual step
   per batch, so it is kept as a follow-on.
 
@@ -1490,7 +1491,8 @@ Rejected:
   direct Garmin login and over an export-zip-only path. *(Superseded for new
   Garmin data, 2026-11-03, by Phase 14's extension: intervals.icu is ending
   Garmin passthrough, so Garmin comes through the hosted relay and through
-  connector plugins with personal tokens.)* The intervals.icu
+  connector plugins with personal tokens. Revised 2026-11-05: Phase 15's
+  built-in Personal-key connector instead.)* The intervals.icu
   connector's pull capability moves into this phase. Its push,
   planned-workout, threshold and plan capabilities stay follow-ons. The
   viability check (2026-09-24) found intervals.icu's copy is Garmin's
@@ -1553,8 +1555,9 @@ Rejected:
   - pulling thresholds, wellness, workout libraries or plans (wellness
     promoted 2026-10-12 to Phase 12's `wellness-pull`);
   - a direct Garmin Connect connector, and a Garmin export-zip importer
-    *(Garmin through the hosted relay, and the connector plugin slot for
-    personal tokens: Phase 14's extension, 2026-11-03)*;
+    *(the connector: Phase 15's built-in Personal-key connector, 2026-11-05,
+    which replaced the hosted route Phase 14's extension chose on
+    2026-11-03)*;
   - a shipped Stryd connector (see the decisions above);
   - a daemon, watcher or scheduler (the OS schedules the one-shot command);
   - cycling dynamics in the model (pedal dynamics, gears, training effect);
@@ -1799,8 +1802,9 @@ credential store are designed for them now and built later.
 - **A direct Garmin Connect connector, and a Garmin export-zip importer,**
   for athletes without intervals.icu. The importer is the no-login fallback
   (the maintainer's 2026-09-12 backfill route). *(The connector half is
-  promoted 2026-11-03 to Phase 14's extension: the hosted relay, and the
-  connector plugin slot. The export-zip importer stays a follow-on.)*
+  promoted 2026-11-05 to Phase 15's built-in Personal-key connector, after
+  Phase 14's extension first chose the hosted relay on 2026-11-03. The
+  export-zip importer stays a follow-on.)*
 - **Stryd data beyond files**: CP history and stress. These arrive through
   whatever channel Stryd's terms allow, and map onto athlete benchmarks.
 - **Cycling dynamics**: pedal dynamics, power phase, gears and training
@@ -3708,9 +3712,8 @@ Rejected:
   - This repository ships a small server that runs locally on SQLite, plus
     the deploy contract above. Hosting is out of scope.
   - The database is the relay's only state, so a database backup is a
-    complete backup. *(To change under this phase's extension: once
-    `relay-held-files` lands, state is the database plus the object
-    store.)*
+    complete backup. *(This phase's extension would have changed that with
+    `relay-held-files`, shelved 2026-11-05, so this rule stands.)*
 - **The open-source relay server has no accounts and sends no email**
   (maintainer, 2026-10-31).
   - The operator mints tokens.
@@ -3825,8 +3828,8 @@ Rejected:
   - configuration only from the environment, with no secret in the image;
   - the configured database (a SQLite file or PostgreSQL) as the only state,
     so the app container is disposable *(the extension's `relay-held-files`
-    adds the object store, deliberately, with a `DEPLOY_CONTRACT_VERSION`
-    advance)*;
+    would have added an object store; shelved 2026-11-05, so this rule
+    stands)*;
   - health and readiness endpoints;
   - a migration command the deploy runs before the app starts;
   - graceful shutdown, and logs to stdout;
@@ -4137,6 +4140,21 @@ Amendment numbers are the next free number at landing.
 
 #### Extension — held files from push sources, and connector plugins (discovery 2026-11-03)
 
+**Revised 2026-11-05 (maintainer), by Phase 15.** Garmin's Personal API turned
+out to have its own terms, public documentation and an Apache-2.0 client from
+Garmin, and a live check found full history and byte-identical originals. Garmin
+therefore comes through a built-in connector with the athlete's own key, and the
+push-tier route below is off the plan:
+- `relay-held-files` is **shelved**.
+- `relay-providers` and `wellness-interchange` are **deferred**, because no
+  producer is left. relay-intervals keeps the lift already in its own tasks.
+- plugin-api's connector kind stays open, for other token sources.
+
+The text below stays as the record of what was decided on 2026-11-03. Its
+research (held-item custody, S3 signing, the fetch queue) is there to reuse if
+a push source is ever wanted. Revisit only for a real need, such as users asking
+for one-click connect, or for a source with no personal key.
+
 **Goal**: an athlete connects a push-only source once, by browser consent
 through the relay.
 - The relay receives each activity and each daily wellness summary as the
@@ -4165,12 +4183,14 @@ through intervals.icu's API: "You need to get your own connection to Garmin
 to get activity data" (<https://forum.intervals.icu/t/api-access-to-intervals-icu/609>,
 2026-10-24). That ends Phase 8's Garmin route for anything new.
 
-**Public-text rule for Garmin** (maintainer, 2026-11-03):
+**Public-text rule for Garmin** (maintainer, 2026-11-03; narrowed 2026-11-05,
+see Phase 15's rule for the Personal API):
 - The Garmin provider is not in this repository.
 - Public specs, docs and tests may name Garmin and cite Garmin's public
   pages.
-- They carry nothing from Garmin's developer documentation, which Garmin's
-  agreement makes confidential (§8.1 of the public FRM-0952 Rev. B).
+- They carry nothing from Garmin's business-tier developer documentation,
+  which Garmin's agreement makes confidential (§8.1 of the public FRM-0952
+  Rev. B). Garmin's public Personal API material is outside this limit.
 - They make no statement about any application or agreement with Garmin
   (§8.4).
 - The hosted deployment's Garmin material lives with the hosted deployment.
@@ -4182,6 +4202,7 @@ to get activity data" (<https://forum.intervals.icu/t/api-access-to-intervals-ic
 - **Path E** (maintainer): four new specs, plus existing-spec updates. One
   of the updates is the connector plugin kind, moved here from Phase 8.
 - **Garmin goes through the hosted relay, on Garmin's push-only tier.**
+  *(Shelved 2026-11-05: Phase 15.)*
   - The provider is private and plugs in through the relay's extension
     seam.
   - This repository gets the generic layer:
@@ -4429,22 +4450,23 @@ to get activity data" (<https://forum.intervals.icu/t/api-access-to-intervals-ic
   - It is source-agnostic for API-token sources: `fitdocs connect` stores
     the token, and pull delivers into the inbox.
   - It adds a template plugin, a connector test kit, and a "write your own
-    connector" section in `docs/plugins.md`. Garmin's Personal tier is one
-    example there; nothing from Garmin's developer documentation goes in.
+    connector" section in `docs/plugins.md`. *(2026-11-05: Garmin's Personal
+    tier no longer needs this slot, because Phase 15 ships it built in. The
+    slot stays for other token sources.)*
 
   Run `/kiro-spec-requirements plugin-api`. Dependencies: none.
-- [ ] relay-intervals: implemented after the extension's specs, it consumes
-  relay-providers' lift instead of building it.
-  - The spec batch's cross-spec review rewrites its requirements, design and
-    tasks (it is unimplemented).
+- [ ] relay-intervals: *(Reverted 2026-11-05: relay-providers is deferred, so
+  relay-intervals keeps the lift in its own tasks (2.1-2.4, 5.2) and no longer
+  waits for this extension. No cross-spec rewrite is due.)*
   - Its intervals.icu policy section goes into the relay's built-in policy
     beside Strava's. A truth-reviewed draft is in the shelved
     relay-legal-pages design ("Supporting References"), and the hosted
     static page carries the same text.
-- [ ] strava-publish: its consent machinery is lifted, with no change in
-  behavior (relay-providers). Its policy text and pages stay as they are,
+- [ ] strava-publish: **deferred 2026-11-05 with relay-providers;**
+  relay-intervals' own lift takes this on. Its consent machinery is lifted,
+  with no change in behavior. Its policy text and pages stay as they are,
   because relay-legal-pages is shelved.
-- [ ] relay-server, carried by relay-held-files:
+- [ ] relay-server, carried by relay-held-files **(shelved 2026-11-05)**:
   - the state rule (Req 7.8, 10.3);
   - the deploy contract and its version;
   - pull contacting a relay for relay-source instances (Req 11.5, 11.6);
@@ -4452,13 +4474,14 @@ to get activity data" (<https://forum.intervals.icu/t/api-access-to-intervals-ic
   - the conformance discipline extended to object stores.
 
   The extension seam gains providers (relay-providers).
-- [ ] connectors, carried by relay-held-files:
+- [ ] connectors, carried by relay-held-files **(shelved 2026-11-05)**:
   - the acknowledge operation after a durable delivery;
   - relay-bound pulling instances (activities and wellness);
   - the network statements.
 - [ ] wellness-store — the interchange format registered, with the source
-  declared per file. Carried by wellness-interchange.
-- [ ] steering, carried by relay-held-files and plugin-api:
+  declared per file. Carried by wellness-interchange **(deferred 2026-11-05)**.
+- [ ] steering, carried by plugin-api (and by relay-held-files until it was
+  shelved on 2026-11-05):
   - `tech.md`: the relay paragraph's "one database", and "Network and
     Credentials" for pull;
   - `structure.md`.
@@ -4555,15 +4578,21 @@ carries its own.
     configurations, or self-hosters asking for a multi-provider policy.
   - The optional `FITDOCS_RELAY_TERMS_URL` footer link is queued
     (`2026-11-03-relay-terms-url-footer-link`).
-- [ ] wellness-interchange — a fitdocs-defined daily wellness file that the
+- [ ] wellness-interchange: **DEFERRED 2026-11-05 (maintainer). Do not spec
+  now.** The hosted provider that needed it is shelved, and Phase 15's connector
+  uses its own format because Garmin's schema is public. Revisit when a connector
+  plugin needs to deliver wellness. A fitdocs-defined daily wellness file that the
   wellness inbox recognizes. Dependencies: none.
   - The source is declared per file, so attribution follows.
   - An absent value is never `0`.
   - Latest entry wins per day and metric.
   - It is documented for any producer.
-- [ ] relay-providers — the target-neutral consent machinery (relay-intervals'
-  planned `fitdocs_relay/targets/` lift, done now). Dependencies: none
-  (relay-legal-pages was shelved).
+- [ ] relay-providers: **DEFERRED 2026-11-05 (maintainer). Do not spec now.**
+  Its only remaining consumer is relay-intervals, whose own tasks already carry
+  the lift, and the webhook and fetch-host parts served push sources alone. The
+  target-neutral consent machinery (relay-intervals' planned
+  `fitdocs_relay/targets/` lift). Dependencies: none (relay-legal-pages was
+  shelved).
   - It adds optional PKCE.
   - Providers register through the extension seam: consent, webhook routes with a secret path and a body limit, token
     custody, a fetch-host allow-list, and a call budget.
@@ -4571,9 +4600,11 @@ carries its own.
   - On the fitdocs side, `relay_route` is lifted out of the Strava
     connector.
   - It adds a fake provider and a provider test kit.
-- [ ] relay-held-files — held-item custody on the relay, and the fitdocs
-  connector that pulls from it. Dependencies: relay-providers,
-  wellness-interchange.
+- [ ] relay-held-files: **SHELVED 2026-11-05 (maintainer). Do not spec or
+  implement.** Phase 15's connector gives CLI users a direct route, with nothing
+  held on a relay. Revisit only for a real need (see this extension's note at
+  the top). Held-item custody on the relay, and the fitdocs connector that pulls
+  from it. Dependencies: relay-providers, wellness-interchange.
   - Storage:
     - metadata in the database, and objects in a local directory or
       S3-compatible storage, encrypted with the relay key;
@@ -4591,8 +4622,154 @@ carries its own.
     inbox write and the ledger save, and reports expired or failed fetches
     as codes.
 
-The hosted deployment's provider, policy pages and storage are outside
-this repository. Run `/kiro-spec-batch` scoped to this extension by name
-(the multi-phase trap is still open,
-`.kiro/queue/2026-09-15-spec-batch-multi-phase-roadmap-unscoped.md`). Run the
-plugin-api update separately.
+The hosted deployment's policy pages are outside this repository. With the
+Specs above shelved or deferred, no spec batch is due for this extension. Run
+the plugin-api update separately (`/kiro-spec-requirements plugin-api`).
+
+### Phase 15 — the Garmin Personal connector (discovery 2026-11-05)
+
+**Goal**: an athlete who records on Garmin creates their own Personal API key,
+connects it once, and `fitdocs pull` brings their activities and daily wellness
+straight from Garmin, history included. There is no relay, no data export and no
+intervals.icu account. Details and sources: `.kiro/specs/garmin-connector/brief.md`.
+
+**Why the plan changed in two days.** Phase 14's extension kept Garmin code
+private because of FRM-0952 §8.1 and §8.4, and left the Personal tier to a
+plugin slot. Reading the Personal tier directly showed the reason does not carry
+over:
+- **Its own terms.** Key holders accept the "Garmin Connect Personal API
+  Supplemental Terms", which supplement Garmin's Terms of Use. They do not name
+  FRM-0952. That FRM-0952 does not apply is an inference; Garmin does not say so
+  outright.
+- **Only the key is confidential.** The terms have no clause on the docs or on
+  publishing client code.
+- **Public material.** The OpenAPI spec is served with no login, and Garmin's
+  Apache-2.0 client says "other projects can reuse its parts independently".
+- **It already does the job.** See "Measured at discovery". Public reports that
+  the tier has no history and that Garmin strips files did not hold on the
+  maintainer's account.
+
+#### Decisions taken at discovery (2026-11-05)
+
+- **Path E** (maintainer): one new spec, with updates to existing specs.
+- **A built-in connector** (maintainer), in the `fitdocs` wheel like `intervals`,
+  standard library only.
+  - *Rejected:* a separate `fitdocs-garmin` package through the plugin slot. It
+    would keep a Garmin objection away from the core repository, but it needs the
+    plugin work first and a second release pipeline, against an objection nobody
+    has seen.
+  - *Rejected:* plugin slot only (the 2026-11-03 plan). Most users would get no
+    connector.
+  - *Rejected:* depending on Garmin's client. It needs Python 3.12 and
+    `requests`, against fitdocs's 3.11 floor and connectors' no-new-dependency
+    rule.
+- **The push-tier route is shelved** (maintainer). See the note at the top of
+  Phase 14's extension. A Personal connector asks more of the user (create a key
+  and renew it within a year), and in return no relay holds anyone's health data.
+- **Activities and daily wellness** (maintainer), as on 2026-11-03. Women's
+  health, courses and training stay out.
+- **The maintainer accepts the open question on the terms' wording**, 2026-11-05:
+  Garmin has not ruled on whether "tools that you develop or operate for your own
+  use" covers third-party open-source software. Its own CLI suggests it does, and
+  forum readers disagree. fitdocs claims no permission and no endorsement.
+
+#### Public-text rule for the Personal API (maintainer, 2026-11-05)
+
+- Public specs, docs, tests and code may use Garmin's public Personal API
+  material: the FAQ, the Swagger page, the Apache-2.0 client and the Supplemental
+  Terms.
+- They carry nothing from Garmin's developer portal, from the hosted deployment's
+  private Garmin notes, or from any third party's copy of Garmin's documents.
+  Implementers and reviewers do not open those.
+- They make no statement about any application or agreement with Garmin, the rule
+  Phase 14's extension already holds.
+
+#### Measured at discovery (2026-11-05, maintainer's key, shapes only)
+
+- **Token:** a bare JWT, 24 h.
+- **History:** 1,070 activities back to 2014, in pages of 200. `limit=1000`
+  answered 500 with an empty body.
+- **Files:** one-member ZIPs. 4 of 4 comparable `.fit` files were byte-identical
+  to the device originals in Garmin's data export, undocumented messages
+  included. A 2014 upload came back as `.gpx`, and the 169 `other` activities
+  match the known GPX-only count.
+- **Pacing:** about 40 requests at 2.5 s drew no 429 and no limit headers. Garmin
+  publishes no numbers, and third parties report 429 on bursts.
+- **Wellness:** daily summaries took a 366-day range and old dates; sleep took 32
+  days and refused 366 (the spec says 31); HRV answered 204 (no device, shape
+  unverified).
+
+#### Viability (2026-11-05)
+
+No showstopper. The findings that shape the spec are in the brief under
+"Recommendations". The main ones:
+- Auth is `API_KEY` with one single-attempt token mint per pull, never stored.
+  `LOGIN` would break connectors Req 4.6.
+- The first pull has no framework bound and the ledger saves only at instance
+  end, so the connector paces and caps each run itself, through `session.sleep`
+  and `ListingDeferral`.
+- 5xx on a download stays per-activity. intervals' mapping would let one bad
+  activity stall everything newer.
+- Wellness is a new DEVICE source, because reusing `garmin-export` lets API
+  revisions silently beat the export's unrevised values.
+- On a real wiki, the first `sync` after a full pull re-bases and re-renders every
+  page whose copy differs, under the existing precedence rules. Pages may move.
+  The docs must say so.
+
+#### Scope
+
+- **In**: the `garmin` connector (connect, activity pull, wellness pull), its
+  wellness format and source, and the docs: key creation and renewal, the terms,
+  a non-affiliation line, and what a first pull does to an existing wiki.
+- **Out**: women's health, courses, training and golf; any relay or hosted path
+  for a key; anything that writes to Garmin; parsing GPX; Garmin's `.cn` server;
+  the export-zip importer.
+
+#### Constraints
+
+- **The key stays on the athlete's machine.** The terms make it "personal to you"
+  and bar sharing it, so no relay, hosted service or telemetry ever carries it.
+  This is a hard limit on future hosted features too.
+- **Provenance:** the public-text rule above.
+- **No test reads a doc** (maintainer, 2026-11-03). `NeutralScan` in
+  `tests/connectors/test_docs.py` is a real code guard and moves to its own file
+  before doc-binding tests there are deleted.
+
+#### Existing Spec Updates
+
+All carried by `garmin-connector`, at landing.
+- [ ] connectors: the built-in list, its doc statements
+  (`docs/connectors.md:636`, `:640`), and the terms gate
+  (`.kiro/specs/connectors/requirements.md:87`), citing Garmin's wording. Takes
+  the next free amendment number.
+- [ ] wellness-store: one more source and format. Canonical order changes and
+  series rebuild once.
+- [ ] steering: `tech.md`'s `fitdocs pull` sentence, which covers token renewal
+  only in login style, and `structure.md`'s connector list.
+
+#### Direct Implementation Candidates
+
+- [x] `product.md` capability 1, and the queue items
+  `2026-10-12-intervals-garmin-data-block-risk`,
+  `2026-09-29-garmin-attribution-scope-decisions` and
+  `2026-09-12-gpx-only-activities-in-a-garmin-export-are-unrepresentable`, in this
+  discovery change.
+- [x] Status lines on the `relay-held-files`, `relay-providers` and
+  `wellness-interchange` briefs, in this discovery change.
+- [ ] Maintainer, before the connector ships (not code):
+  - read the body of Garmin's Terms of Use (discovery could not fetch it);
+  - save the terms the key screen shows, with their "Last updated" date.
+
+#### Follow-on candidates (not scheduled)
+
+- Showing Garmin's own activity title or notes on a page.
+- VO2max, if the live check finds `vO2MaxValue` on real listing rows.
+- Garmin's `.cn` server, if a user asks.
+
+#### Specs (dependency order)
+
+- [ ] garmin-connector — a built-in connector for Garmin's Personal API: activity
+  and daily wellness pull with the athlete's own key. Dependencies: none.
+
+Run `/kiro-spec-init garmin-connector`, or `/kiro-spec-quick garmin-connector` to
+continue straight through.

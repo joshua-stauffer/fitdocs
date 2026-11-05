@@ -1,5 +1,9 @@
 # Brief: relay-providers
 
+> **Deferred 2026-11-05 (maintainer).** Do not spec now; relay-intervals keeps the lift in its own tasks. Phase 15 (`.kiro/specs/garmin-connector/brief.md`) replaced the Garmin
+> push-tier route this brief served. See the note at the top of Phase 14's
+> extension in `.kiro/steering/roadmap.md`. The rest of this brief is kept as a record.
+
 ## Problem
 
 The relay's consent machinery is built for Strava alone. A second provider
