@@ -3342,7 +3342,9 @@ numbers are the next free number at landing.
   12 mandatory leaves accepted, feature validation GO; optional 6.2* run on the maintainer's export 2026-10-17).
   Registering `apple-health`
   changes the default source order to garmin-export, apple-health,
-  intervals-icu, so existing series rebuild once:
+  intervals-icu, so existing series rebuild once *(Phase 15's
+  `garmin-personal` joined the order on 2026-11-05: garmin-export,
+  garmin-personal, apple-health, intervals-icu; wellness-store Amendment 1)*:
   - streaming stdlib parsing of `export.zip`/`export.xml`, with the three
     defect rewrites and all-or-nothing imports;
   - the canonical extract as the archived form;
@@ -4738,20 +4740,23 @@ No showstopper. The findings that shape the spec are in the brief under
   and bar sharing it, so no relay, hosted service or telemetry ever carries it.
   This is a hard limit on future hosted features too.
 - **Provenance:** the public-text rule above.
-- **No test reads a doc** (maintainer, 2026-11-03). `NeutralScan` in
-  `tests/connectors/test_docs.py` is a real code guard and moves to its own file
-  before doc-binding tests there are deleted.
+- **No test reads a doc** (maintainer, 2026-11-03). `NeutralScan` was a real
+  code guard in `tests/connectors/test_docs.py`; it now lives in
+  `tests/connectors/test_neutral_scan.py` (moved 2026-11-05, before the
+  doc-binding tests there were deleted).
 
 #### Existing Spec Updates
 
-All carried by `garmin-connector`, at landing.
-- [ ] connectors: the built-in list, its doc statements
+All carried by `garmin-connector`, at landing. **Recorded 2026-11-05** by its
+task 6.3 (the spec's live check, 7.2, is still the maintainer's).
+- [x] connectors: the built-in list, its doc statements
   (`docs/connectors.md:636`, `:640`), and the terms gate
   (`.kiro/specs/connectors/requirements.md:87`), citing Garmin's wording. Takes
-  the next free amendment number.
-- [ ] wellness-store: one more source and format. Canonical order changes and
-  series rebuild once.
-- [ ] steering: `tech.md`'s `fitdocs pull` sentence, which covers token renewal
+  the next free amendment number. *(Recorded as connectors Amendment 10.)*
+- [x] wellness-store: one more source and format. Canonical order changes and
+  series rebuild once. *(Recorded as wellness-store Amendment 1, the first
+  amendment that spec has.)*
+- [x] steering: `tech.md`'s `fitdocs pull` sentence, which covers token renewal
   only in login style.
 
 #### Direct Implementation Candidates
@@ -4775,9 +4780,11 @@ All carried by `garmin-connector`, at landing.
 
 #### Specs (dependency order)
 
-- [ ] garmin-connector — **spec written 2026-11-05** (`tasks-generated`, all approvals
-  set; 14 requirements / 97 criteria, 7 majors / 20 tasks; the live check is the
-  maintainer's own). A built-in connector for Garmin's Personal API: activity and
+- [ ] garmin-connector — **implemented 2026-11-05, with 7.2 outstanding** (the live
+  check is the maintainer's own, so the spec is not complete; validation 7.1 is
+  also still to run); **spec written 2026-11-05** (`tasks-generated`, all approvals
+  set; 14 requirements / 97 criteria, 7 majors / 20 tasks). A built-in connector for Garmin's Personal API: activity and
   daily wellness pull with the athlete's own key. Dependencies: none.
 
-Next: `/kiro-impl garmin-connector`.
+Next: `/kiro-validate-impl garmin-connector` (task 7.1), then the maintainer's live
+check (7.2).

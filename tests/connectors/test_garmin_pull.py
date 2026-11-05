@@ -7,21 +7,26 @@ transport seam patched to a scripted Garmin and the CLI's sleep patched to a
 recorder so the one-second spacing costs no time. The scripted Garmin answers
 only the routes the design names, checks the host and the credentials of every
 request, honours ``start``, ``limit``, ``startDate`` and ``endDate``, and fails
-on any other request. Wellness is off throughout (the instance's default).
+on any other request. Wellness is off throughout (the instance's default),
+except in the sweep at the end (task 5.3).
 """
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import io
 import json
+import os
+import re
 import time
+import traceback
 import zipfile
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, quote, urlsplit
 
 import pytest
 from typer.testing import CliRunner
@@ -31,8 +36,9 @@ import fitdocs.connectors.garmin as garmin_module
 from fitdocs import layout
 from fitdocs.cli import app
 from fitdocs.connectors.credentials import env_var_name
-from fitdocs.connectors.http import HttpRequest, HttpResponse
+from fitdocs.connectors.http import HttpRequest, HttpResponse, TransportError
 from fitdocs.connectors.ledger import Ledger, Outcome, load_ledger
+from fitdocs.version import user_agent
 from tests.fixtures import builder
 
 runner = CliRunner()
@@ -490,3 +496,461 @@ def test_a_since_backfill_behind_the_watermark_continues_only_with_the_same_sinc
     assert done.exit_code == 0, done.output
     assert done.fetched == []
     assert len(cli.pages()) == 7
+
+
+# --------------------------------------------------------------------------
+# The sweep: no secret and no listing field leaves the connector (Req 3.7,
+# 7.1, 7.3, 7.4, 7.5, 14.3)
+# --------------------------------------------------------------------------
+
+BODY_MARKER = "zq-body-marker-71c5e2"
+LISTING_MARKERS = {
+    "activityName": "Marker Morning Run 8f3a1c",
+    "ownerFullName": "Marker Ownerfull Qx92d",
+    "ownerDisplayName": "marker-owner-display-5b7e",
+    "locationName": "Marker Locality Zr41k",
+}
+# Numbers, as Garmin sends them: a summary value and an owner identifier.
+LISTING_NUMBERS: dict[str, int | float] = {
+    "distance": 16093.41723,
+    "calories": 612.25931,
+    "averageHR": 153.75117,
+    "ownerId": 88675309123,
+}
+_WELLNESS_DAY = date(2025, 1, 2)
+_ROUTES = (
+    re.escape(garmin_module.TOKEN_PATH),
+    re.escape(LISTING_ROUTE),
+    re.escape(FILE_ROUTE) + r"[0-9]+",
+    re.escape(garmin_module.DAILY_PATH),
+    re.escape(garmin_module.SLEEP_PATH),
+    re.escape(garmin_module.HRV_PATH) + r"/\d{4}-\d{2}-\d{2}/\d{4}-\d{2}-\d{2}",
+    re.escape(garmin_module.WEIGHT_PATH) + r"/\d{4}-\d{2}-\d{2}/\d{4}-\d{2}-\d{2}",
+)
+Override = Callable[[HttpRequest], HttpResponse]
+
+
+def _forms(text: str) -> dict[str, bytes]:
+    """``text`` as raw, base64 (padded, unpadded, urlsafe), percent-quoted and
+    hex bytes, each also for its ``ApiKey `` and ``Bearer `` header forms."""
+    forms: dict[str, bytes] = {}
+    for prefix in ("", "ApiKey ", "Bearer "):
+        value = (prefix + text).encode("utf-8")
+        standard = base64.b64encode(value)
+        urlsafe = base64.urlsafe_b64encode(value)
+        for label, form in {
+            "raw": value,
+            "b64": standard,
+            "b64-unpadded": standard.rstrip(b"="),
+            "urlsafe-b64": urlsafe,
+            "urlsafe-b64-unpadded": urlsafe.rstrip(b"="),
+            "quoted": quote(prefix + text, safe="").encode("ascii"),
+            "hex": value.hex().encode("ascii"),
+            "HEX": value.hex().upper().encode("ascii"),
+        }.items():
+            forms[f"{prefix.strip() or 'bare'} {label}"] = form
+    return forms
+
+
+def _needles() -> dict[str, bytes]:
+    needles: dict[str, bytes] = {}
+    for kind, text in (("key", KEY), ("token", TOKEN)):
+        needles.update({f"{kind} {k}": v for k, v in _forms(text).items()})
+    needles.update({f"listing {k}": v.encode() for k, v in LISTING_MARKERS.items()})
+    for name, number in LISTING_NUMBERS.items():
+        needles[f"listing {name}"] = str(number).encode()
+    needles["failure body"] = BODY_MARKER.encode()
+    return needles
+
+
+def _sweep(roots: list[Path], texts: dict[str, str]) -> tuple[list[str], list[Path]]:
+    """Every needle found in any file under ``roots`` (names and bytes) or in
+    any of ``texts``; also the files walked."""
+    needles = _needles()
+    walked: list[Path] = []
+    hits: list[str] = []
+    for root in roots:
+        for path in sorted(root.rglob("*")):
+            if not path.is_file():
+                continue
+            walked.append(path)
+            haystack = str(path).encode() + b"\0" + path.read_bytes()
+            hits += [f"{n} in {path}" for n, v in needles.items() if v in haystack]
+    for label, text in texts.items():
+        encoded = text.encode("utf-8", "surrogateescape")
+        hits += [f"{n} in {label}" for n, v in needles.items() if v in encoded]
+    return hits, walked
+
+
+class _Sweep(_Garmin):
+    """A scripted Garmin that plants markers: the token only in the token
+    body, a name, owner, location, summary values and a numeric owner id in each
+    listing entry, and an answer ``overrides`` replaces by route (``token``,
+    ``listing``, ``file``, ``wellness``). Every body it sent is kept in ``sent``."""
+
+    def __init__(
+        self,
+        history: dict[int, tuple[datetime, bytes]],
+        overrides: dict[str, Override] | None = None,
+    ) -> None:
+        super().__init__(history)
+        self.overrides = overrides or {}
+        self.sent = b""
+
+    def __call__(self, request: HttpRequest, timeout: float) -> HttpResponse:
+        self.seen.requests.append(request)
+        path = urlsplit(request.url).path
+        group = (
+            "token"
+            if path == garmin_module.TOKEN_PATH
+            else "listing"
+            if path == LISTING_ROUTE
+            else "file"
+            if path.startswith(FILE_ROUTE)
+            else "wellness"
+        )
+        if group == "token":
+            self.seen.tokens += 1
+        if group == "file":
+            self.seen.files.append(int(path[len(FILE_ROUTE) :]))
+        if group in self.overrides:
+            answer = self.overrides[group](request)
+        elif group == "token":
+            answer = HttpResponse(200, {}, TOKEN.encode("ascii"))
+        elif group == "listing":
+            answer = self._marked_listing(parse_qs(urlsplit(request.url).query))
+        elif group == "file":
+            _, fit = self.history[self.seen.files[-1]]
+            answer = HttpResponse(200, {}, _zip("any.fit", fit))
+        else:
+            answer = self._wellness(request.url)
+        self.sent += answer.body
+        return answer
+
+    def _marked_listing(self, query: dict[str, list[str]]) -> HttpResponse:
+        entries = json.loads(self._listing(query).body)
+        for entry in entries:
+            entry.update(LISTING_MARKERS)
+            entry.update(LISTING_NUMBERS)
+        return HttpResponse(200, {}, json.dumps(entries).encode("utf-8"))
+
+    @staticmethod
+    def _wellness(url: str) -> HttpResponse:
+        parts = urlsplit(url)
+        stated = _WELLNESS_DAY.isoformat()
+        window = re.findall(r"\d{4}-\d{2}-\d{2}", parts.path + "?" + parts.query)
+        if not (window[0] <= stated <= window[1]):
+            return HttpResponse(204, {}, b"")
+        record = {"calendarDate": stated}
+        if parts.path.startswith(garmin_module.DAILY_PATH):
+            body: object = {"data": [{**record, "totalSteps": 4321}]}
+        elif parts.path.startswith(garmin_module.SLEEP_PATH):
+            body = [{**record, "deepSleepSeconds": 5400}]
+        elif parts.path.startswith(garmin_module.HRV_PATH):
+            body = {"hrvSummaries": [{**record, "lastNightAvg": 41}]}
+        else:
+            return HttpResponse(204, {}, b"")
+        return HttpResponse(200, {}, json.dumps(body).encode("utf-8"))
+
+
+def _echo(error: TransportError) -> Override:
+    def raise_it(_request: HttpRequest) -> HttpResponse:
+        raise error
+
+    return raise_it
+
+
+def _text(status: int, body: str = "") -> Override:
+    return lambda _request: HttpResponse(status, {}, body.encode("utf-8"))
+
+
+def _assert_the_wire(requests: list[HttpRequest]) -> None:
+    """Req 7.1, 7.4, 7.5: one host over https, the fitdocs User-Agent as the
+    transport received it, a POST only to the token route, no secret anywhere
+    but a secret header, and no route outside the design's set."""
+    needles = _needles()
+    allowed = re.compile("|".join(_ROUTES))
+    assert requests
+    for request in requests:
+        parts = urlsplit(request.url)
+        assert (parts.scheme, parts.netloc) == ("https", HOST), request.url
+        assert request.headers["User-Agent"] == user_agent(), request.headers
+        assert allowed.fullmatch(parts.path), request.url
+        is_token = parts.path == garmin_module.TOKEN_PATH
+        assert request.method == ("POST" if is_token else "GET"), request.url
+        assert not request.body
+        plain = (request.url + "\0" + "\0".join(request.headers.values())).encode()
+        assert [n for n, v in needles.items() if v in plain] == [], request.url
+        assert set(request.secret_headers) == {"Authorization"}
+        assert request.secret_headers["Authorization"].reveal() == (
+            f"ApiKey {KEY}" if is_token else f"Bearer {TOKEN}"
+        )
+
+
+def _failure_text(result: object) -> dict[str, str]:
+    """The text of every exception in the run's chain, plain and ``repr``."""
+    error = getattr(result, "exception", None)
+    texts: dict[str, str] = {}
+    seen: set[int] = set()
+    while error is not None and id(error) not in seen:
+        seen.add(id(error))
+        texts[f"exception {type(error).__name__}"] = f"{error} {error!r} " + "".join(
+            traceback.format_exception(error)
+        )
+        error = error.__cause__ or error.__context__
+    return texts
+
+
+def _watch_raises(monkeypatch: pytest.MonkeyPatch) -> list[Exception]:
+    """Every exception the connector's pull operations raise, as raised. The
+    engine redacts what it reports, so its report cannot show a raw secret in
+    an exception's message (Req 7.3); this list can."""
+    raised: list[Exception] = []
+
+    def watched(real: Callable[..., object]) -> Callable[..., object]:
+        def call(*args: object, **kwargs: object) -> object:
+            try:
+                return real(*args, **kwargs)
+            except Exception as error:
+                raised.append(error)
+                raise
+
+        return call
+
+    for name in ("list_activities", "fetch_activity", "list_wellness"):
+        real = getattr(garmin_module.GarminConnector, name)
+        monkeypatch.setattr(garmin_module.GarminConnector, name, watched(real))
+    return raised
+
+
+@dataclass
+class _Swept:
+    cli: _Cli
+    garmin: _Sweep
+    run: _Run
+    texts: dict[str, str]
+    roots: list[Path]
+    raised: list[Exception]
+
+
+def _swept(
+    make_cli: MakeCli,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    overrides: dict[str, Override] | None = None,
+) -> _Swept:
+    history = {7001: (_day(0), _run_fit(9201, 0)), 7002: (_day(1), _run_fit(9202, 1))}
+    cli = make_cli(history)
+    garmin = _Sweep(history, overrides)
+    monkeypatch.setattr(cli_module, "_connector_transport", lambda: garmin)
+    cli.garmin = garmin
+    config = cli.root / "fitdocs.toml"
+    config.write_text(config.read_text() + "wellness = true\n", encoding="utf-8")
+    caplog.set_level("DEBUG")
+    raised = _watch_raises(monkeypatch)
+    run = cli.pull()
+    result = runner.invoke(app, ["pull", INSTANCE, "--out", str(cli.root)])
+    texts = {
+        "stdout+stderr": run.output,
+        "second pull output": result.output,
+        "log": caplog.text,
+        **_failure_text(result),
+        # A TransportError's words are the fake's own, not the connector's.
+        **{
+            f"raised {index}": "".join(traceback.format_exception(error))
+            for index, error in enumerate(raised)
+            if not isinstance(error, TransportError)
+        },
+    }
+    roots = [cli.root.parent, Path(os.environ["HOME"])]
+    roots.append(Path(os.environ["FITDOCS_CREDENTIALS_DIR"]))
+    return _Swept(cli, garmin, run, texts, roots, raised)
+
+
+_LISTED = (*LISTING_MARKERS.values(), *map(str, LISTING_NUMBERS.values()))
+# name -> (answers replaced, what the output must show, what the fake must
+# have sent for the sweep to mean anything)
+_SCENARIOS: dict[str, tuple[dict[str, Override], str, tuple[str, ...]]] = {
+    "success": ({}, "garmin/7001.fit", (TOKEN, *_LISTED)),
+    "token 401": (
+        {"token": _text(401, f"no {BODY_MARKER}")},
+        "Garmin did not accept the Personal API key (HTTP 401)",
+        (BODY_MARKER,),
+    ),
+    "listing 401": (
+        {"listing": _text(401, f"no {BODY_MARKER}")},
+        "Garmin did not accept the Personal API key (HTTP 401)",
+        (TOKEN, BODY_MARKER),
+    ),
+    "listing 403": (
+        {"listing": _text(403, f"no {BODY_MARKER}")},
+        "Garmin refused the activity listing (HTTP 403)",
+        (TOKEN, BODY_MARKER),
+    ),
+    "listing not a list": (
+        {
+            "listing": _text(
+                200,
+                json.dumps(
+                    {"error": BODY_MARKER, **LISTING_MARKERS, **LISTING_NUMBERS}
+                ),
+            )
+        },
+        "Garmin's activity listing was not understood",
+        (TOKEN, BODY_MARKER, *_LISTED),
+    ),
+    "listing entry not an object": (
+        {
+            "listing": _text(
+                200, json.dumps([BODY_MARKER, {**LISTING_MARKERS, **LISTING_NUMBERS}])
+            )
+        },
+        "Garmin's activity listing was not understood",
+        (TOKEN, BODY_MARKER, *_LISTED),
+    ),
+    "download 500": (
+        {"file": _text(500, f"boom {BODY_MARKER}")},
+        "Garmin is unavailable (HTTP 500) for this activity's download",
+        (TOKEN, BODY_MARKER, *_LISTED),
+    ),
+    "download 404": (
+        {"file": _text(404, f"none {BODY_MARKER}")},
+        "Garmin holds no file for this activity",
+        (TOKEN, BODY_MARKER, *_LISTED),
+    ),
+    "download not a zip": (
+        {"file": _text(200, f"<p>{BODY_MARKER}</p>")},
+        "could not be read as a ZIP archive",
+        (TOKEN, BODY_MARKER, *_LISTED),
+    ),
+    "download transport failure echoing the bearer": (
+        {"file": _echo(TransportError(f"reset; sent Authorization: Bearer {TOKEN}"))},
+        "TransportError: reset; sent Authorization: <redacted>",
+        (TOKEN,),
+    ),
+    "download transport failure echoing the bare token": (
+        {"file": _echo(TransportError(f"reset; token {TOKEN} refused"))},
+        "TransportError: reset; token <redacted> refused",
+        (TOKEN,),
+    ),
+    "wellness 500": (
+        {"wellness": _text(500, f"boom {BODY_MARKER}")},
+        "Garmin is unavailable (HTTP 500) for the daily request",
+        (TOKEN, BODY_MARKER, *_LISTED),
+    ),
+    "wellness 403": (
+        {"wellness": _text(403, f"no {BODY_MARKER}")},
+        "Garmin refused the daily request (HTTP 403)",
+        (TOKEN, BODY_MARKER, *_LISTED),
+    ),
+    "wellness record not an object": (
+        {"wellness": _text(200, json.dumps({"data": [BODY_MARKER]}))},
+        "Garmin's daily records were not understood",
+        (TOKEN, BODY_MARKER, *_LISTED),
+    ),
+    "wellness malformed": (
+        {"wellness": _text(200, f"[{BODY_MARKER}]")},
+        "Garmin's daily records were not understood",
+        (TOKEN, BODY_MARKER, *_LISTED),
+    ),
+}
+
+
+@pytest.mark.parametrize("scenario", sorted(_SCENARIOS))
+def test_the_sweep_finds_no_key_token_or_listing_field_anywhere(
+    scenario: str,
+    make_cli: MakeCli,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    overrides, shown, planted = _SCENARIOS[scenario]
+    swept = _swept(make_cli, monkeypatch, caplog, overrides)
+
+    sent = swept.garmin.sent.decode("utf-8", "replace")
+    assert [text for text in planted if text not in sent] == []
+    assert shown in swept.run.output
+    assert bool(swept.raised) == (scenario not in ("success", "download 404"))
+    hits, walked = _sweep(swept.roots, swept.texts)
+    assert hits == []
+    _assert_the_wire(swept.garmin.seen.requests)
+    delivered_fit = any(path.read_bytes() == _run_fit(9201, 0) for path in walked)
+    assert delivered_fit == (scenario == "success" or scenario.startswith("wellness"))
+    if scenario == "success":
+        assert len(swept.cli.pages()) == 2
+        assert any(b"totalSteps" in path.read_bytes() for path in walked)
+
+
+def test_the_sweep_flags_every_form_written_into_a_file_a_report_or_a_binary(
+    make_cli: MakeCli,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    swept = _swept(make_cli, monkeypatch, caplog)
+    assert _sweep(swept.roots, swept.texts)[0] == []
+    ledger = next(
+        path
+        for path in (swept.cli.root / ".fitdocs" / "connectors").rglob("*")
+        if path.is_file() and b"7001" in path.read_bytes()
+    )
+    clean_ledger = ledger.read_bytes()
+    fit = next(path for path in swept.cli.root.rglob("*.fit"))
+    clean_fit = fit.read_bytes()
+    needles = _needles()
+    assert len(needles) == 3 * 8 * 2 + len(LISTING_MARKERS) + len(LISTING_NUMBERS) + 1
+
+    missed: list[str] = []
+    for label, needle in needles.items():
+        for where, original in ((ledger, clean_ledger), (fit, clean_fit)):
+            where.write_bytes(original + b" " + needle + b" ")
+            hits, _ = _sweep(swept.roots, swept.texts)
+            if f"{label} in {where}" not in hits:
+                missed.append(f"{label} in {where.name}")
+            where.write_bytes(original)
+        texts = {**swept.texts, "output": swept.run.output + needle.decode("latin-1")}
+        hits, _ = _sweep(swept.roots, texts)
+        if f"{label} in output" not in hits:
+            missed.append(f"{label} in output")
+    assert missed == []
+    assert _sweep(swept.roots, swept.texts)[0] == []
+
+
+@pytest.mark.parametrize(
+    ("overrides", "code", "shown"),
+    [
+        ({}, 0, "garmin"),
+        (
+            {"token": _text(401, f"no {BODY_MARKER}")},
+            1,
+            "Garmin did not accept the Personal API key (HTTP 401)",
+        ),
+    ],
+    ids=["accepted", "refused"],
+)
+def test_connect_leaves_the_key_only_in_the_credentials_file_and_no_token_anywhere(
+    overrides: dict[str, Override],
+    code: int,
+    shown: str,
+    make_cli: MakeCli,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cli = make_cli({})
+    garmin = _Sweep({}, overrides)
+    monkeypatch.setattr(cli_module, "_connector_transport", lambda: garmin)
+    monkeypatch.delenv(env_var_name(INSTANCE, "api_key"))
+    monkeypatch.setattr(cli_module, "_stdin_is_interactive", lambda: True)
+    monkeypatch.setattr(cli_module, "_ask_secret", lambda _prompt: KEY)
+
+    result = runner.invoke(app, ["connect", INSTANCE, "--out", str(cli.root)])
+
+    assert (result.exit_code, shown in result.output) == (code, True), result.output
+    assert len(garmin.seen.requests) == 1
+    _assert_the_wire(garmin.seen.requests)
+    hits, _ = _sweep(
+        [cli.root.parent, Path(os.environ["HOME"])], {"output": result.output}
+    )
+    assert hits == []
+    stored = sorted(Path(os.environ["FITDOCS_CREDENTIALS_DIR"]).rglob("*"))
+    files = [path.read_bytes() for path in stored if path.is_file()]
+    assert bool(files) == (code == 0)
+    token_forms = _forms(TOKEN).values()
+    assert not any(form in data for form in token_forms for data in files)

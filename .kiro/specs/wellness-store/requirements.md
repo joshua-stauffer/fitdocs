@@ -373,3 +373,32 @@ of fitdocs, so that it is safe to run unattended.
 3. The same wellness archive and `[wellness]` settings shall always produce byte-identical series files, on any machine and in any timezone.
 4. Every write wellness handling makes shall be confined to `wellness-archive/`, `wellness/`, the inbox quarantine record and, under the move disposition, the processed-files destination.
 5. No personal wellness data shall be committed to the fitdocs repository; tests shall use synthetic files shaped like the real formats.
+
+## Amendment 1 (2026-11-05): the `garmin-personal` source and format, landed by garmin-connector
+
+`garmin-connector` registers one more wellness source and format for the
+delivery `fitdocs pull` packages from Garmin's Personal API. The changes below
+are recorded here; no criterion is renumbered. Existing criteria and approvals
+are preserved word-for-word. Nothing here moves a version constant.
+
+- Introduction, **source**: the identifiers are `intervals-icu`,
+  `garmin-export`, `apple-health` and now `garmin-personal`. Its kind is
+  DEVICE and its origin is `garmin`.
+- Requirement 17 (formats added later): the format `fitdocs.garmin-personal-wellness`
+  version 1 is registered after the Garmin export formats and before the
+  Apple Health format, with source `garmin-personal`. It is written by `fitdocs
+  pull`, read through the same archive, merge and series rules as every other
+  format, and has no canonical extract.
+- Requirement 10 criterion 2, default order: a device kind ranks above a phone
+  health store above an aggregator, and the same kind is ordered by
+  identifier, so the default order is now `garmin-export`, `garmin-personal`,
+  `apple-health`, `intervals-icu`. The Garmin export therefore stays canonical
+  over the Personal API wherever both hold a value for a day and metric;
+  neither value is dropped, and the series keeps `garmin-personal`'s as a
+  non-canonical value.
+- Requirement 12 and Requirement 14 criterion 2: adding the source changes the
+  series' inputs, so the series is rebuilt once, on the first `fitdocs sync` or
+  `fitdocs regen` after upgrading, and until then `fitdocs check` reports the
+  series as out of date with the remedy `fitdocs sync` or `fitdocs regen`.
+  No wellness archive entry, existing value or canonical choice changes by
+  the upgrade alone.
