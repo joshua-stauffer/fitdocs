@@ -611,3 +611,56 @@ are preserved word-for-word. Nothing here moves a version constant.
   `post` takes an optional keyword-only `max_request_bytes`. Pinned by
   `tests/connectors/test_relay.py::test_a_data_mode_post_503_sees_one_transport_call`
   and `::test_the_upload_bound_sends_a_body_over_the_envelope_default`.
+
+## Amendment 10 (2026-11-05): a Garmin connector is built in, and a connector may decline the transport's rate-limit retries, landed by garmin-connector
+
+`garmin-connector` adds a fifth built-in connector (Garmin, pull activities and
+pull wellness, authenticated with the athlete's own Personal API key). The
+changes below are recorded here; no criterion is renumbered, and the criteria
+keep their wording except as stated. Existing criteria and approvals are
+preserved word-for-word. Nothing here moves `CONTRACT_VERSION`, `DOC_VERSION`,
+the CLI command count or the connectors `__all__` count.
+
+- New: the built-in Garmin connector (garmin-connector Requirements 1 to 9),
+  an API-key connector with the pull-activities and pull-wellness
+  capabilities, registered after the folder, intervals, relay and Strava
+  connectors. The framework now ships five built-in connectors: `folder`,
+  `intervals`, `relay`, `strava` and `garmin`. `GarminConnector` is not added
+  to the connectors package's public surface, so the count stays 67
+  (garmin-connector Requirement 14.5).
+- Requirement 9 criterion 3: a data request may opt out of the transport's
+  retries of a rate-limit response only. `HttpRequest.retry_rate_limits`
+  (default true) and the keyword of the same name on `HttpClient.get` return a
+  429 to the caller at once when false; server-error and network-failure
+  retries are unchanged. Every existing connector and call keeps its
+  behavior, because the default is unchanged; only the Garmin connector sets
+  it false, so that it can pace and wait out a 429 itself within its own
+  bounded budget (garmin-connector Requirement 4.7). Criteria 4 and 9 are
+  unchanged: authentication stays single-attempt.
+- Requirement 14 criterion 6: the Garmin connector's own module, tests and
+  documentation section are exempt as a shipped service connector. The
+  framework's neutral-address scan is a code guard and now lives in
+  `tests/connectors/test_neutral_scan.py`, where the exempt files for
+  `personal.connectapi.garmin.com` are named beside intervals.icu's. Criterion 6's closing clause stays true of this spec alone; the service
+  connectors later specs ship take the exemption: intervals.icu, the relay and
+  Strava connectors for the relay's address, and now Garmin.
+- Requirement 14 criterion 1 and the terms-first policy: `fitdocs connect` and
+  `fitdocs pull` for a Garmin instance send requests to Garmin's Personal API
+  host; no other command does. The documentation cites Garmin's own
+  Supplemental Terms for the key (a key "personal to you", for tools "that you
+  develop or operate for your own use") and claims neither Garmin's approval
+  nor any permission; the maintainer accepted the open question of how Garmin
+  reads those words on 2026-11-05.
+- Requirement 15 criterion 5: the connectors page's preamble, connector count,
+  "What leaves your machine" section and terms-first policy are rewritten for
+  five connectors, and gain a Garmin section. Under garmin-connector
+  Requirement 14.4 the documentation-binding tests this turned red were
+  deleted, not updated:
+  `tests/connectors/test_docs.py::test_preamble_connector_list_is_the_registry_built_ins`,
+  `::test_page_headings_match_expected`,
+  `::test_documented_environment_variable_examples_match_env_var_name` and
+  `::test_preamble_treats_relay_like_intervals`;
+  the `export` row and its `linked` check in `tests/connectors/test_wellness_docs.py`; and
+  `tests/wellness/apple/test_docs_apple.py::test_source_order`. The roadmap's
+  Phase 15 note that the neutral scan "moves to its own file" before these
+  deletions is done.

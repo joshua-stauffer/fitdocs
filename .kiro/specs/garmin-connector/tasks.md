@@ -145,7 +145,7 @@
   - Done when a search of the docs finds no remaining statement that fitdocs does not read Garmin directly or ships fewer connectors, and the changelog entry names the contract and the action.
   - _Requirements: 12.9, 14.4_
 
-- [ ] 6.3 Land the records
+- [x] 6.3 Land the records
   - Record the amendments to `connectors` and `wellness-store`, taking the next free numbers at landing, and correct `tech.md`'s `fitdocs pull` sentence.
   - Mark Phase 15's existing-spec updates and the spec's entry on the roadmap.
   - Queue the website changes for the release cut, naming all three pages (`website/content/guides/connectors.md`, `website/content/guides/wellness.md`, `website/content/reference/configuration.md`) and editing none of them now, and queue a follow-up for `fitdocs pull` showing no progress during a long wait. Close the README connector-count item.

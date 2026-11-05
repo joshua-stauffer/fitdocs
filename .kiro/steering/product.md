@@ -12,10 +12,11 @@ inside a vendor platform.
 1. **`.fit` → markdown, one-to-one.** Each activity becomes one workout
    document. The user gets the files into a target directory (Garmin exports,
    watch sync, etc.), or, from Phase 8 of the roadmap, a configured connector
-   fetches them. fitdocs does the rest. *(Planned, 2026-11-05, by Phase 15: a
-   built-in Garmin connector pulls with the athlete's own Personal API key.
-   Planned by Phase 14's extension: a user-installed connector plugin can pull
-   from any source that offers an API token.)* When several files record the same
+   fetches them. fitdocs does the rest. *(Built 2026-11-05 by Phase 15, and not
+   yet released: a built-in Garmin connector pulls with the athlete's own
+   Personal API key. It ships in the next release after the maintainer's live
+   check. Planned by Phase 14's extension: a user-installed connector plugin can
+   pull from any source that offers an API token.)* When several files record the same
    session (a phone-side re-export and the device original, say), Phase 8
    makes them one document: a base file plus extras that add only the
    channels the base lacks, never a duplicate.
@@ -56,7 +57,7 @@ inside a vendor platform.
    2026-10-12)*.
    - **Sources.** Daily wellness is resting HR, HRV, sleep, weight, SpO2,
      VO2max and steps. It arrives through the inbox like any file: an
-     intervals.icu pull, a Garmin data export, an Apple Health export.
+     intervals.icu or Garmin pull, a Garmin data export, an Apple Health export.
      fitdocs archives it and keeps one normalized daily series, with every
      value tagged by its source.
    - **What the athlete sees.** A recovery page puts each signal against the

@@ -74,8 +74,12 @@ relay instance, a capabilities read, a registration start and one poll per
 stated interval), `fitdocs disconnect` (one revocation call for a relay
 instance, one disconnect request to its bound relay for a Strava instance,
 none otherwise), `fitdocs pull`
-(a single-attempt token renewal when a login-style token is due, then
-bounded, retried data calls) and `fitdocs publish --yes` (for each page it
+(a single-attempt token request when a login-style token is due, or one
+single-attempt token mint from the athlete's key per pull for a Garmin instance,
+then bounded data calls, retried by the transport; a Garmin instance also spaces
+its requests one second apart and, in place of the transport's rate-limit
+retries, waits out a rate-limit response itself within its own bounded budget)
+and `fitdocs publish --yes` (for each page it
 sends to a target, any of a listing, an update and an upload request, one at
 a time); every other command — `sync`, `regen`,
 `load`, `dashboard`, `recovery`, `check`, `query`, `history`, `plan`, `derive-benchmarks`, `index`, and
