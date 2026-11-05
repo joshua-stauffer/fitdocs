@@ -120,6 +120,41 @@ Two checks: about 40 requests, then 10, all at 2.5 s spacing. No 401, 403 or 429
 - **Build vs adopt**: adopted `zipfile`, `auth_failure_from`, `is_fit`, `load_ledger`, the transport, and the existing `_put` and `_sleep` in `formats/garmin.py`. Built only the connector and the new format's reader. `_document_format` and the content-revision helper are small private functions in `intervals.py`, copied rather than promoted, so a shipped connector is not touched for this.
 - **Simplification**: no settings, no shared pacing machinery, no JWT decoding, no token persistence, no new wellness module (the reader sits in `formats/garmin.py`), no framework report channel for waits, and no separate `covers` per section.
 
+## Limited Live Run (Partial Coverage of Task 7.2)
+On 2026-11-05 the maintainer asked a session to try the connector through the normal install, with the maintainer's key, and to record what that covered. It did not follow task 7.2's script, and 7.2 stays open. It ran against the real wiki rather than a scratch data root (a departure from Req 13.1, at the maintainer's direction), with wellness off. No subagent was given the key. Findings are shapes and counts only (Req 13.3).
+
+**Covered, and held:**
+
+| Check | Result |
+| --- | --- |
+| Install | The editable tool install picked up the connector with no reinstall. |
+| Settings | An empty `[connectors.garmin]` table was enough. |
+| `fitdocs connect` | Run under a pty, with the no-echo prompt answered from the key. One key check succeeded, the key was stored owner-only outside the data root, and the report said the service reported no scopes. |
+| `pull --dry-run` | It listed 200 with one deferred entry naming the remainder, and fetched nothing. |
+| Per-pull limit and resume | Two plain pulls resolved the oldest 400 of 1,070 activities. The second continued where the first stopped, and the remainder fell from 870 to 670. Exit 0 both times, with no failures and no error. |
+| Archive handling | 12 delivered, 219 byte-identical and recorded as already held, 169 declined as GPX-only with the named reason. No several-FIT, TCX, empty-archive or unreadable-archive case appeared. |
+| Delivery cleanup | The second pull removed the first pull's archived deliveries. |
+| Drain onto an existing wiki | All 12 originals joined existing pages and became their base, as documented. The page count did not change and no duplicate appeared. `fitdocs check` raised nothing about the 12 pages. |
+| Secrets | The key is absent from the ledger, the settings and the inbox deliveries, and the ledger holds no token. |
+
+**What the run showed:**
+
+- **GPX-only activities can dominate a stretch of history.** They were most of the first batch, so a first pull can deliver very little. This is the designed outcome, each with a named reason, but a user may read a low delivered count as a fault.
+- **Re-basing can correct a page's start, not only its content.** 11 of the 12 pages were renamed, some across a date boundary, because their local start moved by whole hours. The UTC start was identical in both files on the pages decoded, and the shift came from the phone copy's offset differing from the device's own local time. Originals also added fields such as elevation gain. The docs anticipate the shift; nothing in the wiki linked to the old names, but a wiki that does would need those links repaired.
+- **A re-based page moves to the current `doc_version` while the rest of the corpus stays behind until `fitdocs regen`.** This is expected, and reads as a mixed corpus in `fitdocs check`.
+- **`Already held` overstates on a look-back.** The second pull listed 240 and reported 230 held, but the ledger gained 190. `run_pull` counts every final entry in the look-back as held, including ones recorded as skipped.
+- **Pulls took 5.5 to 6 minutes per 200 activities**, against the docs' "about 4 minutes". The 1 s spacing alone accounts for about 3.5 of those minutes. No progress prints in that time; that follow-up is already queued.
+- **TBC-2, in part:** 1 s spacing held over two consecutive pulls of 200 with no rate-limit stop. Waits are not reported, so a short absorbed wait cannot be ruled out, and no wait schedule was exercised. The wellness catch-up half is untested.
+
+**Not covered:**
+
+- Any wellness pull: TBC-1, the wellness half of TBC-2, and a real HRV record (TBC-4).
+- A wrong, expired or deleted key: TBC-3.
+- A real rate limit, and what clears it.
+- `--since`, `pull --sync` and the environment-variable key.
+- Multisport parents and manual activities: neither surfaced as a decline in these 400, which does not show the account has none (TBC-4).
+- The remaining 670 activities.
+
 ## Risks & Mitigations
 - **"Operate" stays unruled**: the docs cite Garmin's wording and claim no permission. Accepted by the maintainer on 2026-11-05.
 - **Sustained pacing unknown**: the backoff handles a limit over a fixed period, a longer one ends the pull cleanly, and the live check measures it.
