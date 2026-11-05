@@ -10,14 +10,18 @@ sync`, or `pull --sync`) picks it up exactly as it would a file you dropped
 there yourself.
 
 This page documents the connector *framework*: the commands, the settings
-keys, the credential rules, and the four connectors fitdocs ships: `folder`,
+keys, the credential rules, and the five connectors fitdocs ships: `folder`,
 which needs no service at all; `intervals`, for an intervals.icu account
 ([its section](#intervalsicu) below); `relay`, for a fitdocs relay
-([its section](#the-relay-connector) below); and `strava`, for a Strava
-account through a relay ([its section](#strava) below). Outside those three sections, the
-framework sections of this page describe no online service and no network
-protocol; the services they mention (intervals.icu, the relay, and Strava)
-are named only to say which connector they belong to.
+([its section](#the-relay-connector) below); `strava`, for a Strava account
+through a relay ([its section](#strava) below); and `garmin`, for a Garmin
+Connect account ([its section](#garmin) below). Outside those four sections,
+the framework sections of this page describe no online service and no network
+protocol; the services they mention (intervals.icu, the relay, Strava and
+Garmin) are named only to say which connector they belong to and, under
+[What leaves your machine](#what-leaves-your-machine) and
+[the terms-first policy](#the-terms-first-policy), where that connector's
+requests go.
 
 ## Configuring an instance
 
@@ -231,8 +235,9 @@ enabled platforms has no platform attribution.
 
 A 403 message may mean intervals.icu is withholding wellness received from
 Garmin. Set `wellness = false` to stop wellness requests while keeping activity
-pulls. Use Garmin's own data export through the [wellness guide](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/wellness.md)
-for Garmin wellness.
+pulls. For Garmin wellness, use the [Garmin](#garmin) connector's `wellness` setting,
+which reads it from Garmin directly, or Garmin's own data export through the
+[wellness guide](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/wellness.md).
 
 Computed fields (`ctl`, `atl`, `rampRate`, `ctlLoad`, `atlLoad` and `sportInfo`)
 are delivered but never imported into the wellness series. The delivered file
@@ -618,6 +623,11 @@ request. `fitdocs publish` without `--yes` and `fitdocs
 publish --targets` make no request, and no other fitdocs command ever makes a
 connector request, configured or not.
 
+A [Garmin](#garmin) instance sends to Garmin only: your key goes to Garmin's
+token call at personal.connectapi.garmin.com and nowhere else, and every other
+request carries the token that call returned. The other requests are all reads; fitdocs
+changes nothing in your Garmin account.
+
 The only other network access anywhere in fitdocs is fetching basemap map
 tiles for an outdoor activity's Map section — see
 [Configuration](configuration.md#tiles-the-map-tile-provider-and-the-offline-opt-out)
@@ -632,13 +642,16 @@ any of those commands to use.
 ## The terms-first policy
 
 fitdocs ships a connector for a given service only when that service's own
-terms of use permit this kind of automated, personal access. The one
-third-party service connector fitdocs ships is the [intervals.icu](#intervalsicu)
-one. The [relay](#the-relay-connector) connector talks to a fitdocs relay (the
+terms of use permit this kind of automated, personal access. The two
+third-party service connectors fitdocs ships are the [intervals.icu](#intervalsicu)
+one and the [Garmin](#garmin) one, which reads Garmin Connect at
+personal.connectapi.garmin.com under a personal key you create and
+[Garmin's own terms](#garmins-terms). The
+[relay](#the-relay-connector) connector talks to a fitdocs relay (the
 maintainer's, or one you or another operator run), not to a third-party
 service's API, and the [Strava](#strava) connector reaches Strava only through
-a relay. The only web addresses of online services this page gives are
-intervals.icu's and the relay's.
+a relay. The only web addresses of online services this page gives are intervals.icu's, the
+relay's, and Garmin's.
 
 ## Regenerating before a first pull
 
@@ -1121,9 +1134,9 @@ use". fitdocs runs on your machine, with your key, to read your own account,
 and the key goes only to Garmin. fitdocs does not claim that Garmin has
 approved this use and cannot tell you how Garmin reads those words, so read the
 terms you are shown before you accept them. The same terms say Garmin may
-throttle or restrict access and may revoke a key. If Garmin refuses a listing or a download, the pull stops, says
-that Garmin refused the request, and does not repeat it; check the key's status
-on Garmin Connect.
+throttle or restrict access and may revoke a key. If Garmin refuses a listing
+or a download, the pull stops, says that Garmin refused the request, and does
+not repeat it; check the key's status on Garmin Connect.
 
 ### What a first pull does
 
@@ -1149,8 +1162,8 @@ needs no `--since`.
 Wellness has no such limit. With `wellness = true`, the first pull covers the
 whole range in one go: from the start of your history, or from `--since`, to
 today. A year of wellness takes about 27 requests across its record types, so
-twelve years is about 330 requests, 6 to 8 minutes. If a wellness request fails, the
-next pull starts that range again.
+twelve years is about 330 requests, 6 to 8 minutes. If a wellness request
+fails, the next pull starts that range again.
 
 ### Wellness from Garmin
 
@@ -1171,9 +1184,9 @@ that already holds pages built from other copies of the same activities (a
 phone app's copy, say), makes the Garmin original the main file of each such
 page. Those pages re-render. Some may move, because the page's name follows its
 base file, and some may change their time, when the other copy's clock was
-shifted by hours. Regions you own are kept, as for any re-render. A wiki whose pages predate
-cross-source identity needs `fitdocs regen` before the first pull, or the Garmin
-file starts a second page instead; see
+shifted by hours. Regions you own are kept, as for any re-render. A wiki whose
+pages predate cross-source identity needs `fitdocs regen` before the first pull,
+or the Garmin file starts a second page instead; see
 [Regenerating before a first pull](#regenerating-before-a-first-pull).
 
 You have two controls:

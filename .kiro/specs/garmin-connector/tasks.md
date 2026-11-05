@@ -138,7 +138,7 @@
   - Done when the section states every point in Requirement 12.1 to 12.8, and the neutral scan passes.
   - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5, 12.6, 12.7, 12.8, 14.4_
 
-- [ ] 6.2 Correct what the connector makes false
+- [x] 6.2 Correct what the connector makes false
   - Update the connectors page's preamble and connector count, "What leaves your machine" and the terms-first policy; the wellness guide's format list, source order and accepted source ids; the configuration guide; the README's connector list; and add the changelog entry with the settings-schema note and the action.
   - The neutral scan covers those sections too, so name Garmin's address there without a scheme, or link to the Garmin section.
   - Do not edit the website guide: a push to `main` deploys it.

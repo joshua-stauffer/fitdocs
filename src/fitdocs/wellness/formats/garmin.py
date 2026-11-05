@@ -1,4 +1,5 @@
-"""Garmin export wellness records, recognized by structure or empty-file name."""
+"""Garmin wellness records: export files, recognized by structure or empty-file name,
+and the ``garmin`` connector's delivery, recognized by its envelope."""
 
 from __future__ import annotations
 

@@ -55,6 +55,28 @@ recorded as one.
   `fitdocs.toml` settings schema (additive): the `strava` connector's
   required `relay` key and optional `upload` key, default `false`. Action:
   none; add the instance table to use it.
+- The `garmin` connector reads a Garmin Connect account directly with a
+  personal API key you create on Garmin Connect: `fitdocs pull` fetches each
+  activity's original `.fit` file, byte for byte as Garmin stored it, at most
+  200 per pull, with `wellness = true` adding Garmin's daily summaries, sleep,
+  heart rate variability and weight to the wellness series under a new source,
+  `garmin-personal`, ranked after `garmin-export` and before `apple-health`.
+  It only reads; your key goes to Garmin's token call and nowhere else. A
+  first `fitdocs sync` after a pull makes the Garmin original the base of
+  each page that holds another copy of the same activity, so those pages
+  re-render and some are renamed; see
+  [what the first sync does](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/connectors.md#what-the-first-sync-does-to-an-existing-wiki)
+  and how to keep your current base. `fitdocs.toml` settings schema
+  (additive): a `[connectors.NAME]` table with `connector = "garmin"` and the
+  optional `wellness` key, default `false`; `[wellness] precedence` accepts the
+  new source id `garmin-personal`. The generated document and ownership
+  contract (contract version and document format version) is unchanged.
+  Action: none, unless you want the connector; add the instance table and run
+  `fitdocs connect NAME` to use it. In a data root that already holds
+  wellness, the first `fitdocs sync` or `fitdocs regen` after upgrading rebuilds
+  the wellness series once, with no other action from you; until then
+  `fitdocs check` reports the series as stale.
+  See [the Garmin connector](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/connectors.md#garmin).
 - `fitdocs connect NAME --no-browser`, for an instance that connects through
   browser consent such as `strava`. `fitdocs connect NAME` prints the relay's
   connect page address and a code, opens the connect page address in your

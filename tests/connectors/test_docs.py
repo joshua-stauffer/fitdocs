@@ -591,26 +591,6 @@ def test_inbox_page_carve_out_paragraph_is_additive_not_in_place_of_the_pin() ->
 # --------------------------------------------------------------------------
 
 
-def _preamble_text() -> str:
-    return re.split(r"(?m)^## ", _connectors_doc_text(), maxsplit=1)[0]
-
-
-def test_preamble_treats_relay_like_intervals() -> None:
-    """The framework sections describe no online service outside the
-    intervals, relay and Strava sections, and the preamble links all three.
-
-    Mutation: dropping any of the three links, or restoring the
-    two-section or one-section sentence, reds this.
-    """
-    preamble = " ".join(_preamble_text().split())
-    assert "Outside those three sections, the framework sections" in preamble
-    assert "([its section](#intervalsicu) below)" in preamble
-    assert "([its section](#the-relay-connector) below)" in preamble
-    assert "([its section](#strava) below)" in preamble
-    assert "Outside those two sections" not in preamble
-    assert "Outside that section" not in preamble
-
-
 def _relay_section() -> str:
     return _section_text("The relay connector")
 

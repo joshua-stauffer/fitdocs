@@ -273,7 +273,7 @@ other sources or change their definitions.
 
 | Key | Meaning | Default |
 |-----|---------|---------|
-| `precedence` | Source identifiers, best first. Omitted sources follow in the built-in order. | `[]` (built-in order: `garmin-export`, then `apple-health`, then `intervals-icu`) |
+| `precedence` | Source identifiers, best first. Omitted sources follow in the built-in order. | `[]` (built-in order: `garmin-export`, then `garmin-personal`, then `apple-health`, then `intervals-icu`) |
 | `metric_precedence` | A table mapping metric identifiers to source lists. An entry replaces the general list for that metric; omitted sources still follow in built-in order. | `{}` (use the general list) |
 
 ```toml
@@ -284,8 +284,8 @@ precedence = ["garmin-export", "apple-health", "intervals-icu"]
 hrv_rmssd_ms = ["intervals-icu", "garmin-export"]
 ```
 
-Only registered source identifiers (`intervals-icu`, `apple-health` and
-`garmin-export`) and the [wellness metric identifiers](wellness.md#metrics) are
+Only registered source identifiers (`intervals-icu`, `apple-health`,
+`garmin-export` and `garmin-personal`) and the [wellness metric identifiers](wellness.md#metrics) are
 accepted.
 A list must contain strings without duplicates. A non-table `[wellness]`, a
 non-table `metric_precedence`, an unknown metric, an unknown source or a
@@ -363,8 +363,8 @@ the one named like the instance), how far back a pull lists (30 days by
 default), and any keys the connector itself takes.
 Credentials never belong in this file. See
 [`docs/connectors.md`](connectors.md) for the full guide — configuring an
-instance, the built-in folder and intervals.icu connectors, connecting, where credentials
-live, pulling, delivery and removal, and what leaves your machine.
+instance, the built-in folder, intervals.icu, relay, Strava and Garmin connectors,
+connecting, where credentials live, pulling, delivery and removal, and what leaves your machine.
 
 ### `[publish]`: templates for `fitdocs publish`
 

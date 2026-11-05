@@ -153,10 +153,13 @@ the safeguards, and the disposition policy's never-delete guarantee.
 
 `fitdocs connect` authenticates once against a configured connector instance,
 and `fitdocs pull` fetches what's new from it straight into the inbox, where
-the existing drain picks it up like any other file. fitdocs ships two
-connectors: `folder`, which needs no service at all, and `intervals`, which
+the existing drain picks it up like any other file. fitdocs ships five
+connectors: `folder`, which needs no service at all; `intervals`, which
 pulls the original `.fit` files of an intervals.icu account with a personal
-API key and also publishes posts to it; both run on the framework —
+API key and also publishes posts to it; `relay`, for a fitdocs relay;
+`strava`, which publishes to Strava through a relay; and `garmin`, which
+pulls the original `.fit` files and daily wellness of a Garmin Connect account
+with a personal API key. All run on the framework —
 credential storage, per-instance ledgers, and the pull report — any future
 connector builds on. See
 [Connectors](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/connectors.md)
