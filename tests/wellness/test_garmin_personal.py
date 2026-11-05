@@ -9,15 +9,22 @@ from typing import Any
 
 import pytest
 
+from fitdocs.wellness import registry
 from fitdocs.wellness.formats import garmin
 from fitdocs.wellness.merge import merge
 from fitdocs.wellness.model import METRICS, DaySnapshot, Metric
 from fitdocs.wellness.probe import CandidateProbe
+from fitdocs.wellness.settings import effective_order, load_wellness_settings
 from fitdocs.wellness.spec import ParsedEntry, Supersession, WellnessFormatError
 from tests.wellness.builders_garmin import (
     PERSONAL_FETCHED_AT,
+    garmin_biometrics_record,
+    garmin_file_bytes,
+    garmin_maxmet_record,
     garmin_personal_bytes,
     garmin_personal_day,
+    garmin_sleep_record,
+    garmin_uds_record,
     hydration_decoy_bytes,
 )
 
@@ -783,3 +790,186 @@ def test_a_good_day_before_a_bad_one_does_not_hide_the_refusal() -> None:
     )
     with pytest.raises(WellnessFormatError):
         parse_bytes(payload)
+
+
+def claimants(path: Path) -> set[str]:
+    """Every registered format whose recognizer claims the file, suffix ignored."""
+    probe = CandidateProbe.open(path)
+    return {form.id for form in registry.FORMATS if form.recognize(probe)}
+
+
+def test_registered_source_and_format() -> None:
+    assert garmin.PERSONAL_SOURCE in registry.SOURCES
+    assert garmin.PERSONAL_FORMAT in registry.FORMATS
+    registry.validate_registry()
+
+
+def test_default_order_puts_the_export_first_and_this_second() -> None:
+    assert registry.default_source_order() == (
+        "garmin-export",
+        "garmin-personal",
+        "apple-health",
+        "intervals-icu",
+    )
+
+
+@pytest.mark.parametrize(
+    "name", ["delivery.json", "UDSFile_2000-01-01_2000-01-02.json", "DELIVERY.JSON"]
+)
+def test_a_delivery_is_claimed_by_exactly_one_format(tmp_path: Path, name: str) -> None:
+    path = tmp_path / name
+    path.write_bytes(garmin_personal_bytes([day_record()]))
+    assert claimants(path) == {"garmin-personal"}
+    assert registry.recognize(CandidateProbe.open(path)) == registry.Recognized(
+        garmin.PERSONAL_FORMAT
+    )
+
+
+EXPORT_FILES = {
+    "uds": garmin_file_bytes([garmin_uds_record(DAY, totalSteps=1234)]),
+    "sleep": garmin_file_bytes([garmin_sleep_record(DAY, deep_s=123)]),
+    "maxmet": garmin_file_bytes(
+        [
+            garmin_maxmet_record(
+                DAY, sport="RUNNING", vo2max=53, updated="2000-01-02T12:00:00Z"
+            )
+        ]
+    ),
+    "biometrics": garmin_file_bytes(
+        [garmin_biometrics_record(DAY, weight_g=73123, measured_at=f"{DAY}T12:00:00Z")]
+    ),
+    "empty": garmin_file_bytes([]),
+    # export record shapes wrapped the way a delivery wraps its days
+    "uds-in-delivery-shape": json.dumps(
+        {"format": "x", "version": 1, "days": [garmin_uds_record(DAY, totalSteps=1)]}
+    ).encode(),
+}
+
+
+@pytest.mark.parametrize("kind", sorted(EXPORT_FILES))
+def test_a_delivery_format_claims_no_export_file(tmp_path: Path, kind: str) -> None:
+    path = tmp_path / "export.json"
+    path.write_bytes(EXPORT_FILES[kind])
+    assert "garmin-personal" not in claimants(path)
+
+
+def test_each_export_sample_is_claimed_by_exactly_its_own_export_format(
+    tmp_path: Path,
+) -> None:
+    for kind in ("uds", "sleep", "maxmet", "biometrics"):
+        path = tmp_path / f"{kind}.json"
+        path.write_bytes(EXPORT_FILES[kind])
+        assert claimants(path) == {f"garmin-{kind}"}
+
+
+def test_the_export_value_stays_canonical_on_overlap_with_both_kept() -> None:
+    export = ParsedEntry(
+        "export",
+        garmin.UDS_FORMAT.id,
+        garmin.SOURCE.id,
+        Supersession.NONE,
+        tuple(
+            garmin.UDS_FORMAT.parse(
+                io.BytesIO(
+                    garmin_file_bytes(
+                        [
+                            garmin_uds_record(
+                                DAY, totalSteps=1111, currentDayRestingHeartRate=61
+                            )
+                        ]
+                    )
+                )
+            )
+        ),
+    )
+    personal = entry("personal", garmin_personal_bytes([day_record()]))
+    order = registry.default_source_order()
+    for entries in ([export, personal], [personal, export]):
+        result = merge(entries, order_for=lambda metric: order)
+        by_key = {(v.metric, v.source): v for v in result.values}
+        for metric, exported, delivered in (
+            (Metric.STEPS, 1111, 7654),
+            (Metric.RESTING_HR_BPM, 61, 51),
+        ):
+            assert by_key[metric, "garmin-export"].value == exported
+            assert by_key[metric, "garmin-export"].canonical is True
+            assert by_key[metric, "garmin-personal"].value == delivered
+            assert by_key[metric, "garmin-personal"].canonical is False
+        # no export value for this metric on that day: the delivery is canonical
+        assert (Metric.HRV_RMSSD_MS, "garmin-export") not in by_key
+        assert by_key[Metric.HRV_RMSSD_MS, "garmin-personal"].canonical is True
+
+
+def test_a_day_only_the_delivery_supplies_is_canonical() -> None:
+    export = ParsedEntry(
+        "export",
+        garmin.UDS_FORMAT.id,
+        garmin.SOURCE.id,
+        Supersession.NONE,
+        tuple(
+            garmin.UDS_FORMAT.parse(
+                io.BytesIO(garmin_file_bytes([garmin_uds_record(DAY, totalSteps=1111)]))
+            )
+        ),
+    )
+    other_day = garmin_personal_day("2000-01-05", hrv={"lastNightAvg": 44})
+    personal = entry("personal", garmin_personal_bytes([other_day]))
+    order = registry.default_source_order()
+    result = merge([export, personal], order_for=lambda metric: order)
+    mine = [v for v in result.values if v.source == "garmin-personal"]
+    assert [(v.day, v.metric, v.value, v.canonical) for v in mine] == [
+        (date(2000, 1, 5), Metric.HRV_RMSSD_MS, 44, True)
+    ]
+    assert [v.canonical for v in result.values if v.source == "garmin-export"] == [True]
+
+
+@pytest.mark.parametrize(
+    ("document", "personal_first"),
+    [
+        (
+            {"wellness": {"precedence": ["garmin-personal"]}},
+            {Metric.STEPS, Metric.RESTING_HR_BPM},
+        ),
+        (
+            {"wellness": {"metric_precedence": {"steps": ["garmin-personal"]}}},
+            {Metric.STEPS},
+        ),
+    ],
+    ids=["precedence", "metric_precedence"],
+)
+def test_a_configured_order_puts_the_delivery_ahead_of_the_export(
+    tmp_path: Path, document: dict[str, object], personal_first: set[Metric]
+) -> None:
+    export = ParsedEntry(
+        "export",
+        garmin.UDS_FORMAT.id,
+        garmin.SOURCE.id,
+        Supersession.NONE,
+        tuple(
+            garmin.UDS_FORMAT.parse(
+                io.BytesIO(
+                    garmin_file_bytes(
+                        [
+                            garmin_uds_record(
+                                DAY, totalSteps=1111, currentDayRestingHeartRate=61
+                            )
+                        ]
+                    )
+                )
+            )
+        ),
+    )
+    personal = entry("personal", garmin_personal_bytes([day_record()]))
+    settings = load_wellness_settings(document, data_root=tmp_path)
+    for entries in ([export, personal], [personal, export]):
+        result = merge(entries, order_for=lambda m: effective_order(settings, m))
+        by_key = {(v.metric, v.source): v for v in result.values}
+        for metric, exported, delivered in (
+            (Metric.STEPS, 1111, 7654),
+            (Metric.RESTING_HR_BPM, 61, 51),
+        ):
+            winner_is_personal = metric in personal_first
+            assert by_key[metric, "garmin-export"].value == exported
+            assert by_key[metric, "garmin-export"].canonical is not winner_is_personal
+            assert by_key[metric, "garmin-personal"].value == delivered
+            assert by_key[metric, "garmin-personal"].canonical is winner_is_personal

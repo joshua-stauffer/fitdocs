@@ -99,7 +99,7 @@ def test_settings_keep_complete_load_value(tmp_path: Path) -> None:
             ),
             flags=FlagSettings(0.81, 7.0, 91, 211, 0.61, 0.31, 6.2),
         ),
-        ("intervals-icu", "garmin-export", "apple-health"),
+        ("intervals-icu", "garmin-export", "garmin-personal", "apple-health"),
     )
 
 
@@ -107,7 +107,8 @@ def test_settings_keep_complete_load_value(tmp_path: Path) -> None:
 def test_settings_defaults(document: Mapping[str, object], tmp_path: Path) -> None:
     assert engine.load_hr_stage_settings(document, data_root=tmp_path) == (
         engine.HrStageSettings(
-            LoadSettings(), ("garmin-export", "apple-health", "intervals-icu")
+            LoadSettings(),
+            ("garmin-export", "garmin-personal", "apple-health", "intervals-icu"),
         )
     )
 
@@ -2060,7 +2061,7 @@ def test_stage_resting_sources_first_use_order(
         tuple(item.key for item in evidence),
         report.resting_sources,
     ) == (
-        ("garmin-export", "intervals-icu", "apple-health"),
+        ("garmin-export", "intervals-icu", "garmin-personal", "apple-health"),
         ("intervals-icu", "garmin-export", "intervals-icu"),
         ("intervals-icu", "garmin-export"),
     )

@@ -37,7 +37,7 @@
   - _Requirements: 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.9, 10.10, 10.11, 14.3_
   - _Boundary: PERSONAL_FORMAT_
 
-- [ ] 2.2 Register the source and format
+- [x] 2.2 Register the source and format
   - Register `garmin-personal` as a device source and the delivery as its format, so that the default order becomes `garmin-export`, `garmin-personal`, `apple-health`, `intervals-icu`.
   - Update the behavior tests that pin the source and format lists and that order; delete any documentation-binding test this turns red.
   - Done when a delivery is recognized by exactly one format, no export recognizer claims it, it claims no export file, `validate_registry` passes, and a test shows the export's value stays canonical on overlap with both source values kept.

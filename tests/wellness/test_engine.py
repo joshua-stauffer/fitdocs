@@ -115,7 +115,12 @@ def test_first_build_and_idempotency(tmp_path: Path) -> None:
         archive.list_archive(tmp_path), DEFAULT
     )
     assert doc["precedence"] == {
-        "default": ["garmin-export", "apple-health", "intervals-icu"],
+        "default": [
+            "garmin-export",
+            "garmin-personal",
+            "apple-health",
+            "intervals-icu",
+        ],
         "metrics": {},
     }
     assert [(e["format"], e["rules_version"], e["state"]) for e in doc["entries"]] == [
@@ -164,7 +169,12 @@ def test_counts_canonical_changes_and_empty_year(tmp_path: Path) -> None:
     assert moved.status is engine.SeriesStatus.REBUILT
     assert counts(moved) == (0, 0, 0, 1, 0)
     assert manifest(tmp_path)["precedence"] == {
-        "default": ["intervals-icu", "garmin-export", "apple-health"],
+        "default": [
+            "intervals-icu",
+            "garmin-export",
+            "garmin-personal",
+            "apple-health",
+        ],
         "metrics": {},
     }
     first.unlink()
@@ -257,7 +267,12 @@ def test_assess_stale(
     ).fresh
     if change == "settings":
         assert manifest(tmp_path)["precedence"]["metrics"] == {
-            "weight_kg": ["intervals-icu", "garmin-export", "apple-health"]
+            "weight_kg": [
+                "intervals-icu",
+                "garmin-export",
+                "garmin-personal",
+                "apple-health",
+            ]
         }
 
 

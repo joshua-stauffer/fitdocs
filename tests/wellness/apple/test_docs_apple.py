@@ -10,7 +10,7 @@ from markdown_it.token import Token
 
 from fitdocs.wellness.formats.apple import ARCHIVED_SUFFIX, FORMAT, FORMAT_ID
 from fitdocs.wellness.formats.apple.reduce import POLICIES, DailyRule, DayRule, Writer
-from fitdocs.wellness.registry import candidate_suffixes, default_source_order
+from fitdocs.wellness.registry import candidate_suffixes
 from tests._changelog_view import V0_1_0, unreleased_since
 from tests.wellness.test_docs_wellness import (
     DAY_RULE,
@@ -253,33 +253,6 @@ def test_inbox_suffixes() -> None:
     section = _visible(_section(_tokens("docs/inbox.md"), "Safeguards"))
     sentence = section.split("currently ", 1)[-1].split("with case-insensitive", 1)[0]
     assert frozenset(re.findall(r"\.[a-z]+", sentence)) == candidate_suffixes()
-
-
-def test_source_order() -> None:
-    table = next(
-        (
-            table
-            for table in _tables(
-                _section(
-                    _tokens("docs/configuration.md"),
-                    "[wellness]: source precedence for wellness",
-                )
-            )
-            if table[0] == ["Key", "Meaning", "Default"]
-        ),
-        [],
-    )
-    default = next((row[2] for row in table[1:] if row[0] == "precedence"), "")
-    assert (
-        tuple(
-            default.partition("built-in order: ")[2].removesuffix(")").split(", then ")
-        )
-        == default_source_order()
-    )
-    assert (
-        "Today that puts garmin-export before apple-health before intervals-icu."
-        in _visible(_section(_tokens("docs/wellness.md"), "Source precedence"))
-    )
 
 
 def test_skill_unrecognized_meaning() -> None:

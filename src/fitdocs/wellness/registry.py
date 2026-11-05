@@ -16,13 +16,19 @@ from fitdocs.wellness.spec import (
     Supersession,
 )
 
-SOURCES: Final[tuple[SourceSpec, ...]] = (intervals.SOURCE, garmin.SOURCE, apple.SOURCE)
+SOURCES: Final[tuple[SourceSpec, ...]] = (
+    intervals.SOURCE,
+    garmin.SOURCE,
+    garmin.PERSONAL_SOURCE,
+    apple.SOURCE,
+)
 FORMATS: Final[tuple[FormatSpec, ...]] = (
     intervals.FORMAT,
     garmin.UDS_FORMAT,
     garmin.SLEEP_FORMAT,
     garmin.MAXMET_FORMAT,
     garmin.BIOMETRICS_FORMAT,
+    garmin.PERSONAL_FORMAT,
     apple.FORMAT,
 )
 
