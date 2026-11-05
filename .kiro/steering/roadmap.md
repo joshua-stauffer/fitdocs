@@ -4756,9 +4756,9 @@ All carried by `garmin-connector`, at landing.
   discovery change.
 - [x] Status lines on the `relay-held-files`, `relay-providers` and
   `wellness-interchange` briefs, in this discovery change.
-- [ ] Maintainer, before the connector ships (not code):
-  - read the body of Garmin's Terms of Use (discovery could not fetch it);
-  - save the terms the key screen shows, with their "Last updated" date.
+- [ ] Maintainer, before the connector ships (not code): read the body of Garmin's
+  Terms of Use (discovery could not fetch it). *(The key screen's terms were
+  confirmed against the public text on 2026-11-05.)*
 
 #### Follow-on candidates (not scheduled)
 

@@ -38,7 +38,7 @@ machine, so nothing needs to sit in between.
 | [Personal API FAQ](https://developer.garmin.com/gc-developer-program/personal/personal-faq/) | Who it is for, the token exchange, key expiry (30, 90, 180 or 365 days; shown once), no refresh tokens, token life of 24 hours or until the key expires |
 | [Personal API Swagger page](https://developer.garmin.com/gc-developer-program/personal/swagger-docs/) | The full OpenAPI 3.0.1 spec, 26 paths, served to anyone with no login. Sleep summaries take up to 31 days, daily summaries up to 1 year; the listing has `sortOrder`, `excludeChildren` (default true) and date filters on local start time |
 | [`garmin/connect-personal-api-python`](https://github.com/garmin/connect-personal-api-python) | Garmin's own Apache-2.0 client: "other projects can reuse its parts independently". Endpoint table, request headers, and "the original activity file as ZIP bytes" |
-| Garmin Connect Personal API Supplemental Terms | Shown when a key is created. The text is in Garmin's public strings file (`connect.garmin.com/web-translations/partner_portal/partner_portal.properties`) |
+| Garmin Connect Personal API Supplemental Terms | Shown when a key is created. The text is in Garmin's public strings file (`connect.garmin.com/web-translations/partner_portal/partner_portal.properties`). The maintainer confirmed on 2026-11-05 that the key screen shows the same text |
 
 ### Measured at discovery (2026-11-05)
 
@@ -61,20 +61,41 @@ spacing, with no 401, 403 or 429 and no limit headers.
   - HRV: 204 with no body on this account, which has no HRV device;
   - weight and single-day SpO2 answer.
 
-### Still unknown (first task, a live check)
+### Measured before requirements (2026-11-05)
 
-The maintainer authorized the discovery check only, so this one needs their go.
-- Whether Garmin accepts fitdocs's composed User-Agent. The check used another.
-- What the token call answers for a deleted or expired key.
-- The stress and body-battery shapes, and the weight unit (the export is in
-  grams).
-- A real HRV body. The spec documents `lastNightAvg`, `weeklyAvg` and more, but
-  this account has none.
-- Whether `vO2MaxValue` on a listing row ever appears. It is in the spec's
-  schema and on no row of this account.
-- Sustained pacing over hundreds of downloads. Third parties report 429 with no
-  `Retry-After` on bursts, and Garmin publishes no numbers.
-- Manual activities and multisport parents. This account has neither.
+A second check, 10 requests at the same spacing, with fitdocs's real User-Agent.
+
+- **User-Agent:** `fitdocs/<version>` is accepted.
+- **A bad key:** the token call answers 401 with an empty body. The real token's
+  `Content-Type` is `text/plain`.
+- **Listing:** `sortOrder=asc` with a date filter returns oldest first.
+- **Daily summaries:** two fetches of a 90-day window were byte-identical, so a
+  content hash is a stable revision. There is no update-timestamp field. Days with
+  no data are simply missing from the list (63 of 90 returned).
+- **Field shapes** (public spec and live):
+  - `heartRate.{restingValue,minValue,maxValue}`;
+  - `movement.steps.value`;
+  - `stress.avgLevel`;
+  - `bodyBattery.{maxValue,minValue}`;
+  - `respiration.avgValue`;
+  - `pulseOx.{avgValue,minValue}`, empty on this account.
+- **Weight:** `latestWeight.weight` is in grams, like the export, with
+  `timestampGMT` in epoch milliseconds.
+- **Sleep:** stage seconds and `averageRespirationValue` are present.
+  `averageSpO2Value` is null on this account.
+
+### Still unknown
+
+- **HRV.** The public spec documents `hrvSummaries[].lastNightAvg`, `weeklyAvg` and
+  more, but this account answers 204, so no real body has been seen. Requirements
+  must not assume the unit or that `lastNightAvg` equals RMSSD without a source.
+- **Expired key.** A bad key is 401. An expired one cannot be tested without
+  deleting the maintainer's only key, because Garmin allows one at a time.
+- **Sustained pacing.** Third parties report 429 with no `Retry-After` on bursts,
+  and Garmin publishes no numbers. The first real pull measures this.
+- **Manual activities and multisport parents.** This account has neither.
+- **`vO2MaxValue`.** It is in the public spec's listing schema and on no row of this
+  account.
 
 ## Desired Outcome
 
@@ -104,15 +125,15 @@ connectors.
      names the remedy. A plain 403 would otherwise read as "report a bug".
    - `LOGIN` is rejected: connectors Req 4.6 forbids storing the value the user
      typed, and a token with minutes left would die mid-pull.
-2. **First pull takes full history, oldest first.**
+2. **First pull takes full history, oldest first** (maintainer's decision,
+   2026-11-05).
    - Spacing goes through the injected `session.sleep`, 2.5 s to start with.
      About 900 files then take about 38 minutes.
    - Each run is capped, and the rest is reported as a `ListingDeferral`,
      because the ledger saves only at the end of an instance and only a
      no-watermark pull resumes by itself.
    - `--since` narrows it. intervals' 30-day default does not fit a route whose
-     point is having no export; the requirements phase confirms this with the
-     maintainer.
+     point is having no export.
 3. **Failure mapping differs from intervals on purpose.**
    - A 5xx on one download stays per-activity, with a stop after several in a
      row. intervals' "5xx ends the instance" would let one bad activity stall
