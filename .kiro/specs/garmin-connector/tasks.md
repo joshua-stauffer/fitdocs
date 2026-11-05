@@ -113,7 +113,7 @@
 
 - [ ] 5. Integration
 
-- [ ] 5.1 Run activities through the real pull engine
+- [x] 5.1 Run activities through the real pull engine
   - Script a Garmin behind the real pull engine, ledger, inbox and drain.
   - Done when tests show: `pull --sync` produces a workout page with the FIT bytes unchanged in the archive and the Garmin attribution present; a second pull fetches nothing; a byte-identical file is recorded as already held; a first pull over the limit exits with success, and later plain pulls reach the end of the history; a `--since` backfill behind a watermark continues only with the same `--since`; a first pull with `--since` lists only from that date.
   - _Requirements: 4.4, 4.5, 4.6, 8.2, 8.3_
