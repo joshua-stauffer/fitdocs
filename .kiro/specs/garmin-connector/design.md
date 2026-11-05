@@ -120,7 +120,7 @@ tests/wellness/test_garmin_personal.py  # the delivery format: recognition, metr
 - `.kiro/steering/tech.md`, `.kiro/steering/structure.md`: the `fitdocs pull` sentence and the connector list.
 - `.kiro/specs/connectors/requirements.md`, `.kiro/specs/wellness-store/requirements.md`: amendment records, taking the next free numbers at landing.
 - `.kiro/steering/roadmap.md`: Phase 15 status.
-- `.kiro/queue/`: a release-time item for `website/content/guides/connectors.md`, and a follow-up for pull progress output.
+- `.kiro/queue/`: a release-time item for `website/content/guides/connectors.md`, `website/content/guides/wellness.md` and `website/content/reference/configuration.md`, and a follow-up for pull progress output.
 
 ## System Flows
 
@@ -310,6 +310,7 @@ Held in `WeakKeyDictionary[HttpClient, _PullState]` on the connector. It is keye
 **Wellness (`list_wellness`, `package_wellness`)**
 - `first = oldest`; when `None`, the oldest activity's date (one request, `sortOrder=asc&limit=1`), or one year before the pull when there is none.
 - `newest = min(first + 1095 days, today_utc + 1 day)`. Returning that as `WellnessListing.newest` makes the framework's coverage advance, so the next pull continues from there less `lookback_days`.
+- **Accepted edge:** `lookback_days` allows values up to 3650. At 1095 or more on a history longer than one slice, each pull starts so far back that its slice never passes the recorded coverage, so wellness stops catching up. The connector cannot see the look-back, because its settings are `None`. The docs state this; the default of 30 is unaffected.
 - Requests inclusive windows of daily (365), sleep (31), HRV (28) and weight (365) over `[first, newest]`. A 3-year slice is about 84 requests.
 - A 204 means no records. Each record's date comes from `calendarDate` or `summaryDate`, and must be a valid `YYYY-MM-DD`.
 - Merges per date into `{"daily": ..., "sleep": ..., "hrv": ..., "weight": ...}`, each verbatim, sections with no record absent. A later record for the same date and section wins.
@@ -448,7 +449,7 @@ All tests run offline with `FakeTransport` and synthesized FIT and ZIP bytes (14
 - `docs/connectors.md`, existing: the preamble's list, "What leaves your machine" gains one sentence, and the terms-first policy names both third-party connectors and the new address.
 - `docs/wellness.md`: the format, the source, the metric list, the order (`garmin-export`, `garmin-personal`, `apple-health`, `intervals-icu`), and the accepted source ids.
 - `docs/configuration.md`, `README.md`, `CHANGELOG.md` (settings schema additive; Action: none unless the athlete wants the connector).
-- The website guide changes at the release cut, because a push to `main` deploys it (queued).
+- The website's three pages that state these facts change at the release cut, because a push to `main` deploys them (queued).
 
 ## To Be Confirmed by the Live Check
 - **TBC-1:** a whole-record revision is stable for sleep and weight, not only daily summaries. If not, exclude the volatile fields.
