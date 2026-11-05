@@ -34,8 +34,9 @@ share, oldest first, and the next pull continues by itself.
 
 The service shapes used here come from Garmin's public Swagger page, its public
 Apache-2.0 client, and two read-only checks with the maintainer's own key on
-2026-11-05 (`brief.md`, "Measured"). Those checks saw no real HRV record, which is
-why HRV is archived but not read.
+2026-11-05 (`brief.md`, "Measured"). Those checks saw no real HRV record. HRV is
+read as RMSSD on the strength of Garmin's FIT SDK, whose matching fields say so, and
+a record in any other form leaves the value absent.
 
 ## Boundary Context
 - **In scope**: the Garmin connector (its declaration, the key check at connect,
@@ -54,8 +55,7 @@ why HRV is archived but not read.
   - Garmin's activity summary JSON as page content;
   - Garmin's China service;
   - a Garmin export-zip importer;
-  - reading HRV or VO2max into the series (the first follow-on, once a real record
-    and a source for what it measures exist).
+  - reading VO2max into the series (no record of it has been seen).
 - **Adjacent expectations**:
   - `connectors` supplies the protocol, the credential store and its environment
     override, the ledger, the transport (fitdocs User-Agent, timeouts, bounded
@@ -113,24 +113,27 @@ why HRV is archived but not read.
 **Objective:** As an athlete with years of history, I want the first pull to proceed in safe steps that resume by themselves, so that I never risk my access by flooding Garmin and never lose progress to one long run.
 
 #### Acceptance Criteria
-1. The Garmin connector shall leave at least 2.5 seconds between the end of one request to Garmin and the start of the next distinct request, not counting the transport's bounded retries of one request.
+1. The Garmin connector shall leave at least 1 second between the end of one request to Garmin and the start of the next distinct request, not counting the transport's bounded retries of one request or the waits of criterion 7.
 2. The Garmin connector shall offer at most 200 activities for fetching in one pull, oldest first, counting only activities not already finally recorded in the instance's ledger.
 3. While more activities remain than the limit allows, the fitdocs CLI shall report one deferred entry stating how many remain and that the next `fitdocs pull` continues, and that a pull started with `--since` continues only when given the same `--since`.
 4. When a pull stops at the limit and nothing failed, the fitdocs CLI shall exit with the success code.
 5. When `fitdocs pull` runs again without `--since` after a first pull stopped at the limit, the Garmin connector shall continue from where that pull stopped, shall fetch nothing already recorded, and shall reach the end of the history in as many pulls as the limit requires.
 6. Where `--since` is given on an instance's first pull, the Garmin connector shall list only activities from that date on, under the same pacing and limit.
+7. If Garmin answers a listing, download or wellness request as rate-limited, the Garmin connector shall wait and repeat that request, waiting the time Garmin states when it states one of at most 5 minutes, and otherwise 30, 60, 120 and then 240 seconds on successive answers, so that a limit over a fixed period has time to clear.
+8. If the same request is still rate-limited after those waits, or Garmin states a wait longer than 5 minutes, or the rate-limit waits in one pull total more than 15 minutes, the fitdocs CLI shall stop waiting and report as Requirements 6 and 11 state.
+9. When a repeated request succeeds, the Garmin connector shall continue at the normal spacing, and shall start again from the shortest wait on the next rate-limited answer.
 
 ### Requirement 5: Downloading the Original File
 **Objective:** As an athlete, I want the file fitdocs delivers to be exactly what my device recorded, so that a page is built from real device data and an upload from another app is named rather than mistaken for one.
 
 #### Acceptance Criteria
 1. When a pull fetches a Garmin activity, the Garmin connector shall download that activity's original file.
-2. When the download is a ZIP archive with exactly one member and that member is a FIT file, the Garmin connector shall hand over that member's bytes unmodified, adding no marker, so that the drain and every later identity decision see exactly the file Garmin stored.
-3. If the one member is a GPX or TCX document, the Garmin connector shall decline the activity with a reason naming the format, so that the fitdocs CLI records it as skipped, delivers nothing and never downloads it again.
-4. If the one member is neither a FIT file nor a GPX or TCX document, the fitdocs CLI shall record the activity as skipped because the original is not a FIT file, and shall deliver nothing.
+2. When the download is a readable ZIP archive holding exactly one FIT file, with or without other members, the Garmin connector shall hand over that FIT file's bytes unmodified, adding no marker, so that the drain and every later identity decision see exactly the file Garmin stored.
+3. If the archive holds several FIT files, the Garmin connector shall decline the activity with a reason stating how many it found, so that the fitdocs CLI records it as skipped, delivers nothing and never downloads it again.
+4. If the archive holds no FIT file, the Garmin connector shall decline the activity with a reason naming GPX or TCX when one is present, and otherwise stating that it holds no FIT file, so that the fitdocs CLI records it as skipped, delivers nothing and never downloads it again.
 5. If Garmin reports that it holds no file for the activity, the Garmin connector shall decline the activity with a reason saying so.
-6. If the download is not a readable ZIP archive, has no member or several members, or its member would exceed the transport's response-size bound, the Garmin connector shall report that activity's fetch as failed, so that it stays unrecorded and the next pull tries it again.
-7. The Garmin connector shall never use a ZIP member's name as a path, and shall write neither the archive nor a member anywhere except through the framework's delivery.
+6. If the download is not a readable ZIP archive, or a FIT member would exceed the transport's response-size bound, the Garmin connector shall report that activity's fetch as failed, so that it stays unrecorded and the next pull tries it again.
+7. The Garmin connector shall identify each member by its content and never by its name, shall never use a member's name as a path, and shall write neither the archive nor a member anywhere except through the framework's delivery.
 
 ### Requirement 6: Failures and Rate Limits
 **Objective:** As an athlete, I want a refused key, a restriction, a rate limit or an outage reported by name with my next step, so that I can act on it and nothing keeps hitting Garmin after it has said no.
@@ -138,7 +141,7 @@ why HRV is archived but not read.
 #### Acceptance Criteria
 1. If Garmin answers the token request during a pull as unauthorized or forbidden, or a listing or download request as unauthorized, the fitdocs CLI shall end that instance's pull, report a rejected key with the step to create a new key and reconnect, and shall not repeat the request.
 2. If Garmin answers a listing or download request as forbidden, the fitdocs CLI shall end that instance's pull and report that Garmin refused the request, that Garmin's terms let it restrict access, and that the key's status can be checked on Garmin Connect; the report shall not tell the athlete to report a fitdocs bug.
-3. If a listing or download request is still rate-limited after the transport's bounded retries, the fitdocs CLI shall end that instance's pull, stating that Garmin is limiting requests and that the next pull resumes where this one stopped.
+3. If a listing or download request is still rate-limited after the waits of Requirement 4, or the token request during a pull is answered as rate-limited, the fitdocs CLI shall end that instance's pull, stating that Garmin is limiting requests and that the next pull resumes where this one stopped.
 4. If a listing request still meets a server error after the transport's bounded retries, the fitdocs CLI shall end that instance's pull, stating that Garmin is unavailable and that the next pull resumes where this one stopped.
 5. If a download request still meets a server error after the transport's bounded retries, the Garmin connector shall report that activity's fetch as failed, naming the status, and shall continue with the instance's remaining activities.
 6. If five consecutive downloads in one pull meet a server error, the fitdocs CLI shall end that instance's pull, stating that Garmin appears unavailable and that the next pull resumes where this one stopped.
@@ -182,11 +185,11 @@ why HRV is archived but not read.
 
 #### Acceptance Criteria
 1. The wellness inbox shall recognize the delivery as a format of its own under a source of its own, distinct from the Garmin export format and its source.
-2. When the fitdocs CLI reads a delivery, it shall take resting, minimum and maximum heart rate, steps, average stress level, the highest and lowest body battery, and average SpO2 from the day's daily summary, and respiration from the day's sleep summary.
+2. When the fitdocs CLI reads a delivery, it shall take resting, minimum and maximum heart rate, steps, average stress level, the highest and lowest body battery, and average SpO2 from the day's daily summary, respiration from the day's sleep summary, and the last-night HRV average, read as RMSSD, from the day's HRV summary.
 3. When the fitdocs CLI reads a day's sleep summary, it shall derive total sleep and the deep, light, REM and awake stages the same way it does for the Garmin export, and shall read no sleep metric when the stage total is not positive.
 4. When the fitdocs CLI reads a day's weight records, it shall take the day's latest weight, converted from grams to kilograms.
 5. If a value is missing, null or outside the metric's accepted range, the fitdocs CLI shall leave that metric absent for that day, never zero or a default.
-6. The fitdocs CLI shall not read HRV or VO2max from a delivery, and shall keep HRV records in the archived delivery, so that a later version can read them with no new pull.
+6. The fitdocs CLI shall not read VO2max from a delivery, and shall keep each day's records whole in the archived delivery, so that a later version can read more of them with no new pull.
 7. The fitdocs CLI shall never read Garmin's hydration figures as the subjective hydration rating.
 8. Where the Garmin export and this source both supply a day's metric, the fitdocs CLI shall keep both source values and shall leave the export's value canonical, so that existing canonical values do not change.
 9. When a day is delivered again, the fitdocs CLI shall let the later delivery's values replace the earlier delivery's values from this source.
@@ -202,7 +205,7 @@ why HRV is archived but not read.
 2. If an instance's activity pull ended for any other reason, the fitdocs CLI shall still run that instance's wellness pull.
 3. If Garmin answers a wellness request as unauthorized, the fitdocs CLI shall end the instance's pull and report a rejected key with the step to create a new key and reconnect, and shall not repeat the request.
 4. If Garmin answers a wellness request as forbidden, the fitdocs CLI shall end the wellness pull and report that Garmin refused the request, that Garmin's terms let it restrict access, and that setting `wellness = false` stops the request.
-5. If a wellness request is still rate-limited, or still meets a server error, after the transport's bounded retries, or is answered with any other status that is not success, the fitdocs CLI shall end the wellness pull, stating which and that the next pull resumes where this one stopped.
+5. If a wellness request is still rate-limited after the waits of Requirement 4, still meets a server error after the transport's bounded retries, or is answered with any other status that is not success, the fitdocs CLI shall end the wellness pull, stating which and that the next pull resumes where this one stopped.
 6. If a wellness pull ends early, the fitdocs CLI shall keep every wellness delivery already made and recorded, deliver no day from the incomplete window, and leave the wellness mark where it was.
 
 ### Requirement 12: Documentation and the Terms
@@ -215,7 +218,7 @@ why HRV is archived but not read.
 4. The fitdocs documentation shall state that fitdocs is not affiliated with or endorsed by Garmin, shall use the name Garmin only descriptively, shall show no Garmin logo, and shall claim no permission from Garmin.
 5. The fitdocs documentation shall state what a first pull does: full history oldest first, about how long each step takes, the per-pull limit and how it resumes, and how `--since` narrows it.
 6. The fitdocs documentation shall state that on an existing wiki the first `sync` after a pull makes a Garmin original the main file of pages built from other copies, so that those pages re-render, some may move or change time, and regions the athlete owns are kept; it shall name `pull` without `--sync` as the way to hold files back and `[identity] precedence` as the way to keep an existing base.
-7. The fitdocs documentation shall state what the connector does not do: uploads from other apps are skipped as GPX or TCX, women's health, courses and training are not pulled, HRV and VO2max are not read yet, and accounts on Garmin's China service are not supported.
+7. The fitdocs documentation shall state what the connector does not do: uploads from other apps are skipped as GPX or TCX, an archive holding several FIT files is skipped by name, women's health, courses and training are not pulled, VO2max is not read, and accounts on Garmin's China service are not supported.
 8. The fitdocs documentation shall state that an athlete moving from intervals.icu can stop fetching Garmin's copies there through that connector's `sources` setting.
 9. The fitdocs documentation shall correct every statement this connector makes false, including the terms-first policy's list of connectors, the list of built-in connectors and the wellness source order, and shall add a changelog entry with the settings-schema note and the action an athlete takes.
 
@@ -224,7 +227,7 @@ why HRV is archived but not read.
 
 #### Acceptance Criteria
 1. The Maintainer shall run the connector end to end against the maintainer's own Garmin account, into a scratch data root and never the real wiki: connect, one pull up to the per-pull limit, the drain, and a wellness pull.
-2. The Maintainer shall record whether that run met any rate limit, how long it took, what a deleted or wrong key reports, and whether any activity fell outside the shapes the design assumes.
+2. The Maintainer shall record whether that run met any rate limit and what wait cleared it, how long it took, what a deleted or wrong key reports, and whether any activity fell outside the shapes the design assumes.
 3. The Maintainer shall record the findings in the spec's research record as shapes and vocabulary only, never an activity identifier, account identifier, date, name, location, file or key.
 4. If a finding contradicts an assumption the design marks as to be confirmed, the Specification Process shall amend the design and every affected task before the spec is marked complete.
 5. The Specification Process shall treat the live check as the maintainer's own task: no automated agent performs it, records it or marks it done unless the maintainer explicitly asks a session to run it with the maintainer's key, no subagent is given the key, and no other implementation task waits for it except the final completion gate.

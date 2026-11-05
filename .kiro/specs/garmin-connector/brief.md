@@ -38,6 +38,7 @@ machine, so nothing needs to sit in between.
 | [Personal API FAQ](https://developer.garmin.com/gc-developer-program/personal/personal-faq/) | Who it is for, the token exchange, key expiry (30, 90, 180 or 365 days; shown once), no refresh tokens, token life of 24 hours or until the key expires |
 | [Personal API Swagger page](https://developer.garmin.com/gc-developer-program/personal/swagger-docs/) | The full OpenAPI 3.0.1 spec, 26 paths, served to anyone with no login. Sleep summaries take up to 31 days, daily summaries up to 1 year; the listing has `sortOrder`, `excludeChildren` (default true) and date filters on local start time |
 | [`garmin/connect-personal-api-python`](https://github.com/garmin/connect-personal-api-python) | Garmin's own Apache-2.0 client: "other projects can reuse its parts independently". Endpoint table, request headers, and "the original activity file as ZIP bytes" |
+| [FIT SDK, `HrvStatusSummaryMesg`](https://github.com/garmin/fit-csharp-sdk/blob/main/Dynastream/Fit/Profile/Mesgs/HrvStatusSummaryMesg.cs) | Garmin's own field comments: "Last night RMSSD average over sleep", "7 day RMSSD average over sleep", "5 minute high RMSSD value over sleep". The field names match the API's `lastNightAvg`, `weeklyAvg` and `lastNight5MinHigh`; that they are the same numbers is an inference from the match |
 | Garmin Connect Personal API Supplemental Terms | Shown when a key is created. The text is in Garmin's public strings file (`connect.garmin.com/web-translations/partner_portal/partner_portal.properties`). The maintainer confirmed on 2026-11-05 that the key screen shows the same text |
 
 ### Measured at discovery (2026-11-05)
@@ -87,12 +88,14 @@ A second check, 10 requests at the same spacing, with fitdocs's real User-Agent.
 ### Still unknown
 
 - **HRV.** The public spec documents `hrvSummaries[].lastNightAvg`, `weeklyAvg` and
-  more, but this account answers 204, so no real body has been seen. Requirements
-  must not assume the unit or that `lastNightAvg` equals RMSSD without a source.
+  more, but this account answers 204, so no real body has been seen. It is read as
+  RMSSD on the FIT SDK's wording, and a record in any other form leaves it absent.
 - **Expired key.** A bad key is 401. An expired one cannot be tested without
   deleting the maintainer's only key, because Garmin allows one at a time.
 - **Sustained pacing.** Third parties report 429 with no `Retry-After` on bursts,
-  and Garmin publishes no numbers. The first real pull measures this.
+  and Garmin publishes no numbers. The maintainer's expectation is that bursts are
+  supported, and that sustained traffic above about one request a second meets a
+  limit over a fixed period. The first real pull measures this.
 - **Manual activities and multisport parents.** This account has neither.
 - **`vO2MaxValue`.** It is in the public spec's listing schema and on no row of this
   account.
@@ -127,8 +130,13 @@ connectors.
      typed, and a token with minutes left would die mid-pull.
 2. **First pull takes full history, oldest first** (maintainer's decision,
    2026-11-05).
-   - Spacing goes through the injected `session.sleep`, 2.5 s to start with.
-     About 900 files then take about 38 minutes.
+   - Spacing goes through the injected `session.sleep`: 1 s between requests
+     (maintainer's decision, 2026-11-05). About 900 files then take about 15 to 20
+     minutes, and each capped run about 4.
+   - A 429 waits long enough for a limit over a fixed period to clear: any stated
+     wait up to 5 minutes, otherwise 30, 60, 120 and 240 seconds, with at most 15
+     minutes of such waits per pull. The transport's 2 s and 4 s retries would only
+     use up attempts inside the same period.
    - Each run is capped, and the rest is reported as a `ListingDeferral`,
      because the ledger saves only at the end of an instance and only a
      no-watermark pull resumes by itself.
@@ -138,11 +146,16 @@ connectors.
    - A 5xx on one download stays per-activity, with a stop after several in a
      row. intervals' "5xx ends the instance" would let one bad activity stall
      everything newer, oldest first.
-   - A 429 raises `AuthFailure(RATE_LIMITED)`, which also stops wellness.
-   - A 200 that is not a ZIP raises, because a recorded skip would be permanent.
-   - A `.gpx` member is `Declined`. Zero or several members is a failure.
-   - The ZIP is bounded by member size and read limit + 1. Member names are
-     never used as paths.
+   - A 429 that outlasts the waits raises `AuthFailure(RATE_LIMITED)`, which also
+     stops wellness.
+   - A 200 that is not a readable ZIP raises, because a recorded skip would be
+     permanent.
+   - Exactly one FIT member is delivered, whatever else the ZIP holds. Several FIT
+     members, or none (a `.gpx`, say), are `Declined` with what was found. A failure
+     there would fail the exit code, re-download and hold the watermark on every
+     pull, for a case nobody has seen.
+   - The ZIP is bounded by member size and read limit + 1. Members are identified by
+     content, and their names are never used as paths.
 4. **Wellness is a new source and format, not `garmin-export`.**
    - Reusing `garmin-export` lets the API's revisions silently beat the export's
      unrevised values. Use a new DEVICE source, one enveloped format, origin
@@ -154,10 +167,9 @@ connectors.
      and a decade is about 150 requests.
    - Metrics:
      - filled: resting, min and max HR, steps, sleep total and stages,
-       respiration, SpO2;
-     - filled once verified: stress, body battery, weight, HRV;
-     - left absent: any metric with no value, and VO2max unless the live check
-       sees it.
+       respiration, SpO2, stress, body battery, weight, and HRV as RMSSD;
+     - left absent: any metric with no value, and VO2max, which no record has
+       shown.
    - Never map Garmin's `hydration` to `HYDRATION_RATING`, which is a 1-4
      subjective scale.
 5. **Adoption on a real wiki uses the existing rules.** A Garmin original wins

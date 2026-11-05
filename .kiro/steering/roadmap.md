@@ -4667,7 +4667,14 @@ over:
   Phase 14's extension. A Personal connector asks more of the user (create a key
   and renew it within a year), and in return no relay holds anyone's health data.
 - **Activities and daily wellness** (maintainer), as on 2026-11-03. Women's
-  health, courses and training stay out.
+  health, courses and training stay out. HRV is read as RMSSD, on the wording of
+  Garmin's FIT SDK for the matching fields.
+- **Full history on a first pull** (maintainer), oldest first, capped per run and
+  resuming by itself.
+- **One second between requests, with long backoff on 429** (maintainer). Bursts are
+  expected to be fine, and sustained traffic above about one request a second to
+  meet a limit over a fixed period. Garmin publishes no numbers, so the first real
+  pull tests this.
 - **The maintainer accepts the open question on the terms' wording**, 2026-11-05:
   Garmin has not ruled on whether "tools that you develop or operate for your own
   use" covers third-party open-source software. Its own CLI suggests it does, and
