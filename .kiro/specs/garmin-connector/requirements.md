@@ -136,7 +136,7 @@ why HRV is archived but not read.
 **Objective:** As an athlete, I want a refused key, a restriction, a rate limit or an outage reported by name with my next step, so that I can act on it and nothing keeps hitting Garmin after it has said no.
 
 #### Acceptance Criteria
-1. If Garmin answers a token, listing or download request during a pull as unauthorized, the fitdocs CLI shall end that instance's pull, report a rejected key with the step to create a new key and reconnect, and shall not repeat the request.
+1. If Garmin answers the token request during a pull as unauthorized or forbidden, or a listing or download request as unauthorized, the fitdocs CLI shall end that instance's pull, report a rejected key with the step to create a new key and reconnect, and shall not repeat the request.
 2. If Garmin answers a listing or download request as forbidden, the fitdocs CLI shall end that instance's pull and report that Garmin refused the request, that Garmin's terms let it restrict access, and that the key's status can be checked on Garmin Connect; the report shall not tell the athlete to report a fitdocs bug.
 3. If a listing or download request is still rate-limited after the transport's bounded retries, the fitdocs CLI shall end that instance's pull, stating that Garmin is limiting requests and that the next pull resumes where this one stopped.
 4. If a listing request still meets a server error after the transport's bounded retries, the fitdocs CLI shall end that instance's pull, stating that Garmin is unavailable and that the next pull resumes where this one stopped.
