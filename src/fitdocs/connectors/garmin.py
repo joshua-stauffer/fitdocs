@@ -10,10 +10,10 @@ of its own, and reads no clock.
 Task 3.1 declares the connector and implements the key check. Task 3.2 adds
 the per-pull state (one token, spacing, rate-limit waits) and the one helper
 every Garmin GET goes through. Task 3.3 adds the activity listing, task 3.4 the
-per-pull limit and task 4.1 the wellness listing. The other two pull operations
-are placeholders that raise a named
-:class:`ConnectorError` and make no request, because the registry requires
-them once the capabilities are declared; later tasks replace them.
+per-pull limit, task 4.1 the wellness listing and task 4.2 the wellness
+package. The one other pull operation (``fetch_activity``) is a placeholder
+that raises a named :class:`ConnectorError` and makes no request, because the
+registry requires it once the capabilities are declared; task 3.5 replaces it.
 """
 
 from __future__ import annotations
@@ -132,6 +132,16 @@ DEFERRED_MESSAGE: Final[str] = (
     "{count} more {noun} left for a later pull: the next `fitdocs pull` "
     "continues there, and a pull started with `--since` continues only "
     "with the same `--since`"
+)
+WELLNESS_SUFFIX: Final[str] = ".json"
+WELLNESS_FORMAT: Final[str] = "garmin-personal"
+WELLNESS_ORIGIN: Final[str] = "garmin"
+WELLNESS_FORMAT_NAME: Final[str] = "fitdocs.garmin-personal-wellness"
+WELLNESS_REPEAT_MESSAGE: Final[str] = (
+    "the Garmin wellness package was given {day} more than once"
+)
+WELLNESS_RECORD_MESSAGE: Final[str] = (
+    "the Garmin wellness package record for {day} is not an object"
 )
 NOT_BUILT_MESSAGE: Final[str] = (
     "the Garmin connector does not implement {operation} yet"
@@ -514,6 +524,33 @@ def _content_revision(record: Mapping[str, object]) -> str:
     )
 
 
+def _stamp(moment: datetime) -> str:
+    """``YYYY-MM-DDTHH:MM:SS.ffffffZ`` in UTC, six fraction digits always."""
+    return moment.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+
+def _envelope_bytes(days: tuple[WellnessDay, ...], moment: datetime) -> bytes:
+    """The canonical delivery envelope: sorted keys, compact separators."""
+    stamp = _stamp(moment)
+    entries: list[dict[str, object]] = []
+    previous: date | None = None
+    for day in sorted(days, key=lambda item: item.day):
+        if day.day == previous:
+            raise ConnectorError(
+                WELLNESS_REPEAT_MESSAGE.format(day=day.day.isoformat())
+            )
+        previous = day.day
+        if not isinstance(day.record, dict):
+            raise ConnectorError(
+                WELLNESS_RECORD_MESSAGE.format(day=day.day.isoformat())
+            )
+        entries.append({**day.record, "date": day.day.isoformat(), "fetched_at": stamp})
+    envelope = {"format": WELLNESS_FORMAT_NAME, "version": 1, "days": entries}
+    return json.dumps(
+        envelope, sort_keys=True, separators=(",", ":"), allow_nan=False
+    ).encode("utf-8")
+
+
 def _year_before(day: date) -> date:
     try:
         return day.replace(year=day.year - 1)
@@ -808,4 +845,16 @@ class GarminConnector:
     def package_wellness(
         self, session: ConnectorSession, days: tuple[WellnessDay, ...]
     ) -> WellnessPackage:
-        raise _not_built("wellness packaging")
+        """The delivery envelope for ``days`` (Req 9.8); makes no request.
+
+        Days are sorted by date. The framework gives each date once, so a
+        repeated date is refused with a named error rather than one copy
+        being picked. Each day is stamped with the injected clock's instant
+        in UTC, in the fixed-width form the reader requires, so string order is
+        time order."""
+        return WellnessPackage(
+            _envelope_bytes(days, session.now()),
+            WELLNESS_SUFFIX,
+            WELLNESS_FORMAT,
+            frozenset({WELLNESS_ORIGIN}),
+        )

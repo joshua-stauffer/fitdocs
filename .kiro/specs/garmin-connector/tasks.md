@@ -99,7 +99,7 @@
   - Done when tests show each window bound, the three start cases, a multi-year range covered by one listing, the 204 case, a date merged across sections, a changed section changing the revision, and a repeated listing keeping the same revision.
   - _Requirements: 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.9_
 
-- [ ] 4.2 Package wellness days
+- [x] 4.2 Package wellness days
   - Produce the delivery envelope with days sorted and none repeated, each stamped with its fetch time from the injected clock, in one canonical serialization, declaring the format `garmin-personal` and the origin `garmin`. Make no request.
   - Done when a test shows the packaged bytes are claimed by the reader from 2.1 and yield the expected values, and that the framework's package check accepts them.
   - _Requirements: 9.8_

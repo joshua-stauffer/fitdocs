@@ -1,4 +1,4 @@
-"""The Garmin wellness listing (garmin-connector task 4.1; Req 9.2-9.7, 9.9).
+"""The Garmin wellness listing and package (garmin-connector tasks 4.1, 4.2).
 
 Everything runs against a routing transport: no network, a synthetic key, a
 synthetic token. Each answer is built for the route it is sent to, so a test
@@ -8,6 +8,7 @@ sees exactly which windows were requested and in what order.
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import math
 import re
@@ -15,10 +16,12 @@ import tempfile
 from collections.abc import Callable, Mapping
 from datetime import UTC, date, datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
+from fitdocs.connectors.delivery import wellness_package_problem
 from fitdocs.connectors.errors import AuthFailure, ConnectorError
 from fitdocs.connectors.garmin import GarminConnector
 from fitdocs.connectors.http import (
@@ -33,8 +36,13 @@ from fitdocs.connectors.protocol import (
     CredentialAccess,
     WellnessDay,
     WellnessListing,
+    WellnessPackage,
 )
 from fitdocs.connectors.secrets import Redactor, Secret
+from fitdocs.wellness import registry as wellness_registry
+from fitdocs.wellness.formats.garmin import PERSONAL_FORMAT
+from fitdocs.wellness.model import Metric
+from fitdocs.wellness.probe import CandidateProbe
 
 _KEY = "gk-synthetic-4Vq8Zt"
 _TOKEN = (
@@ -1010,3 +1018,263 @@ def test_a_transport_failure_on_the_activity_probe_is_named() -> None:
     _, error = _fails({"probe": TransportError(f"down {_MARKER}")}, oldest=None)
     assert "for the oldest activity request" in str(error)
     assert _MARKER not in str(error)
+
+
+# --------------------------------------------------------------------------
+# Packaging (task 4.2; Req 9.8)
+# --------------------------------------------------------------------------
+
+_ENVELOPE_FORMAT = "fitdocs.garmin-personal-wellness"
+_FETCHED = re.compile(
+    r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{6}Z"
+)
+
+
+def _real_answers() -> dict[str, Answer]:
+    return {
+        "daily": _body(
+            "daily",
+            [
+                _rec(
+                    "daily",
+                    "2026-11-03",
+                    heartRate={"restingValue": 52, "minValue": 44, "maxValue": 131},
+                    movement={"steps": {"value": 9871}},
+                )
+            ],
+        ),
+        "sleep": _body(
+            "sleep",
+            [_rec("sleep", "2026-11-03", deepSleepSeconds=5400, remSleepSeconds=5100)],
+        ),
+        "hrv": _body("hrv", [_rec("hrv", "2026-11-03", lastNightAvg=47)]),
+        "weight": _body(
+            "weight",
+            [_rec("weight", "2026-11-03", latestWeight={"weight": 71234.5})],
+        ),
+    }
+
+
+def _day_of(day: str, **record: object) -> WellnessDay:
+    return WellnessDay(day=_d(day), revision="sha256:x", record=dict(record))
+
+
+def _package(
+    days: tuple[WellnessDay, ...], *, now: datetime = _NOW
+) -> tuple[_Rig, WellnessPackage]:
+    rig = _Rig(now=now)
+    return rig, GarminConnector().package_wellness(rig.session, days)
+
+
+def _envelope(package: WellnessPackage) -> dict[str, Any]:
+    loaded = json.loads(package.data.decode("utf-8"))
+    assert isinstance(loaded, dict)
+    return loaded
+
+
+def test_a_listed_day_is_packaged_claimed_by_one_format_and_read_back(
+    tmp_path: Path,
+) -> None:
+    _, listing = _list(_real_answers())
+    rig = _Rig(now=_NOW)
+    package = GarminConnector().package_wellness(rig.session, listing.days)
+    path = tmp_path / "wellness-2026-11-03_2026-11-03.json"
+    path.write_bytes(package.data)
+    probe = CandidateProbe.open(path)
+    assert {f.id for f in wellness_registry.FORMATS if f.recognize(probe)} == {
+        "garmin-personal"
+    }
+    assert wellness_registry.recognize(probe) == wellness_registry.Recognized(
+        PERSONAL_FORMAT
+    )
+    (snapshot,) = tuple(PERSONAL_FORMAT.parse(io.BytesIO(package.data)))
+    assert snapshot.day == _d("2026-11-03")
+    values = snapshot.values
+    assert values[Metric.RESTING_HR_BPM] == 52
+    assert values[Metric.MIN_HR_BPM] == 44
+    assert values[Metric.MAX_HR_BPM] == 131
+    assert values[Metric.STEPS] == 9871
+    assert values[Metric.HRV_RMSSD_MS] == 47
+    assert values[Metric.WEIGHT_KG] == pytest.approx(71.2345)
+    assert values[Metric.SLEEP_S] == 10500
+    assert set(snapshot.origins.values()) == {"garmin"}
+    assert set(snapshot.origins) == set(values)
+    # 23:30 at UTC-8 on 5 November is 07:30 on 6 November in UTC.
+    assert snapshot.revision == "2026-11-06T07:30:00.000000Z"
+
+
+def test_the_framework_package_check_accepts_the_real_bytes() -> None:
+    _, listing = _list(_real_answers())
+    rig = _Rig()
+    package = GarminConnector().package_wellness(rig.session, listing.days)
+    assert (package.suffix, package.format) == (".json", "garmin-personal")
+    assert package.origins == frozenset({"garmin"})
+    assert (
+        wellness_package_problem(
+            package.data, package.suffix, package.format, package.origins
+        )
+        is None
+    )
+    # The check is live: a wrong format id or origin is a named problem.
+    assert wellness_package_problem(
+        package.data, package.suffix, "Garmin_Personal", package.origins
+    )
+    assert wellness_package_problem(
+        package.data, package.suffix, package.format, frozenset({"Garmin"})
+    )
+
+
+def test_the_envelope_names_its_format_and_version_and_nothing_else() -> None:
+    _, package = _package((_day_of("2026-11-03", daily={"a": 1}),))
+    envelope = _envelope(package)
+    assert set(envelope) == {"format", "version", "days"}
+    assert envelope["format"] == _ENVELOPE_FORMAT
+    assert envelope["version"] == 1 and type(envelope["version"]) is int
+
+
+def test_days_are_sorted_by_date_whatever_order_they_arrive_in() -> None:
+    days = tuple(
+        _day_of(day, daily={"n": index})
+        for index, day in enumerate(["2026-11-03", "2025-12-31", "2026-01-05"])
+    )
+    _, package = _package(days)
+    assert [d["date"] for d in _envelope(package)["days"]] == [
+        "2025-12-31",
+        "2026-01-05",
+        "2026-11-03",
+    ]
+    _, reversed_package = _package(tuple(reversed(days)))
+    assert reversed_package.data == package.data
+
+
+# A record's revision hashes its content, so a real repeat with other content
+# has another revision.
+@pytest.mark.parametrize("revision", ["sha256:x", "sha256:y"])
+def test_a_repeated_date_is_refused_by_name_and_makes_no_request(
+    revision: str,
+) -> None:
+    rig = _Rig()
+    days = (
+        _day_of("2026-11-03", daily={"n": 1}),
+        _day_of("2026-11-04", daily={"n": 2}),
+        WellnessDay(
+            day=_d("2026-11-03"), revision=revision, record={"daily": {"n": 3}}
+        ),
+    )
+    with pytest.raises(ConnectorError, match="2026-11-03") as excinfo:
+        GarminConnector().package_wellness(rig.session, days)
+    assert not isinstance(excinfo.value, AuthFailure)
+    assert rig.requests == []
+
+
+def test_each_day_is_stamped_with_the_clocks_utc_instant_with_six_digits() -> None:
+    cases = [
+        # microsecond 0 at a non-UTC offset: a plain isoformat() would drop
+        # the fraction and keep the offset.
+        (datetime(2026, 11, 5, 23, 30, 0, tzinfo=_WEST), "2026-11-06T07:30:00.000000Z"),
+        (datetime(2026, 11, 5, 12, 0, 0, 7, tzinfo=UTC), "2026-11-05T12:00:00.000007Z"),
+        (
+            datetime(
+                2026, 1, 1, 0, 0, 0, 123450, tzinfo=timezone(timedelta(hours=5.5))
+            ),
+            "2025-12-31T18:30:00.123450Z",
+        ),
+    ]
+    days = (_day_of("2026-11-03", daily={}), _day_of("2026-11-04", daily={}))
+    for now, expected in cases:
+        _, package = _package(days, now=now)
+        stamps = [d["fetched_at"] for d in _envelope(package)["days"]]
+        assert stamps == [expected, expected]
+        assert _FETCHED.fullmatch(stamps[0])
+
+
+def test_a_later_clock_gives_a_later_stamp_down_to_the_microsecond() -> None:
+    base = datetime(2026, 11, 5, 12, 0, 0, tzinfo=UTC)
+    instants = [
+        base,
+        base + timedelta(microseconds=1),
+        base + timedelta(microseconds=999999),
+        base + timedelta(seconds=1),
+        base + timedelta(days=400),
+    ]
+    stamps = []
+    for now in instants:
+        _, package = _package((_day_of("2026-11-03", daily={}),), now=now)
+        stamps.append(_envelope(package)["days"][0]["fetched_at"])
+    assert stamps == sorted(stamps)
+    assert len(set(stamps)) == len(stamps)
+
+
+def test_sections_are_verbatim_and_an_absent_section_is_absent() -> None:
+    record: dict[str, object] = {
+        "sleep": {"deepSleepSeconds": 5400, "nested": {"note": "naïve — ✓"}},
+        "weight": {"latestWeight": {"weight": 71234.5}},
+    }
+    _, package = _package((_day_of("2026-11-03", **record),))
+    (day,) = _envelope(package)["days"]
+    assert set(day) == {"date", "fetched_at", "sleep", "weight"}
+    assert day["sleep"] == record["sleep"] and day["weight"] == record["weight"]
+
+
+def test_a_section_field_named_date_stays_nested_and_cannot_override() -> None:
+    record: dict[str, object] = {
+        "daily": {"date": "1999-01-01", "fetched_at": "x"},
+        "date": "1999-01-01",
+        "fetched_at": "1999-01-01T00:00:00.000000Z",
+    }
+    _, package = _package((_day_of("2026-11-03", **record),))
+    (day,) = _envelope(package)["days"]
+    assert day["date"] == "2026-11-03"
+    assert day["fetched_at"] == "2026-11-06T07:30:00.000000Z"
+    assert day["daily"] == {"date": "1999-01-01", "fetched_at": "x"}
+
+
+def test_the_serialization_is_canonical_utf8_and_repeatable() -> None:
+    first = _day_of("2026-11-03", weight={"z": 1, "a": 2}, daily={"b": "é", "a": [1]})
+    second = _day_of("2026-11-03", daily={"a": [1], "b": "é"}, weight={"a": 2, "z": 1})
+    _, one = _package((first,))
+    _, two = _package((second,))
+    assert one.data == two.data
+    assert one.data == (
+        b'{"days":[{"daily":{"a":[1],"b":"\\u00e9"},"date":"2026-11-03",'
+        b'"fetched_at":"2026-11-06T07:30:00.000000Z","weight":{"a":2,"z":1}}],'
+        b'"format":"fitdocs.garmin-personal-wellness","version":1}'
+    )
+    one.data.decode("utf-8")
+
+
+def test_a_lone_surrogate_in_a_value_still_packages_to_valid_utf8() -> None:
+    _, package = _package((_day_of("2026-11-03", daily={"note": "\ud800"}),))
+    assert _envelope(package)["days"][0]["daily"] == {"note": "\ud800"}
+
+
+def test_a_record_that_is_not_an_object_is_refused_by_name() -> None:
+    rig = _Rig()
+    bad = WellnessDay(day=_d("2026-11-03"), revision="r", record=["x"])
+    with pytest.raises(ConnectorError, match="2026-11-03"):
+        GarminConnector().package_wellness(rig.session, (bad,))
+    assert rig.requests == []
+
+
+def test_no_days_is_a_valid_empty_envelope_the_check_and_reader_accept() -> None:
+    rig, package = _package(())
+    assert _envelope(package) == {
+        "format": _ENVELOPE_FORMAT,
+        "version": 1,
+        "days": [],
+    }
+    assert (
+        wellness_package_problem(
+            package.data, package.suffix, package.format, package.origins
+        )
+        is None
+    )
+    assert tuple(PERSONAL_FORMAT.parse(io.BytesIO(package.data))) == ()
+    assert rig.requests == [] and rig.posts == 0 and rig.sleeps == []
+
+
+def test_packaging_makes_no_request_mints_no_token_and_never_sleeps() -> None:
+    rig, _ = _package(
+        (_day_of("2026-11-03", daily={"a": 1}), _day_of("2026-11-04", daily={}))
+    )
+    assert rig.requests == [] and rig.posts == 0 and rig.sleeps == []

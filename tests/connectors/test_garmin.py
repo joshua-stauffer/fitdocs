@@ -495,14 +495,9 @@ def test_the_later_operations_are_named_connector_errors_with_no_request() -> No
     session = _session(transport)
     connector = GarminConnector()
     activity = RemoteActivity(remote_id="1", original_available=True)
-    calls = (
-        lambda: connector.fetch_activity(session, activity),
-        lambda: connector.package_wellness(session, ()),
-    )
-    for call in calls:
-        with pytest.raises(ConnectorError) as excinfo:
-            call()
-        assert str(excinfo.value)
+    with pytest.raises(ConnectorError) as excinfo:
+        connector.fetch_activity(session, activity)
+    assert str(excinfo.value)
     assert transport.requests == []
 
 
