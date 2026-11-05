@@ -1,4 +1,4 @@
-"""The Garmin wellness listing and package (garmin-connector tasks 4.1, 4.2).
+"""The Garmin wellness listing and package (garmin-connector tasks 4.1, 4.2, 4.3).
 
 Everything runs against a routing transport: no network, a synthetic key, a
 synthetic token. Each answer is built for the route it is sent to, so a test
@@ -21,8 +21,9 @@ from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
+from fitdocs.connectors.credentials import env_var_name
 from fitdocs.connectors.delivery import wellness_package_problem
-from fitdocs.connectors.errors import AuthFailure, ConnectorError
+from fitdocs.connectors.errors import AuthFailure, AuthFailureKind, ConnectorError
 from fitdocs.connectors.garmin import GarminConnector
 from fitdocs.connectors.http import (
     CallMode,
@@ -31,14 +32,20 @@ from fitdocs.connectors.http import (
     HttpResponse,
     TransportError,
 )
+from fitdocs.connectors.ledger import load_ledger
 from fitdocs.connectors.protocol import (
     ConnectorSession,
     CredentialAccess,
+    Fetched,
+    FetchResult,
+    RemoteActivity,
     WellnessDay,
     WellnessListing,
     WellnessPackage,
 )
+from fitdocs.connectors.pull import InstancePullReport, PullOptions, run_pull
 from fitdocs.connectors.secrets import Redactor, Secret
+from fitdocs.connectors.settings import ConnectorInstance
 from fitdocs.wellness import registry as wellness_registry
 from fitdocs.wellness.formats.garmin import PERSONAL_FORMAT
 from fitdocs.wellness.model import Metric
@@ -135,7 +142,7 @@ class _Rig:
         *,
         now: datetime = _NOW,
         data_root: Path = Path("/nonexistent-data-root"),
-        token: HttpResponse | None = None,
+        token: HttpResponse | TransportError | None = None,
     ) -> None:
         self.answers: dict[str, Answer] = {
             **{section: _empty(section) for section in _SECTIONS},
@@ -151,14 +158,15 @@ class _Rig:
             self.requests.append(request)
             if request.method == "POST":
                 self.posts += 1
+                if isinstance(token, TransportError):
+                    raise token
                 return token if token is not None else _text(_TOKEN)
             section, start, end = _classify(request)
             answer = self.answers[section]
             if isinstance(answer, TransportError):
                 raise answer
             if callable(answer):
-                assert start is not None and end is not None
-                return answer(start, end)
+                return answer(start or date.min, end or date.min)
             return answer
 
         class _Key:
@@ -985,26 +993,203 @@ def test_a_malformed_later_window_leaves_no_partial_listing() -> None:
 
 
 # --------------------------------------------------------------------------
-# Statuses not yet mapped to a failure of their own (4.3 maps them)
+# Failures of the request itself (task 4.3; Req 11.3-11.6, 4.7, 4.8, 6.8)
 # --------------------------------------------------------------------------
 
+_RESTART = "the next pull starts the wellness listing again"
+_ROUTES = (*_SECTIONS, "probe")
+_ROUTE_DISPLAY = {**_DISPLAY, "probe": "oldest activity"}
 
-@pytest.mark.parametrize("section", _SECTIONS)
-@pytest.mark.parametrize("status", [400, 404, 500])
-def test_any_other_status_ends_the_pull_naming_the_section_and_the_status(
-    section: str, status: int
+
+def _route_fails(
+    route: str, answer: Answer, *, oldest: date | None = date(2026, 11, 1)
+) -> tuple[_Rig, Exception]:
+    """A listing whose ``route`` is answered with ``answer`` and which ends in
+    an error. The probe is only asked when no earliest date is given."""
+    rig = _Rig({route: answer})
+    with pytest.raises(Exception) as excinfo:
+        GarminConnector().list_wellness(
+            rig.session, None if route == "probe" else oldest
+        )
+    return rig, excinfo.value
+
+
+def _status(status: int, body: str = f"oops {_MARKER}") -> Answer:
+    return lambda s, e: _text(body, status)
+
+
+@pytest.mark.parametrize("route", _ROUTES)
+def test_a_401_is_the_rejected_key_failure_with_the_new_key_step(route: str) -> None:
+    rig, error = _route_fails(route, _status(401))
+    assert isinstance(error, AuthFailure)
+    assert error.kind is AuthFailureKind.REJECTED
+    assert "HTTP 401" in str(error)
+    assert "Create a new key" in str(error)
+    assert "fitdocs connect" in str(error)
+    assert _MARKER not in str(error)
+    # Not repeated: the one refused request is the last one made.
+    assert _classify(rig.gets()[-1])[0] == route
+    assert [_classify(r)[0] for r in rig.gets()].count(route) == 1
+
+
+@pytest.mark.parametrize("route", _ROUTES)
+def test_a_403_says_garmin_refused_its_terms_allow_it_and_names_wellness_false(
+    route: str,
 ) -> None:
-    _, error = _fails({section: lambda s, e: _text(f"oops {_MARKER}", status)})
-    assert _DISPLAY[section] in str(error)
-    assert str(status) in str(error)
+    rig, error = _route_fails(route, _status(403))
+    assert isinstance(error, AuthFailure)
+    assert error.kind is AuthFailureKind.REJECTED
+    text = str(error)
+    assert "HTTP 403" in text
+    assert "refused" in text
+    assert "terms" in text
+    assert "restrict access" in text
+    assert "`wellness = false`" in text
+    assert _ROUTE_DISPLAY[route] in text
+    assert "bug" not in text.lower()
+    assert _MARKER not in text
+    assert [_classify(r)[0] for r in rig.gets()].count(route) == 1
+
+
+@pytest.mark.parametrize("route", _ROUTES)
+def test_a_429_past_the_waits_is_the_rate_limit_failure_with_the_restart_sentence(
+    route: str,
+) -> None:
+    rig, error = _route_fails(route, _status(429))
+    assert isinstance(error, AuthFailure)
+    assert error.kind is AuthFailureKind.RATE_LIMITED
+    assert "HTTP 429" in str(error)
+    assert _RESTART in str(error)
+    assert "resumes where this one stopped" not in str(error)
+    assert _MARKER not in str(error)
+    assert rig.sleeps.count(30.0) >= 1 and 240.0 in rig.sleeps
+    # One request, then a repeat after each of the four waits.
+    assert [_classify(r)[0] for r in rig.gets()].count(route) == 5
+
+
+def test_a_429_that_states_a_wait_too_long_to_honour_ends_the_pull() -> None:
+    answer = HttpResponse(status=429, headers={"retry-after": "301"}, body=b"")
+    rig, error = _route_fails("sleep", lambda s, e: answer)
+    assert isinstance(error, AuthFailure)
+    assert error.kind is AuthFailureKind.RATE_LIMITED
+    assert error.retry_after_s == 301.0
+    assert _RESTART in str(error)
+    assert [s for s in rig.sleeps if s >= 30] == []
+
+
+@pytest.mark.parametrize("route", _ROUTES)
+@pytest.mark.parametrize("status", [500, 502, 503, 599])
+def test_a_5xx_past_the_transports_retries_is_a_named_connector_error(
+    route: str, status: int
+) -> None:
+    _, error = _route_fails(route, _status(status))
+    assert type(error) is ConnectorError
+    text = str(error)
+    assert _ROUTE_DISPLAY[route] in text
+    assert f"HTTP {status}" in text
+    assert "unavailable" in text
+    assert _RESTART in text
+    assert _MARKER not in text
+
+
+@pytest.mark.parametrize("route", _ROUTES)
+@pytest.mark.parametrize("status", [400, 404, 418, 301])
+def test_any_other_status_ends_the_pull_naming_the_route_the_status_and_the_restart(
+    route: str, status: int
+) -> None:
+    _, error = _route_fails(route, _status(status))
+    assert type(error) is ConnectorError
+    text = str(error)
+    assert _ROUTE_DISPLAY[route] in text
+    assert f"HTTP {status}" in text
+    assert "unexpected status" in text
+    assert "unavailable" not in text
+    assert _RESTART in text
+    assert _MARKER not in text
+
+
+@pytest.mark.parametrize("route", _ROUTES)
+def test_a_transport_failure_names_the_route_and_the_restart(route: str) -> None:
+    _, error = _route_fails(route, TransportError(f"down {_MARKER}"))
+    assert type(error) is ConnectorError
+    assert f"for the {_ROUTE_DISPLAY[route]} request" in str(error)
+    assert _RESTART in str(error)
     assert _MARKER not in str(error)
 
 
-def test_a_status_the_activity_probe_does_not_expect_is_named() -> None:
-    _, error = _fails({"probe": _text(f"oops {_MARKER}", 404)}, oldest=None)
-    assert "oldest activity" in str(error)
-    assert "404" in str(error)
-    assert _MARKER not in str(error)
+@pytest.mark.parametrize("failing", [401, 403, 429, 500, 404])
+def test_a_failure_on_a_later_route_delivers_no_day_from_the_earlier_ones(
+    failing: int,
+) -> None:
+    rig = _Rig(
+        {
+            "daily": _body("daily", [_rec("daily", "2026-11-02")]),
+            "sleep": _body("sleep", [_rec("sleep", "2026-11-03")]),
+            "hrv": _body("hrv", [_rec("hrv", "2026-11-04")]),
+            "weight": _status(failing),
+        }
+    )
+    with pytest.raises(ConnectorError if failing in (500, 404) else AuthFailure):
+        GarminConnector().list_wellness(rig.session, date(2026, 11, 1))
+    # The earlier routes did answer, so the failure came after real records.
+    assert rig.sections_in_order()[:3] == ["daily", "sleep", "hrv"]
+
+
+def test_a_failure_on_a_later_window_of_a_route_delivers_no_listing() -> None:
+    first = date(2026, 11, 5) - timedelta(days=100)
+    rig = _Rig(
+        {
+            "sleep": lambda s, e: (
+                _text("x", 500) if s > first + timedelta(days=60) else _empty("sleep")
+            )
+        }
+    )
+    with pytest.raises(ConnectorError):
+        GarminConnector().list_wellness(rig.session, first)
+    # The server error is asked again by the transport; the windows are the
+    # distinct ones: two answered, the third failed, none after it.
+    assert len(set(rig.windows("sleep"))) == 3
+    assert rig.windows("hrv") == []
+
+
+def test_a_429_waited_out_mid_listing_still_completes_the_listing() -> None:
+    seen: list[date] = []
+
+    def sleep_answer(start: date, end: date) -> HttpResponse:
+        seen.append(start)
+        if len(seen) == 2:
+            return _text("slow down", 429)
+        return _body("sleep", [_rec("sleep", start.isoformat())])
+
+    rig, listing = _list({"sleep": sleep_answer}, oldest=date(2026, 9, 1))
+    assert rig.sleeps.count(30.0) == 1
+    assert len(seen) == 4
+    assert len(set(rig.windows("sleep"))) == 3
+    assert len(listing.days) == 3
+
+
+def test_a_token_rate_limit_kept_from_activities_is_the_same_object_in_wellness() -> (
+    None
+):
+    with tempfile.TemporaryDirectory() as root:
+        rig = _Rig(data_root=Path(root), token=_text("slow down", 429))
+        connector = GarminConnector()
+        with pytest.raises(AuthFailure) as kept:
+            connector.list_activities(rig.session, None)
+        with pytest.raises(AuthFailure) as again:
+            connector.list_wellness(rig.session, date(2026, 11, 1))
+    assert again.value is kept.value
+    assert rig.posts == 1
+
+
+def test_the_activity_paths_rate_limit_wording_is_unchanged() -> None:
+    # The activity paths' own sentence is untouched by the wellness wording.
+    with tempfile.TemporaryDirectory() as root:
+        rig = _Rig({"probe": _status(429)}, data_root=Path(root))
+        with pytest.raises(AuthFailure) as excinfo:
+            GarminConnector().list_activities(rig.session, None)
+    assert "resumes where this one stopped" in str(excinfo.value)
+    assert _RESTART not in str(excinfo.value)
 
 
 @pytest.mark.parametrize("section", _SECTIONS)
@@ -1018,6 +1203,291 @@ def test_a_transport_failure_on_the_activity_probe_is_named() -> None:
     _, error = _fails({"probe": TransportError(f"down {_MARKER}")}, oldest=None)
     assert "for the oldest activity request" in str(error)
     assert _MARKER not in str(error)
+
+
+# --- through the engine: a real ledger and inbox on disk -------------------
+
+
+class _Engine:
+    """Pulls through :func:`run_pull` against a routing transport, with the
+    data root and inbox on disk and the clock set per pull. ``answers`` may be
+    changed between pulls."""
+
+    def __init__(self, root: Path, *, activities: list[object] | None = None) -> None:
+        self.root = root
+        self.inbox = root / "inbox"
+        self.answers: dict[str, Answer] = {}
+        self.activities = activities or []
+        self.sleeps: list[float] = []
+        self.requests: list[HttpRequest] = []
+
+        class _Delivering(GarminConnector):
+            def fetch_activity(
+                self, session: ConnectorSession, activity: RemoteActivity
+            ) -> FetchResult:
+                return Fetched(
+                    bytes([14, 16, 0, 0, 0, 0, 0, 0])
+                    + b".FIT"
+                    + activity.remote_id.encode()
+                )
+
+        self.instance = ConnectorInstance(
+            "garmin", _Delivering(), 3, None, wellness=True
+        )
+
+    def transport(self, request: HttpRequest, timeout: float) -> HttpResponse:
+        self.requests.append(request)
+        if request.method == "POST":
+            return _text(_TOKEN)
+        section, start, end = _classify(request)
+        if section == "probe":
+            answer = self.answers.get("probe")
+            if answer is None:
+                return _text(json.dumps(self.activities))
+        else:
+            answer = self.answers.get(section, _empty(section))
+        if isinstance(answer, TransportError):
+            raise answer
+        if callable(answer):
+            assert start is not None and end is not None
+            return answer(start, end)
+        return answer
+
+    def pull(
+        self, now: datetime, *, since: datetime | None = None
+    ) -> InstancePullReport:
+        report = run_pull(
+            self.root,
+            (self.instance,),
+            inbox=self.inbox,
+            store=None,
+            transport=self.transport,
+            options=PullOptions(since=since, dry_run=False),
+            environ={env_var_name("garmin", "api_key"): _KEY},
+            now=lambda: now,
+            sleep=self.sleeps.append,
+            redactor=Redactor(),
+        )
+        [one] = report.instances
+        return one
+
+    def mark(self) -> date | None:
+        ledger = load_ledger(self.root, "garmin", connector_id="garmin")
+        return None if ledger.wellness is None else ledger.wellness.through
+
+    def ledger_days(self) -> list[date]:
+        ledger = load_ledger(self.root, "garmin", connector_id="garmin")
+        return [] if ledger.wellness is None else [e.day for e in ledger.wellness.days]
+
+    def inbox_files(self) -> dict[str, bytes]:
+        if not self.inbox.exists():
+            return {}
+        return {
+            str(p.relative_to(self.inbox)): p.read_bytes()
+            for p in sorted(self.inbox.rglob("*"))
+            if p.is_file()
+        }
+
+
+_T0 = datetime(2026, 11, 5, 12, 0, tzinfo=UTC)
+_T1 = datetime(2026, 11, 8, 12, 0, tzinfo=UTC)
+
+
+def _records(section: str, first: date, last: date) -> Answer:
+    """Answers each window with one record per day of it that lies in
+    ``first`` to ``last``."""
+
+    def answer(start: date, end: date) -> HttpResponse:
+        days = [
+            start + timedelta(days=n)
+            for n in range((end - start).days + 1)
+            if first <= start + timedelta(days=n) <= last
+        ]
+        return _body(section, [_rec(section, d.isoformat(), steps=d.day) for d in days])
+
+    return answer
+
+
+def _first_pull(tmp_path: Path) -> tuple[_Engine, InstancePullReport]:
+    engine = _Engine(tmp_path)
+    engine.answers = {"daily": _records("daily", date(2026, 11, 1), date(2026, 11, 4))}
+    report = engine.pull(_T0)
+    return engine, report
+
+
+def test_the_first_successful_pull_delivers_days_and_moves_the_mark(
+    tmp_path: Path,
+) -> None:
+    engine, report = _first_pull(tmp_path)
+    assert report.error is None
+    assert report.wellness is not None and report.wellness.error is None
+    assert report.wellness.failed == ()
+    assert engine.mark() == _T0.date() + timedelta(days=1)
+    assert engine.ledger_days() == [date(2026, 11, d) for d in (1, 2, 3, 4)]
+    assert len(engine.inbox_files()) == 1
+
+
+_FAILURES: list[tuple[str, Answer]] = [
+    ("401", _status(401)),
+    ("403", _status(403)),
+    ("429", _status(429)),
+    ("500", _status(500)),
+    ("502", _status(502)),
+    ("404", _status(404)),
+    ("transport", TransportError(f"down {_MARKER}")),
+]
+
+
+@pytest.mark.parametrize("label,failure", _FAILURES, ids=[f[0] for f in _FAILURES])
+@pytest.mark.parametrize("route", _SECTIONS)
+def test_a_failure_on_a_later_pull_keeps_the_earlier_deliveries_and_the_mark(
+    tmp_path: Path, route: str, label: str, failure: Answer
+) -> None:
+    engine, first = _first_pull(tmp_path)
+    mark = engine.mark()
+    days = engine.ledger_days()
+    files = engine.inbox_files()
+    assert mark is not None and len(days) == 4 and len(files) == 1
+    # The later pull would find new days on every route that answers, so a
+    # delivery made before the failure would show in the inbox and ledger.
+    engine.answers = {
+        "daily": _records("daily", date(2026, 11, 1), date(2026, 11, 7)),
+        "sleep": _records("sleep", date(2026, 11, 6), date(2026, 11, 7)),
+        "hrv": _records("hrv", date(2026, 11, 6), date(2026, 11, 7)),
+        "weight": _records("weight", date(2026, 11, 6), date(2026, 11, 7)),
+    }
+    engine.answers[route] = failure
+    report = engine.pull(_T1)
+    assert report.wellness is not None
+    error = report.wellness.error
+    assert error is not None
+    assert _MARKER not in error.detail
+    assert report.wellness.delivered == ()
+    assert report.wellness.failed == ()
+    assert engine.mark() == mark
+    assert engine.ledger_days() == days
+    assert engine.inbox_files() == files
+    # The failing route was reached after the earlier routes had answered.
+    order = [_classify(r)[0] for r in engine.requests if r.method == "GET"]
+    assert order.count(route) >= 1
+    assert "daily" in order
+
+
+@pytest.mark.parametrize("label,failure", _FAILURES, ids=[f[0] for f in _FAILURES])
+def test_a_failure_part_way_through_a_long_first_listing_leaves_no_mark_and_no_day(
+    tmp_path: Path, label: str, failure: Answer
+) -> None:
+    engine = _Engine(tmp_path)
+    since = datetime(2024, 1, 1, tzinfo=UTC)
+    seen: list[date] = []
+
+    def sleeping(start: date, end: date) -> HttpResponse:
+        seen.append(start)
+        if len(seen) > 20:
+            if isinstance(failure, TransportError):
+                raise failure
+            assert callable(failure)
+            return failure(start, end)
+        return _body("sleep", [_rec("sleep", start.isoformat(), score=1)])
+
+    engine.answers = {
+        "daily": _records("daily", date(2024, 1, 1), date(2026, 11, 4)),
+        "sleep": sleeping,
+    }
+    report = engine.pull(_T0, since=since)
+    # Hundreds of days were listed first: 20 sleep windows of 31 days, and
+    # the daily route's three windows, all before the failure.
+    assert len(set(seen)) == 21
+    assert report.wellness is not None and report.wellness.error is not None
+    assert report.wellness.delivered == ()
+    assert engine.mark() is None
+    assert engine.ledger_days() == []
+    assert engine.inbox_files() == {}
+
+
+@pytest.mark.parametrize("label,failure", _FAILURES, ids=[f[0] for f in _FAILURES])
+def test_a_failure_ends_the_listing_with_no_later_window_or_route_requested(
+    label: str, failure: Answer
+) -> None:
+    # 67 days: sleep has later windows to go to, and HRV and weight follow it.
+    first = date(2026, 9, 1)
+    rig = _Rig({"sleep": failure})
+    with pytest.raises((AuthFailure, ConnectorError)):
+        GarminConnector().list_wellness(rig.session, first)
+    asked = [_classify(request) for request in rig.gets()]
+    assert asked[-1][0] == "sleep"
+    assert {start for section, start, _ in asked if section == "sleep"} == {first}
+    assert {section for section, _, _ in asked} == {"daily", "sleep"}
+
+
+def test_a_wellness_429_meets_the_waits_activities_already_spent_this_pull(
+    tmp_path: Path,
+) -> None:
+    # Three stated waits of 300 s spend the whole 900 s budget in activities.
+    limited = iter(range(3))
+
+    def listing(start: date, end: date) -> HttpResponse:
+        if next(limited, None) is None:
+            return _text("[]")
+        return HttpResponse(status=429, headers={"retry-after": "300"}, body=b"")
+
+    rig = _Rig({"probe": listing, "daily": _status(429)}, data_root=tmp_path)
+    connector = GarminConnector()
+    connector.list_activities(rig.session, None)
+    assert [s for s in rig.sleeps if s > 1] == [300.0, 300.0, 300.0]
+    with pytest.raises(AuthFailure) as excinfo:
+        connector.list_wellness(rig.session, date(2026, 11, 1))
+    assert excinfo.value.kind is AuthFailureKind.RATE_LIMITED
+    assert _RESTART in str(excinfo.value)
+    # The first 429 would wait 30 s with any budget left; none was slept.
+    assert [s for s in rig.sleeps if s > 1] == [300.0, 300.0, 300.0]
+    assert [_classify(r)[0] for r in rig.gets()].count("daily") == 1
+
+
+def test_a_429_waited_out_mid_listing_still_delivers_and_moves_the_mark(
+    tmp_path: Path,
+) -> None:
+    engine = _Engine(tmp_path)
+    calls: list[date] = []
+
+    def daily(start: date, end: date) -> HttpResponse:
+        calls.append(start)
+        if len(calls) == 2:
+            return _text("slow down", 429)
+        return _body("daily", [_rec("daily", "2026-11-03", steps=7)])
+
+    engine.answers = {"daily": daily}
+    report = engine.pull(_T0, since=datetime(2025, 6, 1, tzinfo=UTC))
+    assert report.wellness is not None and report.wellness.error is None
+    assert engine.sleeps.count(30.0) == 1
+    assert engine.mark() == _T0.date() + timedelta(days=1)
+    assert engine.ledger_days() == [date(2026, 11, 3)]
+    assert len(engine.inbox_files()) == 1
+
+
+def test_a_401_in_wellness_leaves_the_activities_delivered_this_pull(
+    tmp_path: Path,
+) -> None:
+    entry = {
+        "activityId": 4001,
+        "startTimeGMT": "2026-11-04 10:00:00",
+        "activityType": {"typeKey": "running"},
+    }
+    engine = _Engine(tmp_path, activities=[entry])
+    engine.answers = {"daily": _status(401)}
+    report = engine.pull(_T0)
+    assert [d.remote_id for d in report.delivered] == ["4001"]
+    assert report.error is None
+    assert report.wellness is not None and report.wellness.error is not None
+    assert "HTTP 401" in report.wellness.error.detail
+    ledger = load_ledger(tmp_path, "garmin", connector_id="garmin")
+    assert ledger.is_final("4001", None)
+    assert engine.mark() is None
+    names = list(engine.inbox_files())
+    assert len(names) == 1 and names[0].endswith(".fit")
+    assert (
+        _classify([r for r in engine.requests if r.method == "GET"][-1])[0] == "daily"
+    )
 
 
 # --------------------------------------------------------------------------
@@ -1278,3 +1748,20 @@ def test_packaging_makes_no_request_mints_no_token_and_never_sleeps() -> None:
         (_day_of("2026-11-03", daily={"a": 1}), _day_of("2026-11-04", daily={}))
     )
     assert rig.requests == [] and rig.posts == 0 and rig.sleeps == []
+
+
+def test_a_token_failure_met_by_activities_reaches_wellness_with_one_token_request(
+    tmp_path: Path,
+) -> None:
+    engine = _Engine(tmp_path)
+
+    def refused(request: HttpRequest, timeout: float) -> HttpResponse:
+        engine.requests.append(request)
+        return _text("oops", 500)
+
+    engine.transport = refused  # type: ignore[method-assign]
+    report = engine.pull(_T0)
+    assert report.error is not None
+    assert report.wellness is not None and report.wellness.error is not None
+    assert report.wellness.error.detail == report.error.detail
+    assert [r.method for r in engine.requests] == ["POST"]

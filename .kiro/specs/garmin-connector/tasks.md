@@ -105,7 +105,7 @@
   - _Requirements: 9.8_
   - _Depends: 2.1, 2.2_
 
-- [ ] 4.3 Map wellness failures
+- [x] 4.3 Map wellness failures
   - Map refused, rate-limited, server-error and other answers per the design's error table, with the 403 wording naming `wellness = false`.
   - Because a wellness listing is all-or-nothing, any failure delivers no day from that pull and leaves the wellness mark where it was.
   - Done when tests cover each status, show nothing delivered and the mark unmoved after a failure part-way through a listing, and show deliveries from an earlier pull kept.

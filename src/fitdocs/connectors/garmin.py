@@ -10,10 +10,11 @@ of its own, and reads no clock.
 Task 3.1 declares the connector and implements the key check. Task 3.2 adds
 the per-pull state (one token, spacing, rate-limit waits) and the one helper
 every Garmin GET goes through. Task 3.3 adds the activity listing, task 3.4 the
-per-pull limit, task 4.1 the wellness listing and task 4.2 the wellness
-package. The one other pull operation (``fetch_activity``) is a placeholder
-that raises a named :class:`ConnectorError` and makes no request, because the
-registry requires it once the capabilities are declared; task 3.5 replaces it.
+per-pull limit, task 4.1 the wellness listing, task 4.2 the wellness
+package and task 4.3 the wellness failures. The one other pull operation
+(``fetch_activity``) is a placeholder that raises a named
+:class:`ConnectorError` and makes no request, because the registry requires it
+once the capabilities are declared; task 3.5 replaces it.
 """
 
 from __future__ import annotations
@@ -383,12 +384,27 @@ OLDEST_ACTIVITY_FORM_MESSAGE: Final[str] = (
     "Garmin's answer for the oldest activity was not understood: {problem}; "
     "the wellness pull ended"
 )
+WELLNESS_RESTART: Final[str] = "the next pull starts the wellness listing again"
 WELLNESS_STATUS_MESSAGE: Final[str] = (
     "Garmin answered the {section} request with an unexpected status "
-    "(HTTP {status}); the wellness pull ended"
+    "(HTTP {status}); the wellness pull ended and " + WELLNESS_RESTART
+)
+WELLNESS_UNAVAILABLE_MESSAGE: Final[str] = (
+    "Garmin is unavailable (HTTP {status}) for the {section} request; the "
+    "wellness pull ended and " + WELLNESS_RESTART
 )
 WELLNESS_UNREACHABLE_MESSAGE: Final[str] = (
-    "Garmin could not be reached for the {section} request; the wellness pull ended"
+    "Garmin could not be reached for the {section} request; the wellness pull "
+    "ended and " + WELLNESS_RESTART
+)
+WELLNESS_REFUSED_MESSAGE: Final[str] = (
+    "Garmin refused the {section} request (HTTP 403). Garmin's terms let it "
+    "restrict access; setting `wellness = false` stops the request."
+)
+WELLNESS_RATE_LIMITED_MESSAGE: Final[str] = (
+    "Garmin is limiting requests (HTTP 429) and the wellness pull ended; "
+    + WELLNESS_RESTART
+    + "."
 )
 
 
@@ -599,7 +615,9 @@ class GarminConnector:
 
         A 401 or 403 answer is the rejected-key failure and a 429 the
         rate-limit failure, so wellness is suppressed after those; anything
-        else is a :class:`ConnectorError`."""
+        else is a :class:`ConnectorError`. A failure already kept is raised as it
+        was. Activities always meet the mint first in a pull, so a wellness
+        listing only ever sees a token failure kept from there."""
         if state.mint_error is not None:
             raise state.mint_error
         if state.bearer is not None:
@@ -631,12 +649,14 @@ class GarminConnector:
         session: ConnectorSession,
         url: str,
         headers: Mapping[str, str],
+        rate_limited: str = PULL_RATE_LIMITED_MESSAGE,
     ) -> HttpResponse:
         """Every Garmin GET: the pull's token, 1 s of spacing, the transport's
         429 retries off, and the rate-limit waits of Req 4.7 to 4.9.
 
         Any answer but 429 goes back to the caller. A repeat after a wait gets
-        no extra spacing."""
+        no extra spacing. ``rate_limited`` words the failure of a 429 past the
+        waits."""
         state = self._state(session)
         bearer = self._bearer(session, state)
         self._space(session, state)
@@ -654,9 +674,7 @@ class GarminConnector:
             stated = limited.retry_after_s if limited is not None else None
             wait = _rate_limit_wait(stated, repeats, state.waited_s)
             if wait is None:
-                raise AuthFailure(
-                    AuthFailureKind.RATE_LIMITED, PULL_RATE_LIMITED_MESSAGE, stated
-                )
+                raise AuthFailure(AuthFailureKind.RATE_LIMITED, rate_limited, stated)
             session.sleep(wait)
             state.waited_s += wait
             repeats += 1
@@ -746,23 +764,44 @@ class GarminConnector:
         self, session: ConnectorSession, url: str, label: str
     ) -> HttpResponse | None:
         """One wellness GET through :meth:`_get`: ``None`` for a 204 (no
-        records, Req 9.6), the response for a 200, else a named
-        :class:`ConnectorError` that quotes nothing. What :meth:`_get` raises
-        itself, a 429 past the waits or a kept token failure, passes through
-        unchanged. Statuses beyond that are mapped by task 4.3."""
+        records, Req 9.6), the response for a 200, else a failure that quotes
+        no body (Req 11.3-11.5): 401 and 403 are :class:`AuthFailure`
+        ``REJECTED`` (the 403 naming ``wellness = false``), a 429 past the
+        waits is ``RATE_LIMITED`` worded for wellness, and a 5xx, another
+        status or a transport failure is a :class:`ConnectorError`, each
+        saying that the next pull starts the wellness listing again. A token
+        failure kept from the activity part is raised as it was kept."""
         try:
-            response = self._get(session, url, {"Accept": "application/json"})
+            response = self._get(
+                session,
+                url,
+                {"Accept": "application/json"},
+                WELLNESS_RATE_LIMITED_MESSAGE,
+            )
         except TransportError:
             raise ConnectorError(
                 WELLNESS_UNREACHABLE_MESSAGE.format(section=label)
             ) from None
-        if response.status == 204:
+        status = response.status
+        if status == 204:
             return None
-        if response.status != 200:
-            raise ConnectorError(
-                WELLNESS_STATUS_MESSAGE.format(section=label, status=response.status)
+        if status == 200:
+            return response
+        if status == 401:
+            raise AuthFailure(
+                AuthFailureKind.REJECTED, REJECTED_MESSAGE.format(status=401)
             )
-        return response
+        if status == 403:
+            raise AuthFailure(
+                AuthFailureKind.REJECTED, WELLNESS_REFUSED_MESSAGE.format(section=label)
+            )
+        if 500 <= status < 600:
+            raise ConnectorError(
+                WELLNESS_UNAVAILABLE_MESSAGE.format(section=label, status=status)
+            )
+        raise ConnectorError(
+            WELLNESS_STATUS_MESSAGE.format(section=label, status=status)
+        )
 
     def _oldest_activity_day(
         self, session: ConnectorSession, newest: date
