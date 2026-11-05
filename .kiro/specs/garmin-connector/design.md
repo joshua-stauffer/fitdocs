@@ -117,7 +117,7 @@ tests/wellness/test_garmin_personal.py  # the delivery format: recognition, metr
 - `docs/wellness.md`, `docs/configuration.md`: the source, the format, the order, the settings.
 - `README.md`: the connector list (closes `2026-11-02-readme-connector-count-stale`).
 - `CHANGELOG.md`: an `[Unreleased]` entry.
-- `.kiro/steering/tech.md`, `.kiro/steering/structure.md`: the `fitdocs pull` sentence and the connector list.
+- `.kiro/steering/tech.md`: the `fitdocs pull` sentence.
 - `.kiro/specs/connectors/requirements.md`, `.kiro/specs/wellness-store/requirements.md`: amendment records, taking the next free numbers at landing.
 - `.kiro/steering/roadmap.md`: Phase 15 status.
 - `.kiro/queue/`: a release-time item for `website/content/guides/connectors.md`, `website/content/guides/wellness.md` and `website/content/reference/configuration.md`, and a follow-up for pull progress output.
@@ -224,7 +224,7 @@ A wait is allowed when fewer than 4 repeats of this request have happened, any s
 - `capabilities = {PULL_ACTIVITIES, PULL_WELLNESS}`.
 - `credential_fields = (CredentialField("api_key", "Personal API key", secret=True),)`, so the framework's `FITDOCS_CONNECTOR_<INSTANCE>_API_KEY` override applies.
 - `parse_settings` returns `None` and ignores every key.
-- Constants, all fixed: `REQUEST_SPACING_S = 1.0`, `RATE_LIMIT_WAITS_S = (30.0, 60.0, 120.0, 240.0)`, `MAX_STATED_WAIT_S = 300.0`, `MAX_WAITS_PER_PULL_S = 900.0`, `LISTING_PAGE = 200`, `ACTIVITIES_PER_PULL = 200`, `WELLNESS_DAYS_PER_PULL = 1096`, `DAILY_WINDOW_DAYS = 365`, `SLEEP_WINDOW_DAYS = 31`, `HRV_WINDOW_DAYS = 28`, `WEIGHT_WINDOW_DAYS = 365`, `CONSECUTIVE_FAILURE_STOP = 5`, `MAX_FILE_BYTES = MAX_RESPONSE_BYTES`.
+- Constants, all fixed: `REQUEST_SPACING_S = 1.0`, `RATE_LIMIT_WAITS_S = (30.0, 60.0, 120.0, 240.0)`, `MAX_STATED_WAIT_S = 300.0`, `MAX_WAITS_PER_PULL_S = 900.0`, `LISTING_PAGE = 200`, `ACTIVITIES_PER_PULL = 200`, `LISTING_EARLIEST = 1990-01-01`, `DAILY_WINDOW_DAYS = 365`, `SLEEP_WINDOW_DAYS = 31`, `HRV_WINDOW_DAYS = 28`, `WEIGHT_WINDOW_DAYS = 365`, `CONSECUTIVE_FAILURE_STOP = 5`, `MAX_FILE_BYTES = MAX_RESPONSE_BYTES`.
 - HRV's 28 days: Garmin states no limit for this route and third parties report 28, so this errs short.
 
 ##### Service routes
@@ -234,7 +234,7 @@ Every route is on `API_BASE = https://personal.connectapi.garmin.com`. Dates are
 | Route | Request | Parameters | Success body | Date field |
 |---|---|---|---|---|
 | Token | `POST /personalapitoken-service/personal-api/personal-api-key/token` | Empty body; `Authorization: ApiKey <key>`, `Accept: */*` | The token as bare text | None |
-| Listing | `GET /activitylist-service/activities/search/activities` | `start`, `limit`, `sortOrder=asc`; with a start time, also `startDate`, `endDate` | A JSON list | `startTimeGMT` |
+| Listing | `GET /activitylist-service/activities/search/activities` | `start`, `limit`, `sortOrder=asc`, `startDate`, `endDate` | A JSON list | `startTimeGMT` |
 | File | `GET /download-service/files/activity/{activityId}` | `Accept: application/zip, application/x-zip-compressed, application/octet-stream` | ZIP bytes | None |
 | Daily | `GET /usersummary-service/v2/dailysummaries` | `startDate`, `endDate` | `{"data": [...]}` | `calendarDate` |
 | Sleep | `GET /sleep-service/sleep/dailySleepSummariesByDate` | `startDate`, `endDate` | A JSON list | `calendarDate` |
@@ -267,7 +267,7 @@ class GarminConnector:
 
 **Listing (`list_activities`)**
 - `sortOrder=asc`, `limit=200`, `start` advancing, until a short page. New arrivals land at the end, so `asc` is the stable order.
-- With `since`: `startDate` one day before its UTC date, because Garmin filters on local start time, and `endDate` the day after the pull's UTC date. Both are sent because that is the measured form. Each entry is then filtered by its UTC start.
+- Always both date filters, because that is the measured form of an oldest-first listing, and a refusal is then an error rather than silently lost history. `startDate` is one day before `since`'s UTC date, because Garmin filters on local start time, or `LISTING_EARLIEST` with no `since`. `endDate` is the day after the pull's UTC date. With `since`, each entry is then filtered by its UTC start.
 - `excludeChildren` stays at Garmin's default.
 - Entries are deduped by id.
 - `load_ledger(session.data_root, session.instance, connector_id="garmin")`, then keep every final entry plus the first `ACTIVITIES_PER_PULL` not final in start order. A `LedgerError` becomes a `ConnectorError`.
@@ -308,10 +308,9 @@ class _PullState:
 Held in `WeakKeyDictionary[HttpClient, _PullState]` on the connector. It is keyed by the session's client, so it dies with the pull. Nothing in it is ever written to disk.
 
 **Wellness (`list_wellness`, `package_wellness`)**
-- `first = oldest`; when `None`, the oldest activity's date (one request, `sortOrder=asc&limit=1`), or one year before the pull when there is none.
-- `newest = min(first + 1095 days, today_utc + 1 day)`. Returning that as `WellnessListing.newest` makes the framework's coverage advance, so the next pull continues from there less `lookback_days`.
-- **Accepted edge:** `lookback_days` allows values up to 3650. At 1095 or more on a history longer than one slice, each pull starts so far back that its slice never passes the recorded coverage, so wellness stops catching up. The connector cannot see the look-back, because its settings are `None`. The docs state this; the default of 30 is unaffected.
-- Requests inclusive windows of daily (365), sleep (31), HRV (28) and weight (365) over `[first, newest]`. A 3-year slice is about 84 requests.
+- `first = oldest`; when `None`, the oldest activity's date (one listing request with `limit=1` and both date filters), or one year before the pull when there is none.
+- `newest = today_utc + 1 day`. One pull covers everything from `first`, with no per-pull limit, so a `--since` older than the recorded coverage fills the gap and any `lookback_days` keeps progressing.
+- Requests inclusive windows of daily (365), sleep (31), HRV (28) and weight (365) over `[first, newest]`. A year is about 27 requests, so 12 years is about 330, or 6 to 8 minutes.
 - A 204 means no records. Each record's date comes from `calendarDate` or `summaryDate`, and must be a valid `YYYY-MM-DD`.
 - Merges per date into `{"daily": ..., "sleep": ..., "hrv": ..., "weight": ...}`, each verbatim, sections with no record absent. A later record for the same date and section wins.
 - `revision` is `sha256:` over the merged record's canonical JSON. `package_wellness` makes no request. It stamps `fetched_at` from `session.now()` and returns `WellnessPackage(data, ".json", "garmin-personal", frozenset({"garmin"}))`.
@@ -397,7 +396,7 @@ Activities raise `AuthFailure` where wellness must not run, because the engine s
 | Wellness | 429 past the waits | `AuthFailure(RATE_LIMITED)` | Wellness ends |
 | Wellness | 5xx, other, malformed | `ConnectorError` | Wellness ends, mark unchanged |
 
-Because a wellness listing is all-or-nothing, a failure delivers no day from that pull's slice and leaves the wellness mark where it was (11.6).
+Because a wellness listing is all-or-nothing, a failure delivers no day from that pull and leaves the wellness mark where it was (11.6).
 
 ## Testing Strategy
 
@@ -411,7 +410,7 @@ All tests run offline with `FakeTransport` and synthesized FIT and ZIP bytes (14
 - **Listing:** `asc` paging ends at a short page; a repeated id is listed once; UTC filter around a `--since` near midnight; the per-pull limit counts only non-final; the deferral names the remainder; a malformed entry names its position.
 - **Archive:** each row of the archive table, including a non-FIT member beside one FIT, a member named like `../x.fit`, a CRC failure, and a member over the size limit.
 - **Failures:** five in a row stops and a success resets the count; a transport failure counts.
-- **Wellness:** windows respect each limit; a 204 is no records; a date merges across sections; a section change changes the revision; a repeated listing is byte-stable in revision; the oldest-activity start and the one-year fallback; the slice bound.
+- **Wellness:** windows respect each limit; a 204 is no records; a date merges across sections; a section change changes the revision; a repeated listing is byte-stable in revision; the oldest-activity start and the one-year fallback; a multi-year range covered by one listing.
 - **Format:** every row of the metric mapping; absence for each bad form; the `hydration` decoy stays unread; recognition does not collide with any export recognizer; a later `fetched_at` replaces and retracts.
 
 ### Integration Tests
@@ -435,7 +434,8 @@ All tests run offline with `FakeTransport` and synthesized FIT and ZIP bytes (14
 - The Garmin Terms make the key personal. There is deliberately no code path to a relay.
 
 ## Performance & Scalability
-- 200 activities take about 4 minutes; a 3-year wellness slice about 2. Whole history is about 5 pulls on an account of about 900 files.
+- 200 activities take about 4 minutes. Whole activity history is about 5 pulls on an account of about 900 files.
+- Wellness has no per-pull limit: 12 years is about 330 requests, 6 to 8 minutes, in the first pull that enables it.
 - A wiki already holding the same bytes still pays the downloads once, because a listing carries no hash.
 - The ZIP is held in memory, bounded by the transport's 64 MiB.
 
@@ -453,6 +453,6 @@ All tests run offline with `FakeTransport` and synthesized FIT and ZIP bytes (14
 
 ## To Be Confirmed by the Live Check
 - **TBC-1:** a whole-record revision is stable for sleep and weight, not only daily summaries. If not, exclude the volatile fields.
-- **TBC-2:** 1 s spacing holds over 200 downloads, and which wait clears a limit if one is met.
+- **TBC-2:** 1 s spacing holds over 200 downloads and a full wellness catch-up, and which wait clears a limit if one is met. If a limit keeps stopping the catch-up, per-pull slicing comes back.
 - **TBC-3:** the status for a deleted key. A wrong key is 401; 401 and 403 both map to the same message, so either is safe.
 - **TBC-4:** not checkable on the maintainer's account: multisport parents, manual activities, a real HRV record. Each fails safe: a named skip, a named skip, and an absent value.

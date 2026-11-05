@@ -97,7 +97,7 @@ a record in any other form leaves the value absent.
 #### Acceptance Criteria
 1. Where a connectors instance names the Garmin connector, the Garmin connector shall accept no settings beyond those the fitdocs CLI defines for every instance.
 2. The Garmin connector shall ignore instance keys it does not recognize.
-3. The Garmin connector shall apply the pacing and the per-pull limits of Requirements 4 and 9 as fixed values that no setting changes.
+3. The Garmin connector shall apply the pacing and the per-pull limit of Requirement 4 as fixed values that no setting changes.
 
 ### Requirement 3: Listing Activities
 **Objective:** As an athlete, I want each pull to list exactly the Garmin activities in its window, and my whole history the first time, so that I need no data export and nothing already handled is fetched again.
@@ -174,7 +174,7 @@ a record in any other form leaves the value absent.
 #### Acceptance Criteria
 1. Where an instance has not enabled wellness, the Garmin connector shall make no wellness request.
 2. While a wellness pull gives no earliest date, the Garmin connector shall start from the date of the key owner's oldest activity, or from one year before the pull when the account has no activity.
-3. The Garmin connector shall cover at most 1,096 consecutive days of wellness in one pull, oldest first and through the day after the pull's date in UTC, so that the next pull continues from where this one stopped with no `--since`.
+3. The Garmin connector shall cover every day from that start through the day after the pull's date in UTC in one pull, so that a `--since` older than the recorded coverage fills the whole gap.
 4. The Garmin connector shall request daily summaries, sleep summaries, HRV summaries and weight records, shall keep each request within Garmin's published range limit for that record type, and shall list each date at most once.
 5. The Garmin connector shall merge what Garmin returns for one date into one wellness day, and shall list no day for a date on which Garmin returned nothing.
 6. If Garmin answers that it has no data for a window, the Garmin connector shall treat that as no records for that window and not as an error.
@@ -208,7 +208,7 @@ a record in any other form leaves the value absent.
 3. If Garmin answers a wellness request as unauthorized, the fitdocs CLI shall end the instance's pull and report a rejected key with the step to create a new key and reconnect, and shall not repeat the request.
 4. If Garmin answers a wellness request as forbidden, the fitdocs CLI shall end the wellness pull and report that Garmin refused the request, that Garmin's terms let it restrict access, and that setting `wellness = false` stops the request.
 5. If a wellness request is still rate-limited after the waits of Requirement 4, still meets a server error after the transport's bounded retries, or is answered with any other status that is not success, the fitdocs CLI shall end the wellness pull, stating which and that the next pull resumes where this one stopped.
-6. If a wellness pull ends early, the fitdocs CLI shall keep every wellness delivery already made and recorded, deliver no day from the incomplete window, and leave the wellness mark where it was.
+6. If a wellness pull ends early, the fitdocs CLI shall keep every wellness delivery already made and recorded by earlier pulls, deliver no day from the listing it could not finish, and leave the wellness mark where it was.
 
 ### Requirement 12: Documentation and the Terms
 **Objective:** As an athlete, I want the docs to say plainly how to set this up, what I agree to with Garmin, and what a first pull does to my wiki, so that I decide with my eyes open.
@@ -218,7 +218,7 @@ a record in any other form leaves the value absent.
 2. The fitdocs documentation shall state that a key expires after the period chosen when creating it (30, 90, 180 or 365 days), that Garmin sends a reminder, that a key is shown once, and that renewing means creating a new key and running `fitdocs connect` again.
 3. The fitdocs documentation shall state that the athlete accepts Garmin's own terms when creating a key, quote the terms' words that a key is "personal to you" and for "applications, services, or tools that you develop or operate for your own use", and state that Garmin may throttle or restrict access and revoke a key.
 4. The fitdocs documentation shall state that fitdocs is not affiliated with or endorsed by Garmin, shall use the name Garmin only descriptively, shall show no Garmin logo, and shall claim no permission from Garmin.
-5. The fitdocs documentation shall state what a first pull does: full history oldest first, about how long each step takes, the per-pull limit and how it resumes, and how `--since` narrows it.
+5. The fitdocs documentation shall state what a first pull does: full activity history oldest first, about how long each step takes, the per-pull limit and how it resumes, how `--since` narrows it, and that wellness has no such limit, covering its whole range in one pull.
 6. The fitdocs documentation shall state that on an existing wiki the first `sync` after a pull makes a Garmin original the main file of pages built from other copies, so that those pages re-render, some may move or change time, and regions the athlete owns are kept; it shall name `pull` without `--sync` as the way to hold files back and `[identity] precedence` as the way to keep an existing base.
 7. The fitdocs documentation shall state what the connector does not do: uploads from other apps are skipped as GPX or TCX, an archive holding several FIT files is skipped by name, women's health, courses and training are not pulled, VO2max is not read, and accounts on Garmin's China service are not supported.
 8. The fitdocs documentation shall state that an athlete moving from intervals.icu can stop fetching Garmin's copies there through that connector's `sources` setting.
@@ -244,4 +244,4 @@ a record in any other form leaves the value absent.
 4. The Specification Process shall add no test that reads documentation, changelogs or specs, shall delete rather than update a documentation-binding test this work would otherwise have to change, and shall keep every code guard in such a test file enforced by moving it first.
 5. The Garmin connector shall add no runtime dependency, no fitdocs command and no name to the connectors package's public surface.
 6. The Garmin connector shall leave the document-format and contract versions unchanged, unless the design records why one must move.
-7. The Specification Process shall record the amendments this makes to `connectors` and `wellness-store`, and shall correct the `fitdocs pull` sentence in `.kiro/steering/tech.md` and the connector list in `.kiro/steering/structure.md`, in the change that lands them.
+7. The Specification Process shall record the amendments this makes to `connectors` and `wellness-store`, and shall correct the `fitdocs pull` sentence in `.kiro/steering/tech.md`, in the change that lands them.

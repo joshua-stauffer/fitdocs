@@ -70,7 +70,7 @@
   - _Depends: 1.2_
 
 - [ ] 3.3 List activities
-  - Use the design's "Service routes" table. Page the listing oldest first in pages of 200 until a short page, sending both date filters when a start time is given, with the start date one day early and each entry then filtered by its UTC start. Leave Garmin's default of excluding multisport legs.
+  - Use the design's "Service routes" table. Page the listing oldest first in pages of 200 until a short page, always sending both date filters: the start is one day before any given start time, or the design's earliest date with none. With a start time, each entry is then filtered by its UTC start. Leave Garmin's default of excluding multisport legs.
   - Map each entry to a remote activity: Garmin's identifier unchanged, the UTC start, sport and elapsed duration when stated and absent otherwise, with no revision and nothing else kept.
   - List each identifier once. End the instance's pull with a named problem on a malformed answer, never quoting it.
   - Map refused, rate-limited, unavailable and other answers per the design's error table, using `REJECTED` rather than `BLOCKED` for a 403 so the report never says to report a bug.
@@ -91,12 +91,12 @@
 
 - [ ] 4. The connector: wellness
 
-- [ ] 4.1 List wellness in forward slices
-  - Start from the given date, else the oldest activity's date, else one year before the pull. Cover at most 1,096 days, through the day after the pull's UTC date, and report the slice's end as the listing's newest date.
+- [ ] 4.1 List wellness
+  - Start from the given date, else the oldest activity's date, else one year before the pull, and cover everything from there through the day after the pull's UTC date in one listing.
   - Using the design's "Service routes" table, request daily, sleep, HRV and weight records in windows of 365, 31, 28 and 365 days. A 204 means no records.
   - Merge each date's records verbatim into one day, listing no day with no record, with a revision hashed from the merged record's canonical form.
   - A malformed response or an invalid date ends the wellness pull with a named problem, never quoting it.
-  - Done when tests show each window bound, the three start cases, the slice bound, the 204 case, a date merged across sections, a changed section changing the revision, and a repeated listing keeping the same revision.
+  - Done when tests show each window bound, the three start cases, a multi-year range covered by one listing, the 204 case, a date merged across sections, a changed section changing the revision, and a repeated listing keeping the same revision.
   - _Requirements: 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.9_
 
 - [ ] 4.2 Package wellness days
@@ -107,8 +107,8 @@
 
 - [ ] 4.3 Map wellness failures
   - Map refused, rate-limited, server-error and other answers per the design's error table, with the 403 wording naming `wellness = false`.
-  - Because a wellness listing is all-or-nothing, any failure delivers no day from that pull's slice and leaves the wellness mark where it was.
-  - Done when tests cover each status, show nothing delivered and the mark unmoved after a failure part-way through a slice, and show deliveries from an earlier pull kept.
+  - Because a wellness listing is all-or-nothing, any failure delivers no day from that pull and leaves the wellness mark where it was.
+  - Done when tests cover each status, show nothing delivered and the mark unmoved after a failure part-way through a listing, and show deliveries from an earlier pull kept.
   - _Requirements: 11.3, 11.4, 11.5, 11.6_
 
 - [ ] 5. Integration
@@ -120,7 +120,7 @@
   - _Depends: 3.4, 3.5_
 
 - [ ] 5.2 Run wellness through the real pull engine and series
-  - Done when tests show: no wellness request unless enabled; a delivery reaches the series through the drain; a changed day is delivered again and replaces the earlier values while an unchanged day is not; a rate limit or refusal during activities suppresses wellness while a listing server error does not; the existing data root's series rebuilds once with no value lost; a delivery that cannot be read is named in the drain's report and leaves the series unchanged; a token server error ends activities with an error, wellness reports the same error, and exactly one token request was made; a wellness history longer than 1,096 days reaches the present over successive plain pulls with no `--since`, under the default look-back.
+  - Done when tests show: no wellness request unless enabled; a delivery reaches the series through the drain; a changed day is delivered again and replaces the earlier values while an unchanged day is not; a rate limit or refusal during activities suppresses wellness while a listing server error does not; the existing data root's series rebuilds once with no value lost; a delivery that cannot be read is named in the drain's report and leaves the series unchanged; a token server error ends activities with an error, wellness reports the same error, and exactly one token request was made; a multi-year wellness history is delivered by one plain pull, a second pull delivers only what changed, and a later `--since` older than the recorded coverage fills the gap in one pull.
   - _Requirements: 9.1, 9.3, 10.8, 10.9, 10.11, 10.12, 11.1, 11.2_
   - _Depends: 4.3, 5.1_
 
@@ -133,7 +133,7 @@
 - [ ] 6. Documentation and records
 
 - [ ] 6.1 Write the connector's documentation
-  - Add the Garmin section to the connectors page: creating a key, the settings table, `fitdocs connect`, the environment override and enabling wellness; expiry and renewal; the terms quoted, the non-affiliation line and no permission claimed; the first pull, the limit, resuming and `--since`; what the first `sync` does to an existing wiki and its two controls; what the connector does not do; the `sources` hint for intervals users; and that a `lookback_days` of three years or more stops wellness catching up on a longer history.
+  - Add the Garmin section to the connectors page: creating a key, the settings table, `fitdocs connect`, the environment override and enabling wellness; expiry and renewal; the terms quoted, the non-affiliation line and no permission claimed; the first pull, the limit, resuming and `--since`; what the first `sync` does to an existing wiki and its two controls; what the connector does not do; and the `sources` hint for intervals users.
   - Add the Garmin hosts this section links to into the neutral scan's table under the exact key `docs/connectors.md#Garmin`. Delete any documentation-binding test this turns red.
   - Done when the section states every point in Requirement 12.1 to 12.8, and the neutral scan passes.
   - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5, 12.6, 12.7, 12.8, 14.4_
@@ -146,7 +146,7 @@
   - _Requirements: 12.9, 14.4_
 
 - [ ] 6.3 Land the records
-  - Record the amendments to `connectors` and `wellness-store`, taking the next free numbers at landing, and correct `tech.md`'s `fitdocs pull` sentence and `structure.md`'s connector list.
+  - Record the amendments to `connectors` and `wellness-store`, taking the next free numbers at landing, and correct `tech.md`'s `fitdocs pull` sentence.
   - Mark Phase 15's existing-spec updates and the spec's entry on the roadmap.
   - Queue the website changes for the release cut, naming all three pages (`website/content/guides/connectors.md`, `website/content/guides/wellness.md`, `website/content/reference/configuration.md`) and editing none of them now, and queue a follow-up for `fitdocs pull` showing no progress during a long wait. Close the README connector-count item.
   - Done when each record exists, and a search of the steering files finds no statement this contradicts.

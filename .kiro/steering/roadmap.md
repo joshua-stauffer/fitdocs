@@ -4670,7 +4670,7 @@ over:
   health, courses and training stay out. HRV is read as RMSSD, on the wording of
   Garmin's FIT SDK for the matching fields.
 - **Full history on a first pull** (maintainer), oldest first, capped per run and
-  resuming by itself.
+  resuming by itself. Wellness has no per-pull limit (maintainer).
 - **One second between requests, with long backoff on 429** (maintainer). Bursts are
   expected to be fine, and sustained traffic above about one request a second to
   meet a limit over a fixed period. Garmin publishes no numbers, so the first real
@@ -4775,8 +4775,9 @@ All carried by `garmin-connector`, at landing.
 
 #### Specs (dependency order)
 
-- [ ] garmin-connector — a built-in connector for Garmin's Personal API: activity
-  and daily wellness pull with the athlete's own key. Dependencies: none.
+- [ ] garmin-connector — **spec written 2026-11-05** (`tasks-generated`, all approvals
+  set; 14 requirements / 97 criteria, 7 majors / 20 tasks; the live check is the
+  maintainer's own). A built-in connector for Garmin's Personal API: activity and
+  daily wellness pull with the athlete's own key. Dependencies: none.
 
-Run `/kiro-spec-init garmin-connector`, or `/kiro-spec-quick garmin-connector` to
-continue straight through.
+Next: `/kiro-impl garmin-connector`.

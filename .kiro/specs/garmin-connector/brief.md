@@ -163,8 +163,10 @@ connectors.
      revisions and per-record `covers`.
    - Recommended id: `garmin-personal`. Canonical order sorts by id, so it must
      sort after `garmin-export` for existing canonical values to stay put.
-   - Listing runs in forward slices, because `list_wellness` is all-or-nothing
-     and a decade is about 150 requests.
+   - One pull covers the whole range, with no per-pull limit (maintainer's
+     decision, 2026-11-05). A year is about 27 requests, so 12 years is 6 to 8
+     minutes at 1 s spacing. `list_wellness` is all-or-nothing, so a failure means
+     the next pull starts wellness over.
    - Metrics:
      - filled: resting, min and max HR, steps, sleep total and stages,
        respiration, SpO2, stress, body battery, weight, and HRV as RMSSD;

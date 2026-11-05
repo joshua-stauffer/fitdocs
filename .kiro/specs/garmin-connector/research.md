@@ -92,7 +92,18 @@ Two checks: about 40 requests, then 10, all at 2.5 s spacing. No 401, 403 or 429
 ### Decision: every delivered day is complete
 - **Context**: a merge retracts any metric the newest revision lacks, so a transient gap could erase values.
 - **Selected Approach**: one wellness listing is all-or-nothing, so no partial window is ever delivered. `covers` is therefore the format's full metric set on every day, and a later delivery replaces the earlier one outright.
-- **Trade-offs**: a failure late in a 3-year slice wastes that pull's wellness requests. The next pull repeats them.
+- **Trade-offs**: a failure late in a listing wastes that pull's wellness requests. The next pull repeats them.
+
+### Decision: no per-pull limit on wellness
+- **Context**: a 3-year slice per pull was drafted to guarantee progress under an unknown limit, when spacing was 2.5 s. It then needed a ledger read and left two edges: a `--since` older than the recorded coverage never filled its gap, and a `lookback_days` of 3 years or more stopped catching up.
+- **Selected Approach**: the maintainer removed it on 2026-11-05. At 1 s spacing, 12 years is about 330 requests, or 6 to 8 minutes. Both edges go away with it.
+- **Trade-offs**: if Garmin's limit is much harsher than expected, a long history could keep getting stopped and never finish. That shows as repeated rate-limit errors, not missing data, and slicing can come back. The live check tests it (TBC-2).
+- **Not applied to activities**: the 200-file limit stays, because the ledger saves only when a pull ends, so a hard kill during one long run loses the record of what was fetched.
+
+### Decision: every listing sends both date filters
+- **Context**: `sortOrder=asc` was measured only with both date filters. Without them, a Garmin that ignored it would start wellness from the newest activity and silently lose its history.
+- **Selected Approach**: always send both, with `1990-01-01` as the start when no start time is given.
+- **Trade-offs**: a range that old is itself unmeasured, but a refusal would be a visible error.
 
 ### Decision: a lenient parser for this format
 - **Context**: the export parser refuses a whole file on a non-numeric value. Here that would leave a delivery stuck over a surprise in one field, and HRV's real form is unseen.
