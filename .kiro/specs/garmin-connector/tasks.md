@@ -91,7 +91,7 @@
 
 - [ ] 4. The connector: wellness
 
-- [ ] 4.1 List wellness
+- [x] 4.1 List wellness
   - Start from the given date, else the oldest activity's date, else one year before the pull, and cover everything from there through the day after the pull's UTC date in one listing.
   - Using the design's "Service routes" table, request daily, sleep, HRV and weight records in windows of 365, 31, 28 and 365 days. A 204 means no records.
   - Merge each date's records verbatim into one day, listing no day with no record, with a revision hashed from the merged record's canonical form.

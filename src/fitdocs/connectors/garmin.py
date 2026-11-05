@@ -9,18 +9,20 @@ of its own, and reads no clock.
 
 Task 3.1 declares the connector and implements the key check. Task 3.2 adds
 the per-pull state (one token, spacing, rate-limit waits) and the one helper
-every Garmin GET goes through. Task 3.3 adds the activity listing and task 3.4
-the per-pull limit. The other three pull operations are placeholders that raise a named
+every Garmin GET goes through. Task 3.3 adds the activity listing, task 3.4 the
+per-pull limit and task 4.1 the wellness listing. The other two pull operations
+are placeholders that raise a named
 :class:`ConnectorError` and make no request, because the registry requires
 them once the capabilities are declared; later tasks replace them.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import re
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from typing import Final
@@ -348,6 +350,177 @@ def _limit(
     return Listing(tuple(ordered[:cut]), (ListingDeferral(session.instance, reason),))
 
 
+# --------------------------------------------------------------------------
+# Wellness listing (task 4.1; Req 9.2-9.7, 9.9)
+# --------------------------------------------------------------------------
+
+DAILY_PATH: Final[str] = "/usersummary-service/v2/dailysummaries"
+SLEEP_PATH: Final[str] = "/sleep-service/sleep/dailySleepSummariesByDate"
+HRV_PATH: Final[str] = "/hrv-service/hrv/daily"
+WEIGHT_PATH: Final[str] = "/weight-service/weight/range"
+DAILY_WINDOW_DAYS: Final[int] = 365
+SLEEP_WINDOW_DAYS: Final[int] = 31
+HRV_WINDOW_DAYS: Final[int] = 28
+WEIGHT_WINDOW_DAYS: Final[int] = 365
+CONTENT_REVISION_PREFIX: Final[str] = "sha256:"
+
+_CALENDAR_DATE_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
+
+WELLNESS_FORM_MESSAGE: Final[str] = (
+    "Garmin's {section} records were not understood: {problem}; the wellness pull ended"
+)
+OLDEST_ACTIVITY_FORM_MESSAGE: Final[str] = (
+    "Garmin's answer for the oldest activity was not understood: {problem}; "
+    "the wellness pull ended"
+)
+WELLNESS_STATUS_MESSAGE: Final[str] = (
+    "Garmin answered the {section} request with an unexpected status "
+    "(HTTP {status}); the wellness pull ended"
+)
+WELLNESS_UNREACHABLE_MESSAGE: Final[str] = (
+    "Garmin could not be reached for the {section} request; the wellness pull ended"
+)
+
+
+@dataclass(frozen=True)
+class _Section:
+    """One wellness route: its window, its URL, where its records are in the
+    answer (``container`` is ``None`` when the answer is the list itself) and
+    which field holds each record's date."""
+
+    name: str
+    label: str
+    window_days: int
+    url: Callable[[date, date], str]
+    container: str | None
+    date_field: str
+
+
+def _daily_url(first: date, last: date) -> str:
+    query = urlencode({"startDate": first.isoformat(), "endDate": last.isoformat()})
+    return f"{API_BASE}{DAILY_PATH}?{query}"
+
+
+def _sleep_url(first: date, last: date) -> str:
+    query = urlencode({"startDate": first.isoformat(), "endDate": last.isoformat()})
+    return f"{API_BASE}{SLEEP_PATH}?{query}"
+
+
+def _hrv_url(first: date, last: date) -> str:
+    return f"{API_BASE}{HRV_PATH}/{first.isoformat()}/{last.isoformat()}"
+
+
+def _weight_url(first: date, last: date) -> str:
+    return (
+        f"{API_BASE}{WEIGHT_PATH}/{first.isoformat()}/{last.isoformat()}"
+        f"?{urlencode({'includeAll': 'true'})}"
+    )
+
+
+_SECTIONS: Final[tuple[_Section, ...]] = (
+    _Section("daily", "daily", DAILY_WINDOW_DAYS, _daily_url, "data", "calendarDate"),
+    _Section("sleep", "sleep", SLEEP_WINDOW_DAYS, _sleep_url, None, "calendarDate"),
+    _Section("hrv", "HRV", HRV_WINDOW_DAYS, _hrv_url, "hrvSummaries", "calendarDate"),
+    _Section(
+        "weight",
+        "weight",
+        WEIGHT_WINDOW_DAYS,
+        _weight_url,
+        "dailyWeightSummaries",
+        "summaryDate",
+    ),
+)
+
+
+def _refuse_constant(name: str) -> object:
+    raise ValueError(name)
+
+
+def _finite_float(text: str) -> float:
+    """``1e999`` reads as infinity with no constant named, so it is refused here."""
+    value = float(text)
+    if not math.isfinite(value):
+        raise ValueError("not finite")
+    return value
+
+
+def _wellness_json(body: bytes) -> object:
+    """The body as JSON with no non-finite number, else :class:`ValueError`."""
+    try:
+        return json.loads(
+            body.decode("utf-8"),
+            parse_constant=_refuse_constant,
+            parse_float=_finite_float,
+        )
+    except (UnicodeDecodeError, RecursionError) as exc:
+        raise ValueError("unreadable") from exc
+
+
+def _windows(first: date, newest: date, size: int) -> list[tuple[date, date]]:
+    """Inclusive windows of at most ``size`` days over ``[first, newest]``,
+    contiguous and not overlapping (Req 9.3, 9.4)."""
+    windows: list[tuple[date, date]] = []
+    start = first
+    while start <= newest:
+        end = min(start + timedelta(days=size - 1), newest)
+        windows.append((start, end))
+        start = end + timedelta(days=1)
+    return windows
+
+
+def _section_records(section: _Section, body: bytes) -> list[dict[str, object]]:
+    """The records of one 200 answer, each an object whose date field is a
+    valid ``YYYY-MM-DD``; anything else is a named :class:`ConnectorError`
+    that never quotes the body (Req 9.9)."""
+
+    def form(problem: str) -> ConnectorError:
+        return ConnectorError(
+            WELLNESS_FORM_MESSAGE.format(section=section.label, problem=problem)
+        )
+
+    try:
+        data = _wellness_json(body)
+    except ValueError:
+        raise form("the body is not valid JSON with finite numbers") from None
+    if section.container is not None:
+        if not isinstance(data, dict) or section.container not in data:
+            raise form("the body is not the documented object")
+        data = data[section.container]
+    if not isinstance(data, list):
+        raise form("the records are not a list")
+    records: list[dict[str, object]] = []
+    for position, record in enumerate(data, start=1):
+        if not isinstance(record, dict):
+            raise form(f"record {position} is not an object")
+        stated = record.get(section.date_field)
+        if not isinstance(stated, str) or _CALENDAR_DATE_RE.fullmatch(stated) is None:
+            raise form(f"record {position} has no YYYY-MM-DD date")
+        try:
+            date.fromisoformat(stated)
+        except ValueError:
+            raise form(f"record {position} has an invalid calendar date") from None
+        records.append(record)
+    return records
+
+
+def _content_revision(record: Mapping[str, object]) -> str:
+    """``sha256:`` over the record's canonical JSON: sorted keys, compact
+    separators, so key order in the response never changes it."""
+    canonical = json.dumps(
+        record, sort_keys=True, separators=(",", ":"), allow_nan=False
+    )
+    return (
+        CONTENT_REVISION_PREFIX + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    )
+
+
+def _year_before(day: date) -> date:
+    try:
+        return day.replace(year=day.year - 1)
+    except ValueError:
+        return day.replace(year=day.year - 1, day=28)
+
+
 def _not_built(operation: str) -> ConnectorError:
     return ConnectorError(NOT_BUILT_MESSAGE.format(operation=operation))
 
@@ -532,10 +705,105 @@ class GarminConnector:
     ) -> FetchResult:
         raise _not_built("the activity download")
 
+    def _wellness_get(
+        self, session: ConnectorSession, url: str, label: str
+    ) -> HttpResponse | None:
+        """One wellness GET through :meth:`_get`: ``None`` for a 204 (no
+        records, Req 9.6), the response for a 200, else a named
+        :class:`ConnectorError` that quotes nothing. What :meth:`_get` raises
+        itself, a 429 past the waits or a kept token failure, passes through
+        unchanged. Statuses beyond that are mapped by task 4.3."""
+        try:
+            response = self._get(session, url, {"Accept": "application/json"})
+        except TransportError:
+            raise ConnectorError(
+                WELLNESS_UNREACHABLE_MESSAGE.format(section=label)
+            ) from None
+        if response.status == 204:
+            return None
+        if response.status != 200:
+            raise ConnectorError(
+                WELLNESS_STATUS_MESSAGE.format(section=label, status=response.status)
+            )
+        return response
+
+    def _oldest_activity_day(
+        self, session: ConnectorSession, newest: date
+    ) -> date | None:
+        """The UTC date of the key owner's oldest activity, or ``None`` when
+        there is none (Req 9.2): one listing request with ``limit=1``."""
+        query = urlencode(
+            {
+                "start": 0,
+                "limit": 1,
+                "sortOrder": "asc",
+                "startDate": LISTING_EARLIEST.isoformat(),
+                "endDate": newest.isoformat(),
+            }
+        )
+        label = "oldest activity"
+        response = self._wellness_get(
+            session, f"{API_BASE}{LISTING_PATH}?{query}", label
+        )
+        if response is None:
+            return None
+
+        def form(problem: str) -> ConnectorError:
+            return ConnectorError(OLDEST_ACTIVITY_FORM_MESSAGE.format(problem=problem))
+
+        try:
+            data = _wellness_json(response.body)
+        except ValueError:
+            raise form("the body is not valid JSON with finite numbers") from None
+        if not isinstance(data, list):
+            raise form("the body is not a list")
+        if not data:
+            return None
+        entry = data[0]
+        if not isinstance(entry, dict):
+            raise form("the entry is not an object")
+        start = _gmt_start(entry.get("startTimeGMT"))
+        if start is None:
+            raise form("the entry has no valid start")
+        return start.date()
+
     def list_wellness(
         self, session: ConnectorSession, oldest: date | None
     ) -> WellnessListing:
-        raise _not_built("the wellness listing")
+        """Every day from ``oldest`` through the day after the pull's UTC
+        date, in one listing with no per-pull limit (Req 9.2-9.7, 9.9).
+
+        Without ``oldest``, the start is the oldest activity's UTC date, else
+        one year before the pull. Each route is requested in inclusive windows
+        of its own size, route after route; a date's records merge into one
+        day with sections that have no record absent, a later record for a
+        date and section replaces an earlier one, and a date the service
+        returned outside the range is kept as sent. An ``oldest`` after the
+        range's end is read as the last day."""
+        today = session.now().astimezone(UTC).date()
+        newest = today + timedelta(days=1)
+        first = oldest
+        if first is None:
+            first = self._oldest_activity_day(session, newest)
+        if first is None:
+            first = _year_before(today)
+        first = min(first, newest)
+        merged: dict[date, dict[str, object]] = {}
+        for section in _SECTIONS:
+            for start, end in _windows(first, newest, section.window_days):
+                response = self._wellness_get(
+                    session, section.url(start, end), section.label
+                )
+                if response is None:
+                    continue
+                for record in _section_records(section, response.body):
+                    day = date.fromisoformat(str(record[section.date_field]))
+                    merged.setdefault(day, {})[section.name] = record
+        days = tuple(
+            WellnessDay(day=day, revision=_content_revision(record), record=record)
+            for day, record in sorted(merged.items())
+        )
+        return WellnessListing(oldest=first, newest=newest, days=days)
 
     def package_wellness(
         self, session: ConnectorSession, days: tuple[WellnessDay, ...]

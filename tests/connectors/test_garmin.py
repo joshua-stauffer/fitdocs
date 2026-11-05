@@ -490,16 +490,13 @@ def test_the_key_is_in_no_exception_text_or_repr(answer: HttpResponse) -> None:
 # --------------------------------------------------------------------------
 
 
-def test_the_three_later_operations_are_named_connector_errors_with_no_request() -> (
-    None
-):
+def test_the_later_operations_are_named_connector_errors_with_no_request() -> None:
     transport = FakeTransport([_token_ok()])
     session = _session(transport)
     connector = GarminConnector()
     activity = RemoteActivity(remote_id="1", original_available=True)
     calls = (
         lambda: connector.fetch_activity(session, activity),
-        lambda: connector.list_wellness(session, None),
         lambda: connector.package_wellness(session, ()),
     )
     for call in calls:
