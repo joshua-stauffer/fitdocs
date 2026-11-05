@@ -28,3 +28,10 @@ README.md ~156; src/fitdocs/connectors/__init__.py ~186 `register(RelayConnector
 
 ## How to pick it up
 Reword the paragraph to name the built-in connectors (or avoid a count); coordinate with strava-publish's landing.
+
+## Resolution
+Done 2026-11-05, closed by garmin-connector task 6.3 (the README rewrite itself
+was task 6.2). `README.md` (Connectors, lines 152-166) now reads "fitdocs ships
+five connectors" and names `folder`, `intervals`, `relay`, `strava` and `garmin`;
+`src/fitdocs/connectors/__init__.py` registers the same five. Verified by reading
+both on branch `impl/gc-wellness` at 25a96806.
