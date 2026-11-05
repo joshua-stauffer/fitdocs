@@ -27,7 +27,7 @@
 
 - [ ] 2. The Garmin wellness format
 
-- [ ] 2.1 (P) Read the delivery into wellness values
+- [x] 2.1 (P) Read the delivery into wellness values
   - Add the delivery envelope's recognition and the day reader beside the existing Garmin formats, sharing the existing sleep derivation by naming the respiration field it reads.
   - Map every row of the design's metric table, including grams to kilograms and `lastNightAvg` as RMSSD; attribute every value to origin `garmin`; give each day the full metric set as `covers` and `fetched_at` as its revision.
   - A section that is not an object, or a value that is not a finite number within the metric's accepted range, leaves only that metric absent. Only an envelope outside the documented form refuses the file.
@@ -37,7 +37,7 @@
   - _Requirements: 10.2, 10.3, 10.4, 10.5, 10.6, 10.7, 10.9, 10.10, 10.11, 14.3_
   - _Boundary: PERSONAL_FORMAT_
 
-- [ ] 2.2 Register the source and format
+- [x] 2.2 Register the source and format
   - Register `garmin-personal` as a device source and the delivery as its format, so that the default order becomes `garmin-export`, `garmin-personal`, `apple-health`, `intervals-icu`.
   - Update the behavior tests that pin the source and format lists and that order; delete any documentation-binding test this turns red.
   - Done when a delivery is recognized by exactly one format, no export recognizer claims it, it claims no export file, `validate_registry` passes, and a test shows the export's value stays canonical on overlap with both source values kept.
@@ -132,13 +132,13 @@
 
 - [ ] 6. Documentation and records
 
-- [ ] 6.1 Write the connector's documentation
+- [x] 6.1 Write the connector's documentation
   - Add the Garmin section to the connectors page: creating a key, the settings table, `fitdocs connect`, the environment override and enabling wellness; expiry and renewal; the terms quoted, the non-affiliation line and no permission claimed; the first pull, the limit, resuming and `--since`, and that wellness has no such limit; what the first `sync` does to an existing wiki and its two controls; what the connector does not do; and the `sources` hint for intervals users.
   - Add the Garmin hosts this section links to into the neutral scan's table under the exact key `docs/connectors.md#Garmin`. Delete any documentation-binding test this turns red.
   - Done when the section states every point in Requirement 12.1 to 12.8, and the neutral scan passes.
   - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5, 12.6, 12.7, 12.8, 14.4_
 
-- [ ] 6.2 Correct what the connector makes false
+- [x] 6.2 Correct what the connector makes false
   - Update the connectors page's preamble and connector count, "What leaves your machine" and the terms-first policy; the wellness guide's format list, source order and accepted source ids; the configuration guide; the README's connector list; and add the changelog entry with the settings-schema note and the action.
   - The neutral scan covers those sections too, so name Garmin's address there without a scheme, or link to the Garmin section.
   - Do not edit the website guide: a push to `main` deploys it.

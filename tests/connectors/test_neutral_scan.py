@@ -57,6 +57,11 @@ NEUTRAL_SCAN_EXEMPTIONS: dict[str, frozenset[str]] = {
             "tests/connectors/test_garmin_pull.py",
         }
     ),
+    "developer.garmin.com": frozenset(
+        {
+            "docs/connectors.md#Garmin",
+        }
+    ),
     "api.fitdocs.ai": frozenset(
         {
             "src/fitdocs/connectors/relay.py",

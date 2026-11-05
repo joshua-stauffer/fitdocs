@@ -33,12 +33,18 @@ SHIPPED = (
     garmin.SLEEP_FORMAT,
     garmin.MAXMET_FORMAT,
     garmin.BIOMETRICS_FORMAT,
+    garmin.PERSONAL_FORMAT,
     apple.FORMAT,
 )
 
 
 def test_shipped_sources() -> None:
-    assert registry.SOURCES == (intervals.SOURCE, garmin.SOURCE, apple.SOURCE)
+    assert registry.SOURCES == (
+        intervals.SOURCE,
+        garmin.SOURCE,
+        garmin.PERSONAL_SOURCE,
+        apple.SOURCE,
+    )
 
 
 def test_shipped_formats() -> None:
@@ -56,6 +62,7 @@ def test_shipped_suffixes() -> None:
 def test_shipped_source_order() -> None:
     assert registry.default_source_order() == (
         "garmin-export",
+        "garmin-personal",
         "apple-health",
         "intervals-icu",
     )

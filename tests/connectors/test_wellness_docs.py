@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-import tomllib
 from pathlib import Path
 
 import pytest
@@ -16,10 +15,6 @@ from fitdocs.connectors.settings import _RESERVED_KEYS
 
 _ROOT = Path(__file__).resolve().parents[2]
 _DOC = _ROOT / "docs" / "connectors.md"
-_GUIDE = (
-    tomllib.loads((_ROOT / "pyproject.toml").read_text())["project"]["urls"]["Source"]
-    + "/blob/main/docs/wellness.md"
-)
 
 
 _MD = MarkdownIt("commonmark").enable("table")
@@ -344,12 +339,6 @@ _PASSAGES = [
         "activity pulls.",
     ),
     (
-        "export",
-        "### Wellness",
-        f"Use Garmin's own data export through the [wellness guide]({_GUIDE}) "
-        "for Garmin wellness.",
-    ),
-    (
         "computed",
         "### Wellness",
         "Computed fields (`ctl`, `atl`, `rampRate`, `ctlLoad`, `atlLoad` and "
@@ -382,9 +371,4 @@ def test_guide_passage(name: str, heading: str, passage: str) -> None:
         text = " ".join(
             meaning for key, meaning, _default in _config_rows() if key == meaning_key
         )
-    linked = name != "export" or any(
-        child.type == "link_open" and child.attrGet("href") == _GUIDE
-        for token in _section(heading)
-        for child in token.children or []
-    )
-    assert passage in text and linked
+    assert passage in text

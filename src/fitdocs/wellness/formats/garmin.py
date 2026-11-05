@@ -1,8 +1,10 @@
-"""Garmin export wellness records, recognized by structure or empty-file name."""
+"""Garmin wellness records: export files, recognized by structure or empty-file name,
+and the ``garmin`` connector's delivery, recognized by its envelope."""
 
 from __future__ import annotations
 
 import json
+import math
 import re
 from collections.abc import Iterator, Mapping
 from datetime import UTC, date, datetime
@@ -172,7 +174,9 @@ def _uds(record: dict[str, object]) -> dict[Metric, float]:
     return values
 
 
-def _sleep(record: dict[str, object]) -> dict[Metric, float]:
+def _sleep(
+    record: dict[str, object], respiration_field: str = "averageRespiration"
+) -> dict[Metric, float]:
     values: dict[Metric, float] = {}
     stages = {field: _number(record.get(field)) for field in _STAGE_FIELDS}
     awake = _number(record.get("awakeSleepSeconds"))
@@ -187,7 +191,7 @@ def _sleep(record: dict[str, object]) -> dict[Metric, float]:
         for field, metric in _STAGE_FIELDS.items():
             _put(values, metric, stages[field])
         _put(values, Metric.SLEEP_AWAKE_S, awake)
-    _put(values, Metric.RESPIRATION_BRPM, record.get("averageRespiration"))
+    _put(values, Metric.RESPIRATION_BRPM, record.get(respiration_field))
     return values
 
 
@@ -265,4 +269,166 @@ MAXMET_FORMAT: Final[FormatSpec] = _format(
 )
 BIOMETRICS_FORMAT: Final[FormatSpec] = _format(
     "biometrics", "Garmin body metrics", frozenset({Metric.WEIGHT_KG})
+)
+
+
+PERSONAL_SOURCE: Final[SourceSpec] = SourceSpec(
+    "garmin-personal", "Garmin Personal API", SourceKind.DEVICE
+)
+_PERSONAL_NAME: Final[str] = "fitdocs.garmin-personal-wellness"
+_PERSONAL_VERSION: Final[int] = 1
+_PERSONAL_RESPIRATION: Final[str] = "averageRespirationValue"
+_PERSONAL_METRICS: Final[frozenset[Metric]] = (
+    _UDS_METRICS | _SLEEP_METRICS | {Metric.HRV_RMSSD_MS, Metric.WEIGHT_KG}
+)
+_PERSONAL_DAILY: Final[Mapping[Metric, tuple[str, ...]]] = {
+    Metric.RESTING_HR_BPM: ("heartRate", "restingValue"),
+    Metric.MIN_HR_BPM: ("heartRate", "minValue"),
+    Metric.MAX_HR_BPM: ("heartRate", "maxValue"),
+    Metric.STEPS: ("movement", "steps", "value"),
+    Metric.STRESS_LEVEL: ("stress", "avgLevel"),
+    Metric.BODY_BATTERY_HIGHEST: ("bodyBattery", "maxValue"),
+    Metric.BODY_BATTERY_LOWEST: ("bodyBattery", "minValue"),
+    Metric.SPO2_PCT: ("pulseOx", "avgValue"),
+}
+_PERSONAL_SLEEP_FIELDS: Final[frozenset[str]] = frozenset(_STAGE_FIELDS) | {
+    "awakeSleepSeconds",
+    _PERSONAL_RESPIRATION,
+}
+
+
+def _is_delivery_header(payload: object) -> bool:
+    """The envelope's name and integer version, as recognition and parsing share."""
+    if not isinstance(payload, dict) or payload.get("format") != _PERSONAL_NAME:
+        return False
+    version = payload.get("version")
+    return (
+        isinstance(version, int)
+        and not isinstance(version, bool)
+        and version == _PERSONAL_VERSION
+    )
+
+
+def _recognize_personal(probe: CandidateProbe) -> bool:
+    return _is_delivery_header(probe.json())
+
+
+def _finite(raw: object) -> int | float | None:
+    """The number itself, or None for a bool, a non-number or a non-finite one."""
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+        return None
+    try:
+        return raw if math.isfinite(raw) else None
+    except OverflowError:
+        return None
+
+
+def _section(record: dict[str, object], name: str) -> dict[str, object]:
+    section = record.get(name)
+    return section if isinstance(section, dict) else {}
+
+
+def _at(section: dict[str, object], path: tuple[str, ...]) -> object:
+    node: object = section
+    for key in path:
+        if not isinstance(node, dict):
+            return None
+        node = node.get(key)
+    return node
+
+
+_FETCHED_AT: Final[str] = (
+    r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{6}Z"
+)
+
+
+def _fetched_at(raw: object) -> str:
+    """The revision, only in its fixed-width form, so string order is time order."""
+    if isinstance(raw, str) and re.fullmatch(_FETCHED_AT, raw) is not None:
+        try:
+            datetime.strptime(raw, "%Y-%m-%dT%H:%M:%S.%fZ")
+        except ValueError:
+            pass
+        else:
+            return raw
+    raise WellnessFormatError("invalid Garmin delivery fetch time")
+
+
+def _personal_values(day: dict[str, object]) -> dict[Metric, float]:
+    values: dict[Metric, float] = {}
+    daily = _section(day, "daily")
+    for metric, path in _PERSONAL_DAILY.items():
+        _put(values, metric, _finite(_at(daily, path)))
+    sleep = _section(day, "sleep")
+    values.update(
+        _sleep(
+            {
+                field: sleep[field]
+                for field in _PERSONAL_SLEEP_FIELDS
+                if _finite(sleep.get(field)) is not None
+            },
+            _PERSONAL_RESPIRATION,
+        )
+    )
+    _put(
+        values,
+        Metric.HRV_RMSSD_MS,
+        _finite(_at(_section(day, "hrv"), ("lastNightAvg",))),
+    )
+    grams = _finite(_at(_section(day, "weight"), ("latestWeight", "weight")))
+    if grams is not None:
+        _put(values, Metric.WEIGHT_KG, grams / 1000)
+    return values
+
+
+def _parse_personal(stream: BinaryIO) -> Iterator[DaySnapshot]:
+    try:
+        payload = json.load(stream)
+    except (ValueError, UnicodeError) as error:
+        raise WellnessFormatError("invalid Garmin delivery JSON") from error
+    if not isinstance(payload, dict) or not _is_delivery_header(payload):
+        raise WellnessFormatError("invalid Garmin delivery header")
+    days = payload.get("days")
+    if not isinstance(days, list):
+        raise WellnessFormatError("Garmin delivery days must be a list")
+    previous: date | None = None
+    for ordinal, record in enumerate(days):
+        if not isinstance(record, dict):
+            raise WellnessFormatError("invalid Garmin delivery day")
+        raw = record.get("date")
+        if not isinstance(raw, str) or re.fullmatch(_DATE, raw) is None:
+            raise WellnessFormatError("invalid Garmin delivery date")
+        try:
+            day = date.fromisoformat(raw)
+        except ValueError as error:
+            raise WellnessFormatError("invalid Garmin delivery date") from error
+        if previous is not None and day <= previous:
+            raise WellnessFormatError("Garmin delivery days must ascend by date")
+        previous = day
+        revision = _fetched_at(record.get("fetched_at"))
+        values = _personal_values(record)
+        yield DaySnapshot(
+            day,
+            _PERSONAL_METRICS,
+            values,
+            {metric: "garmin" for metric in values},
+            revision,
+            ordinal,
+        )
+
+
+PERSONAL_FORMAT: Final[FormatSpec] = FormatSpec(
+    "garmin-personal",
+    "Garmin Personal API",
+    PERSONAL_SOURCE,
+    frozenset({".json"}),
+    ArchiveForm.ORIGINAL,
+    ".json",
+    1,
+    _PERSONAL_METRICS,
+    _recognize_personal,
+    _parse_personal,
+    supersession=Supersession.NONE,
+    extract=None,
+    entry_order=None,
 )

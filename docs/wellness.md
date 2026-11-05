@@ -30,11 +30,16 @@ its content hash; correct its bytes or use `fitdocs sync --retry-quarantined`
 after fixing the cause. Deferred files are considered again on the next drain.
 
 You can save an intervals.icu wellness API response as a `.json` file and drop
-it into the inbox. Connector deliveries use the [envelope below](#delivery-envelope).
+it into the inbox. An intervals.icu connector delivery uses the [envelope below](#delivery-envelope).
 
 The intervals.icu pull delivers wellness files into the inbox: set
 `wellness = true` on your connector instance and run `fitdocs pull --sync`.
 See [wellness pulling](connectors.md#wellness) for setup and limits.
+
+The `garmin` connector pulls Garmin's own daily summaries, sleep, heart rate
+variability and weight directly from a Garmin Connect account, with no export
+step: set `wellness = true` on a `garmin` instance and run `fitdocs pull --sync`.
+See [Wellness from Garmin](connectors.md#wellness-from-garmin).
 
 Apple Health exports are supported as `.zip` or bare `.xml`; see [Apple
 Health](#apple-health).
@@ -43,6 +48,7 @@ A Garmin monitoring, sleep or settings `.fit` file is not one of these JSON
 exports. A FIT header declaring a non-activity type is skipped with a warning,
 creates no workout page and stays in the inbox under every disposition.
 Garmin wellness FIT message parsing and whole Garmin export ZIP import are not supported.
+(The `garmin` connector reads Garmin's service records, not these files.)
 
 ## Supported files and source definitions
 
@@ -51,7 +57,9 @@ files below, including all date chunks you need. Names here are patterns;
 recognition uses record structure (and the matching name for an empty list),
 not a particular account identifier. These JSON formats archive their original bytes;
 Apple Health archives the extract described below.
-All four Garmin formats use source `garmin-export` and origin `garmin`.
+All four Garmin export formats use source `garmin-export` and origin `garmin`.
+A fifth Garmin format, the `garmin-personal` delivery, comes from the `garmin`
+connector rather than from an export; it is described after the table.
 
 | File pattern | What is imported and how |
 | --- | --- |
@@ -60,6 +68,32 @@ All four Garmin formats use source `garmin-export` and origin `garmin`.
 | `MetricsMaxMetData_*.json` | `vo2MaxValue` for sport `RUNNING` / `CYCLING` → running / cycling VO2max. Other or missing sports are ignored; `updateTimestamp` selects the latest record. |
 | `*_userBioMetrics.json` | `weight.weight`, converted from grams to kilograms, under `metaData.calendarDate`, a local timestamp whose date part is the day. Other body measurements are ignored. |
 | intervals.icu wellness `.json` | A bare nonempty list from the [wellness API](https://intervals.icu/api-docs.html), or the delivery envelope below. Source `intervals-icu`; origin is unknown for a bare list and field-specific for an envelope. |
+
+The `garmin` connector's delivery is a `.json` file in fitdocs's own envelope
+(format `fitdocs.garmin-personal-wellness`, version 1), written by `fitdocs pull`
+into the inbox; you never make one by hand and need no export. Its source is
+`garmin-personal` and its origin is `garmin`. Each day merges Garmin's daily
+summary, sleep, heart rate variability and weight records, and fitdocs reads
+these values from them:
+
+| Metric | Read from |
+| --- | --- |
+| Resting, lowest and highest HR | the daily summary's heart rate resting, minimum and maximum |
+| Steps | the daily summary's steps |
+| Stress level | the daily summary's average stress level; Garmin's negative placeholders are absent |
+| Body battery highest / lowest | the daily summary's body battery maximum and minimum |
+| SpO2 | the daily summary's average pulse oximetry |
+| Deep, light, REM and awake seconds, and total sleep | the sleep record's stage seconds; total sleep is the stages summed, excluding awake time |
+| Respiration | the sleep record's average respiration |
+| Weight | the weight record's latest weight, converted from grams to kilograms |
+| Overnight HRV (RMSSD) | the heart rate variability record's last-night average |
+
+VO2max and every other field in Garmin's records are not read; they stay in the
+archived delivery. A value Garmin does not supply, or one outside the metric's
+accepted range, is absent, never zero. A later delivery of a day replaces the
+earlier one, including a metric it no longer carries. When `garmin-export` and
+`garmin-personal` both hold a value for a day and metric, the export stays
+canonical under the default order; both rows are kept.
 
 Garmin's daily resting HR is its lowest 30-minute average over a 24-hour period;
 fitdocs imports the daily `currentDayRestingHeartRate`, not the separate rolling
@@ -392,8 +426,8 @@ sleep is positive. A new revision can withdraw an earlier measurement.
 All sources' values are retained. Exactly one available source is canonical for
 each day and metric; consumers can instead follow a single source consistently.
 The default source ranking is device, then hub, then relay, then source id
-within each kind. Today that puts `garmin-export` before `apple-health` before
-`intervals-icu`.
+within each kind. Today that puts `garmin-export` before `garmin-personal`
+before `apple-health` before `intervals-icu`.
 Future source registrations can extend the ranking.
 
 Set the order in `<data-root>/fitdocs.toml`:
@@ -410,8 +444,8 @@ The general list applies to all metrics; a metric-specific list replaces it for
 that metric. Every partial list is completed with remaining registered sources
 in default order. An empty list uses the default. Unknown sources, duplicate
 sources, unknown metrics and malformed lists are configuration errors before
-writes. Only registered source ids are accepted: `garmin-export`, `apple-health` and
-`intervals-icu`. Changed precedence rebuilds the series on the next drain or `fitdocs
+writes. Only registered source ids are accepted: `garmin-export`, `garmin-personal`,
+`apple-health` and `intervals-icu`. Changed precedence rebuilds the series on the next drain or `fitdocs
 regen`.
 Precedence does not mix or average sources, and does not alter their definitions.
 
@@ -479,8 +513,8 @@ The reader also provides `days`, `for_day`, `sources`, `value` and
 ## Archive and withdrawal
 
 Handled JSON inputs live at `wellness-archive/<format>/<original-sha256>.json`:
-`intervals-icu`, `garmin-uds`, `garmin-sleep`, `garmin-maxmet` or
-`garmin-biometrics`. Entries are immutable. Byte-identical inputs of one format
+`intervals-icu`, `garmin-uds`, `garmin-sleep`, `garmin-maxmet`,
+`garmin-biometrics` or `garmin-personal`. Entries are immutable. Byte-identical inputs of one format
 share an entry; a failed parse writes no archive entry. The next drain rebuilds
 the series after intake; `fitdocs regen` forces a rebuild before rendering pages.
 
