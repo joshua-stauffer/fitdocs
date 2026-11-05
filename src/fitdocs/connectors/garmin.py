@@ -9,19 +9,22 @@ of its own, and reads no clock.
 
 Task 3.1 declares the connector and implements the key check. Task 3.2 adds
 the per-pull state (one token, spacing, rate-limit waits) and the one helper
-every Garmin GET goes through. The four pull operations are placeholders that
-raise a named :class:`ConnectorError` and make no request, because the
-registry requires them once the capabilities are declared; later tasks
-replace them.
+every Garmin GET goes through. Task 3.3 adds the activity listing. The other
+three pull operations are placeholders that raise a named
+:class:`ConnectorError` and make no request, because the registry requires
+them once the capabilities are declared; later tasks replace them.
 """
 
 from __future__ import annotations
 
+import json
+import math
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Final
+from urllib.parse import urlencode
 from weakref import WeakKeyDictionary
 
 from fitdocs.connectors.errors import AuthFailure, AuthFailureKind, ConnectorError
@@ -55,13 +58,17 @@ REQUEST_SPACING_S: Final[float] = 1.0
 RATE_LIMIT_WAITS_S: Final[tuple[float, ...]] = (30.0, 60.0, 120.0, 240.0)
 MAX_STATED_WAIT_S: Final[float] = 300.0
 MAX_WAITS_PER_PULL_S: Final[float] = 900.0
+LISTING_PAGE: Final[int] = 200
+LISTING_EARLIEST: Final[date] = date(1990, 1, 1)
+LISTING_PATH: Final[str] = "/activitylist-service/activities/search/activities"
 
 _TOKEN_RE = re.compile(r"[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+")
+_GMT_START_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}")
 
 REJECTED_MESSAGE: Final[str] = (
     "Garmin did not accept the Personal API key (HTTP {status}); the key may "
     "be wrong, expired or deleted. Create a new key on Garmin Connect, then "
-    "run `fitdocs connect` again"
+    "run `fitdocs connect` again."
 )
 RATE_LIMITED_MESSAGE: Final[str] = (
     "Garmin is limiting requests (HTTP 429) and refused the key check"
@@ -76,11 +83,40 @@ NOT_A_TOKEN_MESSAGE: Final[str] = (
 )
 PULL_RATE_LIMITED_MESSAGE: Final[str] = (
     "Garmin is limiting requests (HTTP 429); the next pull resumes where this "
-    "one stopped"
+    "one stopped."
 )
 TOKEN_UNREACHABLE_MESSAGE: Final[str] = (
     "Garmin could not be reached for the token request; the next pull resumes "
     "where this one stopped"
+)
+LISTING_NOT_A_LIST_MESSAGE: Final[str] = (
+    "Garmin's activity listing was not understood: it is not a list of activity objects"
+)
+LISTING_NOT_AN_OBJECT_MESSAGE: Final[str] = (
+    "Garmin's activity listing was not understood: entry {position} is not an object"
+)
+LISTING_NO_ID_MESSAGE: Final[str] = (
+    "Garmin's activity listing was not understood: entry {position} has no "
+    "positive whole-number identifier"
+)
+LISTING_REPEATED_MESSAGE: Final[str] = (
+    "Garmin's activity listing was not understood: a full page repeated "
+    "activities already listed"
+)
+LISTING_REFUSED_MESSAGE: Final[str] = (
+    "Garmin refused the activity listing (HTTP 403). Garmin's terms let it "
+    "restrict access; check the key's status on Garmin Connect."
+)
+LISTING_UNAVAILABLE_MESSAGE: Final[str] = (
+    "Garmin is unavailable (HTTP {status}) for the activity listing; the next "
+    "pull resumes where this one stopped"
+)
+LISTING_UNREACHABLE_MESSAGE: Final[str] = (
+    "Garmin is unavailable: it could not be reached for the activity listing; "
+    "the next pull resumes where this one stopped"
+)
+LISTING_OTHER_MESSAGE: Final[str] = (
+    "Garmin answered the activity listing with an unexpected status (HTTP {status})"
 )
 NOT_BUILT_MESSAGE: Final[str] = (
     "the Garmin connector does not implement {operation} yet"
@@ -164,6 +200,89 @@ def _rate_limit_wait(
     if waited_s + wait > MAX_WAITS_PER_PULL_S:
         return None
     return wait
+
+
+def _remote_activity(entry: object, position: int) -> RemoteActivity:
+    """One listing entry as a remote activity (Req 3.5-3.7). Keeps the
+    identifier, the stated UTC start, the sport and the elapsed duration;
+    nothing else of the entry is read. A missing or malformed identifier is a
+    :class:`ConnectorError` naming ``position`` (1-based, across the whole
+    listing) that never quotes the entry; any other field that is not stated
+    in its documented form is ``None``."""
+    if not isinstance(entry, dict):
+        raise ConnectorError(LISTING_NOT_AN_OBJECT_MESSAGE.format(position=position))
+    activity_id = entry.get("activityId")
+    if not isinstance(activity_id, int) or isinstance(activity_id, bool):
+        raise ConnectorError(LISTING_NO_ID_MESSAGE.format(position=position))
+    if activity_id <= 0:
+        raise ConnectorError(LISTING_NO_ID_MESSAGE.format(position=position))
+    return RemoteActivity(
+        remote_id=str(activity_id),
+        original_available=True,
+        start=_gmt_start(entry.get("startTimeGMT")),
+        sport=_sport(entry.get("activityType")),
+        duration_s=_seconds(entry.get("elapsedDuration")),
+    )
+
+
+def _gmt_start(value: object) -> datetime | None:
+    """``YYYY-MM-DD HH:MM:SS`` read as UTC, else ``None``."""
+    if not isinstance(value, str) or _GMT_START_RE.fullmatch(value) is None:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
+    except ValueError:
+        return None
+
+
+def _sport(value: object) -> str | None:
+    if not isinstance(value, dict):
+        return None
+    key = value.get("typeKey")
+    if isinstance(key, str) and key.strip():
+        return key
+    return None
+
+
+def _seconds(value: object) -> float | None:
+    """A stated finite, non-negative number as seconds, else ``None``. A
+    stated 0 is a stated value."""
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return None
+    try:
+        seconds = float(value)
+    except OverflowError:
+        return None
+    if not math.isfinite(seconds) or seconds < 0:
+        return None
+    return seconds
+
+
+def _listing_page(body: bytes) -> list[object]:
+    """The entries of one listing answer, or a named :class:`ConnectorError`
+    that never quotes the body."""
+    try:
+        data = json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError, RecursionError):
+        raise ConnectorError(LISTING_NOT_A_LIST_MESSAGE) from None
+    if not isinstance(data, list):
+        raise ConnectorError(LISTING_NOT_A_LIST_MESSAGE)
+    return data
+
+
+def _raise_for_listing(response: HttpResponse) -> None:
+    """Map a listing answer that is not 200 (Req 6.1-6.4, 6.7, 6.8). A 429
+    never gets here: ``_get`` has already raised it after the waits."""
+    status = response.status
+    if status == 200:
+        return
+    if status == 401:
+        raise AuthFailure(AuthFailureKind.REJECTED, REJECTED_MESSAGE.format(status=401))
+    if status == 403:
+        raise AuthFailure(AuthFailureKind.REJECTED, LISTING_REFUSED_MESSAGE)
+    if 500 <= status < 600:
+        raise ConnectorError(LISTING_UNAVAILABLE_MESSAGE.format(status=status))
+    raise ConnectorError(LISTING_OTHER_MESSAGE.format(status=status))
 
 
 def _not_built(operation: str) -> ConnectorError:
@@ -286,7 +405,62 @@ class GarminConnector:
     def list_activities(
         self, session: ConnectorSession, since: datetime | None
     ) -> Listing:
-        raise _not_built("the activity listing")
+        """Every activity of the key's owner from ``since`` (Req 3.1-3.7),
+        oldest first in pages of :data:`LISTING_PAGE`, each identifier once.
+        Both date filters are always sent; ``since`` is then applied to each
+        entry's UTC start."""
+        floor = None
+        if since is not None:
+            floor = (since if since.tzinfo else since.replace(tzinfo=UTC)).astimezone(
+                UTC
+            )
+        first_day = (
+            LISTING_EARLIEST if floor is None else floor.date() - timedelta(days=1)
+        )
+        last_day = session.now().astimezone(UTC).date() + timedelta(days=1)
+        activities: dict[str, RemoteActivity] = {}
+        offset = 0
+        while True:
+            query = urlencode(
+                {
+                    "start": offset,
+                    "limit": LISTING_PAGE,
+                    "sortOrder": "asc",
+                    "startDate": first_day.isoformat(),
+                    "endDate": last_day.isoformat(),
+                }
+            )
+            try:
+                response = self._get(
+                    session,
+                    f"{API_BASE}{LISTING_PATH}?{query}",
+                    {"Accept": "application/json"},
+                )
+            except TransportError:
+                raise ConnectorError(LISTING_UNREACHABLE_MESSAGE) from None
+            _raise_for_listing(response)
+            page = _listing_page(response.body)
+            mapped = [
+                _remote_activity(entry, offset + index + 1)
+                for index, entry in enumerate(page)
+            ]
+            before = len(activities)
+            for activity in mapped:
+                if activity.remote_id in activities:
+                    continue
+                activities[activity.remote_id] = activity
+            if len(page) < LISTING_PAGE:
+                break
+            if len(activities) == before:
+                raise ConnectorError(LISTING_REPEATED_MESSAGE)
+            offset += LISTING_PAGE
+        return Listing(
+            tuple(
+                activity
+                for activity in activities.values()
+                if floor is None or activity.start is None or activity.start >= floor
+            )
+        )
 
     def fetch_activity(
         self, session: ConnectorSession, activity: RemoteActivity

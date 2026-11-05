@@ -69,7 +69,7 @@
   - _Requirements: 2.3, 4.1, 4.7, 4.8, 4.9, 6.1, 6.3, 7.2, 7.3, 7.4_
   - _Depends: 1.2_
 
-- [ ] 3.3 List activities
+- [x] 3.3 List activities
   - Use the design's "Service routes" table. Page the listing oldest first in pages of 200 until a short page, always sending both date filters: the start is one day before any given start time, or the design's earliest date with none. With a start time, each entry is then filtered by its UTC start. Leave Garmin's default of excluding multisport legs.
   - Map each entry to a remote activity: Garmin's identifier unchanged, the UTC start, sport and elapsed duration when stated and absent otherwise, with no revision and nothing else kept.
   - List each identifier once. End the instance's pull with a named problem on a malformed answer, never quoting it.

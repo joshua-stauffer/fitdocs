@@ -1,7 +1,8 @@
 """The Garmin connector's declaration, registration, settings and key check
 (garmin-connector task 3.1; Req 1.1-1.7, 2.1, 2.2, 7.1, 14.2, 14.5), and its
 per-pull state, pacing and rate-limit waits (task 3.2; Req 2.3, 4.1, 4.7-4.9,
-6.1, 6.3, 7.2-7.4).
+6.1, 6.3, 7.2-7.4), and the activity listing (task 3.3; Req 3.1-3.7, 6.1-6.4,
+6.7, 6.8, 7.5, 8.1).
 
 Everything runs against a scripted transport: no network, a synthetic key,
 a synthetic token.
@@ -11,9 +12,11 @@ from __future__ import annotations
 
 import dataclasses
 import gc
+import json
 from collections.abc import Callable, Mapping
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
@@ -29,7 +32,11 @@ from fitdocs.connectors import (
 from fitdocs.connectors.connect import Connected, ConnectFailed, run_connect
 from fitdocs.connectors.credentials import CredentialStore
 from fitdocs.connectors.errors import AuthFailure, AuthFailureKind, ConnectorError
-from fitdocs.connectors.garmin import GarminConnector, _mint, _PullState
+from fitdocs.connectors.garmin import (
+    GarminConnector,
+    _mint,
+    _PullState,
+)
 from fitdocs.connectors.http import (
     CallMode,
     HttpClient,
@@ -469,7 +476,7 @@ def test_the_key_is_in_no_exception_text_or_repr(answer: HttpResponse) -> None:
 # --------------------------------------------------------------------------
 
 
-def test_the_four_pull_operations_are_named_connector_errors_that_make_no_request() -> (
+def test_the_three_later_operations_are_named_connector_errors_with_no_request() -> (
     None
 ):
     transport = FakeTransport([_token_ok()])
@@ -477,7 +484,6 @@ def test_the_four_pull_operations_are_named_connector_errors_that_make_no_reques
     connector = GarminConnector()
     activity = RemoteActivity(remote_id="1", original_available=True)
     calls = (
-        lambda: connector.list_activities(session, None),
         lambda: connector.fetch_activity(session, activity),
         lambda: connector.list_wellness(session, None),
         lambda: connector.package_wellness(session, ()),
@@ -510,6 +516,7 @@ class _Pull:
         script: list[HttpResponse | TransportError],
         *,
         token: str = _TOKEN,
+        now: datetime = _CLOCK,
     ) -> None:
         self.fake = FakeTransport(script)
         self.log: list[str] = []
@@ -561,7 +568,7 @@ class _Pull:
             ),
             credentials=credentials,
             data_root=Path("/nonexistent-data-root"),
-            now=lambda: _CLOCK,
+            now=lambda: now,
             sleep=sleep,
             redactor=self.redactor,
         )
@@ -1024,3 +1031,712 @@ def test_a_wait_that_would_cross_the_budget_from_below_stops_without_sleeping(
     assert excinfo.value.retry_after_s == stated
     assert pull.sleeps == [1.0, 300.0, 300.0, 1.0, 280.0]
     assert connector._pulls[pull.session.http].waited_s == 880.0
+
+
+# --------------------------------------------------------------------------
+# Listing activities (task 3.3; Req 3.1-3.7, 6.1-6.4, 6.7, 6.8, 7.5, 8.1)
+# --------------------------------------------------------------------------
+
+_LISTING_PATH = "/activitylist-service/activities/search/activities"
+_GMT = "2026-03-01 08:00:00"
+# The athlete's wall clock, deliberately not the UTC instant.
+_LOCAL = "2026-03-01 03:00:00"
+
+
+def _entry(
+    activity_id: object = 4001,
+    gmt: object = _GMT,
+    *,
+    type_key: object = "running",
+    elapsed: object = 1800.5,
+) -> dict[str, object]:
+    """A listing entry carrying values a wrong field choice would show: the
+    local start, a different `duration`, the name and owner, and a summary."""
+    return {
+        "activityId": activity_id,
+        "activityName": f"Morning Run {_MARKER}",
+        "startTimeLocal": _LOCAL,
+        "startTimeGMT": gmt,
+        "activityType": {"typeId": 1, "typeKey": type_key},
+        "duration": 1650.25,
+        "elapsedDuration": elapsed,
+        "movingDuration": 1600.75,
+        "distance": 9876.5,
+        "calories": 777.0,
+        "ownerId": 31337,
+        "ownerDisplayName": "owner-display-xyz",
+        "ownerFullName": "Owner Fullname Xyz",
+        "locationName": "Locationville",
+    }
+
+
+def _page(*entries: object) -> HttpResponse:
+    return _text(json.dumps(list(entries)))
+
+
+def _ids(listing_activities: tuple[RemoteActivity, ...]) -> list[str]:
+    return [a.remote_id for a in listing_activities]
+
+
+def _numbered(first: int, count: int) -> list[dict[str, object]]:
+    return [
+        _entry(first + i, gmt=f"2026-03-01 08:{i % 60:02d}:00") for i in range(count)
+    ]
+
+
+def _query(request: HttpRequest) -> dict[str, list[str]]:
+    return parse_qs(urlsplit(request.url).query, keep_blank_values=True)
+
+
+def _list(
+    script: list[HttpResponse | TransportError],
+    since: datetime | None = None,
+    *,
+    now: datetime = _CLOCK,
+) -> tuple[_Pull, tuple[RemoteActivity, ...]]:
+    pull = _Pull([_token_ok(), *script], now=now)
+    listing = GarminConnector().list_activities(pull.session, since)
+    return pull, listing.activities
+
+
+def _list_error(
+    script: list[HttpResponse | TransportError],
+    since: datetime | None = None,
+) -> tuple[_Pull, Exception]:
+    pull = _Pull([_token_ok(), *script])
+    with pytest.raises((ConnectorError, AuthFailure)) as excinfo:
+        GarminConnector().list_activities(pull.session, since)
+    return pull, excinfo.value
+
+
+def test_the_first_request_is_the_measured_form_with_both_date_filters() -> None:
+    pull, activities = _list([_page(_entry())])
+    [request] = pull.gets()
+    parts = urlsplit(request.url)
+    assert f"{parts.scheme}://{parts.netloc}{parts.path}" == (
+        "https://personal.connectapi.garmin.com" + _LISTING_PATH
+    )
+    assert _query(request) == {
+        "start": ["0"],
+        "limit": ["200"],
+        "sortOrder": ["asc"],
+        "startDate": ["1990-01-01"],
+        "endDate": ["2026-11-06"],
+    }
+    assert request.method == "GET"
+    assert request.headers["Accept"] == "application/json"
+    assert request.secret_headers["Authorization"].reveal() == f"Bearer {_TOKEN}"
+    assert _ids(activities) == ["4001"]
+
+
+def test_the_whole_history_is_paged_oldest_first_by_200_with_one_token() -> None:
+    pull, activities = _list(
+        [
+            _page(*_numbered(1, 200)),
+            _page(*_numbered(201, 200)),
+            _page(*_numbered(401, 199)),
+        ]
+    )
+    assert [_query(r)["start"] for r in pull.gets()] == [["0"], ["200"], ["400"]]
+    assert all(_query(r)["limit"] == ["200"] for r in pull.gets())
+    assert all(_query(r)["sortOrder"] == ["asc"] for r in pull.gets())
+    assert all(_query(r)["startDate"] == ["1990-01-01"] for r in pull.gets())
+    assert all(_query(r)["endDate"] == ["2026-11-06"] for r in pull.gets())
+    assert all("excludeChildren" not in _query(r) for r in pull.gets())
+    assert _ids(activities) == [str(n) for n in range(1, 600)]
+    assert [r.method for r in pull.fake.requests] == ["POST", "GET", "GET", "GET"]
+    assert pull.log == ["POST", "sleep 1", "GET", "sleep 1", "GET", "sleep 1", "GET"]
+
+
+def test_a_full_page_followed_by_an_empty_one_ends() -> None:
+    pull, activities = _list([_page(*_numbered(1, 200)), _page()])
+    assert len(pull.gets()) == 2
+    assert len(activities) == 200
+
+
+def test_a_page_of_199_ends_with_no_further_request() -> None:
+    pull, activities = _list([_page(*_numbered(1, 199))])
+    assert len(pull.gets()) == 1
+    assert len(activities) == 199
+
+
+def test_an_empty_history_is_one_request_and_an_empty_listing() -> None:
+    pull = _Pull([_token_ok(), _page()])
+    listing = GarminConnector().list_activities(pull.session, None)
+    assert len(pull.gets()) == 1
+    assert listing.activities == ()
+    assert listing.deferred == ()
+
+
+def test_the_window_around_a_near_midnight_start_is_cut_on_the_utc_date() -> None:
+    plus_five = timezone(timedelta(hours=5))
+    # 2026-03-02 01:30 at +05:00 is 2026-03-01 20:30 UTC: the local date
+    # (03-02) and the UTC date (03-01) differ, so a local-date slip shows.
+    since = datetime(2026, 3, 2, 1, 30, tzinfo=plus_five)
+    pull, activities = _list(
+        [
+            _page(
+                _entry(1, "2026-03-01 20:29:59"),
+                _entry(2, "2026-03-01 20:30:00"),
+                _entry(3, "2026-03-01 20:30:01"),
+                _entry(4, "2026-02-28 23:00:00"),
+                _entry(5, "2026-03-02 00:00:00"),
+                _entry(6, None),
+                _entry(7, "not a time"),
+            )
+        ],
+        since,
+    )
+    [request] = pull.gets()
+    assert _query(request)["startDate"] == ["2026-02-28"]
+    # The local-time listing of 2026-03-01 is why the window opens a day early;
+    # the exact cut is the UTC start, equal kept.
+    assert _ids(activities) == ["2", "3", "5", "6", "7"]
+
+
+def test_the_end_date_is_the_day_after_the_utc_date_of_the_pull() -> None:
+    minus_five = timezone(timedelta(hours=-5))
+    # 23:30 at -05:00 on 11-05 is 04:30 UTC on 11-06: the end is 11-07.
+    pull, _ = _list([_page()], now=datetime(2026, 11, 5, 23, 30, tzinfo=minus_five))
+    assert _query(pull.gets()[0])["endDate"] == ["2026-11-07"]
+
+
+def test_a_since_given_without_a_zone_is_read_as_utc() -> None:
+    pull, activities = _list(
+        [_page(_entry(1, "2026-03-01 20:29:59"), _entry(2, "2026-03-01 20:30:00"))],
+        datetime(2026, 3, 1, 20, 30),
+    )
+    assert _query(pull.gets()[0])["startDate"] == ["2026-02-28"]
+    assert _ids(activities) == ["2"]
+
+
+def test_the_filter_applies_to_every_page_not_only_the_first() -> None:
+    old = [_entry(n, "2026-01-01 00:00:00") for n in range(1, 201)]
+    new = [_entry(n, "2026-03-05 00:00:00") for n in range(201, 206)]
+    new.append(_entry(206, "2026-01-02 00:00:00"))
+    pull, activities = _list(
+        [_page(*old), _page(*new)], datetime(2026, 3, 1, tzinfo=UTC)
+    )
+    assert len(pull.gets()) == 2
+    assert all(_query(r)["startDate"] == ["2026-02-28"] for r in pull.gets())
+    assert all(_query(r)["endDate"] == ["2026-11-06"] for r in pull.gets())
+    assert _ids(activities) == ["201", "202", "203", "204", "205"]
+
+
+def test_a_repeated_identifier_across_pages_is_listed_once_keeping_the_first() -> None:
+    first = _numbered(1, 200)
+    repeat = _entry(200, "2026-04-01 09:00:00", type_key="cycling")
+    pull, activities = _list(
+        [_page(*first), _page(repeat, *_numbered(201, 199)), _page(_entry(400))]
+    )
+    # The second page had 200 raw entries, one a repeat, so paging went on.
+    assert len(pull.gets()) == 3
+    ids = _ids(activities)
+    assert ids == [str(n) for n in range(1, 401)]
+    kept = next(a for a in activities if a.remote_id == "200")
+    assert kept.sport == "running"
+    assert kept.start == datetime(2026, 3, 1, 8, 19, tzinfo=UTC)
+
+
+def test_a_repeated_identifier_within_a_page_is_listed_once() -> None:
+    _, activities = _list([_page(_entry(5), _entry(6), _entry(5, type_key="cycling"))])
+    assert _ids(activities) == ["5", "6"]
+    assert activities[0].sport == "running"
+
+
+def test_a_full_page_with_a_repeat_in_it_still_continues_to_the_next_page() -> None:
+    page = [*_numbered(1, 199), _entry(1)]
+    pull, activities = _list([_page(*page), _page(*_numbered(200, 3))])
+    assert len(pull.gets()) == 2
+    assert _ids(activities) == [str(n) for n in range(1, 203)]
+
+
+def test_a_full_page_adding_a_single_new_identifier_continues() -> None:
+    # The one new id sits between repeats: neither the page's edges nor a share
+    # of new ids can stand in for "at least one".
+    repeats = _numbered(1, 199)
+    second = [*repeats[:100], _entry(500), *repeats[100:]]
+    pull, activities = _list(
+        [_page(*_numbered(1, 200)), _page(*second), _page(_entry(600))]
+    )
+    assert [_query(r)["start"] for r in pull.gets()] == [["0"], ["200"], ["400"]]
+    assert _ids(activities) == [*(str(n) for n in range(1, 201)), "500", "600"]
+
+
+def test_an_entry_maps_to_a_remote_activity_and_nothing_else() -> None:
+    _, activities = _list([_page(_entry(12345678901))])
+    assert activities == (
+        RemoteActivity(
+            remote_id="12345678901",
+            original_available=True,
+            unavailable_reason=None,
+            start=datetime(2026, 3, 1, 8, 0, tzinfo=UTC),
+            sport="running",
+            duration_s=1800.5,
+            revision=None,
+            suggested_name=None,
+        ),
+    )
+    assert activities[0].start is not None
+    assert activities[0].start.utcoffset() == timedelta(0)
+
+
+def test_a_listing_entrys_name_owner_location_and_summary_reach_nothing() -> None:
+    pull = _Pull([_token_ok(), _page(_entry())])
+    listing = GarminConnector().list_activities(pull.session, None)
+    assert [f.name for f in dataclasses.fields(RemoteActivity)] == [
+        "remote_id",
+        "original_available",
+        "unavailable_reason",
+        "start",
+        "sport",
+        "duration_s",
+        "revision",
+        "suggested_name",
+    ]
+    shown = repr(listing) + str(dataclasses.asdict(listing))
+    for decoy in (
+        "Morning Run",
+        _MARKER,
+        "owner-display-xyz",
+        "Owner Fullname Xyz",
+        "Locationville",
+        "777",
+        "9876",
+        "31337",
+        "1650",
+        "1600",
+    ):
+        assert decoy not in shown
+    assert listing.deferred == ()
+    [activity] = listing.activities
+    assert activity.suggested_name is None
+    assert activity.revision is None
+    assert activity.original_available is True
+
+
+@pytest.mark.parametrize(
+    "gmt",
+    [
+        None,
+        20260301,
+        "",
+        "2026-13-45 12:00:00",
+        "2026-02-30 12:00:00",
+        "2026-03-01 25:00:00",
+        "2026-03-01 08:00:60",
+        "2026-03-01T08:00:00",
+        "2026-03-01 08:00:00Z",
+        "2026-03-01 08:00:00.5",
+        " 2026-03-01 08:00:00",
+        "2026-03-01 08:00:00\n",
+        "2026-3-1 08:00:00",
+        "2026-03-01 08:00",
+        "٢٠٢٦-٠٣-٠١ ٠٨:٠٠:٠٠",
+        "0000-01-01 00:00:00",
+    ],
+)
+def test_a_start_that_is_not_a_valid_stated_instant_is_absent_not_an_error(
+    gmt: object,
+) -> None:
+    _, activities = _list([_page(_entry(1, gmt))])
+    assert activities[0].start is None
+    assert activities[0].remote_id == "1"
+
+
+def test_a_missing_start_key_is_absent() -> None:
+    entry = _entry(1)
+    del entry["startTimeGMT"]
+    _, activities = _list([_page(entry)])
+    assert activities[0].start is None
+
+
+@pytest.mark.parametrize(
+    "activity_type",
+    [
+        None,
+        "running",
+        ["running"],
+        7,
+        {},
+        {"typeKey": None},
+        {"typeKey": 5},
+        {"typeKey": ""},
+        {"typeKey": "  "},
+        {"typeKey": ["running"]},
+    ],
+)
+def test_a_sport_that_is_not_stated_text_is_absent(activity_type: object) -> None:
+    entry = _entry(1)
+    entry["activityType"] = activity_type
+    _, activities = _list([_page(entry)])
+    assert activities[0].sport is None
+    assert activities[0].duration_s == 1800.5
+
+
+def test_a_missing_activity_type_is_absent() -> None:
+    entry = _entry(1)
+    del entry["activityType"]
+    _, activities = _list([_page(entry)])
+    assert activities[0].sport is None
+
+
+@pytest.mark.parametrize(
+    "elapsed",
+    [
+        True,
+        False,
+        "1800",
+        None,
+        [1800],
+        {"v": 1},
+        float("nan"),
+        float("inf"),
+        float("-inf"),
+        -1,
+        -0.5,
+        10**400,
+    ],
+)
+def test_an_elapsed_duration_not_finite_and_non_negative_is_absent(
+    elapsed: object,
+) -> None:
+    pull = _Pull([_token_ok(), _text(json.dumps([_entry(1, elapsed=elapsed)]))])
+    activities = GarminConnector().list_activities(pull.session, None).activities
+    assert activities[0].duration_s is None
+    assert activities[0].sport == "running"
+
+
+def test_a_missing_elapsed_duration_is_absent_even_with_a_duration_stated() -> None:
+    entry = _entry(1)
+    del entry["elapsedDuration"]
+    _, activities = _list([_page(entry)])
+    assert entry["duration"] == 1650.25
+    assert activities[0].duration_s is None
+
+
+def test_a_stated_zero_and_a_whole_number_elapsed_duration_are_kept_as_stated() -> None:
+    _, activities = _list([_page(_entry(1, elapsed=0), _entry(2, elapsed=1800))])
+    assert [a.duration_s for a in activities] == [0.0, 1800.0]
+    assert all(isinstance(a.duration_s, float) for a in activities)
+
+
+_BAD_IDS: list[object] = [
+    1.0,
+    4001.5,
+    True,
+    False,
+    0,
+    -7,
+    "4001",
+    f"id-{_MARKER}",
+    "",
+    None,
+    [4001],
+    {"id": 4001},
+    float("nan"),
+    "__missing__",
+]
+
+
+@pytest.mark.parametrize("bad", _BAD_IDS, ids=repr)
+def test_an_entry_without_a_positive_whole_number_id_ends_the_pull_naming_it(
+    bad: object,
+) -> None:
+    broken = _entry(1)
+    if bad == "__missing__":
+        del broken["activityId"]
+    else:
+        broken["activityId"] = bad
+    pull, error = _list_error([_page(_entry(11), _entry(12), broken, _entry(14))])
+    assert type(error) is ConnectorError
+    assert "entry 3 has no positive whole-number identifier" in str(error)
+    # The broken entry carries the marker in its name: quoting it shows here.
+    assert _MARKER not in str(error)
+    assert len(pull.gets()) == 1
+
+
+def test_a_malformed_entry_is_named_by_its_position_in_the_whole_listing() -> None:
+    pull, error = _list_error(
+        [
+            _page(*_numbered(1, 200)),
+            _page(_entry(201), _entry("x"), _entry(203)),
+            _page(),
+        ]
+    )
+    assert "entry 202" in str(error)
+    assert len(pull.gets()) == 2
+
+
+def test_a_malformed_entry_that_the_window_would_drop_still_ends_the_pull() -> None:
+    old = _entry(1, "2020-01-01 00:00:00")
+    old["activityId"] = None
+    _, error = _list_error([_page(old)], datetime(2026, 1, 1, tzinfo=UTC))
+    assert type(error) is ConnectorError
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        json.dumps({"activities": [_entry()]}),
+        json.dumps(_entry()),
+        json.dumps(_MARKER),
+        "null",
+        "7",
+        "true",
+        "",
+        f"not json {_MARKER}",
+        f"[{_MARKER}",
+        f"[1, 2 {_MARKER}",
+        f"<html>{_MARKER}</html>",
+        "[" * 100000,
+    ],
+    ids=[
+        "object-of-list",
+        "one-object",
+        "string",
+        "null",
+        "number",
+        "bool",
+        "empty",
+        "text",
+        "open",
+        "truncated",
+        "html",
+        "deeply-nested",
+    ],
+)
+def test_a_body_that_is_not_a_list_of_activity_objects_is_named_and_not_quoted(
+    body: str,
+) -> None:
+    pull, error = _list_error([_text(body)])
+    assert type(error) is ConnectorError
+    assert _MARKER not in str(error)
+    assert "listing" in str(error)
+    assert "not a list" in str(error)
+    assert len(pull.gets()) == 1
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [None, 7, f"text {_MARKER}", [_MARKER], True, 1.5],
+    ids=["null", "number", "text", "list", "bool", "float"],
+)
+def test_an_entry_that_is_not_an_object_ends_the_pull_naming_its_position(
+    entry: object,
+) -> None:
+    _, error = _list_error([_page(_entry(1), entry)])
+    assert type(error) is ConnectorError
+    assert "entry 2 is not an object" in str(error)
+    assert _MARKER not in str(error)
+
+
+def test_a_body_that_is_not_utf8_is_named_and_not_quoted() -> None:
+    # Valid UTF-16 JSON: a decoder that guesses the encoding would accept it.
+    body = json.dumps([_entry()]).encode("utf-16")
+    _, error = _list_error([_text(body)])
+    assert type(error) is ConnectorError
+    assert "listing" in str(error)
+    _, error = _list_error([_text(b"[\xff\xfe" + _MARKER.encode())])
+    assert type(error) is ConnectorError
+    assert _MARKER not in str(error)
+
+
+def test_a_malformed_second_page_ends_the_pull_with_no_partial_listing() -> None:
+    pull = _Pull([_token_ok(), _page(*_numbered(1, 200)), _text(f"oops {_MARKER}")])
+    with pytest.raises(ConnectorError) as excinfo:
+        GarminConnector().list_activities(pull.session, None)
+    assert _MARKER not in str(excinfo.value)
+    assert len(pull.gets()) == 2
+
+
+def test_a_401_is_the_rejected_key_failure_and_is_not_repeated() -> None:
+    pull, error = _list_error([_text(f"no {_MARKER}", 401), _page()])
+    assert isinstance(error, AuthFailure)
+    assert error.kind is AuthFailureKind.REJECTED
+    assert "401" in str(error)
+    assert "wrong, expired or deleted" in str(error)
+    assert "Create a new key on Garmin Connect" in str(error)
+    assert "`fitdocs connect`" in str(error)
+    # The engine appends the next step directly after this text.
+    assert str(error).endswith(".")
+    assert _MARKER not in str(error)
+    assert len(pull.gets()) == 1
+
+
+def test_a_403_is_rejected_with_the_refused_wording_and_no_bug_report() -> None:
+    pull, error = _list_error([_text(f"no {_MARKER}", 403), _page()])
+    assert isinstance(error, AuthFailure)
+    assert error.kind is AuthFailureKind.REJECTED
+    text = str(error)
+    assert "403" in text
+    assert "refused" in text
+    assert "terms" in text
+    assert "restrict" in text
+    assert "key's status on Garmin Connect" in text
+    assert text.endswith(".")
+    assert "report" not in text.lower()
+    assert "bug" not in text.lower()
+    assert "github" not in text.lower()
+    assert _MARKER not in text
+    assert len(pull.gets()) == 1
+
+
+def test_a_429_past_the_waits_is_the_rate_limit_failure_naming_the_resume() -> None:
+    pull, error = _list_error([*(_limited() for _ in range(5)), _page()])
+    assert isinstance(error, AuthFailure)
+    assert error.kind is AuthFailureKind.RATE_LIMITED
+    assert "429" in str(error)
+    assert "next pull resumes" in str(error)
+    assert str(error).endswith(".")
+    assert _MARKER not in str(error)
+    assert pull.sleeps == [1.0, 30.0, 60.0, 120.0, 240.0]
+
+
+def test_a_short_stated_wait_on_a_later_page_is_waited_out_and_that_page_repeated() -> (
+    None
+):
+    pull = _Pull(
+        [
+            _token_ok(),
+            _page(*_numbered(1, 200)),
+            _limited(**{"retry-after": "7"}),
+            _page(*_numbered(201, 3)),
+        ]
+    )
+    listing = GarminConnector().list_activities(pull.session, None)
+    assert len(listing.activities) == 203
+    assert pull.sleeps == [1.0, 1.0, 7.0]
+    assert [_query(r)["start"] for r in pull.gets()] == [["0"], ["200"], ["200"]]
+
+
+def test_a_429_past_the_waits_on_a_later_page_ends_the_pull() -> None:
+    pull = _Pull(
+        [_token_ok(), _page(*_numbered(1, 200)), *(_limited() for _ in range(5))]
+    )
+    with pytest.raises(AuthFailure) as excinfo:
+        GarminConnector().list_activities(pull.session, None)
+    assert excinfo.value.kind is AuthFailureKind.RATE_LIMITED
+    assert [_query(r)["start"] for r in pull.gets()] == [["0"], *[["200"]] * 5]
+
+
+def test_an_arrival_at_the_end_during_the_listing_is_listed_once() -> None:
+    # 399 activities when the listing starts, so the second page would be short;
+    # one more arrives after the first page and fills it, which needs a third.
+    pull, activities = _list(
+        [_page(*_numbered(1, 200)), _page(*_numbered(201, 200)), _page()]
+    )
+    assert [_query(r)["start"] for r in pull.gets()] == [["0"], ["200"], ["400"]]
+    assert _ids(activities) == [str(n) for n in range(1, 401)]
+
+
+def test_an_arrival_that_shifts_the_listing_repeats_nothing() -> None:
+    # An older activity syncs after the first page: every later position moves
+    # up one, so the first page's last entry opens the second page again.
+    pull, activities = _list(
+        [_page(*_numbered(1, 200)), _page(_numbered(200, 1)[0], *_numbered(201, 5))]
+    )
+    assert len(pull.gets()) == 2
+    assert _ids(activities) == [str(n) for n in range(1, 206)]
+
+
+def test_a_full_page_that_adds_no_new_identifier_ends_the_pull_naming_it() -> None:
+    # Garmin answering the same full page whatever `start` says would otherwise
+    # be paged at one request a second forever.
+    pull, error = _list_error(
+        [
+            _page(*_numbered(1, 200)),
+            _page(*_numbered(1, 200)),
+            _page(*_numbered(1, 200)),
+            _page(*_numbered(1, 200)),
+        ]
+    )
+    assert type(error) is ConnectorError
+    assert str(error) == (
+        "Garmin's activity listing was not understood: a full page repeated "
+        "activities already listed"
+    )
+    assert [_query(r)["start"] for r in pull.gets()] == [["0"], ["200"]]
+
+
+def test_a_short_page_of_only_repeats_ends_the_listing_normally() -> None:
+    pull, activities = _list([_page(*_numbered(1, 200)), _page(*_numbered(1, 3))])
+    assert len(pull.gets()) == 2
+    assert _ids(activities) == [str(n) for n in range(1, 201)]
+
+
+@pytest.mark.parametrize("status", [500, 501, 502, 503, 504, 599])
+def test_a_server_error_after_the_transports_retries_is_unavailable_with_the_resume(
+    status: int,
+) -> None:
+    answers = [_text(f"down {_MARKER}", status) for _ in range(3)]
+    pull, error = _list_error([*answers, _page(_entry())])
+    assert type(error) is ConnectorError
+    text = str(error)
+    assert str(status) in text
+    assert "unavailable" in text
+    assert "next pull resumes" in text
+    assert _MARKER not in text
+    retried = status in (500, 502, 503, 504)
+    assert len(pull.gets()) == (3 if retried else 1)
+    assert pull.http_sleeps == ([2.0, 4.0] if retried else [])
+
+
+def test_a_server_error_on_a_later_page_ends_the_pull() -> None:
+    answers = [_text("x", 503) for _ in range(3)]
+    pull = _Pull([_token_ok(), _page(*_numbered(1, 200)), *answers])
+    with pytest.raises(ConnectorError) as excinfo:
+        GarminConnector().list_activities(pull.session, None)
+    assert "503" in str(excinfo.value)
+
+
+@pytest.mark.parametrize("status", [204, 301, 400, 404, 410, 418, 422, 100])
+def test_any_other_status_ends_the_pull_naming_the_status(status: int) -> None:
+    pull, error = _list_error([_text(f"odd {_MARKER}", status), _page()])
+    assert type(error) is ConnectorError
+    assert str(status) in str(error)
+    assert "unavailable" not in str(error)
+    assert _MARKER not in str(error)
+    assert len(pull.gets()) == 1
+
+
+def test_a_transport_failure_is_the_unavailable_connector_error() -> None:
+    failure = TransportError("timed out")
+    pull, error = _list_error([failure, failure, failure, _page()])
+    assert type(error) is ConnectorError
+    assert "unavailable" in str(error)
+    assert "could not be reached" in str(error)
+    assert "next pull resumes" in str(error)
+    assert len(pull.gets()) == 3
+
+
+def test_a_refused_token_in_a_pull_ends_the_listing_with_no_listing_request() -> None:
+    pull = _Pull([_text(f"no {_MARKER}", 401), _page()])
+    with pytest.raises(AuthFailure) as excinfo:
+        GarminConnector().list_activities(pull.session, None)
+    assert excinfo.value.kind is AuthFailureKind.REJECTED
+    assert pull.gets() == []
+
+
+def test_an_unusable_token_answer_is_a_connector_error_with_no_listing_request() -> (
+    None
+):
+    pull = _Pull([_text("not a token", 200), _page()])
+    with pytest.raises(ConnectorError):
+        GarminConnector().list_activities(pull.session, None)
+    assert pull.gets() == []
+
+
+def test_a_listing_request_has_the_token_only_as_authorization_and_never_the_key() -> (
+    None
+):
+    pull, _ = _list([_page(*_numbered(1, 200)), _page()])
+    for request in pull.gets():
+        assert _KEY not in request.url
+        assert _TOKEN not in request.url
+        assert _KEY not in repr(request.headers)
+        assert _TOKEN not in repr(request.headers)
+        assert set(request.secret_headers) == {"Authorization"}
+        assert request.secret_headers["Authorization"].reveal() == f"Bearer {_TOKEN}"
+        assert request.headers["Accept"] == "application/json"
+    assert [r.method for r in pull.fake.requests].count("POST") == 1

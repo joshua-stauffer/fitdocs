@@ -270,6 +270,7 @@ class GarminConnector:
 - Always both date filters, because that is the measured form of an oldest-first listing, and a refusal is then an error rather than silently lost history. `startDate` is one day before `since`'s UTC date, because Garmin filters on local start time, or `LISTING_EARLIEST` with no `since`. `endDate` is the day after the pull's UTC date. With `since`, each entry is then filtered by its UTC start.
 - `excludeChildren` stays at Garmin's default.
 - Entries are deduped by id.
+- A full page that adds no id not already listed ends the pull with a named `ConnectorError` that never quotes the entries, so a service that ignores `start` is not paged forever. A page that adds at least one new id continues; a short page of only repeats ends normally.
 - `load_ledger(session.data_root, session.instance, connector_id="garmin")`, then keep every final entry plus the first `ACTIVITIES_PER_PULL` not final in start order. A `LedgerError` becomes a `ConnectorError`.
 - `Listing(activities, deferred=(ListingDeferral(session.instance, reason),))` when any remain. The reason gives the count and says the next `fitdocs pull` continues, and that a pull started with `--since` continues only with the same `--since`.
 - **Accepted edge:** the connector reads the ledger on disk, while the engine's sweep result stays in memory until the instance ends. An entry whose pending delivery was just lost therefore looks final to the connector, and the engine fetches it again, so one pull can occasionally exceed 200 (4.2). Fixing it needs an engine change, which is out of boundary, and the only effect is a slightly longer pull.
@@ -386,6 +387,7 @@ Activities raise `AuthFailure` where wellness must not run, because the engine s
 | Listing or file | 401 | `AuthFailure(REJECTED)` | Instance ends, no wellness |
 | Listing or file | 403 | `AuthFailure(REJECTED)`, refused wording. `BLOCKED`'s next step says report a bug, so it is not used | Instance ends, no wellness |
 | Listing or file | 429 past the waits | `AuthFailure(RATE_LIMITED)` | Instance ends, no wellness |
+| Listing | Transport failure | `ConnectorError(UNAVAILABLE)` naming that Garmin could not be reached | Activities end, wellness runs |
 | Listing | 5xx past the transport | `ConnectorError(UNAVAILABLE)` | Activities end, wellness runs |
 | Listing | Other, malformed | `ConnectorError` naming the status or problem | Activities end, wellness runs |
 | File | 404 | `Declined`, no file | Skipped, recorded |
