@@ -1,5 +1,7 @@
 """The Garmin connector's declaration, registration, settings and key check
-(garmin-connector task 3.1; Req 1.1-1.7, 2.1, 2.2, 7.1, 14.2, 14.5).
+(garmin-connector task 3.1; Req 1.1-1.7, 2.1, 2.2, 7.1, 14.2, 14.5), and its
+per-pull state, pacing and rate-limit waits (task 3.2; Req 2.3, 4.1, 4.7-4.9,
+6.1, 6.3, 7.2-7.4).
 
 Everything runs against a scripted transport: no network, a synthetic key,
 a synthetic token.
@@ -8,6 +10,7 @@ a synthetic token.
 from __future__ import annotations
 
 import dataclasses
+import gc
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
@@ -26,10 +29,11 @@ from fitdocs.connectors import (
 from fitdocs.connectors.connect import Connected, ConnectFailed, run_connect
 from fitdocs.connectors.credentials import CredentialStore
 from fitdocs.connectors.errors import AuthFailure, AuthFailureKind, ConnectorError
-from fitdocs.connectors.garmin import GarminConnector, _mint
+from fitdocs.connectors.garmin import GarminConnector, _mint, _PullState
 from fitdocs.connectors.http import (
     CallMode,
     HttpClient,
+    HttpRequest,
     HttpResponse,
     TransportError,
 )
@@ -190,7 +194,10 @@ def test_a_token_is_discarded_and_scopes_and_expiry_are_absent() -> None:
     session = _session(transport)
     connector = GarminConnector()
     result = connector.verify(session, {"api_key": session.secret(_KEY)})
-    assert vars(connector) == {}
+    assert len(connector._pulls) == 0
+    assert set(vars(connector)) == {"_pulls"}
+    assert _TOKEN not in repr(vars(connector))
+    assert "Bearer" not in repr(vars(connector))
     assert result == Granted(scopes=None)
     assert result.scopes is None
     assert [f.name for f in dataclasses.fields(result)] == ["scopes"]
@@ -260,6 +267,8 @@ def test_a_rate_limit_carries_the_wait_garmin_states_and_is_not_retried(
     assert failure.kind is AuthFailureKind.RATE_LIMITED
     assert failure.retry_after_s == wait
     assert "429" in failure.service_message
+    assert "key check" in failure.service_message
+    assert "next pull" not in failure.service_message
     assert _MARKER not in failure.service_message
     assert len(transport.requests) == 1
 
@@ -478,3 +487,540 @@ def test_the_four_pull_operations_are_named_connector_errors_that_make_no_reques
             call()
         assert str(excinfo.value)
     assert transport.requests == []
+
+
+# --------------------------------------------------------------------------
+# The per-pull state, pacing and waits (task 3.2; Req 2.3, 4.1, 4.7, 4.8, 4.9,
+# 6.1, 6.3, 7.2, 7.3, 7.4)
+# --------------------------------------------------------------------------
+
+_LIST_URL = "https://personal.connectapi.garmin.com/activitylist-service/x"
+_OTHER_URL = "https://personal.connectapi.garmin.com/sleep-service/y"
+_ACCEPT = {"Accept": "application/json"}
+
+
+class _Pull:
+    """One pull's session over a scripted transport. ``log`` interleaves the
+    requests the transport saw with the sleeps the connector made; the
+    client's own sleep is separate, so a transport-level wait would show up as
+    ``http_sleeps`` and never as a connector sleep."""
+
+    def __init__(
+        self,
+        script: list[HttpResponse | TransportError],
+        *,
+        token: str = _TOKEN,
+    ) -> None:
+        self.fake = FakeTransport(script)
+        self.log: list[str] = []
+        self.sleeps: list[float] = []
+        self.http_sleeps: list[float] = []
+        self.redacted_at_get: list[bool] = []
+        self.token = token
+        self.redactor = Redactor()
+
+        def transport(request: HttpRequest, timeout: float) -> HttpResponse:
+            method = request.method
+            self.log.append(method)
+            if method == "GET":
+                self.redacted_at_get.append(
+                    self.redactor.redact(f"Bearer {self.token}") == REDACTED
+                    and self.redactor.redact(self.token) == REDACTED
+                )
+            return self.fake(request, timeout)
+
+        def sleep(seconds: float) -> None:
+            self.sleeps.append(seconds)
+            self.log.append(f"sleep {seconds:g}")
+
+        class _Key:
+            def value(self, field: str) -> Secret:
+                assert field == "api_key"
+                return Secret(_KEY)
+
+            @property
+            def scopes(self) -> tuple[str, ...] | None:
+                return None
+
+            @property
+            def expires_at(self) -> datetime | None:
+                return None
+
+            def replace(self, tokens: object) -> None:
+                raise AssertionError("a pull stores nothing")
+
+        credentials: CredentialAccess = _Key()
+        self.session = ConnectorSession(
+            instance="garmin",
+            settings=None,
+            http=HttpClient(
+                transport,
+                mode=CallMode.DATA,
+                redactor=self.redactor,
+                sleep=self.http_sleeps.append,
+            ),
+            credentials=credentials,
+            data_root=Path("/nonexistent-data-root"),
+            now=lambda: _CLOCK,
+            sleep=sleep,
+            redactor=self.redactor,
+        )
+
+    def gets(self) -> list[HttpRequest]:
+        return [r for r in self.fake.requests if r.method == "GET"]
+
+
+def _limited(**headers: str) -> HttpResponse:
+    return _text(f"slow {_MARKER}", 429, **headers)
+
+
+def _ok(body: str = "[]") -> HttpResponse:
+    return _text(body)
+
+
+def test_distinct_requests_are_spaced_a_second_with_none_before_the_first() -> None:
+    pull = _Pull([_token_ok(), _ok("a"), _ok("b"), _ok("c")])
+    connector = GarminConnector()
+    first = connector._get(pull.session, _LIST_URL, _ACCEPT)
+    second = connector._get(pull.session, _OTHER_URL, _ACCEPT)
+    third = connector._get(pull.session, _LIST_URL, _ACCEPT)
+    assert [r.body for r in (first, second, third)] == [b"a", b"b", b"c"]
+    assert pull.log == [
+        "POST",
+        "sleep 1",
+        "GET",
+        "sleep 1",
+        "GET",
+        "sleep 1",
+        "GET",
+    ]
+    assert pull.http_sleeps == []
+
+
+def test_the_get_carries_the_bearer_and_the_callers_headers_and_no_429_retry() -> None:
+    pull = _Pull([_token_ok(), _ok()])
+    GarminConnector()._get(pull.session, _LIST_URL, _ACCEPT)
+    request = pull.fake.requests[1]
+    assert request.method == "GET"
+    assert request.url == _LIST_URL
+    assert request.headers["Accept"] == "application/json"
+    assert request.retry_rate_limits is False
+    assert set(request.secret_headers) == {"Authorization"}
+    assert request.secret_headers["Authorization"].reveal() == f"Bearer {_TOKEN}"
+    assert _TOKEN not in request.url
+    assert _TOKEN not in repr(request.headers)
+    assert pull.redacted_at_get == [True]
+
+
+def test_a_429_is_returned_to_the_helper_and_never_retried_by_the_transport() -> None:
+    pull = _Pull([_token_ok(), _limited(**{"retry-after": "9"}), _ok()])
+    GarminConnector()._get(pull.session, _LIST_URL, _ACCEPT)
+    # The transport would have waited on its own sleep and retried itself.
+    assert pull.http_sleeps == []
+    assert [r.retry_rate_limits for r in pull.gets()] == [False, False]
+
+
+@pytest.mark.parametrize("status", [404, 401, 403, 204, 418])
+def test_any_other_answer_goes_back_to_the_caller_unchanged(status: int) -> None:
+    answer = _text(f"body {_MARKER}", status, **{"x-marker": "kept"})
+    pull = _Pull([_token_ok(), answer])
+    response = GarminConnector()._get(pull.session, _LIST_URL, _ACCEPT)
+    assert response is answer
+    assert pull.sleeps == [1.0]
+    assert len(pull.fake.requests) == 2
+
+
+def test_the_default_waits_are_30_60_120_240_with_no_extra_spacing_after_a_wait() -> (
+    None
+):
+    pull = _Pull([_token_ok(), *[_limited() for _ in range(4)], _ok("done")])
+    response = GarminConnector()._get(pull.session, _LIST_URL, _ACCEPT)
+    assert response.body == b"done"
+    assert pull.sleeps == [1.0, 30.0, 60.0, 120.0, 240.0]
+    assert len(pull.gets()) == 5
+
+
+def test_a_fifth_429_stops_with_the_rate_limit_failure_and_no_further_wait() -> None:
+    pull = _Pull([_token_ok(), *[_limited() for _ in range(5)], _ok()])
+    with pytest.raises(AuthFailure) as excinfo:
+        GarminConnector()._get(pull.session, _LIST_URL, _ACCEPT)
+    failure = excinfo.value
+    assert failure.kind is AuthFailureKind.RATE_LIMITED
+    assert failure.retry_after_s is None
+    assert "limiting requests" in failure.service_message
+    assert "next pull resumes where this one stopped" in failure.service_message
+    assert _MARKER not in failure.service_message
+    assert pull.sleeps == [1.0, 30.0, 60.0, 120.0, 240.0]
+    assert len(pull.gets()) == 5
+    assert pull.log[-1] == "GET"
+
+
+def test_a_stated_wait_is_honoured_in_seconds_or_as_an_http_date() -> None:
+    pull = _Pull(
+        [
+            _token_ok(),
+            _limited(**{"retry-after": "7"}),
+            _limited(
+                **{
+                    "retry-after": "Wed, 04 Nov 2026 09:00:45 GMT",
+                    "date": "Wed, 04 Nov 2026 09:00:00 GMT",
+                }
+            ),
+            _ok(),
+        ]
+    )
+    GarminConnector()._get(pull.session, _LIST_URL, _ACCEPT)
+    assert pull.sleeps == [1.0, 7.0, 45.0]
+
+
+def test_a_stated_wait_of_exactly_5_minutes_is_honoured() -> None:
+    pull = _Pull([_token_ok(), _limited(**{"retry-after": "300"}), _ok()])
+    GarminConnector()._get(pull.session, _LIST_URL, _ACCEPT)
+    assert pull.sleeps == [1.0, 300.0]
+
+
+@pytest.mark.parametrize("stated", ["301", "100000", "Wed, 04 Nov 2026 09:10:00 GMT"])
+def test_a_stated_wait_over_5_minutes_stops_at_once_without_sleeping(
+    stated: str,
+) -> None:
+    headers = {"retry-after": stated, "date": "Wed, 04 Nov 2026 09:00:00 GMT"}
+    pull = _Pull([_token_ok(), _limited(**headers), _ok()])
+    with pytest.raises(AuthFailure) as excinfo:
+        GarminConnector()._get(pull.session, _LIST_URL, _ACCEPT)
+    assert excinfo.value.kind is AuthFailureKind.RATE_LIMITED
+    assert excinfo.value.retry_after_s is not None
+    assert excinfo.value.retry_after_s > 300.0
+    assert pull.sleeps == [1.0]
+    assert len(pull.gets()) == 1
+
+
+def test_a_stated_wait_after_unstated_ones_follows_the_answer_position() -> None:
+    pull = _Pull(
+        [
+            _token_ok(),
+            _limited(),
+            _limited(**{"retry-after": "7"}),
+            _limited(),
+            _ok(),
+        ]
+    )
+    GarminConnector()._get(pull.session, _LIST_URL, _ACCEPT)
+    assert pull.sleeps == [1.0, 30.0, 7.0, 120.0]
+
+
+@pytest.mark.parametrize("stated", ["2", "0"])
+def test_a_repeating_short_stated_wait_stops_after_four_repeats(stated: str) -> None:
+    pull = _Pull(
+        [_token_ok(), *[_limited(**{"retry-after": stated}) for _ in range(6)]]
+    )
+    with pytest.raises(AuthFailure) as excinfo:
+        GarminConnector()._get(pull.session, _LIST_URL, _ACCEPT)
+    assert excinfo.value.kind is AuthFailureKind.RATE_LIMITED
+    assert excinfo.value.retry_after_s == float(stated)
+    assert pull.sleeps == [
+        1.0,
+        float(stated),
+        float(stated),
+        float(stated),
+        float(stated),
+    ]
+    assert len(pull.gets()) == 5
+
+
+def test_the_15_minute_budget_stops_across_requests_without_sleeping() -> None:
+    long = {"retry-after": "300"}
+    pull = _Pull(
+        [
+            _token_ok(),
+            _limited(**long),
+            _limited(**long),
+            _ok("first"),
+            _limited(**long),  # the pull's waits reach exactly 900 s here
+            _limited(**{"retry-after": "1"}),
+            _ok("never reached"),
+        ]
+    )
+    connector = GarminConnector()
+    assert connector._get(pull.session, _LIST_URL, _ACCEPT).body == b"first"
+    with pytest.raises(AuthFailure) as excinfo:
+        connector._get(pull.session, _OTHER_URL, _ACCEPT)
+    assert excinfo.value.kind is AuthFailureKind.RATE_LIMITED
+    assert excinfo.value.retry_after_s == 1.0
+    assert pull.sleeps == [1.0, 300.0, 300.0, 1.0, 300.0]
+    assert len(pull.gets()) == 5
+    state = connector._pulls[pull.session.http]
+    assert state.waited_s == 900.0
+
+
+def test_a_success_restarts_the_schedule_but_not_the_pull_budget() -> None:
+    pull = _Pull(
+        [
+            _token_ok(),
+            _limited(),
+            _limited(),
+            _ok("a"),
+            _limited(),
+            _ok("b"),
+            _limited(),
+            _limited(),
+            _ok("c"),
+        ]
+    )
+    connector = GarminConnector()
+    for url in (_LIST_URL, _OTHER_URL, _LIST_URL):
+        connector._get(pull.session, url, _ACCEPT)
+    assert pull.sleeps == [1.0, 30.0, 60.0, 1.0, 30.0, 1.0, 30.0, 60.0]
+    assert connector._pulls[pull.session.http].waited_s == 30 + 60 + 30 + 30 + 60
+
+
+def test_the_repeat_count_is_per_request_not_per_pull() -> None:
+    answers: list[HttpResponse | TransportError] = [_token_ok()]
+    for _ in range(3):
+        answers += [_limited(**{"retry-after": "1"}) for _ in range(3)] + [_ok()]
+    pull = _Pull(answers)
+    connector = GarminConnector()
+    for _ in range(3):
+        connector._get(pull.session, _LIST_URL, _ACCEPT)
+    assert len(pull.gets()) == 12
+
+
+# -- the token in a pull ------------------------------------------------------
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_a_token_refusal_in_a_pull_is_the_rejected_key_failure(status: int) -> None:
+    pull = _Pull([_text(f"no {_MARKER}", status), _token_ok(), _ok()])
+    with pytest.raises(AuthFailure) as excinfo:
+        GarminConnector()._get(pull.session, _LIST_URL, _ACCEPT)
+    assert excinfo.value.kind is AuthFailureKind.REJECTED
+    assert "`fitdocs connect`" in excinfo.value.service_message
+    assert _MARKER not in excinfo.value.service_message
+    assert pull.log == ["POST"]
+
+
+@pytest.mark.parametrize(("headers", "wait"), [({"retry-after": "7"}, 7.0), ({}, None)])
+def test_a_token_429_in_a_pull_is_the_rate_limit_failure_with_no_wait(
+    headers: dict[str, str], wait: float | None
+) -> None:
+    pull = _Pull([_text(f"slow {_MARKER}", 429, **headers), _token_ok(), _ok()])
+    with pytest.raises(AuthFailure) as excinfo:
+        GarminConnector()._get(pull.session, _LIST_URL, _ACCEPT)
+    failure = excinfo.value
+    assert failure.kind is AuthFailureKind.RATE_LIMITED
+    assert failure.retry_after_s == wait
+    assert "limiting requests" in failure.service_message
+    assert "next pull resumes where this one stopped" in failure.service_message
+    assert _MARKER not in failure.service_message
+    assert pull.log == ["POST"]
+
+
+_NOT_A_TOKEN = [
+    (_text(f"{_MARKER}"), "not understood"),
+    (_text(f"{_TOKEN}.extra"), "not understood"),
+    (_text(""), "not understood"),
+]
+_TOKEN_TROUBLES: list[tuple[HttpResponse | TransportError, str]] = [
+    *[
+        (_text(f"oops {_MARKER}", s), f"HTTP {s}")
+        for s in (500, 502, 503, 404, 400, 418, 301, 204)
+    ],
+    *_NOT_A_TOKEN,
+    (TransportError(f"timed out {_MARKER}"), "could not be reached"),
+]
+
+
+@pytest.mark.parametrize(("trouble", "says"), _TOKEN_TROUBLES)
+def test_any_other_token_trouble_in_a_pull_is_the_kept_connector_error(
+    trouble: HttpResponse | TransportError, says: str
+) -> None:
+    pull = _Pull([trouble, _token_ok(), _ok()])
+    with pytest.raises(ConnectorError) as excinfo:
+        GarminConnector()._get(pull.session, _LIST_URL, _ACCEPT)
+    assert not isinstance(excinfo.value, AuthFailure)
+    assert type(excinfo.value) is ConnectorError
+    assert says in str(excinfo.value)
+    assert _MARKER not in str(excinfo.value)
+    assert _MARKER not in repr(excinfo.value)
+    assert pull.log == ["POST"]
+
+
+_FAILED_TOKENS: list[HttpResponse | TransportError] = [
+    _text("x", 401),
+    _text("x", 403),
+    _text("x", 429),
+    _text("x", 500),
+    _text("x", 200),
+    TransportError("timed out"),
+]
+
+
+@pytest.mark.parametrize("trouble", _FAILED_TOKENS)
+def test_a_failed_mint_raises_the_same_error_again_with_no_second_request(
+    trouble: HttpResponse | TransportError,
+) -> None:
+    pull = _Pull([trouble, _token_ok(), _ok(), _ok()])
+    connector = GarminConnector()
+    with pytest.raises((AuthFailure, ConnectorError)) as first:
+        connector._get(pull.session, _LIST_URL, _ACCEPT)
+    for url in (_OTHER_URL, _LIST_URL):
+        with pytest.raises((AuthFailure, ConnectorError)) as again:
+            connector._get(pull.session, url, _ACCEPT)
+        assert again.value is first.value
+    assert pull.log == ["POST"]
+    assert connector._pulls[pull.session.http].bearer is None
+
+
+def test_one_token_request_serves_every_request_of_the_pull_even_after_waits() -> None:
+    pull = _Pull([_token_ok(), _limited(), _ok(), _ok(), _ok()])
+    connector = GarminConnector()
+    for url in (_LIST_URL, _OTHER_URL, _LIST_URL):
+        connector._get(pull.session, url, _ACCEPT)
+    assert pull.log.count("POST") == 1
+    assert len(pull.gets()) == 4
+
+
+def test_two_pulls_mint_once_each_and_never_share_a_token() -> None:
+    other_token = _TOKEN.replace("eyJhbGci", "ZXlKaGJHY2k")
+    assert other_token != _TOKEN
+    one = _Pull([_token_ok(), _ok(), _ok()])
+    two = _Pull([_text(other_token), _ok(), _ok()], token=other_token)
+    connector = GarminConnector()
+    for _ in range(2):
+        connector._get(one.session, _LIST_URL, _ACCEPT)
+        connector._get(two.session, _LIST_URL, _ACCEPT)
+    assert one.log.count("POST") == 1
+    assert two.log.count("POST") == 1
+    assert one.log.count("sleep 1") == 2
+    assert two.log.count("sleep 1") == 2
+    for pull, token in ((one, _TOKEN), (two, other_token)):
+        sent = [
+            r.secret_headers["Authorization"].reveal()
+            for r in pull.fake.requests
+            if r.method == "GET"
+        ]
+        assert sent == [f"Bearer {token}"] * 2
+
+
+def test_a_pulls_state_goes_when_its_client_does() -> None:
+    connector = GarminConnector()
+    pull = _Pull([_token_ok(), _ok()])
+    connector._get(pull.session, _LIST_URL, _ACCEPT)
+    assert len(connector._pulls) == 1
+    del pull
+    gc.collect()
+    assert len(connector._pulls) == 0
+
+
+def test_the_state_never_shows_the_token_the_bearer_or_the_key() -> None:
+    pull = _Pull([_token_ok(), _limited(), _ok()])
+    connector = GarminConnector()
+    connector._get(pull.session, _LIST_URL, _ACCEPT)
+    state = connector._pulls[pull.session.http]
+    assert isinstance(state.bearer, Secret)
+    assert state.bearer.reveal() == f"Bearer {_TOKEN}"
+    assert state.used is True
+    assert state.consecutive_failures == 0
+    rendered = repr(state) + repr(vars(connector))
+    for secret in (_TOKEN, "Bearer", _KEY):
+        assert secret not in rendered
+    assert [f.name for f in dataclasses.fields(_PullState)] == [
+        "bearer",
+        "mint_error",
+        "used",
+        "waited_s",
+        "consecutive_failures",
+    ]
+
+
+def test_the_key_check_neither_waits_nor_touches_the_pull_state() -> None:
+    pull = _Pull([_token_ok(), _token_ok(), _ok()])
+    connector = GarminConnector()
+    connector.verify(pull.session, {"api_key": pull.session.secret(_KEY)})
+    assert pull.sleeps == []
+    assert len(connector._pulls) == 0
+    connector._get(pull.session, _LIST_URL, _ACCEPT)
+    # The pull minted its own token: the check kept none for it.
+    assert pull.log == ["POST", "POST", "sleep 1", "GET"]
+
+
+def test_the_token_and_a_throttled_answer_never_reach_an_exception_text() -> None:
+    pull = _Pull(
+        [_token_ok(), *[_text(f"{_TOKEN} {_KEY} {_MARKER}", 429) for _ in range(5)]]
+    )
+    with pytest.raises(AuthFailure) as excinfo:
+        GarminConnector()._get(pull.session, _LIST_URL, _ACCEPT)
+    for form in (str(excinfo.value), repr(excinfo.value), repr(excinfo.value.args)):
+        for secret in (_TOKEN, _KEY, _MARKER):
+            assert secret not in form
+
+
+def test_the_schedule_alone_reaches_the_budget_across_requests() -> None:
+    # 30 + 60 + 120 + 240 = 450 a request: exactly 900 after two, and the
+    # third request's 30 would cross it.
+    answers: list[HttpResponse | TransportError] = [_token_ok()]
+    for _ in range(2):
+        answers += [*[_limited() for _ in range(4)], _ok()]
+    pull = _Pull([*answers, _limited(), _ok("never reached")])
+    connector = GarminConnector()
+    for _ in range(2):
+        connector._get(pull.session, _LIST_URL, _ACCEPT)
+    with pytest.raises(AuthFailure) as excinfo:
+        connector._get(pull.session, _LIST_URL, _ACCEPT)
+    assert excinfo.value.kind is AuthFailureKind.RATE_LIMITED
+    assert excinfo.value.retry_after_s is None
+    schedule = [30.0, 60.0, 120.0, 240.0]
+    assert pull.sleeps == [1.0, *schedule, 1.0, *schedule, 1.0]
+    assert len(pull.gets()) == 11
+
+
+@pytest.mark.parametrize("status", [500, 502, 503, 504])
+def test_a_server_error_is_retried_by_the_transport_then_goes_back(status: int) -> None:
+    answers = [_text(f"down {_MARKER}", status) for _ in range(3)]
+    pull = _Pull([_token_ok(), *answers, _ok("never reached")])
+    response = GarminConnector()._get(pull.session, _LIST_URL, _ACCEPT)
+    assert response is answers[-1]
+    assert pull.http_sleeps == [2.0, 4.0]
+    assert pull.sleeps == [1.0]
+    assert len(pull.gets()) == 3
+
+
+def test_a_transport_failure_goes_back_unchanged_and_the_next_request_is_spaced() -> (
+    None
+):
+    failure = TransportError("timed out")
+    pull = _Pull([_token_ok(), failure, failure, failure, _ok("next")])
+    connector = GarminConnector()
+    with pytest.raises(TransportError) as excinfo:
+        connector._get(pull.session, _LIST_URL, _ACCEPT)
+    assert excinfo.value is failure
+    assert pull.http_sleeps == [2.0, 4.0]
+    assert connector._get(pull.session, _OTHER_URL, _ACCEPT).body == b"next"
+    assert pull.log == ["POST", "sleep 1", "GET", "GET", "GET", "sleep 1", "GET"]
+
+
+@pytest.mark.parametrize(
+    ("last", "stated"), [({"retry-after": "21"}, 21.0), ({}, None)], ids=["21s", "60s"]
+)
+def test_a_wait_that_would_cross_the_budget_from_below_stops_without_sleeping(
+    last: dict[str, str], stated: float | None
+) -> None:
+    long = {"retry-after": "300"}
+    pull = _Pull(
+        [
+            _token_ok(),
+            _limited(**long),
+            _limited(**long),
+            _ok("first"),
+            _limited(**{"retry-after": "280"}),  # the pull's waits are now 880 s
+            _limited(**last),
+            _ok("never reached"),
+        ]
+    )
+    connector = GarminConnector()
+    connector._get(pull.session, _LIST_URL, _ACCEPT)
+    with pytest.raises(AuthFailure) as excinfo:
+        connector._get(pull.session, _OTHER_URL, _ACCEPT)
+    assert excinfo.value.kind is AuthFailureKind.RATE_LIMITED
+    assert excinfo.value.retry_after_s == stated
+    assert pull.sleeps == [1.0, 300.0, 300.0, 1.0, 280.0]
+    assert connector._pulls[pull.session.http].waited_s == 880.0

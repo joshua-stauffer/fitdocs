@@ -58,7 +58,7 @@
   - _Boundary: GarminConnector_
   - _Depends: 1.1_
 
-- [ ] 3.2 Add the per-pull state, pacing and rate-limit waits
+- [x] 3.2 Add the per-pull state, pacing and rate-limit waits
   - Hold the per-pull state on the connector, keyed by the session's client: the token, the first-request flag, the waits so far, the consecutive failure count, and any token failure.
   - Mint at most one token per pull, on first need and in a single attempt. A failed mint, including a transport failure converted to the kept connector error, raises the same error again with no second request. Register the token and its header form as secrets before use, and never store them.
   - Send every Garmin GET through one helper that spaces distinct requests by 1 second through the injected sleep and turns the transport's 429 retries off.
