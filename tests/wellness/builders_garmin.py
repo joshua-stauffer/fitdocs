@@ -85,3 +85,32 @@ def garmin_file_name(
 
 def hydration_decoy_bytes() -> bytes:
     return garmin_file_bytes([{"calendarDate": "2000-01-02", "valueInML": 1234}])
+
+
+PERSONAL_FORMAT_NAME = "fitdocs.garmin-personal-wellness"
+PERSONAL_FETCHED_AT = "2000-01-03T04:05:06.123456Z"
+
+
+def garmin_personal_day(
+    day: object,
+    *,
+    fetched_at: object = PERSONAL_FETCHED_AT,
+    **sections: object,
+) -> dict[str, object]:
+    """One delivered day; section keywords (daily, sleep, hrv, weight) are verbatim."""
+    return {
+        "date": _day(day) if isinstance(day, (str, date)) else day,
+        "fetched_at": fetched_at,
+        **sections,
+    }
+
+
+def garmin_personal_bytes(
+    days: object,
+    *,
+    format_name: object = PERSONAL_FORMAT_NAME,
+    version: object = 1,
+) -> bytes:
+    return json.dumps(
+        {"format": format_name, "version": version, "days": days}
+    ).encode()

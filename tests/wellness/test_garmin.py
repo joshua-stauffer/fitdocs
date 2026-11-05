@@ -292,6 +292,37 @@ def test_partial_sleep() -> None:
 
 
 @pytest.mark.parametrize(
+    "stage,metric",
+    [
+        ("deep_s", Metric.SLEEP_DEEP_S),
+        ("light_s", Metric.SLEEP_LIGHT_S),
+        ("rem_s", Metric.SLEEP_REM_S),
+    ],
+)
+def test_out_of_range_stage_absent_and_the_total_is_the_raw_sum(
+    stage: str, metric: Metric
+) -> None:
+    stages = {"deep_s": 2001, "light_s": 13002, "rem_s": 5003}
+    expected: dict[Metric, float] = {Metric(k): v for k, v in SLEEP.items()}
+    del expected[metric]
+    for outside, total in ((-1, 20006 - stages[stage] - 1), (90000, None)):
+        values = parsed(
+            "sleep",
+            [
+                garmin_sleep_record(
+                    DAY, **{**stages, stage: outside}, awake_s=604, respiration=15
+                )
+            ],
+        )[0].values
+        want: dict[Metric, float] = {
+            m: v for m, v in expected.items() if m is not Metric.SLEEP_S
+        }
+        if total is not None:
+            want[Metric.SLEEP_S] = total
+        assert values == want
+
+
+@pytest.mark.parametrize(
     "sport,expected",
     [
         ("RUNNING", {Metric.VO2MAX_RUN_ML_PER_KG_MIN: 53}),

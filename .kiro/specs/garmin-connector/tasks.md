@@ -27,7 +27,7 @@
 
 - [ ] 2. The Garmin wellness format
 
-- [ ] 2.1 (P) Read the delivery into wellness values
+- [x] 2.1 (P) Read the delivery into wellness values
   - Add the delivery envelope's recognition and the day reader beside the existing Garmin formats, sharing the existing sleep derivation by naming the respiration field it reads.
   - Map every row of the design's metric table, including grams to kilograms and `lastNightAvg` as RMSSD; attribute every value to origin `garmin`; give each day the full metric set as `covers` and `fetched_at` as its revision.
   - A section that is not an object, or a value that is not a finite number within the metric's accepted range, leaves only that metric absent. Only an envelope outside the documented form refuses the file.
