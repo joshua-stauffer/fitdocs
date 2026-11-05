@@ -188,7 +188,7 @@ A wait is allowed when fewer than 4 repeats of this request have happened, any s
 | 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7 | Reading values | `PERSONAL_FORMAT`, `_personal_values` | Metric mapping |
 | 10.8, 10.9, 10.10, 10.11, 10.12 | Order, later wins, attribution, refusal, rebuild | `PERSONAL_SOURCE`, revision; existing series engine | Merge rule |
 | 11.1, 11.2 | Whether wellness runs | Framework, `AuthFailure` vs `ConnectorError` | Error table |
-| 11.3, 11.4, 11.5, 11.6 | Wellness failures | `_raise_for_wellness` | Error table |
+| 11.3, 11.4, 11.5, 11.6 | Wellness failures | `_wellness_get` | Error table |
 | 12.1, 12.2, 12.3, 12.4, 12.5, 12.6, 12.7, 12.8, 12.9 | Docs | `docs/connectors.md`, `docs/wellness.md`, `docs/configuration.md`, `README.md`, `CHANGELOG.md` | Doc plan below |
 | 13.1, 13.2, 13.3, 13.4, 13.5 | Live check | Maintainer; `research.md` | TBC list |
 | 14.1, 14.2 | Provenance | All | `research.md`, reviewer brief |

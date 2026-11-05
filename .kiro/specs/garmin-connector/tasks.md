@@ -91,7 +91,7 @@
 
 - [ ] 4. The connector: wellness
 
-- [ ] 4.1 List wellness
+- [x] 4.1 List wellness
   - Start from the given date, else the oldest activity's date, else one year before the pull, and cover everything from there through the day after the pull's UTC date in one listing.
   - Using the design's "Service routes" table, request daily, sleep, HRV and weight records in windows of 365, 31, 28 and 365 days. A 204 means no records.
   - Merge each date's records verbatim into one day, listing no day with no record, with a revision hashed from the merged record's canonical form.
@@ -99,13 +99,13 @@
   - Done when tests show each window bound, the three start cases, a multi-year range covered by one listing, the 204 case, a date merged across sections, a changed section changing the revision, and a repeated listing keeping the same revision.
   - _Requirements: 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.9_
 
-- [ ] 4.2 Package wellness days
+- [x] 4.2 Package wellness days
   - Produce the delivery envelope with days sorted and none repeated, each stamped with its fetch time from the injected clock, in one canonical serialization, declaring the format `garmin-personal` and the origin `garmin`. Make no request.
   - Done when a test shows the packaged bytes are claimed by the reader from 2.1 and yield the expected values, and that the framework's package check accepts them.
   - _Requirements: 9.8_
   - _Depends: 2.1, 2.2_
 
-- [ ] 4.3 Map wellness failures
+- [x] 4.3 Map wellness failures
   - Map refused, rate-limited, server-error and other answers per the design's error table, with the 403 wording naming `wellness = false`.
   - Because a wellness listing is all-or-nothing, any failure delivers no day from that pull and leaves the wellness mark where it was.
   - Done when tests cover each status, show nothing delivered and the mark unmoved after a failure part-way through a listing, and show deliveries from an earlier pull kept.

@@ -486,26 +486,6 @@ def test_the_key_is_in_no_exception_text_or_repr(answer: HttpResponse) -> None:
 
 
 # --------------------------------------------------------------------------
-# The pull operations wait for later tasks (registry requires them)
-# --------------------------------------------------------------------------
-
-
-def test_the_later_operations_are_named_connector_errors_with_no_request() -> None:
-    transport = FakeTransport([_token_ok()])
-    session = _session(transport)
-    connector = GarminConnector()
-    calls = (
-        lambda: connector.list_wellness(session, None),
-        lambda: connector.package_wellness(session, ()),
-    )
-    for call in calls:
-        with pytest.raises(ConnectorError) as excinfo:
-            call()
-        assert str(excinfo.value)
-    assert transport.requests == []
-
-
-# --------------------------------------------------------------------------
 # The per-pull state, pacing and waits (task 3.2; Req 2.3, 4.1, 4.7, 4.8, 4.9,
 # 6.1, 6.3, 7.2, 7.3, 7.4)
 # --------------------------------------------------------------------------
