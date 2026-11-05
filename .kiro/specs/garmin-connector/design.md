@@ -138,7 +138,7 @@ sequenceDiagram
         C->>G: GET listing
         G-->>C: page
     end
-    C->>C: dedupe, read ledger, keep final + oldest 200 not final
+    C->>C: dedupe, read ledger, keep entries in start order until 200 not final are kept, withhold the rest
     C-->>E: Listing(activities, deferred=[N more])
     loop oldest first
         E->>C: fetch_activity
@@ -149,7 +149,7 @@ sequenceDiagram
     E->>E: compute watermark, save ledger
 ```
 
-The remainder is always newer than the watermark, so the next plain pull's `since` (watermark less `lookback_days`) lists it. A `--since` older than an existing watermark does not self-resume, so the deferral's reason says to repeat the same `--since`.
+The remainder is never older than the watermark this pull computes (at most it ties with it, which the engine's `>=` filter still lists), and a newer watermark already standing does not move, so its window is unchanged; either way the next plain pull's `since` (watermark less `lookback_days`) lists it. A `--since` older than an existing watermark does not self-resume, so the deferral's reason says to repeat the same `--since`.
 
 ### A rate-limited request
 
@@ -271,9 +271,9 @@ class GarminConnector:
 - `excludeChildren` stays at Garmin's default.
 - Entries are deduped by id.
 - A full page that adds no id not already listed ends the pull with a named `ConnectorError` that never quotes the entries, so a service that ignores `start` is not paged forever. A page that adds at least one new id continues; a short page of only repeats ends normally.
-- `load_ledger(session.data_root, session.instance, connector_id="garmin")`, then keep every final entry plus the first `ACTIVITIES_PER_PULL` not final in start order. A `LedgerError` becomes a `ConnectorError`.
+- `load_ledger(session.data_root, session.instance, connector_id="garmin")`, then walk the deduped listing in start order and keep entries until `ACTIVITIES_PER_PULL` not-final entries are kept; stop at the first not-final entry that would be the next one, and withhold everything from there on, finals included. Finals before the cut are listed and not counted; the deferral counts only the not-final among the withheld, and nothing is deferred when none is withheld, so trailing finals after the last kept not-final stay listed. Withholding the finals too keeps the engine's watermark, which it computes over the listing, from jumping past the remainder and stranding it. A `LedgerError` becomes a `ConnectorError`.
 - `Listing(activities, deferred=(ListingDeferral(session.instance, reason),))` when any remain. The reason gives the count and says the next `fitdocs pull` continues, and that a pull started with `--since` continues only with the same `--since`.
-- **Accepted edge:** the connector reads the ledger on disk, while the engine's sweep result stays in memory until the instance ends. An entry whose pending delivery was just lost therefore looks final to the connector, and the engine fetches it again, so one pull can occasionally exceed 200 (4.2). Fixing it needs an engine change, which is out of boundary, and the only effect is a slightly longer pull.
+- **Accepted edge:** the connector reads the ledger on disk, while the engine's sweep result stays in memory until the instance ends. An entry whose pending delivery was just lost therefore looks final to the connector. Before the cut the engine fetches it again, so one pull can occasionally exceed 200 (4.2); past the cut it is withheld and fetched by a later pull, and the deferral's count is short by that entry for this pull. Fixing it needs an engine change, which is out of boundary, and the effects are only a slightly longer pull or a slightly low count.
 
 **`_remote_activity`**
 - `remote_id = str(activityId)` for a positive non-bool int; otherwise a `ConnectorError` naming the entry's position.

@@ -13,6 +13,7 @@ from __future__ import annotations
 import dataclasses
 import gc
 import json
+import tempfile
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
@@ -21,6 +22,8 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 
 import fitdocs.connectors as connectors_package
+import fitdocs.connectors.garmin as garmin_module
+from fitdocs import layout
 from fitdocs.connectors import (
     AuthStyle,
     Capability,
@@ -30,7 +33,7 @@ from fitdocs.connectors import (
     validate_connector,
 )
 from fitdocs.connectors.connect import Connected, ConnectFailed, run_connect
-from fitdocs.connectors.credentials import CredentialStore
+from fitdocs.connectors.credentials import CredentialStore, env_var_name
 from fitdocs.connectors.errors import AuthFailure, AuthFailureKind, ConnectorError
 from fitdocs.connectors.garmin import (
     GarminConnector,
@@ -44,14 +47,25 @@ from fitdocs.connectors.http import (
     HttpResponse,
     TransportError,
 )
+from fitdocs.connectors.ledger import (
+    Ledger,
+    LedgerEntry,
+    Outcome,
+    load_ledger,
+    save_ledger,
+)
 from fitdocs.connectors.protocol import (
     ConnectorSession,
     CredentialAccess,
+    Fetched,
+    FetchResult,
     Granted,
+    ListingDeferral,
     RemoteActivity,
 )
+from fitdocs.connectors.pull import InstancePullReport, PullOptions, run_pull
 from fitdocs.connectors.secrets import REDACTED, Redactor, Secret
-from fitdocs.connectors.settings import ConnectorInstance
+from fitdocs.connectors.settings import ConnectorInstance, load_connectors_settings
 from tests.connectors.conftest import FakeTransport
 
 _KEY = "gk-synthetic-4Vq8Zt"
@@ -517,6 +531,8 @@ class _Pull:
         *,
         token: str = _TOKEN,
         now: datetime = _CLOCK,
+        data_root: Path = Path("/nonexistent-data-root"),
+        instance: str = "garmin",
     ) -> None:
         self.fake = FakeTransport(script)
         self.log: list[str] = []
@@ -558,7 +574,7 @@ class _Pull:
 
         credentials: CredentialAccess = _Key()
         self.session = ConnectorSession(
-            instance="garmin",
+            instance=instance,
             settings=None,
             http=HttpClient(
                 transport,
@@ -567,7 +583,7 @@ class _Pull:
                 sleep=self.http_sleeps.append,
             ),
             credentials=credentials,
-            data_root=Path("/nonexistent-data-root"),
+            data_root=data_root,
             now=lambda: now,
             sleep=sleep,
             redactor=self.redactor,
@@ -1079,9 +1095,14 @@ def _ids(listing_activities: tuple[RemoteActivity, ...]) -> list[str]:
 
 
 def _numbered(first: int, count: int) -> list[dict[str, object]]:
-    return [
-        _entry(first + i, gmt=f"2026-03-01 08:{i % 60:02d}:00") for i in range(count)
-    ]
+    """Entries whose starts rise with the identifier, one minute apart."""
+    return [_entry(first + i, gmt=_numbered_start(first + i)) for i in range(count)]
+
+
+def _numbered_start(n: int) -> str:
+    return (datetime(2026, 3, 1, 8, 0, tzinfo=UTC) + timedelta(minutes=n)).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
 
 
 def _query(request: HttpRequest) -> dict[str, list[str]]:
@@ -1094,8 +1115,19 @@ def _list(
     *,
     now: datetime = _CLOCK,
 ) -> tuple[_Pull, tuple[RemoteActivity, ...]]:
-    pull = _Pull([_token_ok(), *script], now=now)
-    listing = GarminConnector().list_activities(pull.session, since)
+    # Every identifier the script lists is recorded final, so the per-pull
+    # limit keeps all of them and these tests see exactly what was paged.
+    seen = [
+        entry["activityId"]
+        for answer in script
+        if isinstance(answer, HttpResponse) and answer.status == 200
+        for entry in json.loads(answer.body)
+        if isinstance(entry, dict) and isinstance(entry.get("activityId"), int)
+    ]
+    with tempfile.TemporaryDirectory() as root:
+        _record(Path(root), "garmin", dict.fromkeys(seen))
+        pull = _Pull([_token_ok(), *script], now=now, data_root=Path(root))
+        listing = GarminConnector().list_activities(pull.session, since)
     return pull, listing.activities
 
 
@@ -1227,7 +1259,11 @@ def test_a_repeated_identifier_across_pages_is_listed_once_keeping_the_first() -
     first = _numbered(1, 200)
     repeat = _entry(200, "2026-04-01 09:00:00", type_key="cycling")
     pull, activities = _list(
-        [_page(*first), _page(repeat, *_numbered(201, 199)), _page(_entry(400))]
+        [
+            _page(*first),
+            _page(repeat, *_numbered(201, 199)),
+            _page(_entry(400, _numbered_start(400))),
+        ]
     )
     # The second page had 200 raw entries, one a repeat, so paging went on.
     assert len(pull.gets()) == 3
@@ -1235,7 +1271,7 @@ def test_a_repeated_identifier_across_pages_is_listed_once_keeping_the_first() -
     assert ids == [str(n) for n in range(1, 401)]
     kept = next(a for a in activities if a.remote_id == "200")
     assert kept.sport == "running"
-    assert kept.start == datetime(2026, 3, 1, 8, 19, tzinfo=UTC)
+    assert kept.start == datetime(2026, 3, 1, 11, 20, tzinfo=UTC)
 
 
 def test_a_repeated_identifier_within_a_page_is_listed_once() -> None:
@@ -1255,9 +1291,13 @@ def test_a_full_page_adding_a_single_new_identifier_continues() -> None:
     # The one new id sits between repeats: neither the page's edges nor a share
     # of new ids can stand in for "at least one".
     repeats = _numbered(1, 199)
-    second = [*repeats[:100], _entry(500), *repeats[100:]]
+    second = [*repeats[:100], _entry(500, "2026-03-02 00:00:00"), *repeats[100:]]
     pull, activities = _list(
-        [_page(*_numbered(1, 200)), _page(*second), _page(_entry(600))]
+        [
+            _page(*_numbered(1, 200)),
+            _page(*second),
+            _page(_entry(600, "2026-03-03 00:00:00")),
+        ]
     )
     assert [_query(r)["start"] for r in pull.gets()] == [["0"], ["200"], ["400"]]
     assert _ids(activities) == [*(str(n) for n in range(1, 201)), "500", "600"]
@@ -1596,16 +1636,14 @@ def test_a_429_past_the_waits_is_the_rate_limit_failure_naming_the_resume() -> N
 def test_a_short_stated_wait_on_a_later_page_is_waited_out_and_that_page_repeated() -> (
     None
 ):
-    pull = _Pull(
+    pull, activities = _list(
         [
-            _token_ok(),
             _page(*_numbered(1, 200)),
             _limited(**{"retry-after": "7"}),
             _page(*_numbered(201, 3)),
         ]
     )
-    listing = GarminConnector().list_activities(pull.session, None)
-    assert len(listing.activities) == 203
+    assert len(activities) == 203
     assert pull.sleeps == [1.0, 1.0, 7.0]
     assert [_query(r)["start"] for r in pull.gets()] == [["0"], ["200"], ["200"]]
 
@@ -1740,3 +1778,354 @@ def test_a_listing_request_has_the_token_only_as_authorization_and_never_the_key
         assert request.secret_headers["Authorization"].reveal() == f"Bearer {_TOKEN}"
         assert request.headers["Accept"] == "application/json"
     assert [r.method for r in pull.fake.requests].count("POST") == 1
+
+
+# --------------------------------------------------------------------------
+# Task 3.4: the per-pull limit (Req 4.2, 4.3, 4.6)
+# --------------------------------------------------------------------------
+
+_INSTANCE = "garmin-work"
+_BASE = datetime(2026, 1, 1, tzinfo=UTC)
+
+
+def _at(minutes: int) -> str:
+    return (_BASE + timedelta(minutes=minutes)).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _pages(entries: list[dict[str, object]]) -> list[HttpResponse | TransportError]:
+    """The listing as Garmin pages it: 200 per page and a short last page, or
+    an empty one after a full last page."""
+    pages = [_page(*entries[i : i + 200]) for i in range(0, len(entries), 200)]
+    if len(entries) % 200 == 0:
+        pages.append(_page())
+    return list(pages)
+
+
+def _record(root: Path, instance: str, known: dict[int, str | None]) -> None:
+    """A ledger holding one entry per id at the given revision (``None`` is the
+    revision a Garmin listing states, so those entries are final)."""
+    entries = tuple(
+        LedgerEntry(str(n), Outcome.SKIPPED, revision=rev, detail="recorded")
+        for n, rev in sorted(known.items(), key=lambda item: str(item[0]))
+    )
+    save_ledger(root, instance, Ledger("garmin", None, entries))
+
+
+def _limited_list(
+    root: Path, entries: list[dict[str, object]]
+) -> tuple[_Pull, tuple[RemoteActivity, ...], tuple[object, ...]]:
+    pull = _Pull([_token_ok(), *_pages(entries)], data_root=root, instance=_INSTANCE)
+    listing = GarminConnector().list_activities(pull.session, None)
+    return pull, listing.activities, listing.deferred
+
+
+def _dated(ids: range, minute_of: Callable[[int], int]) -> list[dict[str, object]]:
+    return [_entry(n, gmt=_at(minute_of(n))) for n in ids]
+
+
+def test_the_limit_counts_only_the_not_final_in_start_order_and_stops_at_the_cut(
+    tmp_path: Path,
+) -> None:
+    def minute(n: int) -> int:
+        return (n * 37) % 260  # a permutation of 0..259: arrival is not start order
+
+    entries = _dated(range(1, 261), minute)
+    newest = next(n for n in range(1, 261) if minute(n) == 259)
+    oldest = next(n for n in range(1, 261) if minute(n) == 0)
+    at = {minute(n): n for n in range(1, 261)}
+    # Minutes 235 and 245 are certainly after the cut, 259 is the newest.
+    finals = {5, 17, 60, 101, 150, 199, 230, 260, newest, oldest, at[235], at[245]}
+    by_start = sorted((n for n in range(1, 261) if n not in finals), key=minute)
+    # Recorded at another revision, so not final: inside the first 200 (one of
+    # them the very last kept) and so counted against the limit.
+    stale = {by_start[0]: "r1", by_start[120]: "r2", by_start[199]: "r3"}
+    _record(tmp_path, _INSTANCE, {**dict.fromkeys(finals), **stale})
+    # Another instance's ledger must not be the one read.
+    _record(tmp_path, "garmin", dict.fromkeys(by_start[:40]))
+
+    pull, activities, deferred = _limited_list(tmp_path, entries)
+
+    cut = by_start[200]  # the 201st not-final: the first thing withheld
+    early = {f for f in finals if minute(f) < minute(cut)}
+    late = finals - early
+    # Finals before the cut are listed and uncounted; finals after it are
+    # withheld with the rest, so the engine's watermark cannot pass them.
+    assert newest in late and oldest in early and len(early) > 1 and len(late) > 1
+    kept = early | set(by_start[:200])
+    assert len(_ids(activities)) == len(kept) == 200 + len(early)
+    assert set(_ids(activities)) == {str(n) for n in kept}
+    assert _ids(activities) == [str(n) for n in sorted(kept, key=minute)]
+    assert len(deferred) == 1
+    note = deferred[0]
+    assert isinstance(note, ListingDeferral)
+    assert note.subject == _INSTANCE
+    # Only the not-final among the withheld are counted, not the late finals.
+    withheld = len(by_start) - 200
+    assert withheld == 49
+    assert note.reason.startswith(f"{withheld} more activities")
+    assert len(pull.gets()) == 2
+
+
+def test_finals_after_the_last_kept_not_final_stay_listed_when_nothing_is_withheld(
+    tmp_path: Path,
+) -> None:
+    entries = [
+        *_dated(range(1, 201), lambda n: n),
+        *_dated(range(201, 211), lambda n: n),
+    ]
+    _record(tmp_path, _INSTANCE, dict.fromkeys(range(201, 211)))
+    _, activities, deferred = _limited_list(tmp_path, entries)
+    assert _ids(activities) == [str(n) for n in range(1, 211)]
+    assert deferred == ()
+
+
+def test_the_cut_is_the_first_not_final_past_the_limit_and_nothing_else(
+    tmp_path: Path,
+) -> None:
+    entries = [
+        *_dated(range(1, 201), lambda n: n),
+        _entry(301, gmt=_at(300)),  # final, after the last kept: still before the cut
+        _entry(401, gmt=_at(400)),  # final, tied with the cut and sorting before it
+        _entry(402, gmt=_at(400)),  # not final: the 201st, so the cut
+        _entry(403, gmt=_at(400)),  # final, tied with the cut and sorting after it
+        _entry(900, gmt=None),  # final, with no start, so last of all
+    ]
+    _record(tmp_path, _INSTANCE, dict.fromkeys([301, 401, 403, 900]))
+    _, activities, deferred = _limited_list(tmp_path, entries)
+    assert _ids(activities) == [*(str(n) for n in range(1, 201)), "301", "401"]
+    [note] = deferred
+    assert isinstance(note, ListingDeferral)
+    assert note.reason.startswith("1 more activity left")
+
+
+def test_the_deferral_names_the_count_and_both_ways_to_continue(
+    tmp_path: Path,
+) -> None:
+    entries = _dated(range(1, 202), lambda n: n)
+    _, activities, deferred = _limited_list(tmp_path, entries)
+    assert _ids(activities) == [str(n) for n in range(1, 201)]
+    [note] = deferred
+    assert isinstance(note, ListingDeferral)
+    assert note.reason == (
+        "1 more activity left for a later pull: the next `fitdocs pull` continues "
+        "there, and a pull started with `--since` continues only with the same "
+        "`--since`"
+    )
+    assert note.subject == _INSTANCE
+
+
+def test_a_since_pull_limits_only_what_its_window_holds(tmp_path: Path) -> None:
+    # Req 4.6: below the floor neither counts nor defers, and a final entry on
+    # either side of the floor is not counted.
+    entries = _dated(range(1, 241), lambda n: n)
+    _record(tmp_path, _INSTANCE, dict.fromkeys([5, 30]))
+    pull = _Pull(
+        [_token_ok(), *_pages(entries)], data_root=tmp_path, instance=_INSTANCE
+    )
+    listing = GarminConnector().list_activities(
+        pull.session, _BASE + timedelta(minutes=21)
+    )
+    assert _ids(listing.activities) == [str(n) for n in range(21, 222)]
+    [note] = listing.deferred
+    assert note.reason.startswith("19 more activities")
+
+
+def test_every_final_outcome_is_left_out_of_the_count(tmp_path: Path) -> None:
+    # A delivery still pending in the inbox is the state a real pull leaves.
+    sha = "a" * 64
+    entries = (
+        LedgerEntry("1", Outcome.DELIVERED, sha256=sha, pending=f"{_INSTANCE}/1.fit"),
+        LedgerEntry("2", Outcome.ALREADY_HELD, sha256=sha),
+        LedgerEntry("3", Outcome.SKIPPED, detail="recorded"),
+    )
+    save_ledger(tmp_path, _INSTANCE, Ledger("garmin", None, entries))
+    _, activities, deferred = _limited_list(
+        tmp_path, _dated(range(1, 204), lambda n: n)
+    )
+    assert len(activities) == 203
+    assert deferred == ()
+
+
+def test_exactly_the_limit_of_not_final_activities_defers_nothing(
+    tmp_path: Path,
+) -> None:
+    entries = _dated(range(1, 201), lambda n: n)
+    _, activities, deferred = _limited_list(tmp_path, entries)
+    assert len(activities) == 200
+    assert deferred == ()
+
+
+def test_finals_do_not_count_toward_the_limit_that_defers_nothing(
+    tmp_path: Path,
+) -> None:
+    entries = _dated(range(1, 251), lambda n: (n * 7) % 250)
+    _record(tmp_path, _INSTANCE, dict.fromkeys(range(201, 251)))
+    _, activities, deferred = _limited_list(tmp_path, entries)
+    assert _ids(activities) == [
+        str(n) for n in sorted(range(1, 251), key=lambda n: (n * 7) % 250)
+    ]
+    assert deferred == ()
+
+
+def test_an_activity_with_no_start_sorts_last_and_falls_into_the_remainder(
+    tmp_path: Path,
+) -> None:
+    entries = [_entry(900, gmt=None), *_dated(range(1, 201), lambda n: n)]
+    assert len(entries) == 201
+    _, activities, deferred = _limited_list(tmp_path, entries)
+    assert _ids(activities) == [str(n) for n in range(1, 201)]
+    [note] = deferred
+    assert isinstance(note, ListingDeferral)
+    assert note.reason.startswith("1 more activity")
+
+
+def test_activities_with_no_start_follow_the_dated_ones_in_the_engines_tie_order(
+    tmp_path: Path,
+) -> None:
+    undated = [_entry(n, gmt=None) for n in range(990, 1050)]
+    dated = _dated(range(1, 151), lambda n: 500 - n)
+    _, activities, deferred = _limited_list(tmp_path, [*undated, *dated])
+    # Dated first (oldest start first), then the undated by identifier text,
+    # which is the engine's own order: "1000" sorts before "990".
+    expected = [str(n) for n in range(150, 0, -1)] + [
+        str(n) for n in sorted(range(990, 1050), key=str)[:50]
+    ]
+    assert _ids(activities) == expected
+    [note] = deferred
+    assert isinstance(note, ListingDeferral)
+    assert note.reason.startswith("10 more activities")
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        f'ledger_version = "{_MARKER}\nnot toml',
+        f'ledger_version = 1\nconnector = "{_MARKER}"\n',
+    ],
+    ids=["not-toml", "another-connectors-ledger"],
+)
+def test_an_unreadable_ledger_ends_the_pull_with_a_named_error(
+    tmp_path: Path, content: str
+) -> None:
+    path = layout.connector_ledger_path(tmp_path, _INSTANCE)
+    path.parent.mkdir(parents=True)
+    path.write_text(content, encoding="utf-8")
+    pull = _Pull([_token_ok(), _page(_entry())], data_root=tmp_path, instance=_INSTANCE)
+    with pytest.raises(ConnectorError) as excinfo:
+        GarminConnector().list_activities(pull.session, None)
+    error = excinfo.value
+    assert type(error) is ConnectorError
+    assert "ledger" in str(error)
+    assert _MARKER not in str(error)
+    assert _MARKER not in repr(error)
+    assert error.__cause__ is None
+    assert error.__suppress_context__
+
+
+def test_a_deferral_alone_is_no_failure_when_the_engine_runs_the_pull(
+    tmp_path: Path,
+) -> None:
+    entries = _dated(range(1, 202), lambda n: 1000 - n)
+
+    def transport(request: HttpRequest, timeout: float) -> HttpResponse:
+        if request.method == "POST":
+            return _token_ok()
+        assert request.method == "GET"
+        start = int(_query(request)["start"][0])
+        return _page(*entries[start : start + 200])
+
+    instances = load_connectors_settings(
+        {"connectors": {"garmin": {}}},
+        settings_file=tmp_path / "fitdocs.toml",
+        context=SettingsContext(data_root=tmp_path, inbox=tmp_path / "inbox"),
+    )
+    report = run_pull(
+        tmp_path,
+        instances,
+        inbox=tmp_path / "inbox",
+        store=None,
+        transport=transport,
+        options=PullOptions(since=None, dry_run=True),
+        environ={env_var_name("garmin", "api_key"): _KEY},
+        now=lambda: _CLOCK,
+        sleep=lambda seconds: None,
+        redactor=Redactor(),
+    )
+    [instance] = report.instances
+    assert instance.error is None
+    assert instance.failed == ()
+    assert not report.failed
+    assert instance.listed == 200
+    assert instance.would_fetch == tuple(sorted(str(n) for n in range(2, 202)))
+    [note] = instance.deferred
+    assert note.subject == "garmin"
+    assert note.detail.startswith("1 more activity")
+    assert "`--since`" in note.detail
+
+
+def test_a_since_pull_that_defers_is_followed_by_plain_pulls_that_reach_everything(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The watermark is computed over the listing, so a listing that kept the
+    # finals beyond its cut would let it jump past the deferred remainder and
+    # strand the history between. Small scale: the limit is 5, there are 14
+    # activities, `--since` starts at the 8th and its oldest fails once.
+    monkeypatch.setattr(garmin_module, "ACTIVITIES_PER_PULL", 5)
+    entries = _dated(range(1, 15), lambda n: n * 1440)
+    fetched: list[str] = []
+    failing = {"8"}
+
+    class _Delivering(GarminConnector):
+        def fetch_activity(
+            self, session: ConnectorSession, activity: RemoteActivity
+        ) -> FetchResult:
+            if activity.remote_id in failing:
+                failing.discard(activity.remote_id)
+                raise RuntimeError("one bad download")
+            fetched.append(activity.remote_id)
+            return Fetched(
+                bytes([14, 16, 0, 0, 0, 0, 0, 0])
+                + b".FIT"
+                + activity.remote_id.encode()
+            )
+
+    def transport(request: HttpRequest, timeout: float) -> HttpResponse:
+        if request.method == "POST":
+            return _token_ok()
+        start = int(_query(request)["start"][0])
+        return _page(*entries[start : start + 200])
+
+    instance = ConnectorInstance("garmin", _Delivering(), 0, None)
+
+    def pull(since: datetime | None) -> InstancePullReport:
+        report = run_pull(
+            tmp_path,
+            (instance,),
+            inbox=tmp_path / "inbox",
+            store=None,
+            transport=transport,
+            options=PullOptions(since=since, dry_run=False),
+            environ={env_var_name("garmin", "api_key"): _KEY},
+            now=lambda: _BASE + timedelta(days=30),
+            sleep=lambda seconds: None,
+            redactor=Redactor(),
+        )
+        [one] = report.instances
+        assert one.error is None
+        return one
+
+    first = pull(_BASE + timedelta(days=8))
+    assert [note.subject for note in first.failed] == ["8"]
+    assert first.deferred[0].detail.startswith("2 more activities")
+    assert fetched == ["9", "10", "11", "12"]
+    for _ in range(4):
+        last = pull(None)
+        if not last.deferred:
+            break
+    assert last.deferred == ()
+    assert sorted(fetched, key=int) == [str(n) for n in range(1, 15)]
+    assert len(fetched) == 14
+    again = pull(None)
+    assert again.delivered == () and again.failed == ()
+    ledger = load_ledger(tmp_path, "garmin", connector_id="garmin")
+    assert all(ledger.is_final(str(n), None) for n in range(1, 15))

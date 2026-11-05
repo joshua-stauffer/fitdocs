@@ -77,8 +77,8 @@
   - Done when tests cover the window around a near-midnight start, the whole-history case, a repeated identifier across pages, each malformed form, each status, and a listing entry's name and owner fields appearing nowhere in the result.
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 6.1, 6.2, 6.3, 6.4, 6.7, 6.8, 7.5, 8.1_
 
-- [ ] 3.4 Apply the per-pull limit
-  - Read the instance's ledger, keep every final entry plus the first 200 not final in start order, with an activity that has no start sorting last as the engine does, and report the remainder as one deferred listing entry giving the count and both resume rules. A ledger read failure ends the pull with a named error. Extend the module's import pin with the ledger.
+- [x] 3.4 Apply the per-pull limit
+  - Read the instance's ledger, walk the listing in start order keeping entries until 200 not final are kept, then withhold everything from the first not-final entry after them (finals included, so the watermark cannot pass the remainder; finals before the cut are listed and uncounted), with an activity that has no start sorting last as the engine does, and report the withheld not-final entries as one deferred listing entry giving the count and both resume rules. A ledger read failure ends the pull with a named error. Extend the module's import pin with the ledger.
   - Done when tests show exactly 200 offered from a larger history, final entries not counted, an activity with no start not raising and sorting last, the deferral text carrying the count, and no deferral at or under the limit.
   - _Requirements: 4.2, 4.3, 4.6_
 
@@ -167,3 +167,7 @@
   - Done when the findings are recorded and any contradiction is resolved. No other task waits for this except the completion claim.
   - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5_
   - _Blocked: the maintainer's own task, Req 13.5_
+
+## Implementation Notes
+
+- 3.4: controller ruling: stop at the cut rather than keep every final, or the watermark strands deferred history. Amends design 'Listing'.

@@ -4,13 +4,13 @@ Pulls a Garmin account's activities and daily wellness with the athlete's own
 Connect Personal API key. This module is the one module in the connectors
 package that names the Personal API host (the service-neutral scan admits it
 here and in its own tests only). It imports only the standard library and
-``fitdocs.connectors.{errors,http,protocol,secrets}``, builds no HTTP client
+``fitdocs.connectors.{errors,http,ledger,protocol,secrets}``, builds no HTTP client
 of its own, and reads no clock.
 
 Task 3.1 declares the connector and implements the key check. Task 3.2 adds
 the per-pull state (one token, spacing, rate-limit waits) and the one helper
-every Garmin GET goes through. Task 3.3 adds the activity listing. The other
-three pull operations are placeholders that raise a named
+every Garmin GET goes through. Task 3.3 adds the activity listing and task 3.4
+the per-pull limit. The other three pull operations are placeholders that raise a named
 :class:`ConnectorError` and make no request, because the registry requires
 them once the capabilities are declared; later tasks replace them.
 """
@@ -34,6 +34,7 @@ from fitdocs.connectors.http import (
     TransportError,
     auth_failure_from,
 )
+from fitdocs.connectors.ledger import Ledger, LedgerError, load_ledger
 from fitdocs.connectors.protocol import (
     AuthStyle,
     Capability,
@@ -42,6 +43,7 @@ from fitdocs.connectors.protocol import (
     FetchResult,
     Granted,
     Listing,
+    ListingDeferral,
     RemoteActivity,
     SettingsContext,
     WellnessDay,
@@ -61,6 +63,7 @@ MAX_WAITS_PER_PULL_S: Final[float] = 900.0
 LISTING_PAGE: Final[int] = 200
 LISTING_EARLIEST: Final[date] = date(1990, 1, 1)
 LISTING_PATH: Final[str] = "/activitylist-service/activities/search/activities"
+ACTIVITIES_PER_PULL: Final[int] = 200
 
 _TOKEN_RE = re.compile(r"[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+")
 _GMT_START_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}")
@@ -117,6 +120,16 @@ LISTING_UNREACHABLE_MESSAGE: Final[str] = (
 )
 LISTING_OTHER_MESSAGE: Final[str] = (
     "Garmin answered the activity listing with an unexpected status (HTTP {status})"
+)
+LEDGER_UNREADABLE_MESSAGE: Final[str] = (
+    "The ledger of what this instance already pulled could not be read, so "
+    "no activities were pulled; repair or remove the instance's ledger file "
+    "under .fitdocs/connectors, then pull again"
+)
+DEFERRED_MESSAGE: Final[str] = (
+    "{count} more {noun} left for a later pull: the next `fitdocs pull` "
+    "continues there, and a pull started with `--since` continues only "
+    "with the same `--since`"
 )
 NOT_BUILT_MESSAGE: Final[str] = (
     "the Garmin connector does not implement {operation} yet"
@@ -285,6 +298,56 @@ def _raise_for_listing(response: HttpResponse) -> None:
     raise ConnectorError(LISTING_OTHER_MESSAGE.format(status=status))
 
 
+def _limit(
+    session: ConnectorSession, activities: tuple[RemoteActivity, ...]
+) -> Listing:
+    """Entries in start order up to the cut (Req 4.2, 4.3, 4.6): the cut is the
+    first not-final entry after :data:`ACTIVITIES_PER_PULL` not-final ones have
+    been kept, and everything from it on is withheld, finals included. Finals
+    before the cut are listed and not counted. Withholding the finals past the
+    cut is what keeps the engine's watermark, computed over the listing, from
+    jumping over the withheld entries and stranding them. Final is the
+    engine's own test, :meth:`Ledger.is_final`, read from the instance's
+    ledger on disk; the sort key is the engine's, so an activity with no start
+    comes last, by identifier. The withheld not-final entries are one deferred
+    entry naming the count; with none withheld there is no deferral and every
+    entry is listed."""
+    try:
+        ledger: Ledger = load_ledger(
+            session.data_root, session.instance, connector_id=GARMIN_CONNECTOR_ID
+        )
+    except LedgerError:
+        raise ConnectorError(LEDGER_UNREADABLE_MESSAGE) from None
+    ordered = sorted(
+        activities,
+        key=lambda activity: (
+            activity.start is None,
+            activity.start,
+            activity.remote_id,
+        ),
+    )
+    not_final = [
+        not ledger.is_final(activity.remote_id, activity.revision)
+        for activity in ordered
+    ]
+    cut = len(ordered)
+    seen = 0
+    for index, pending in enumerate(not_final):
+        if not pending:
+            continue
+        if seen == ACTIVITIES_PER_PULL:
+            cut = index
+            break
+        seen += 1
+    remainder = sum(not_final[cut:])
+    if remainder == 0:
+        return Listing(tuple(ordered))
+    reason = DEFERRED_MESSAGE.format(
+        count=remainder, noun="activity" if remainder == 1 else "activities"
+    )
+    return Listing(tuple(ordered[:cut]), (ListingDeferral(session.instance, reason),))
+
+
 def _not_built(operation: str) -> ConnectorError:
     return ConnectorError(NOT_BUILT_MESSAGE.format(operation=operation))
 
@@ -408,7 +471,8 @@ class GarminConnector:
         """Every activity of the key's owner from ``since`` (Req 3.1-3.7),
         oldest first in pages of :data:`LISTING_PAGE`, each identifier once.
         Both date filters are always sent; ``since`` is then applied to each
-        entry's UTC start."""
+        entry's UTC start. The listing is then limited per pull by
+        :func:`_limit` (Req 4.2, 4.3, 4.6)."""
         floor = None
         if since is not None:
             floor = (since if since.tzinfo else since.replace(tzinfo=UTC)).astimezone(
@@ -454,12 +518,13 @@ class GarminConnector:
             if len(activities) == before:
                 raise ConnectorError(LISTING_REPEATED_MESSAGE)
             offset += LISTING_PAGE
-        return Listing(
+        return _limit(
+            session,
             tuple(
                 activity
                 for activity in activities.values()
                 if floor is None or activity.start is None or activity.start >= floor
-            )
+            ),
         )
 
     def fetch_activity(
