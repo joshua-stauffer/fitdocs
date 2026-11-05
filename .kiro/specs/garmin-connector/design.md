@@ -107,10 +107,9 @@ tests/wellness/test_garmin_personal.py  # the delivery format: recognition, metr
 - `src/fitdocs/connectors/__init__.py`: register `GarminConnector` after `StravaConnector`; not added to `__all__`.
 - `src/fitdocs/wellness/formats/garmin.py`: `PERSONAL_SOURCE`, `PERSONAL_FORMAT`, the reader; `_sleep` takes the respiration field name.
 - `src/fitdocs/wellness/registry.py`: add the source and format.
-- `src/fitdocs/index/derived/wellness.py`: no code change expected; the column doc names examples only.
 - `tests/connectors/test_boundary.py`: the module list and import pins.
 - `tests/connectors/test_intervals.py`, `tests/connectors/test_relay.py`: the registry order literal.
-- `tests/connectors/test_http.py` (or the existing transport test file): the new option.
+- `tests/connectors/test_http.py`: the new option.
 - `tests/wellness/test_registered_formats.py`, `tests/wellness/test_engine.py`, `tests/test_cli_derive.py`, `tests/hr_benchmarks/test_engine.py`: source and format literals.
 - `tests/wellness/builders_garmin.py`: delivery builders.
 - `tests/connectors/test_docs.py`, `tests/wellness/apple/test_docs_apple.py`, and any other documentation-binding test the doc edits turn red: the affected test functions are deleted, never updated (14.4). `NeutralScan` moves out first.
@@ -244,6 +243,7 @@ class GarminConnector:
 - `POST` with an empty body, `Accept: */*`, `secret_headers={"Authorization": session.secret(f"ApiKey {key}")}`, `single_attempt=True`.
 - A 200 whose body matches three dot-separated base64url segments, at most 16 KiB, is the token. It is registered with `session.secret` in both bare and `Bearer` form before any use, and is never decoded.
 - `verify` mints and discards. A pull mints on first need and caches the bearer in `_PullState`.
+- A pull makes one token request at most. If it fails with a `ConnectorError`, `_PullState` keeps that error, and wellness raises it again with no second request (7.2, 11.2).
 
 **Pacing and waits (`_get`)**
 - Before each request, including the token: `session.sleep(REQUEST_SPACING_S)` unless it is the pull's first.
@@ -253,7 +253,7 @@ class GarminConnector:
 
 **Listing (`list_activities`)**
 - `sortOrder=asc`, `limit=200`, `start` advancing, until a short page. New arrivals land at the end, so `asc` is the stable order.
-- With `since`: `startDate` one day before its UTC date, because Garmin filters on local start time. Each entry is then filtered by its UTC start.
+- With `since`: `startDate` one day before its UTC date, because Garmin filters on local start time, and `endDate` the day after the pull's UTC date. Both are sent because that is the measured form. Each entry is then filtered by its UTC start.
 - `excludeChildren` stays at Garmin's default.
 - Entries are deduped by id.
 - `load_ledger(session.data_root, session.instance, connector_id="garmin")`, then keep every final entry plus the first `ACTIVITIES_PER_PULL` not final in start order. A `LedgerError` becomes a `ConnectorError`.
@@ -285,6 +285,7 @@ Members are classified from their first bytes: `is_fit` for FIT, and a local `_d
 @dataclass
 class _PullState:
     bearer: Secret | None = None
+    mint_error: ConnectorError | None = None
     used: bool = False
     waited_s: float = 0.0
     consecutive_failures: int = 0
@@ -408,7 +409,7 @@ All tests run offline with `FakeTransport` and synthesized FIT and ZIP bytes (14
 
 ### Guards
 - `tests/connectors/test_boundary.py` includes `garmin`. The raw-substring clock scan means no attribute spelled `..._time.timestamp()` or `datetime.timedelta`-like text in the module (`.kiro/queue/2026-11-01-connectors-clock-scan-substring-false-positive.md`).
-- `NeutralScan` moves unchanged, is green on the moved file, and then gains the `personal.connectapi.garmin.com` entry.
+- `NeutralScan` moves unchanged and is green on the moved file. It then gains entries for `personal.connectapi.garmin.com` (the connector and its tests), and for the Garmin hosts the docs link to (`docs/connectors.md#garmin` only).
 
 ## Security Considerations
 - The key and the token are registered with the redactor before first use, and sent only as `secret_headers`, which the transport never forwards to a redirect target.
