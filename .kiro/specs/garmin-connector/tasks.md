@@ -12,7 +12,7 @@
 
 - [ ] 1. Foundation
 
-- [ ] 1.1 Move the service-neutral scan to its own test file
+- [x] 1.1 Move the service-neutral scan to its own test file
   - Move the `NeutralScan` guard and its tests out of the connector documentation test file, unchanged, into a test file of its own.
   - Change no assertion and no exemption entry in this move.
   - Done when the same scan tests pass from the new file, none remain in the old one, and the real-tree scan still flags an unadmitted host.
