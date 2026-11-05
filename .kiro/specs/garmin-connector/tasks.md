@@ -119,7 +119,7 @@
   - _Requirements: 4.4, 4.5, 4.6, 8.2, 8.3_
   - _Depends: 3.4, 3.5_
 
-- [ ] 5.2 Run wellness through the real pull engine and series
+- [x] 5.2 Run wellness through the real pull engine and series
   - Done when tests show: no wellness request unless enabled; a delivery reaches the series through the drain; a changed day is delivered again and replaces the earlier values while an unchanged day is not; a rate limit or refusal during activities suppresses wellness while a listing server error does not; the existing data root's series rebuilds once with no value lost; a delivery that cannot be read is named in the drain's report and leaves the series unchanged; a token server error ends activities with an error, wellness reports the same error, and exactly one token request was made; a multi-year wellness history is delivered by one plain pull, a second pull delivers only what changed, and a later `--since` older than the recorded coverage fills the gap in one pull.
   - _Requirements: 9.1, 9.3, 10.8, 10.9, 10.11, 10.12, 11.1, 11.2_
   - _Depends: 4.3, 5.1_

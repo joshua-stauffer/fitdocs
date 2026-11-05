@@ -13,14 +13,19 @@ import json
 import math
 import re
 import tempfile
+import time
 from collections.abc import Callable, Mapping
-from datetime import UTC, date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta, timezone, tzinfo
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
+from typer.testing import CliRunner, Result
 
+import fitdocs.cli as cli_module
+import fitdocs.connectors.garmin as garmin_module
+from fitdocs.cli import app
 from fitdocs.connectors.credentials import env_var_name
 from fitdocs.connectors.delivery import wellness_package_problem
 from fitdocs.connectors.errors import AuthFailure, AuthFailureKind, ConnectorError
@@ -46,10 +51,24 @@ from fitdocs.connectors.protocol import (
 from fitdocs.connectors.pull import InstancePullReport, PullOptions, run_pull
 from fitdocs.connectors.secrets import Redactor, Secret
 from fitdocs.connectors.settings import ConnectorInstance
+from fitdocs.wellness import read_series
 from fitdocs.wellness import registry as wellness_registry
 from fitdocs.wellness.formats.garmin import PERSONAL_FORMAT
 from fitdocs.wellness.model import Metric
 from fitdocs.wellness.probe import CandidateProbe
+from tests.connectors.test_garmin_pull import (
+    FILE_ROUTE,
+    HOST,
+    LISTING_ROUTE,
+    _Cli,
+    _Garmin,
+    _history,
+)
+from tests.wellness.builders_garmin import (
+    garmin_file_bytes,
+    garmin_file_name,
+    garmin_uds_record,
+)
 
 _KEY = "gk-synthetic-4Vq8Zt"
 _TOKEN = (
@@ -1765,3 +1784,607 @@ def test_a_token_failure_met_by_activities_reaches_wellness_with_one_token_reque
     assert report.wellness is not None and report.wellness.error is not None
     assert report.wellness.error.detail == report.error.detail
     assert [r.method for r in engine.requests] == ["POST"]
+
+
+# --------------------------------------------------------------------------
+# Through the real CLI: pull, ledger, inbox, drain and series (task 5.2;
+# Req 9.1, 9.3, 10.8-10.12, 11.1, 11.2)
+# --------------------------------------------------------------------------
+
+
+_runner = CliRunner()
+Sections = dict[str, dict[str, object]]
+_PERSONAL_ID = "garmin-personal"
+_CLI_NOW = datetime(2026, 6, 15, 12, 0, tzinfo=UTC)
+
+
+class _CliDatetime(datetime):
+    """The CLI's ``datetime`` in this section: mid-June at noon, so the weeks
+    before it share one year and no test crosses a midnight, and each read a
+    second after the last, so a later delivery's stamp is later."""
+
+    reads = 0
+
+    @classmethod
+    def now(cls, tz: tzinfo | None = None) -> datetime:  # type: ignore[override]
+        cls.reads += 1
+        moment = _CLI_NOW + timedelta(seconds=cls.reads)
+        if tz is None:
+            return moment.astimezone().replace(tzinfo=None)
+        return moment.astimezone(tz)
+
+
+class _WellnessGarmin(_Garmin):
+    """The activity Garmin of the pull tests plus the four wellness routes.
+
+    ``days`` maps a date to the sections Garmin holds for it; each route
+    answers the dates inside the window it was asked for. ``fail`` makes a
+    wellness route answer with a status, ``listing_status`` the activity
+    listing and ``token_status`` the token request."""
+
+    def __init__(self, history: dict[int, tuple[datetime, bytes]] | None = None):
+        super().__init__(history or {})
+        self.days: dict[date, Sections] = {}
+        self.asked: list[str] = []
+        self.probes = 0
+        self.fail: dict[str, int] = {}
+        self.listing_status: int | None = None
+        self.token_status: int | None = None
+
+    def __call__(self, request: HttpRequest, timeout: float) -> HttpResponse:
+        parts = urlsplit(request.url)
+        if request.method == "POST" and self.token_status is not None:
+            self.seen.requests.append(request)
+            self.seen.tokens += 1
+            return _text("oops", self.token_status)
+        if request.method == "GET" and parts.path == LISTING_ROUTE:
+            if parse_qs(parts.query).get("limit") == ["1"]:
+                self.probes += 1
+            if self.listing_status is not None:
+                self.seen.requests.append(request)
+                return _text("oops", self.listing_status)
+        if (
+            request.method == "GET"
+            and parts.path != LISTING_ROUTE
+            and not parts.path.startswith(FILE_ROUTE)
+        ):
+            return self._wellness(request)
+        return super().__call__(request, timeout)
+
+    def _wellness(self, request: HttpRequest) -> HttpResponse:
+        assert urlsplit(request.url).netloc == HOST
+        assert request.secret_headers["Authorization"].reveal() == f"Bearer {_TOKEN}"
+        self.seen.requests.append(request)
+        section, first, last = _classify(request)
+        assert first is not None and last is not None
+        self.asked.append(section)
+        if section in self.fail:
+            return _text("oops", self.fail[section])
+        records: list[object] = [
+            _rec(section, day.isoformat(), **self.days[day][section])
+            for day in sorted(self.days)
+            if first <= day <= last and section in self.days[day]
+        ]
+        return _body(section, records)
+
+
+def _today() -> date:
+    return _CLI_NOW.date()
+
+
+def _sections(k: int) -> Sections:
+    """One day's records, every value a function of ``k``; among the ``k``
+    any one test uses, no two values are equal."""
+    return {
+        "daily": {
+            "heartRate": {"restingValue": 40 + k, "maxValue": 150 + k},
+            "movement": {"steps": {"value": 5000 + 13 * k}},
+        },
+        "sleep": {
+            "deepSleepSeconds": 3000 + 60 * k,
+            "remSleepSeconds": 1500 + 70 * k,
+        },
+        "hrv": {"lastNightAvg": 30 + k},
+        "weight": {"latestWeight": {"weight": 70000 + 100 * k}},
+    }
+
+
+def _expected(day_k: Mapping[date, int]) -> dict[tuple[date, str], float]:
+    out: dict[tuple[date, str], float] = {}
+    for day, k in day_k.items():
+        out[(day, "resting_hr_bpm")] = 40 + k
+        out[(day, "max_hr_bpm")] = 150 + k
+        out[(day, "steps")] = 5000 + 13 * k
+        out[(day, "sleep_deep_s")] = 3000 + 60 * k
+        out[(day, "sleep_rem_s")] = 1500 + 70 * k
+        out[(day, "sleep_s")] = 4500 + 130 * k
+        out[(day, "hrv_rmssd_ms")] = 30 + k
+        out[(day, "weight_kg")] = (70000 + 100 * k) / 1000
+    return out
+
+
+class _WellnessCli(_Cli):
+    def __init__(self, root: Path, garmin: _WellnessGarmin, sleeps: list[float]):
+        super().__init__(root, garmin, sleeps)
+        self.wgarmin = garmin
+
+    def configure(
+        self, lookback_days: int | None = None, wellness: bool = True
+    ) -> None:
+        (self.root / "fitdocs.toml").write_text(
+            f'[inbox]\npath = "inbox"\nsettle_seconds = 0\n\n'
+            f"[connectors.garmin]\nwellness = {str(wellness).lower()}\n"
+            f"lookback_days = {lookback_days or 5}\n",
+            encoding="utf-8",
+        )
+
+    def run(self, *args: str, sync: bool = True) -> Result:
+        flags = ["--sync"] if sync else []
+        return _runner.invoke(
+            app,
+            ["pull", "garmin", *flags, "--no-prompt", "--out", str(self.root), *args],
+        )
+
+    def drain(self) -> Result:
+        return _runner.invoke(app, ["sync", "--no-prompt", "--out", str(self.root)])
+
+    def command(self, *args: str) -> Result:
+        return _runner.invoke(app, [*args, "--out", str(self.root)])
+
+    def personal(self) -> dict[tuple[date, str], float]:
+        values = [v for v in read_series(self.root).values if v.source == _PERSONAL_ID]
+        assert all(v.origin == "garmin" and v.canonical for v in values)
+        return {(v.day, v.metric.value): v.value for v in values}
+
+    def csv(self) -> dict[str, bytes]:
+        return {
+            path.name: path.read_bytes()
+            for path in sorted((self.root / "wellness").glob("*.csv"))
+        }
+
+    def archived(self) -> dict[str, dict[str, Any]]:
+        folder = self.root / "wellness-archive" / _PERSONAL_ID
+        return (
+            {
+                path.name: json.loads(path.read_text(encoding="utf-8"))
+                for path in sorted(folder.glob("*.json"))
+            }
+            if folder.exists()
+            else {}
+        )
+
+    def ledger_wellness(self) -> Any:
+        wellness = self.ledger().wellness
+        assert wellness is not None
+        return wellness
+
+
+@pytest.fixture
+def wcli(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _WellnessCli:
+    garmin = _WellnessGarmin()
+    sleeps: list[float] = []
+    monkeypatch.setattr(cli_module, "_connector_transport", lambda: garmin)
+    monkeypatch.setattr(cli_module, "datetime", _CliDatetime)
+    monkeypatch.setattr(_CliDatetime, "reads", 0)
+    monkeypatch.setattr(time, "sleep", sleeps.append)
+    monkeypatch.setenv(env_var_name("garmin", "api_key"), _KEY)
+    root = tmp_path / "data-root"
+    root.mkdir()
+    cli = _WellnessCli(root, garmin, sleeps)
+    cli.configure()
+    return cli
+
+
+def _ago(n: int) -> date:
+    return _today() - timedelta(days=n)
+
+
+def _table(output: str, label: str) -> int:
+    """The count on the one row of ``output`` that carries ``label``."""
+    [count] = re.findall(rf"│ {label}\s+│\s+(\d+) │", output)
+    return int(count)
+
+
+def test_no_wellness_request_unless_the_instance_enables_it(
+    wcli: _WellnessCli,
+) -> None:
+    wcli.configure(wellness=False)
+    wcli.wgarmin.days = {_ago(n): _sections(n) for n in (1, 2, 3)}
+
+    off = wcli.run()
+
+    assert off.exit_code == 0, off.output
+    assert wcli.wgarmin.asked == [] and wcli.wgarmin.probes == 0
+    assert wcli.ledger().wellness is None
+    assert wcli.csv() == {} and wcli.archived() == {}
+
+    # The same account with wellness enabled does ask: the quiet above is the
+    # setting's, not an account with nothing to ask for.
+    wcli.configure(wellness=True)
+    on = wcli.run()
+    assert on.exit_code == 0, on.output
+    assert sorted(set(wcli.wgarmin.asked)) == ["daily", "hrv", "sleep", "weight"]
+    assert wcli.wgarmin.probes == 1
+
+
+def test_a_delivery_reaches_the_series_through_the_drain(wcli: _WellnessCli) -> None:
+    ks = {_ago(n): n for n in (1, 2, 3, 10)}
+    wcli.wgarmin.days = {day: _sections(k) for day, k in ks.items()}
+
+    result = wcli.run()
+
+    assert result.exit_code == 0, result.output
+    assert wcli.personal() == _expected(ks)
+    [(name, envelope)] = wcli.archived().items()
+    assert [entry["date"] for entry in envelope["days"]] == sorted(
+        day.isoformat() for day in ks
+    )
+    archived = wcli.root / "wellness-archive" / _PERSONAL_ID / name
+    assert name == hashlib.sha256(archived.read_bytes()).hexdigest() + ".json"
+    ledger = wcli.ledger_wellness()
+    assert [entry.day for entry in ledger.days] == sorted(ks)
+    assert ledger.through == _today() + timedelta(days=1)
+    assert ledger.origins == ("garmin",)
+
+
+def test_a_changed_day_is_delivered_again_and_an_unchanged_day_is_not(
+    wcli: _WellnessCli,
+) -> None:
+    # lookback_days is 5: the second pull lists from the 5th day before the
+    # mark, so day 10 is not listed again and days 3, 2 and 1 are.
+    ks = {_ago(n): n for n in (1, 2, 3, 10)}
+    wcli.wgarmin.days = {day: _sections(k) for day, k in ks.items()}
+    assert wcli.run().exit_code == 0
+    [(first_name, first)] = wcli.archived().items()
+    before = {entry.day: entry for entry in wcli.ledger_wellness().days}
+
+    # Day 3 changes its values and loses its HRV section; days 2 and 1 and 10
+    # are as they were.
+    changed = _sections(50)
+    del changed["hrv"]
+    wcli.wgarmin.days[_ago(3)] = changed
+    second = wcli.run()
+
+    assert second.exit_code == 0, second.output
+    assert _table(second.output, "Days listed") == 3
+    assert _table(second.output, "Days unchanged") == 2
+    delivered = {n: e for n, e in wcli.archived().items() if n != first_name}
+    [(second_name, envelope)] = delivered.items()
+    assert [entry["date"] for entry in envelope["days"]] == [_ago(3).isoformat()]
+    assert envelope["days"][0]["fetched_at"] > first["days"][0]["fetched_at"]
+    after = {entry.day: entry for entry in wcli.ledger_wellness().days}
+    assert after[_ago(3)].sha256 == second_name.removesuffix(".json")
+    assert after[_ago(3)].revision != before[_ago(3)].revision
+    for n in (1, 2, 10):
+        assert after[_ago(n)] == before[_ago(n)]
+    expected = _expected({day: k for day, k in ks.items() if k != 3})
+    expected.update(
+        {
+            key: value
+            for key, value in _expected({_ago(3): 50}).items()
+            if key[1] != "hrv_rmssd_ms"
+        }
+    )
+    assert (_ago(3), "hrv_rmssd_ms") not in expected
+    assert wcli.personal() == expected
+
+
+_ACTIVITY_REFUSALS = {
+    401: "did not accept the Personal API key",
+    403: "refused",
+    429: "limiting requests",
+}
+
+
+@pytest.mark.parametrize("status", sorted(_ACTIVITY_REFUSALS))
+def test_a_rejection_refusal_or_rate_limit_during_activities_suppresses_wellness(
+    wcli: _WellnessCli, status: int
+) -> None:
+    wcli.wgarmin.days = {_ago(n): _sections(n) for n in (1, 2)}
+    wcli.wgarmin.listing_status = status
+
+    result = wcli.run()
+
+    assert result.exit_code == 1, result.output
+    assert _ACTIVITY_REFUSALS[status] in result.output
+    assert wcli.wgarmin.asked == [] and wcli.wgarmin.probes == 0
+    assert "garmin wellness" not in result.output
+    methods = [(r.method, urlsplit(r.url).path) for r in wcli.wgarmin.seen.requests]
+    assert {path for _, path in methods} == {
+        garmin_module.TOKEN_PATH,
+        LISTING_ROUTE,
+    }
+    assert wcli.ledger().wellness is None and wcli.csv() == {}
+
+
+@pytest.mark.parametrize("status", [500, 502])
+@pytest.mark.usefixtures("utc")
+def test_a_listing_server_error_during_activities_still_runs_wellness(
+    wcli: _WellnessCli, status: int
+) -> None:
+    ks = {_ago(n): n for n in (1, 2, 3)}
+    wcli.wgarmin.days = {day: _sections(k) for day, k in ks.items()}
+    wcli.wgarmin.listing_status = status
+
+    result = wcli.run("--since", _ago(5).isoformat())
+
+    assert result.exit_code == 1, result.output
+    activities, wellness = result.output.split("fitdocs pull: garmin wellness")
+    assert f"HTTP {status}" in activities
+    assert _table(activities, "Error") == 1
+    assert _table(wellness, "Error") == 0
+    assert sorted(set(wcli.wgarmin.asked)) == ["daily", "hrv", "sleep", "weight"]
+    assert wcli.personal() == _expected(ks)
+    assert _table(wellness, "Days listed") == 3
+
+
+@pytest.fixture
+def utc(monkeypatch: pytest.MonkeyPatch) -> Any:
+    """``--since`` is a local calendar day; pin the zone so the day it names
+    is the UTC day the wellness listing starts from."""
+    monkeypatch.setenv("TZ", "UTC")
+    time.tzset()
+    yield
+    monkeypatch.undo()
+    time.tzset()
+
+
+def test_a_token_server_error_ends_activities_and_wellness_with_one_token_request(
+    wcli: _WellnessCli,
+) -> None:
+    wcli.wgarmin.days = {_ago(n): _sections(n) for n in (1, 2)}
+    wcli.wgarmin.token_status = 500
+
+    result = wcli.run()
+
+    assert result.exit_code == 1, result.output
+    activities, wellness = result.output.split("fitdocs pull: garmin wellness")
+    [activity_error] = re.findall(r"Error:\n  (.+)\n", activities)
+    [wellness_error] = re.findall(r"Error:\n  (.+)\n", wellness)
+    assert "(HTTP 500) to the token request" in activity_error
+    assert wellness_error == activity_error
+    assert _table(activities, "Error") == 1 and _table(wellness, "Error") == 1
+    assert wcli.wgarmin.seen.tokens == 1
+    assert [r.method for r in wcli.wgarmin.seen.requests] == ["POST"]
+    assert wcli.wgarmin.asked == [] and wcli.csv() == {}
+
+
+def _export_files(inbox: Path, steps_day: date, steps: int) -> None:
+    inbox.mkdir(parents=True, exist_ok=True)
+    name = garmin_file_name("uds", steps_day, steps_day)
+    (inbox / name).write_bytes(
+        garmin_file_bytes(
+            [garmin_uds_record(steps_day, totalSteps=steps, minHeartRate=33)]
+        )
+    )
+
+
+def test_an_existing_series_rebuilds_once_with_no_value_lost(
+    wcli: _WellnessCli, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    exported, overlap = _ago(20), _ago(2)
+    original = (wellness_registry.FORMATS, wellness_registry.SOURCES)
+    # A data root as the version before this source built it: the registry
+    # has neither the format nor the source.
+    monkeypatch.setattr(
+        wellness_registry,
+        "FORMATS",
+        tuple(f for f in original[0] if f is not PERSONAL_FORMAT),
+    )
+    monkeypatch.setattr(
+        wellness_registry,
+        "SOURCES",
+        tuple(s for s in original[1] if s is not PERSONAL_FORMAT.source),
+    )
+    _export_files(wcli.root / "inbox", exported, 8123)
+    _export_files(wcli.root / "inbox" / "again", overlap, 7777)
+    old = wcli.drain()
+    assert old.exit_code == 0, old.output
+    before = wcli.csv()
+    assert set(before) == {f"{exported.year}.csv"}
+    exported_rows = [
+        (v.day, v.metric.value, v.source, v.value)
+        for v in read_series(wcli.root).values
+    ]
+    assert (exported, "steps", "garmin-export", 8123.0) in exported_rows
+    assert (overlap, "steps", "garmin-export", 7777.0) in exported_rows
+
+    monkeypatch.setattr(wellness_registry, "FORMATS", original[0])
+    monkeypatch.setattr(wellness_registry, "SOURCES", original[1])
+
+    assert wcli.command("check").exit_code == 1
+    rebuilt = wcli.drain()
+    assert rebuilt.exit_code == 0, rebuilt.output
+    assert rebuilt.output.count("Wellness series: rebuilt") == 1
+    assert "Values removed: 0" in rebuilt.output
+    assert wcli.csv() == before
+    assert wcli.command("check").exit_code == 0
+    again = wcli.drain()
+    assert again.exit_code == 0, again.output
+    assert "Wellness series:" not in again.output
+    assert wcli.csv() == before
+
+    # The source then adds its own values beside the old ones; the export's
+    # value stays the canonical one on the day both supply.
+    wcli.wgarmin.days = {overlap: _sections(2), _ago(1): _sections(1)}
+    pulled = wcli.run()
+    assert pulled.exit_code == 0, pulled.output
+    after = {
+        (v.day, v.metric.value, v.source): (v.value, v.origin, v.canonical)
+        for v in read_series(wcli.root).values
+    }
+    assert after[(exported, "steps", "garmin-export")] == (8123.0, "garmin", True)
+    assert after[(overlap, "steps", "garmin-export")] == (7777.0, "garmin", True)
+    assert after[(overlap, "steps", _PERSONAL_ID)] == (5026.0, "garmin", False)
+    assert after[(_ago(1), "steps", _PERSONAL_ID)] == (5013.0, "garmin", True)
+
+
+def test_a_delivery_that_cannot_be_read_is_named_and_leaves_the_series_unchanged(
+    wcli: _WellnessCli,
+) -> None:
+    wcli.wgarmin.days = {_ago(n): _sections(n) for n in (1, 2, 3)}
+    assert wcli.run().exit_code == 0
+    before = wcli.csv()
+    assert before and wcli.personal()
+
+    # Day 2 changes; the delivery is pulled but not drained, then damaged in
+    # the inbox where the pull put it: the envelope header is intact and one
+    # day's fetch time is not in the fixed form.
+    wcli.wgarmin.days[_ago(2)] = _sections(60)
+    inbox_before = set((wcli.root / "inbox").rglob("*.json"))
+    pulled = wcli.run(sync=False)
+    assert pulled.exit_code == 0, pulled.output
+    [path] = sorted(set((wcli.root / "inbox").rglob("*.json")) - inbox_before)
+    rel = path.relative_to(wcli.root / "inbox").as_posix()
+    envelope = json.loads(path.read_text(encoding="utf-8"))
+    assert [entry["date"] for entry in envelope["days"]] == [_ago(2).isoformat()]
+    envelope["days"][0]["fetched_at"] = "yesterday"
+    damaged = json.dumps(envelope)
+    path.write_text(damaged, encoding="utf-8")
+
+    drained = wcli.drain()
+
+    assert drained.exit_code == 1, drained.output
+    assert _table(drained.output, "Wellness failed") == 1
+    assert re.search(
+        rf"Wellness failed:\n  {re.escape(rel)}\n"
+        r"    invalid Garmin delivery fetch time\n",
+        drained.output,
+    )
+    assert "Wellness series:" not in drained.output
+    assert wcli.csv() == before
+    assert len(wcli.archived()) == 1
+    assert path.read_text(encoding="utf-8") == damaged
+
+
+# --- a multi-year history (Req 9.2, 9.3, 11.6) -------------------------------
+
+_YEARS_BACK = 1096
+
+
+def _long_history(wcli: _WellnessCli, *, with_activity: bool) -> dict[date, int]:
+    """Three years of daily steps, each day's value its own, and sleep on
+    every tenth day; one activity on the first day when asked for."""
+    ks = {_ago(n): n for n in range(1, _YEARS_BACK + 1)}
+    days: dict[date, Sections] = {}
+    for day, k in ks.items():
+        days[day] = {"daily": {"movement": {"steps": {"value": 5000 + k}}}}
+        if k % 10 == 0:
+            days[day]["sleep"] = {"deepSleepSeconds": 3000 + k}
+    wcli.wgarmin.days = days
+    if with_activity:
+        start = datetime.combine(_ago(_YEARS_BACK), datetime.min.time(), UTC)
+        wcli.wgarmin.history = _history({7001: start + timedelta(hours=12)})
+    return ks
+
+
+def _steps(ks: Mapping[date, int]) -> dict[tuple[date, str], float]:
+    out: dict[tuple[date, str], float] = {}
+    for day, k in ks.items():
+        out[(day, "steps")] = 5000 + k
+        if k % 10 == 0:
+            out[(day, "sleep_deep_s")] = 3000 + k
+            out[(day, "sleep_s")] = 3000 + k
+    return out
+
+
+def _delivered_days(wcli: _WellnessCli, before: set[str]) -> list[str]:
+    return sorted(
+        entry["date"]
+        for name, envelope in wcli.archived().items()
+        if name not in before
+        for entry in envelope["days"]
+    )
+
+
+def test_a_multi_year_history_is_delivered_by_one_plain_pull(
+    wcli: _WellnessCli,
+) -> None:
+    ks = _long_history(wcli, with_activity=True)
+
+    result = wcli.run()
+
+    assert result.exit_code == 0, result.output
+    assert wcli.wgarmin.probes == 1
+    assert wcli.wgarmin.asked.count("daily") == 4  # 1,098 days, 365 to a window
+    assert wcli.personal() == _steps(ks)
+    assert _delivered_days(wcli, set()) == sorted(d.isoformat() for d in ks)
+    ledger = wcli.ledger_wellness()
+    assert [entry.day for entry in ledger.days] == sorted(ks)
+    assert ledger.through is not None and ledger.through > max(ks)
+    assert _table(result.output, "Days listed") == _YEARS_BACK
+    wellness = result.output.split("fitdocs pull: garmin wellness")[1]
+    assert _table(wellness.split("Inbox:")[0], "Failed") == 0
+
+
+def test_a_second_pull_delivers_only_what_changed_and_lists_only_the_lookback(
+    wcli: _WellnessCli,
+) -> None:
+    ks = _long_history(wcli, with_activity=True)
+    assert wcli.run().exit_code == 0
+    first = set(wcli.archived())
+    asked, probes = len(wcli.wgarmin.asked), wcli.wgarmin.probes
+
+    wcli.wgarmin.days[_ago(2)]["daily"] = {"movement": {"steps": {"value": 9999}}}
+    second = wcli.run()
+
+    assert second.exit_code == 0, second.output
+    assert wcli.wgarmin.asked[asked:] == ["daily", "sleep", "hrv", "weight"]
+    assert wcli.wgarmin.probes == probes
+    assert _delivered_days(wcli, first) == [_ago(2).isoformat()]
+    expected = _steps(ks)
+    expected[(_ago(2), "steps")] = 9999
+    assert wcli.personal() == expected
+    assert (
+        _table(second.output, "Days unchanged")
+        == _table(second.output, "Days listed") - 1
+    )
+
+
+@pytest.mark.usefixtures("utc")
+def test_a_since_older_than_the_recorded_coverage_fills_the_gap_in_one_pull(
+    wcli: _WellnessCli,
+) -> None:
+    ks = _long_history(wcli, with_activity=False)
+    assert wcli.run().exit_code == 0
+    recorded = {entry.day for entry in wcli.ledger_wellness().days}
+    oldest = min(recorded)
+    assert (_today() - oldest).days == 365
+    assert wcli.personal() == _steps({d: k for d, k in ks.items() if d in recorded})
+    first = set(wcli.archived())
+    through = wcli.ledger_wellness().through
+
+    since = _ago(1000)
+    result = wcli.run("--since", since.isoformat())
+
+    assert result.exit_code == 0, result.output
+    gap = sorted(d.isoformat() for d in ks if since <= d < oldest)
+    assert len(gap) > 600
+    assert _delivered_days(wcli, first) == gap
+    assert wcli.personal() == _steps({d: k for d, k in ks.items() if d >= since})
+    assert wcli.ledger_wellness().through == through
+    assert wcli.wgarmin.probes == 1
+
+
+def test_a_failed_pull_then_a_plain_pull_restarts_the_listing_and_completes(
+    wcli: _WellnessCli,
+) -> None:
+    ks = _long_history(wcli, with_activity=True)
+    wcli.wgarmin.fail["weight"] = 500
+
+    failed = wcli.run()
+
+    assert failed.exit_code == 1, failed.output
+    assert "HTTP 500" in failed.output
+    assert "the next pull starts the wellness listing again" in failed.output
+    assert wcli.archived() == {} and wcli.csv() == {}
+    ledger = wcli.ledger().wellness
+    assert ledger is None or (ledger.through is None and ledger.days == ())
+
+    del wcli.wgarmin.fail["weight"]
+    again = wcli.run()
+
+    assert again.exit_code == 0, again.output
+    assert wcli.personal() == _steps(ks)
+    assert wcli.ledger_wellness().through is not None
+    assert [e.day for e in wcli.ledger_wellness().days] == sorted(ks)
