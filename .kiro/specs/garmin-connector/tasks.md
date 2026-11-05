@@ -124,7 +124,7 @@
   - _Requirements: 9.1, 9.3, 10.8, 10.9, 10.11, 10.12, 11.1, 11.2_
   - _Depends: 4.3, 5.1_
 
-- [ ] 5.3 Sweep for secrets and stray data
+- [x] 5.3 Sweep for secrets and stray data
   - Run a scripted pull with a marker key and token and search every report, exception, ledger, delivery, inbox file and data-root file for them, in plain and encoded forms, and for a listing entry's name and owner fields.
   - Confirm every request went to the one Garmin host with the fitdocs User-Agent, and that no request other than the token call was anything but a GET.
   - Done when the sweep passes with no network access and fails when a marker is deliberately written to a report.
