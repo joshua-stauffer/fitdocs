@@ -46,7 +46,7 @@
 
 - [ ] 3. The connector: declaration and activities
 
-- [ ] 3.1 (P) Declare and register the connector, and verify a key
+- [x] 3.1 (P) Declare and register the connector, and verify a key
   - Add the Garmin connector with its one secret credential field, the two capabilities, API-key auth, and settings that accept nothing and ignore unknown keys. Register it after Strava, and keep it out of `__all__`.
   - Verification makes exactly one token request with the given key and discards the token. It reports absent scopes and no expiry, and maps refused, rate-limited, unavailable and not-a-token answers per the design's error table, never quoting a body.
   - The registry requires the pull operations once the capabilities are declared, so define the four as stubs raising a named connector error; 3.3, 3.5, 4.1 and 4.2 replace them.

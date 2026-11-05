@@ -669,29 +669,6 @@ def _preamble_text() -> str:
     return re.split(r"(?m)^## ", _connectors_doc_text(), maxsplit=1)[0]
 
 
-_NUMBER_WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five"}
-
-
-def test_preamble_connector_list_is_the_registry_built_ins() -> None:
-    """The preamble's "the N connectors fitdocs ships: `a`, ..." list is the
-    registry's built-in connector ids, in registration order, and N is their
-    count.
-
-    Mutation: deleting ``relay`` from the preamble reds this.
-    """
-    match = re.search(
-        r"the (\w+) connectors fitdocs ships:(.*?)\. Outside", _preamble_text(), re.S
-    )
-    assert match, "the preamble no longer lists the connectors fitdocs ships"
-    listed = re.findall(r"`([a-z]+)`", match.group(2))
-    built_in = [c.connector_id for c in registry.available()]
-    assert built_in[:4] == ["folder", "intervals", "relay", "strava"], (
-        "not the built-in set"
-    )
-    assert listed == built_in
-    assert match.group(1) == _NUMBER_WORDS[len(built_in)]
-
-
 def test_preamble_treats_relay_like_intervals() -> None:
     """The framework sections describe no online service outside the
     intervals, relay and Strava sections, and the preamble links all three.

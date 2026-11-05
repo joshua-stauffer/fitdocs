@@ -874,6 +874,7 @@ def test_strava_is_registered_as_a_publish_target_with_its_label() -> None:
         "intervals",
         "relay",
         "strava",
+        "garmin",
     ]
 
 
