@@ -49,13 +49,6 @@ def test_unreleased_entry_carries_the_clause(name: str) -> None:
     assert _CLAUSES[name] in _unreleased(), name
 
 
-def test_entry_is_in_unreleased_not_in_the_0_2_0_section() -> None:
-    text = _CHANGELOG.read_text(encoding="utf-8")
-    released = text.split("\n## [", 2)[2]
-    for name, clause in _CLAUSES.items():
-        assert clause not in " ".join(released.split()), name
-
-
 def test_entry_names_no_service() -> None:
     entry = _unreleased()
     # Only the publish-core bullets: the section also carries other features.

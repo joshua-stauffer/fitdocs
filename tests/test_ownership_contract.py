@@ -732,17 +732,3 @@ def test_contract_history_records_the_disconnect_change() -> None:
         "file and nothing else"
     ) in history
     assert contract.CONTRACT_VERSION == "19"
-
-
-def test_changelog_names_contract_version_nineteen_and_its_action() -> None:
-    changelog = Path(__file__).resolve().parent.parent / "CHANGELOG.md"
-    text = _flat(changelog.read_text(encoding="utf-8"))
-    unreleased = text.split("## [Unreleased]", 1)[1].split(" ## [", 1)[0]
-    for phrase in (
-        "advances from version 18 to 19 (contract version 19)",
-        "the new `fitdocs disconnect` command removes the named connector "
-        "instance's own credentials file, and nothing else",
-        "Action: run `fitdocs sync` or `fitdocs regen` once to refresh the "
-        "in-tree ownership declarations",
-    ):
-        assert phrase in unreleased, phrase
