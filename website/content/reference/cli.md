@@ -31,7 +31,7 @@ Reads new files, archives them, and writes workout pages. Then it runs the passe
 
 ### `fitdocs regen`
 
-Rebuilds every workout page from the archive in `fit-archive/`, using your current athlete profile and settings, and rebuilds the wellness series from `wellness-archive/` first. You don't need the original files or the inbox. Your Notes, Workout sections, race tags, and computed load are kept. Then it runs the same passes as `sync`. Run it when `check` asks you to, after a release that changes the document format, or after you change `[identity]` or `[wellness]` settings.
+Rebuilds every workout page from the archive in `fit-archive/`, using your current athlete profile and settings, and rebuilds the wellness series from `wellness-archive/` first. You don't need the original files or the inbox. Your Notes, Workout sections, post text, race tags, `publish` keys, and computed load are kept. Then it runs the same passes as `sync`. Run it when `check` asks you to, after a release that changes the document format, or after you change `[identity]` or `[wellness]` settings.
 
 `regen` may rename a page: any page whose best file has changed, and a page whose name fitdocs chose when its local start time has changed. Each rename prints a warning with the old name. Links to the old name aren't updated. See [When a page is renamed](../guides/workout-pages.md#when-a-page-is-renamed).
 
@@ -49,16 +49,39 @@ Runs the training-load pass over existing pages without syncing, then refreshes 
 
 ### `fitdocs connect NAME`
 
-Checks and stores the credentials for one configured connector instance (a `[connectors.NAME]` table). It asks for the key without echoing it, makes one request to check it, and saves it outside your data root only if it works. A connector that needs no credentials, like `folder`, has nothing to connect. See [Pulling from intervals.icu](../guides/connectors.md).
+Checks and stores the credentials for one configured connector instance (a `[connectors.NAME]` table), outside your data root. What it does depends on the connector:
+
+- **`intervals` and `garmin`:** asks for the key without echoing it, makes one request to check it, and saves it only if it works.
+- **`relay`:** asks for a relay token without echoing it, makes one request to check it, and saves it only if the relay accepts it. With `--register`, it registers an email address instead and saves the token the relay issues.
+- **`strava`:** asks for nothing. It starts the connection through the relay instance it names, prints an address and a code, opens the address in your browser, and saves the connection token once you've given consent.
+- **`folder`:** needs no credentials, so there's nothing to connect.
+
+| Option | Meaning |
+|---|---|
+| `--register` | (`relay`) Register an email address with a relay that offers registration, instead of pasting a token |
+| `--email ADDRESS` | (`relay`, with `--register`) The address to register. Without it, fitdocs asks. |
+| `--no-browser` | (`strava`) Print the address and don't try to open a browser |
+
+See [Connectors](../guides/connectors.md).
+
+### `fitdocs disconnect NAME`
+
+Forgets one configured instance's stored credentials and removes nothing else. It never writes under your data root.
+
+For a `relay` or `strava` instance, it first makes one request asking the relay to revoke the token or end the connection. If the relay can't confirm, the credentials file is kept and the command exits `1`. For an `intervals` or `garmin` instance it makes no request, and the key stays valid at the service. With nothing stored, it says so and exits `0`.
+
+| Option | Meaning |
+|---|---|
+| `--local-only` | (`relay`, `strava`) Remove the file without contacting the relay, even if fitdocs can't read it. A relay token stays valid until its operator revokes it. A Strava connection stays at the relay until the instance is connected and disconnected again, or access is revoked in Strava's settings. |
 
 ### `fitdocs pull [NAMES...]`
 
-Fetches new activities, and wellness where it's turned on, from every configured connector instance, or just the ones you name, and delivers them into the inbox.
+Fetches new activities, and wellness where it's turned on, from every configured connector instance that pulls, or just the ones you name, and delivers them into the inbox. Without names it skips `relay` and `strava` instances, which have nothing to pull. Naming one reports that and exits `1`, with no request.
 
 | Option | Meaning |
 |---|---|
 | `--since YYYY-MM-DD` | List from the start of that day, in local time |
-| `--dry-run` | Report what would be fetched; download and deliver nothing |
+| `--dry-run` | Report what would be fetched; download and deliver nothing. It still sends the listing requests. |
 | `--sync` | Then drain the inbox, as `fitdocs sync` does |
 | `--no-prompt` | With `--sync`, never ask during the load pass |
 
@@ -129,6 +152,21 @@ Works on the charts in your [dashboard](../guides/dashboards.md) pages. A target
 |---|---|
 | `--format FORMAT` | Report format: `text` (the default) or `json` |
 
+## Publishing
+
+### `fitdocs publish [PAGES...]`
+
+Composes each workout page's post and, with `--yes`, sends it to the publish targets the page opts in to. Without `--yes` it sends no request and writes nothing. See [Publishing posts](../guides/publishing.md).
+
+`PAGES` are workout pages, each a file name in `workouts/` (with or without `.md`) or a path to a file directly in `workouts/`. Without them, it considers every workout page.
+
+| Option | Meaning |
+|---|---|
+| `--to TARGET` | Consider only this target. Repeat it to name several. |
+| `--yes` | Post what the dry run shows |
+| `--targets` | List the configured targets and whether each is ready, instead of publishing. It sends no request and writes nothing, and can't be combined with `PAGES`, `--to`, or `--yes`. |
+| `--format FORMAT` | Report format: `text` (the default) or `json` |
+
 ## Inspecting
 
 ### `fitdocs check`
@@ -152,8 +190,8 @@ Prints the installed version.
 | Code | Meaning |
 |---|---|
 | `0` | Success. A declined benchmark or an unsupported sport isn't a failure. |
-| `1` | Something failed: a file or page, a connector (a refused key, an unreachable service), a query, or a dashboard chart. The report says which and why. |
+| `1` | Something failed: a file or page, a connector (a refused key, an unreachable service), a published post, a query, or a dashboard chart. The report says which and why. |
 | `2` | Configuration error: no data root found, a malformed `fitdocs.toml` or `athlete.toml`, an unknown connector name, or an invalid option combination. The message names what's wrong and how to fix it. |
-| `130` | You stopped `fitdocs query` or `fitdocs dashboard` with Ctrl-C. |
+| `130` | You stopped `fitdocs query`, `fitdocs dashboard`, `fitdocs publish`, or `fitdocs connect` for a relay or Strava instance with Ctrl-C. |
 
 A plugin that fails to load prints a warning. It never fails a run or changes the exit code. Neither does an index or dashboard refresh that runs after `sync`, `pull --sync`, `regen`, or `load`.
