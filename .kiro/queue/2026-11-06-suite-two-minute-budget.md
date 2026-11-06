@@ -1,6 +1,6 @@
 ---
 id: 2026-11-06-suite-two-minute-budget
-title: The CI test step takes 3m20s-5m16s against a 2-minute target; the maintainer has to choose the CI target
+title: The CI test step takes 4m09s-5m37s against a 2-minute target; the maintainer has to choose the CI target
 status: open
 importance: medium
 importance_why: The local target is met and CI fell from about 28 min, but the 7-minute CI budget is a placeholder until the maintainer sets the real target.
@@ -119,11 +119,11 @@ The maintainer approved steps 1-4 and 6 of "How to pick it up" and ruled out ste
 Measured:
 
 - Local, full suite: 1m17s with `-n auto`, 1m49s with `-n 4`.
-- CI, with 4 workers on all three interpreters: 3m20s-5m16s over nine job runs. Identical commits varied by more than 50%, so one run says little. About 45-55 s of each is startup and collection.
+- CI, with 4 workers on all three interpreters, on the final test code: 4m09s-5m37s over six job runs. With 5 SIGINT trials it was 3m20s-5m16s over nine, and identical test code varied by more than 50% between runs, so one run says little. About 40-60 s of each is startup and collection.
 
 Not done, on purpose:
 
-- **The real-SIGINT tests keep 14 trials.** Cutting them to 5 was tried and reverted. With the regression `analytics-query/design.md` names, on the locked duckdb 1.5.6, a reviewer measured 3 misses in 13 runs at 5 trials (10 hangs in 45 trials, about 22% per trial, so about 29% missed at 5 trials and about 3% at 14). The saving was an estimated 4-5 s of wall time, on the check for a critical Ctrl-C hang. These tests do not saturate the runner: `src/fitdocs/query/sandbox.py:23` caps DuckDB at 2 threads.
+- **The real-SIGINT tests keep 14 trials.** Cutting them to 5 was tried and reverted. With the regression `analytics-query/design.md` names, on the locked duckdb 1.5.6, a reviewer measured 3 misses in 13 runs at 5 trials (10 hangs in 45 trials, about 22% per trial, so about 29% missed at 5 trials and about 3% at 14). The saving is an estimated 10-12 s of CI wall time (each test takes about 32 s at 14 trials and 8-9 s at 5 on a slow runner; the commit message's 4-5 s was from local timings), on the check for a critical Ctrl-C hang. These tests do not saturate the runner: `src/fitdocs/query/sandbox.py:23` caps DuckDB at 2 threads.
 - **No shards.** They would be the way to reach 2 minutes in CI: 2 shards per interpreter is 6 jobs, and splitting by path can silently drop a new directory unless something checks the partition. Pruning (`2026-11-06-test-suite-pruning-decisions`) saves little time, as noted under Evidence, so it would not close the gap.
 
 ## Open questions

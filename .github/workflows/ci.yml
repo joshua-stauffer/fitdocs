@@ -113,8 +113,8 @@ jobs:
       # forbidden-strings guard (tests/_forbidden_strings.py): unset, it skips
       # its scan of every tracked file, so a new doc or fixture would merge
       # unscanned. `runner.temp` is the same directory as `$RUNNER_TEMP`.
-      # The suite's time budget, and the stop for a hung test. Identical commits
-      # took 3m20s-5m16s here because runners vary, so this sits above that range.
+      # The suite's time budget, and the stop for a hung test. Runs take 4m09s-5m37s
+      # here and runners vary a lot, so this sits above that range.
       - name: Run the test suite
         timeout-minutes: 7
         env:
@@ -186,8 +186,8 @@ jobs:
       # Deliberately unarmed: no secret, so fork PRs keep their 3.12/3.13
       # results. The forbidden-strings scan does not depend on the
       # interpreter; `gates` (3.11) runs it, and these runs skip its tests.
-      # The suite's time budget, and the stop for a hung test. Identical commits
-      # took 3m20s-5m16s here because runners vary, so this sits above that range.
+      # The suite's time budget, and the stop for a hung test. Runs take 4m09s-5m37s
+      # here and runners vary a lot, so this sits above that range.
       - name: Run the test suite
         timeout-minutes: 7
         run: uv run pytest -n auto
