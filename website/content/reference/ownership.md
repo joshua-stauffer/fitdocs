@@ -7,7 +7,7 @@ order: 3
 
 # Ownership contract
 
-fitdocs writes into a folder that may also hold your own notes. The rules for who owns what are a published, versioned contract (currently version 16). This page summarizes it. The [full contract](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md) is the authoritative version.
+fitdocs writes into a folder that may also hold your own notes. The rules for who owns what are a published, versioned contract (currently version 19). This page summarizes it. The [full contract](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md) is the authoritative version.
 
 ## What fitdocs owns
 
@@ -24,13 +24,13 @@ fitdocs may create, rewrite, or delete these, and writes **nowhere else**:
 | `wellness-archive/` | Your wellness source files, never modified |
 | `wellness/` | The daily wellness series, rebuilt from `wellness-archive/` |
 | `.cache/` | Map tiles |
-| `.fitdocs/` | fitdocs' own state: the quarantine record, files held because they matched more than one page, and each connector's delivery record |
+| `.fitdocs/` | fitdocs' own state: the quarantine record, files held because they matched more than one page, each connector's delivery record, and each publish target's ledger under `.fitdocs/publish/` |
 
 In `dashboards/`, the pages are yours. fitdocs writes only inside each chart's region, which it adds below the chart's directive if it's missing, plus `dashboards/AGENTS.md`. It never creates, renames, or deletes a dashboard page.
 
 It also writes to the locations your settings name: the inbox folder and, if you opt in, `processed_dir`. A connector delivers into its own subfolder of the inbox, and removes those deliveries once they're archived.
 
-Two things live outside the data root: connector credentials, in your user's config folder, and the analytics index, a disposable cache in your user's cache folder. See [Configuration](configuration.md#outside-the-data-root).
+Two things live outside the data root: connector credentials, in your user's config folder, and the analytics index, a disposable cache in your user's cache folder. `fitdocs disconnect` removes one instance's credentials file and nothing else. See [Configuration](configuration.md#outside-the-data-root).
 
 ## What you own
 
@@ -46,14 +46,16 @@ Two things live outside the data root: connector credentials, in your user's con
 |---|---|---|
 | `notes` | you | kept word for word |
 | `workout` (strength pages) | you | kept word for word |
+| `post` | you | kept word for word |
 | `load` | fitdocs | kept; only replaced when you run `fitdocs load --recompute` |
 | `morning` (the Morning Of block) | fitdocs | refreshed from your wellness series; hand edits are replaced |
-| `effort`, `effort_distance_m`, `effort_time_s`, `effort_event` frontmatter keys | you | kept word for word |
+| `published` | fitdocs | carried over; `fitdocs publish --yes` refills it and replaces hand edits |
+| `effort`, `effort_distance_m`, `effort_time_s`, `effort_event`, `publish` frontmatter keys | you | kept word for word |
 | everything else | fitdocs | rebuilt |
 
 Regions are marked with `<!-- fitdocs:begin:NAME -->` / `<!-- fitdocs:end:NAME -->`. Don't add markers of your own. A page with a marker fitdocs doesn't recognize is refused regeneration until the marker is removed. That way fitdocs never guesses about content it doesn't understand.
 
-**No operation throws away your region or race-tag content.** It’s yours to do with as you’d like, and when you upgrade fitdocs versions and regenerate your wiki, it persists.
+**No operation throws away your region, race-tag, or `publish` content.** It’s yours to do with as you’d like, and when you upgrade fitdocs versions and regenerate your wiki, it persists.
 
 ## Several files, renames, and links
 
@@ -71,7 +73,7 @@ All three are generated from the same source code, and a test keeps the publishe
 
 ## Versions
 
-- The **contract version** changes whenever a guarantee changes: a new owned path, a new page type, or a new class of user-owned key. The changelog calls it out, along with what (if anything) you need to do.
+- The **contract version** changes whenever a guarantee changes, such as a new owned path, a new page type, a new region, a new class of user-owned key, or a change to what a command may write. The changelog calls it out, along with what (if anything) you need to do.
 - Each page's **`doc_version`** tracks its file format. When it changes, `fitdocs check` tells you and `fitdocs regen` updates your pages. If a page was written by a *newer* fitdocs than the one you have installed, fitdocs leaves it alone rather than downgrading it.
 
 See the [compatibility policy](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/compatibility.md) for exactly what each version number promises.
