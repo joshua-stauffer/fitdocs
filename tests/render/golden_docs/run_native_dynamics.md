@@ -18,7 +18,7 @@ sources:
 - fit-archive/29327f7926996543bc743ae011a9bd703a73aa5430404800225d0f88421ad2f6.fit
 ---
 
-<!-- fitdocs:generated: everything outside the notes/workout/load regions is replaced on regeneration -- see this directory's AGENTS.md -->
+<!-- fitdocs:generated: regeneration rewrites this page except what the nearest AGENTS.md says is yours -->
 
 # Run 2021-09-07 19:46
 

@@ -1,7 +1,7 @@
 ---
 id: 2026-10-13-cli-markup-off-consoles-still-substitute-emoji
 title: Rich consoles in cli.py built with markup=False but without emoji=False turn a `:a:` in user-derived text into an emoji
-status: open
+status: done
 importance: medium
 importance_why: It also fires with no user data at all, on fitdocs' own message naming the end marker a page needs, so the printed fix is wrong; the original case needs a colon-delimited shortcode in a page path, an error message or a producer name.
 effort: S
@@ -63,3 +63,6 @@ Whether to extend the same treatment to the twenty default consoles. They were n
 
 ## Update 2026-11-06: fixed on chore/pre-cut-fixes
 `src/fitdocs/cli.py` now defines a `Console` subclass that defaults to `emoji=False`, so every console built there is covered, default ones included. That answers the open question: the sighting above came from a default `Console()` built in `_report_load`, printed through `_print_detail`, which this item's list did not include, and no string under `src/` means an emoji code. Not changed: `src/fitdocs/load/prompts.py:292` builds its own console (see `2026-09-19-prompts-print-swallows-y-n-markup`), and default consoles still parse markup, as the class docstring says. A scan of `cli.py` found three f-string prints on such consoles, all fixed labels, so no bracket-loss case was shown; table cells were not audited. Left open for the maintainer to close.
+
+## Resolution
+2026-11-06. `cli.py` builds every console through a subclass defaulting to `emoji=False`, on `main` at ac4bc942 and 4d2a8780. Removing the default reds five tests, and the stderr case is pinned. `fitdocs load` now prints `<!-- fitdocs:end:load -->` correctly. `load/prompts.py` is tracked by `2026-09-19-prompts-print-swallows-y-n-markup`. The maintainer approved closing.

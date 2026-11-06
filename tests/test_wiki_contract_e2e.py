@@ -39,7 +39,13 @@ from unittest import mock
 
 from fitdocs.athlete import load_athlete_inputs
 from fitdocs.audit import FindingKind, audit
-from fitdocs.contract import DOC_VERSION, GENERATED_PREFIX, GENERATOR, GENERATOR_KEY
+from fitdocs.contract import (
+    DOC_BANNER,
+    DOC_VERSION,
+    GENERATED_PREFIX,
+    GENERATOR,
+    GENERATOR_KEY,
+)
 from fitdocs.declaration import DECLARATION_FILENAME, declaration_path
 from fitdocs.docmerge import begin_marker, end_marker, extract_regions
 from fitdocs.layout import DECLARED_DIRS, WORKOUTS_DIR, doc_path
@@ -168,6 +174,35 @@ def test_full_round_trip_preserves_edit_provenance_declarations_and_confinement(
 
     after = _snapshot(sandbox)
     assert_confined(sandbox, permitted_locations(data_root), before, after)
+
+
+def test_regen_replaces_an_earlier_banner_and_keeps_the_note(tmp_path: Path) -> None:
+    """wiki-contract Amendment 16: a page keeps the banner it was written with
+    until it is regenerated, through the engine's own rewrite path."""
+    earlier = (
+        "<!-- fitdocs:generated: everything outside the notes/workout/load regions "
+        "is replaced on regeneration -- see this directory's AGENTS.md -->"
+    )
+    data_root = tmp_path / "data"
+    data_root.mkdir()
+    source = tmp_path / "src"
+    _put(source, "run.fit", builder.run_fit_bytes())
+    athlete = load_athlete_inputs(data_root)
+    assert sync(source, data_root, athlete=athlete, tz=_TZ, tiles=_TILES).failures == ()
+    doc = doc_path(data_root, _RUN_STEM)
+    note = "A hand-written note."
+    stamped = _set_region(doc.read_text(encoding="utf-8"), "notes", note).replace(
+        DOC_BANNER, earlier
+    )
+    assert earlier in stamped
+    doc.write_text(stamped, encoding="utf-8")
+
+    assert regen(data_root, athlete=athlete, tz=_TZ, tiles=_TILES).failures == ()
+
+    final = doc.read_text(encoding="utf-8")
+    assert final.count(DOC_BANNER) == 1
+    assert earlier not in final
+    assert extract_regions(final)["notes"] == note
 
 
 # --- 2. migration by regeneration: previous-format docs come current -------

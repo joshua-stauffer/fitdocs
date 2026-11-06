@@ -302,12 +302,11 @@ def test_success_writes_owned_paths_reports_counts_and_pins_frontmatter(
 
 def test_the_written_chart_is_well_formed_xml(tmp_path: Path) -> None:
     """Named mutation: none needed as a fresh regression here -- the 5.2
-    review found the chart once broken as XML (a `DOC_BANNER`-prefixed
-    write, whose embedded `--` is invalid inside an XML comment); this test
-    exists so that regression is pinned at the CLI's own writer, not only at
-    the engine level `tests/history/test_engine.py` already covers. A
-    non-well-formed rewrite (e.g. reintroducing `contract.DOC_BANNER` as the
-    chart's leading line) makes `ET.fromstring` raise
+    review found the chart once broken as XML (a leading comment holding `--`,
+    which is invalid inside an XML comment); this test exists so that regression
+    is pinned at the CLI's own writer, not only at the engine level
+    `tests/history/test_engine.py` already covers. A non-well-formed rewrite
+    (e.g. a leading comment with `--` in it) makes `ET.fromstring` raise
     `xml.etree.ElementTree.ParseError` and this test reds."""
     _write_archive(tmp_path)
 

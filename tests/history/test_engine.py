@@ -1012,12 +1012,10 @@ def test_the_written_chart_is_well_formed_xml_and_recognized_as_generated(
     by `contract.is_generated`, and that a second run treats its own chart as
     its own (not foreign).
 
-    Named mutation: write `contract.DOC_BANNER + "\\n" + rendered.chart_svg`
-    instead of `_CHART_MARKER + "\\n" + rendered.chart_svg` (the pre-fix
-    code) -- `contract.DOC_BANNER`'s prose contains a literal ` -- `, which
-    is forbidden inside an XML comment's content, and `ET.fromstring` raises
-    `xml.etree.ElementTree.ParseError` instead of returning -- the strongest
-    possible red for this assertion."""
+    Named mutation: build `_CHART_MARKER` with a `--` in its comment, such as
+    `f"{contract.GENERATED_PREFIX} -- chart -->"`. A literal ` -- ` is forbidden
+    inside an XML comment's content, and `ET.fromstring` raises
+    `xml.etree.ElementTree.ParseError` instead of returning."""
     _write_mixed_archive(tmp_path)
 
     run_history(tmp_path, methodology="banister_1991")

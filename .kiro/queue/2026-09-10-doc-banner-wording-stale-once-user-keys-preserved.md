@@ -66,3 +66,6 @@ It will say the tag is discarded when the tag is in fact preserved.
 
 ## Open questions
 None — the wording itself is a small editorial call for the bump's author.
+
+## Update 2026-11-06: reworded on chore/doc-banner-wording
+The banner now reads "regeneration rewrites this page except what the nearest AGENTS.md says is yours", names no region, and rides on the unreleased document format version 12 (wiki-contract Amendment 16). A real regen over a page with the earlier line replaced it and kept a hand-written note. Left open for the maintainer to close.
