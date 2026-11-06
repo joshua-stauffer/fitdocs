@@ -18,7 +18,7 @@ pages_with_load: 5
 criterion_points: 2
 ---
 
-<!-- fitdocs:generated: everything outside the notes/workout/load regions is replaced on regeneration -- see this directory's AGENTS.md -->
+<!-- fitdocs:generated: regeneration rewrites this page except what this directory's AGENTS.md says is yours -->
 
 # Training Load History
 

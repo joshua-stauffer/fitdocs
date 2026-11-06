@@ -67,11 +67,9 @@ placement here is not what recognition depends on) can recognize a chart
 this tool wrote; the marker sits at the top specifically because that is a
 placement this module's own XML-validity constraint (below) allows without
 inspecting the rest of `render_calendar_chart`'s output. `_CHART_MARKER` is
-deliberately **not** `contract.DOC_BANNER`: the banner's prose contains a
-literal ` -- ` em-dash rendered as two hyphens, which is forbidden inside an
-XML comment's content (`--` may not appear between `<!--` and `-->`); an SVG
-file is XML, and a banner-prefixed chart fails `xml.etree.ElementTree.fromstring`.
-`_CHART_MARKER` is instead built as `f"{contract.GENERATED_PREFIX} -->"` --
+deliberately **not** `contract.DOC_BANNER`, whose sentence addresses the reader
+of a page. An SVG file is XML, and `--` may not appear between `<!--` and `-->`,
+so `_CHART_MARKER` is built as `f"{contract.GENERATED_PREFIX} -->"` --
 an HTML/XML comment whose only content is a single space, the module's own
 provenance text and a single space, none of it containing `--` -- so the
 written file is valid XML and `contract.is_generated` (a line-prefix scan
@@ -158,8 +156,8 @@ _TMP_SUFFIX = ".tmp"
 
 #: The chart file's own write-time provenance marker (see the module
 #: docstring's "Because the history chart carries no provenance marker of its
-#: own" paragraph) -- an XML-comment-safe alternative to `contract.DOC_BANNER`,
-#: which contains a forbidden `--` inside an XML comment's content. Built from
+#: own" paragraph) -- the prefix alone rather than `contract.DOC_BANNER`, whose
+#: sentence addresses the reader of a page. Built from
 #: `contract.GENERATED_PREFIX` so `contract.is_generated` still recognizes it
 #: (that function matches on the prefix alone, at column zero).
 _CHART_MARKER = f"{contract.GENERATED_PREFIX} -->"

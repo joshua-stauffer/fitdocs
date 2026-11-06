@@ -9,7 +9,7 @@ window_start: "2025-02-01"
 window_end: "2025-05-01"
 ---
 
-<!-- fitdocs:generated: everything outside the notes/workout/load regions is replaced on regeneration -- see this directory's AGENTS.md -->
+<!-- fitdocs:generated: regeneration rewrites this page except what this directory's AGENTS.md says is yours -->
 
 # Recovery
 Data source: Garmin

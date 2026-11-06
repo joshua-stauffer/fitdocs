@@ -394,7 +394,7 @@ ownership is obvious without consulting anything else.
 
 #### Acceptance Criteria
 1. The fitdocs CLI shall stamp every generated workout document with a machine-readable marker identifying fitdocs as its generator, distinguishable from a hand-authored document that merely looks similar.
-2. The fitdocs CLI shall include in every generated workout document a human-readable provenance statement naming the tool, stating that content outside the marked regions is replaced on regeneration, and pointing to the in-tree ownership declaration.
+2. The fitdocs CLI shall include in every generated workout document a human-readable provenance statement naming the tool, stating that content outside the marked regions is replaced on regeneration, and pointing to the in-tree ownership declaration. *(amended by Amendment 16: it names no region, and states the boundary through the declaration)*
 3. The provenance statement shall not be visible in rendered markdown output while remaining plainly visible in the document's source text.
 4. The fitdocs CLI shall place the provenance statement outside every preserved region, so that regeneration always refreshes it and a user can never accidentally own it.
 5. The fitdocs CLI shall not include in the provenance stamp any value that varies between runs or between tool versions.
@@ -606,4 +606,22 @@ restate the new version, so the action for a user is to run `fitdocs sync` or
 credentials-store bullet and the `disconnect` entry that task 8.8 adds to
 `tests/test_ownership_contract.py`, and by
 `tests/test_ownership_contract.py::test_contract_version_matches_code`. No
+existing criterion or amendment is renumbered.
+
+## Amendment 16 (2026-11-06): the provenance statement names no region
+
+Requirement 4 criterion 2 (tagged in place): the statement says that regeneration
+rewrites the page except what the in-tree ownership declaration says is the
+reader's own, instead of describing "the marked regions". The earlier sentence
+named `notes`, `workout` and `load`, which no longer fit any page: a workout page
+also keeps the `post` region and user-owned keys, a block page has only `notes`,
+and a history or planned page has none. The new sentence also holds no `--`, so
+it is valid inside an XML comment.
+
+This lands before the next release so that it rides on document format version
+12, which is unreleased. No version constant moves. A page written earlier keeps
+its comment until it is next regenerated and is still recognized by
+`GENERATED_PREFIX`. Criterion 5 still holds: the sentence is a constant that
+carries no version or time. Pinned by `tests/test_contract.py` and
+`tests/render/test_views.py::test_regeneration_replaces_the_earlier_banner`. No
 existing criterion or amendment is renumbered.

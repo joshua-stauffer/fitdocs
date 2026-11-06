@@ -38,6 +38,7 @@ from __future__ import annotations
 import ast
 import dataclasses
 import inspect
+import xml.etree.ElementTree as ET
 from datetime import UTC
 from pathlib import Path
 from types import MappingProxyType
@@ -802,6 +803,35 @@ def test_doc_banner_names_the_tool_and_the_declaration() -> None:
     assert contract.GENERATOR in contract.DOC_BANNER
     assert "regenerat" in contract.DOC_BANNER
     assert "AGENTS.md" in contract.DOC_BANNER
+
+
+def test_doc_banner_names_no_region() -> None:
+    """Amendment 16: no one sentence fits every page, so it names no region and
+    the declaration it points at states the boundary."""
+    regions = (
+        *contract.USER_REGIONS,
+        contract.LOAD_REGION,
+        contract.MORNING_REGION,
+        contract.PUBLISHED_REGION,
+    )
+    assert len(regions) == 6
+    for region in regions:
+        assert region not in contract.DOC_BANNER
+
+
+def test_doc_banner_is_valid_inside_an_xml_comment() -> None:
+    ET.fromstring(contract.DOC_BANNER + "\n<svg/>")
+
+
+def test_a_page_stamped_with_the_earlier_banner_is_still_recognized() -> None:
+    """Pages written before Amendment 16 keep this line until their next
+    regeneration, and a page not recognized here reads as foreign."""
+    earlier = (
+        "<!-- fitdocs:generated: everything outside the notes/workout/load regions "
+        "is replaced on regeneration -- see this directory's AGENTS.md -->"
+    )
+    assert earlier != contract.DOC_BANNER
+    assert contract.is_generated(earlier + "\n")
 
 
 def test_doc_banner_carries_no_run_or_release_varying_value() -> None:

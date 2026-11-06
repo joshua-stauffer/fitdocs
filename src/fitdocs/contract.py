@@ -972,14 +972,18 @@ as a damaged one.
 """
 
 DOC_BANNER: Final[str] = (
-    f"{GENERATED_PREFIX}: everything outside the notes/workout/load regions is "
-    "replaced on regeneration -- see this directory's AGENTS.md -->"
+    f"{GENERATED_PREFIX}: regeneration rewrites this page except what this "
+    "directory's AGENTS.md says is yours -->"
 )
 """The one-line HTML-comment provenance banner every generated document carries.
 
-Names the tool (via :data:`GENERATED_PREFIX`), states the regeneration
-boundary, and points at the in-tree ownership declaration (Req 4.2). A single
-constant, module-level string: it contains no tool version, no timestamp, no
+Names the tool (via :data:`GENERATED_PREFIX`), says that regeneration rewrites
+the page, and leaves the exact boundary to the in-tree ownership declaration it
+points at (Req 4.2, wiki-contract Amendment 16). It names no region because no
+one sentence fits every page: a workout page also keeps user-owned keys, a block
+page has only ``notes``, and a history or planned page has none. It holds no
+``--``, so it is also valid inside an XML comment. A single constant,
+module-level string: it contains no tool version, no timestamp, no
 uuid, and no machine-specific path, so it is identical between runs and between
 releases (Req 4.5) and its equality with :data:`GENERATED_PREFIX`'s prefix is
 what lets :func:`is_generated` recognize it. Placement -- outside every

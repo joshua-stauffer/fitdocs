@@ -10,7 +10,7 @@ goal: "Build aerobic base through week two.\nSharpen for the tune-up race in wee
 mesocycle_days: 7
 ---
 
-<!-- fitdocs:generated: everything outside the notes/workout/load regions is replaced on regeneration -- see this directory's AGENTS.md -->
+<!-- fitdocs:generated: regeneration rewrites this page except what this directory's AGENTS.md says is yours -->
 
 # Base build
 

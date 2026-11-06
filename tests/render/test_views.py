@@ -546,6 +546,26 @@ def test_banner_survives_a_region_round_trip_unchanged(run_fit_bytes: bytes) -> 
     assert "A hand-written note the user added." in merged  # the edit carried over
 
 
+def test_regeneration_replaces_the_earlier_banner(run_fit_bytes: bytes) -> None:
+    """A page keeps the banner it was written with until its next regeneration,
+    which leaves only the current one and carries the user's notes over."""
+    earlier = (
+        "<!-- fitdocs:generated: everything outside the notes/workout/load regions "
+        "is replaced on regeneration -- see this directory's AGENTS.md -->"
+    )
+    fresh = render_document(_ctx(run_fit_bytes)).markdown
+    existing = fresh.replace(DOC_BANNER, earlier).replace(
+        "_Your notes go here.", "A hand-written note the user added."
+    )
+    assert earlier in existing
+
+    merged = merge_regions(fresh, existing)
+
+    assert merged.count(DOC_BANNER) == 1
+    assert earlier not in merged
+    assert "A hand-written note the user added." in merged
+
+
 def test_banner_is_invisible_once_html_comments_are_stripped(
     run_fit_bytes: bytes,
 ) -> None:
