@@ -1069,10 +1069,15 @@ Garmin's own terms, quoted [below](#garmins-terms).
 
 ### Connecting a Garmin instance
 
-1. In Garmin Connect, create a personal API key for the Connect Personal API.
-   Garmin describes the key and its expiry in the
-   [Personal API FAQ](https://developer.garmin.com/gc-developer-program/personal/personal-faq/).
-   Garmin shows the key once, when you create it, so copy it then.
+1. Sign in to Garmin Connect on the web and open the
+   [Personal API Key page](https://connect.garmin.com/app/settings/personalApiToken).
+   Select **Create Key**, read and accept Garmin's terms, choose when the key
+   expires (30 days, 90 days, 180 days, or one year), and select **Create**.
+   Garmin shows the key only once, so copy it now and keep it like a password,
+   then select **Done**. If you lose it, delete it there and create a new one.
+   These steps come from Garmin's
+   [Personal API FAQ](https://developer.garmin.com/gc-developer-program/personal/personal-faq/),
+   which says more about the key.
 2. In `<data-root>/fitdocs.toml`, add the instance. An empty table is enough,
    because every key of it is optional:
 
