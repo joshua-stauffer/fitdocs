@@ -1663,8 +1663,8 @@ def test_plain_rich_replaces_the_codes_the_console_tests_print() -> None:
 
 @pytest.mark.parametrize(
     "kwargs",
-    [{}, {"markup": False, "highlight": False, "soft_wrap": True}],
-    ids=["default", "markup-off"],
+    [{}, {"markup": False, "highlight": False, "soft_wrap": True}, {"stderr": True}],
+    ids=["default", "markup-off", "stderr"],
 )
 def test_cli_consoles_print_emoji_codes_as_written(kwargs: dict[str, bool]) -> None:
     assert _EMOJI_CODES in _printed_through(cli_module.Console, **kwargs)

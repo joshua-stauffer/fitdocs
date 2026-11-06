@@ -185,8 +185,8 @@ recorded as one.
 
 ### Fixed
 
-- `fitdocs` output prints paths and messages as written. A `:end:` or `:a:` in
-  them no longer turns into an emoji, so an error naming the region marker
+- `fitdocs` command reports no longer turn a `:end:` or `:a:` in a path or
+  message into an emoji, so an error naming the region marker
   `<!-- fitdocs:end:load -->` now shows it correctly. Action: none.
 
 ## [0.2.0] - 2026-10-19
