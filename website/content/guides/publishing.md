@@ -17,7 +17,7 @@ fitdocs publish             # dry run: shows what would be posted
 fitdocs publish --yes       # posts it
 ```
 
-A page written by an older fitdocs reports `page_out_of_date` and nothing is sent from it. Run `fitdocs regen` to bring it up to date.
+A page written by an older fitdocs that opts in to a target reports `page_out_of_date`, and nothing is sent from it. Run `fitdocs regen` to bring it up to date.
 
 ## Opt a page in
 
@@ -123,7 +123,7 @@ The command exits `0` when no result is a failure, `1` when one is, and `2` for 
 
 ## What fitdocs records
 
-When a post lands, its link goes in the page’s `published` region, right under the title:
+When a post lands, its link goes in the page’s `published` region, near the top of the page, above Notes:
 
 ```markdown
 Published: [Club feed](https://example.invalid/a/1) · [Team log](https://example.invalid/b/2)

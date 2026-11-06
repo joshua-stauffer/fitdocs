@@ -100,7 +100,7 @@ Fitdocs looks for the activity in this order, and stops at the first step that f
 
 If several activities match in one step, the answer is `ambiguous` and nothing changes. Fitdocs never picks one.
 
-An activity intervals.icu imported from Strava is never updated. When nothing else matches and a Strava import starts within a second of the page, the answer is `not_updatable`.
+A listed activity that intervals.icu imported from Strava is never chosen. When nothing else matches and a Strava import starts within a second of the page, the answer is `not_updatable`.
 
 When nothing matches, the answer is `not_found` and nothing is created, unless you turn uploads on:
 
@@ -160,7 +160,7 @@ The same terms say Garmin may throttle or restrict access and may revoke a key. 
 
 ### What a first pull does
 
-A pull with no earlier record and no `--since` takes your whole activity history, oldest first. Fitdocs waits one second between requests. When Garmin says it’s limiting requests, fitdocs waits for the time Garmin states, up to five minutes, or else 30 seconds to four minutes, before trying again. If that doesn’t clear it, the pull stops and says so, and the next pull resumes where this one stopped. A pull prints no progress while it runs, so a long wait looks like a pause.
+A pull with no earlier record and no `--since` takes your whole activity history, oldest first. Fitdocs waits one second between requests. When Garmin says it’s limiting a request after the token call, fitdocs waits for the time Garmin states, up to five minutes, or else 30 seconds to four minutes, before trying again. If that doesn’t clear it, the pull stops and says so, and the next pull resumes where this one stopped. A pull prints no progress while it runs, so a long wait looks like a pause.
 
 A pull fetches at most 200 activities. When more remain, the report has one deferred entry that says how many, and the next plain `fitdocs pull` continues from there and fetches nothing already recorded. An account of 1,000 activities takes five pulls.
 
@@ -229,7 +229,7 @@ A relay is a small server that holds a platform application on your behalf, so t
 url = "https://relay.example.com"
 ```
 
-Leave `url` out and the instance uses `https://api.fitdocs.ai`, the maintainer’s relay. The address must be `https`. Plain `http` is accepted only for `localhost`, `127.0.0.1`, and `::1`, for testing a relay on your own machine. To use more than one relay, name each instance and set `connector = "relay"` in its table.
+Leave `url` out and the instance uses the built-in default, `https://api.fitdocs.ai`. The address must be `https`. Plain `http` is accepted only for `localhost`, `127.0.0.1`, and `::1`, for testing a relay on your own machine. To use more than one relay, name each instance and set `connector = "relay"` in its table.
 
 A relay token comes from the relay’s operator, or from registering with a relay that offers registration. With a token in hand:
 
@@ -257,6 +257,7 @@ An instance needs a relay instance to talk to, and the relay behind it has to of
 
 ```toml
 [connectors.relay]
+url = "https://relay.example.com"
 
 [connectors.strava]
 relay = "relay"
@@ -292,7 +293,7 @@ A post that lands records a View on Strava link in the page’s `published` regi
 
 Keys and tokens are never stored in your data root. They live in your user’s config folder, `~/.config/fitdocs/credentials/` by default (or under `$XDG_CONFIG_HOME`, or wherever `FITDOCS_CREDENTIALS_DIR` points). Fitdocs refuses a credentials folder inside the data root, so a key can’t end up in your wiki’s git history or a shared folder. Each instance’s file is readable only by you.
 
-`fitdocs.toml` can’t hold a key either. Fitdocs refuses a setting there with the same name as a connector’s credential, like `api_key` or `token`. To use one without storing it, set an environment variable instead. For an instance named `intervals`, that’s `FITDOCS_CONNECTOR_INTERVALS_API_KEY`, and for one named `relay`, `FITDOCS_CONNECTOR_RELAY_TOKEN`. A variable that’s set wins over a stored value, except in `fitdocs disconnect`, which acts only on what’s stored.
+Don’t put a key in `fitdocs.toml`. Fitdocs refuses a setting in an instance’s table with the same name as that connector’s own credential: `api_key` on `intervals` and `garmin`, `token` on `relay` and `strava`. To use one without storing it, set an environment variable instead. For an instance named `intervals`, that’s `FITDOCS_CONNECTOR_INTERVALS_API_KEY`, and for one named `relay`, `FITDOCS_CONNECTOR_RELAY_TOKEN`. A variable that’s set wins over a stored value, except in `fitdocs disconnect`, which acts only on what’s stored.
 
 `fitdocs disconnect NAME` forgets one instance’s stored credentials and removes nothing else. For an `intervals` or `garmin` instance it sends no request, so the key stays valid at the service until you delete it there or it expires.
 

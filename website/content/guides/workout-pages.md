@@ -49,7 +49,7 @@ publish: intervals
 
 ## Published links
 
-If you’ve [published](publishing.md) this workout, a line right under the title links to each post. A page that hasn’t been posted shows nothing here. Fitdocs fills this in when you run `fitdocs publish --yes`, so it’s not a place for your own writing.
+If you’ve [published](publishing.md) this workout, a line near the top of the page, above Notes, links to each post. A page that hasn’t been posted shows nothing here. Fitdocs fills this in when you run `fitdocs publish --yes`, so it’s not a place for your own writing.
 
 ## Notes 
 
