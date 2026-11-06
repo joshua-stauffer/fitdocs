@@ -48,6 +48,15 @@ It will say the tag is discarded when the tag is in fact preserved.
   11) must not write it at all (`.kiro/specs/dashboards/brief.md`,
   Constraints).
 
+- Added 2026-11-06: the banner also omits the `post` region, which is the
+  athlete's and survives regeneration, plus `published` and `morning`
+  (`src/fitdocs/contract.py:974-977`).
+- Added 2026-11-06, timing: `DOC_VERSION` is 11 at `v0.2.0` and 12 on `main`, and
+  12 has not been released. A reword landed before the next cut rides on that
+  bump for everyone on a released version. After the cut it waits for another
+  bump. A wiki already regenerated at 12 from `main` keeps the old banner until
+  its next regen, since the version would not move.
+
 ## How to pick it up
 1. Wait for whichever change next bumps `DOC_VERSION` for its own reason.
 2. In that same change, reword `DOC_BANNER` to name what is preserved

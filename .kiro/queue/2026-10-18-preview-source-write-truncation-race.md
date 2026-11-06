@@ -106,6 +106,13 @@ showed the identical duplicated `section: 'Nowhere'` line, and attempt 2
 passed. That makes two occurrences on unrelated branches within about eight
 hours.
 
+Recurred 2026-11-06 with the first symptom: DOCS run 42302391633 (the
+`pull_request` run on `chore/site-copy-connectors`, head `5adb82b1`) ended
+`1 failed, 753 passed, 3 skipped`, with
+`test_live_preview_serves_edits_adds_deletes_failures_and_fixes` failing at
+`tests/sitebuild/test_preview.py:1178` on `why.md: no frontmatter`. The `push` run
+of the same commit passed, and that branch's changes are website pages only.
+
 ## How to pick it up
 
 1. Read the writer, polling preview loop, source reader and failing test above.
