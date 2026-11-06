@@ -373,6 +373,11 @@ class Console(RichConsole):
         super().__init__(**kwargs)
 
 
+_CONNECTORS_GUIDE_URL: Final[str] = "https://fitdocs.ai/guides/connectors/"
+"""The site page that explains how to get a connector's credentials and how to
+configure an instance."""
+_CREDENTIALS_HINT: Final[str] = f"To get your credentials, see {_CONNECTORS_GUIDE_URL}"
+
 _EXIT_SUCCESS: int = 0
 """Everything written and/or skipped; no failures (an all-skipped run, too)."""
 _EXIT_FILE_FAILURES: int = 1
@@ -1391,6 +1396,11 @@ def _stdin_is_interactive() -> bool:
     return sys.stdin.isatty()
 
 
+def _print_credentials_hint() -> None:
+    """Say where to get credentials, before ``fitdocs connect`` asks for them."""
+    Console().print(_CREDENTIALS_HINT, markup=False, highlight=False, soft_wrap=True)
+
+
 def _ask_secret(prompt: str) -> str:
     """Read one line with no echo (design: CliCommands, Req 5.1)."""
     return getpass.getpass(prompt)
@@ -1521,7 +1531,8 @@ def _connect_relay(
             )
         _config_error(
             f"{name}: standard input is not an interactive terminal; "
-            f"an unattended command can use {token_variable} instead."
+            f"an unattended command can use {token_variable} instead. "
+            f"{_CREDENTIALS_HINT}"
         )
 
     redactor = Redactor()
@@ -1551,6 +1562,7 @@ def _connect_relay(
                 on_started=on_started,
             )
         else:
+            _print_credentials_hint()
             outcome = run_relay_connect(
                 instance,
                 _ask_secret("Relay token: "),
@@ -1611,8 +1623,9 @@ def connect_command(
     own settings can refuse a configuration that would loop into it), and
     projects the connectors table. NAME must be a configured instance;
     otherwise this exits with the configuration-error code naming every
-    configured instance (Req 5.3). A connector that needs no authentication
-    reports that there is nothing to connect and exits with the success code,
+    configured instance and the site's connectors guide (Req 5.3). A connector
+    that needs no authentication reports that there is nothing to connect and
+    exits with the success code,
     prompting for and writing nothing (Req 5.2); a connector whose
     authentication style this version does not support exits with the
     configuration-error code naming it unsupported (Req 1.7, 5.3).
@@ -1622,8 +1635,9 @@ def connect_command(
     interactive terminal this command prompts for nothing and exits with the
     configuration-error code, naming -- for a personal-key connector only --
     the environment variables an unattended pull can use instead (Req 5.4).
-    Otherwise every credential field the connector declares is prompted for,
-    a field marked secret through the no-echo seam (Req 5.1); an empty
+    Otherwise this prints where to get credentials, and every credential field
+    the connector declares is prompted for, a field marked secret through the
+    no-echo seam (Req 5.1); an empty
     answer exits with the configuration-error code before any request is
     made (Req 5.7).
 
@@ -1679,7 +1693,8 @@ def connect_command(
         configured = ", ".join(sorted(by_name)) or "none"
         _config_error(
             f"{name!r} is not a configured connector instance; "
-            f"configured instances: {configured}"
+            f"configured instances: {configured}. "
+            f"To set one up, see {_CONNECTORS_GUIDE_URL}"
         )
 
     connector = instance.connector
@@ -1735,13 +1750,16 @@ def connect_command(
             )
             _config_error(
                 f"{name}: standard input is not an interactive terminal; "
-                f"an unattended pull can use {variables} instead."
+                f"an unattended pull can use {variables} instead. "
+                f"{_CREDENTIALS_HINT}"
             )
         _config_error(
             f"{name}: standard input is not an interactive terminal; "
-            "`fitdocs connect` needs one to prompt for credentials."
+            "`fitdocs connect` needs one to prompt for credentials. "
+            f"{_CREDENTIALS_HINT}"
         )
 
+    _print_credentials_hint()
     answers: dict[str, str] = {}
     for credential_field in connector.credential_fields:
         prompt = f"{credential_field.label}: "

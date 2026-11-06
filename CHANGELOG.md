@@ -182,6 +182,10 @@ recorded as one.
   under `docs/` and the code, now
   names `fitdocs publish --yes` among the commands that make connector
   requests. The change advances no contract version. Action: none.
+- `fitdocs connect` now links the connectors guide,
+  <https://fitdocs.ai/guides/connectors/>, when the name you give isn't a
+  configured instance, when there's no terminal to ask for a credential at, and
+  just before it asks. Action: none.
 
 ### Fixed
 

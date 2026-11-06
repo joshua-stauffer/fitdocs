@@ -219,6 +219,10 @@ def _snapshot(root: Path) -> set[str]:
     return {str(p.relative_to(root)) for p in root.rglob("*")}
 
 
+_GUIDE = "https://fitdocs.ai/guides/connectors/"
+_HINT = f"To get your credentials, see {_GUIDE}"
+
+
 def _lines(output: str) -> list[str]:
     return output.splitlines()
 
@@ -325,7 +329,8 @@ def test_unknown_name_names_every_configured_instance(
     assert result.exit_code == 2
     assert _lines(result.output) == [
         "'nope' is not a configured connector instance; configured "
-        "instances: login-style, personal-key, scripted-puller"
+        "instances: login-style, personal-key, scripted-puller. "
+        f"To set one up, see {_GUIDE}"
     ]
 
 
@@ -338,7 +343,8 @@ def test_no_configured_instances_lists_none(
 
     assert result.exit_code == 2
     assert _lines(result.output) == [
-        "'anything' is not a configured connector instance; configured instances: none"
+        "'anything' is not a configured connector instance; configured instances: "
+        f"none. To set one up, see {_GUIDE}"
     ]
 
 
@@ -417,7 +423,7 @@ def test_non_interactive_names_every_variable(
     assert _lines(result.output) == [
         "two-field-key: standard input is not an interactive terminal; an "
         "unattended pull can use FITDOCS_CONNECTOR_TWO_FIELD_KEY_API_KEY, "
-        "FITDOCS_CONNECTOR_TWO_FIELD_KEY_ATHLETE_ID instead."
+        f"FITDOCS_CONNECTOR_TWO_FIELD_KEY_ATHLETE_ID instead. {_HINT}"
     ]
     assert secret_calls == []
     assert value_calls == []
@@ -435,7 +441,7 @@ def test_non_interactive_login_exact_message(
     assert result.exit_code == 2
     assert _lines(result.output) == [
         "login-style: standard input is not an interactive terminal; "
-        "`fitdocs connect` needs one to prompt for credentials."
+        f"`fitdocs connect` needs one to prompt for credentials. {_HINT}"
     ]
     assert secret_calls == []
     assert value_calls == []
@@ -548,7 +554,7 @@ def test_empty_answer_exits_before_any_request(
     result = runner.invoke(app, ["connect", "personal-key", "--out", str(tmp_path)])
 
     assert result.exit_code == 2
-    assert _lines(result.output) == ["personal-key: API Key must not be empty."]
+    assert _lines(result.output) == [_HINT, "personal-key: API Key must not be empty."]
     assert connector.verify_calls == []
     store = CredentialStore(_credentials_dir())
     assert store.load("personal-key") is None
@@ -574,6 +580,7 @@ def test_connect_success_prints_instance_path_and_scopes(
     assert result.exit_code == 0, result.output
     expected_path = CredentialStore(_credentials_dir()).path_for("personal-key")
     assert _lines(result.output) == [
+        _HINT,
         "personal-key: connected.",
         f"Credentials: {expected_path}",
         "Scopes: read, write",
@@ -730,7 +737,7 @@ def test_each_failure_kind_exact_line_and_next_step(
     )
     # Longer than 80 columns, so a dropped soft_wrap hard-wraps it under CI.
     assert len(failure_line) > 80
-    assert _lines(result.output) == [failure_line, _STEPS[kind]]
+    assert _lines(result.output) == [_HINT, failure_line, _STEPS[kind]]
     store = CredentialStore(_credentials_dir())
     assert store.load("personal-key") is None
     # Nothing written under the data root on a refusal either (Req 5.9).
@@ -768,7 +775,7 @@ def test_unexpected_connector_exception_is_redacted_type_and_message(
         " returned for this connector instance"
     )
     assert len(unexpected_line) > 80
-    assert _lines(result.output) == [unexpected_line]
+    assert _lines(result.output) == [_HINT, unexpected_line]
     store = CredentialStore(_credentials_dir())
     assert store.load("login-style") is None
     # Nothing written under the data root here either (Req 5.9).

@@ -62,6 +62,7 @@ _FORMAT_LINE = (
     "fdr1_<16 characters>_<52 characters>."
 )
 _EMAIL_LINE = "That is not a plausible email address."
+_HINT = "To get your credentials, see https://fitdocs.ai/guides/connectors/"
 
 
 @dataclass
@@ -172,6 +173,7 @@ def test_paste_prompts_without_echo_checks_once_and_reports_success(
     code, lines = _run(tmp_path)
     assert code == 0
     assert lines == [
+        _HINT,
         f"{_NAME}: connected.",
         f"Credentials: {_stored_path()}",
         f"Relay: {_URL}",
@@ -196,11 +198,11 @@ def test_paste_success_names_an_overriding_environment_variable(
     )
     code, lines = _run(tmp_path)
     assert code == 0
-    assert lines[3:] == [
+    assert lines[4:] == [
         "Overriding environment variables (used instead of the stored values "
         f"during a pull): {_TOKEN_VARIABLE}"
     ]
-    assert len(lines) == 4
+    assert len(lines) == 5
 
 
 def test_paste_refused_prints_code_explanation_and_next_step_exit_1(
@@ -215,6 +217,7 @@ def test_paste_refused_prints_code_explanation_and_next_step_exit_1(
     code, lines = _run(tmp_path)
     assert code == 1
     assert lines == [
+        _HINT,
         f"{_NAME}: token-unknown: The relay does not recognise this token.",
         "Check the token you pasted, or ask the relay's operator for a new one, "
         f"then run `fitdocs connect {_NAME}`.",
@@ -234,8 +237,9 @@ def test_paste_unreachable_relay_prints_its_code_exit_1(
     )
     code, lines = _run(tmp_path)
     assert code == 1
-    assert lines[0].startswith(f"{_NAME}: relay-unreachable: ")
-    assert len(lines) == 2
+    assert lines[0] == _HINT
+    assert lines[1].startswith(f"{_NAME}: relay-unreachable: ")
+    assert len(lines) == 3
     assert _credentials_files() == []
 
 
@@ -248,7 +252,7 @@ def test_malformed_token_exits_2_with_the_fixed_message_unredacted(
     assert code == 2
     # A one-character paste is registered for redaction before the format
     # check; the message must still read exactly as the fixed text.
-    assert lines == [_FORMAT_LINE]
+    assert lines == [_HINT, _FORMAT_LINE]
     assert session.transport.requests == []
     assert _credentials_files() == []
 
@@ -264,7 +268,7 @@ def test_interrupt_at_the_token_prompt_exits_130_with_no_request(
     monkeypatch.setattr(cli_module, "_ask_secret", interrupted)
     code, lines = _run(tmp_path)
     assert code == 130
-    assert lines == [f"{_NAME}: interrupted; nothing was stored."]
+    assert lines == [_HINT, f"{_NAME}: interrupted; nothing was stored."]
     assert session.transport.requests == []
     assert _credentials_files() == []
 
@@ -282,7 +286,7 @@ def test_non_interactive_paste_exits_2_naming_the_override_variable(
     assert code == 2
     assert lines == [
         f"{_NAME}: standard input is not an interactive terminal; "
-        f"an unattended command can use {_TOKEN_VARIABLE} instead."
+        f"an unattended command can use {_TOKEN_VARIABLE} instead. {_HINT}"
     ]
     assert session.transport.requests == []
     assert session.secret_calls == [] and session.value_calls == []
@@ -586,6 +590,7 @@ def test_unexpected_engine_exception_is_a_redacted_line_with_exit_1(
     monkeypatch.setattr(cli_module, "run_relay_connect", boom)
     code, lines = _run(tmp_path)
     assert code == 1
-    assert len(lines) == 1
-    assert lines[0].startswith("RuntimeError: exploded near ")
-    assert _TOKEN not in lines[0]
+    assert len(lines) == 2
+    assert lines[0] == _HINT
+    assert lines[1].startswith("RuntimeError: exploded near ")
+    assert _TOKEN not in lines[1]
