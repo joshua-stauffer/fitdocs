@@ -2,8 +2,8 @@
 id: 2026-10-13-cli-markup-off-consoles-still-substitute-emoji
 title: Rich consoles in cli.py built with markup=False but without emoji=False turn a `:a:` in user-derived text into an emoji
 status: open
-importance: low
-importance_why: Needs a colon-delimited shortcode in a page path, an error message or a producer name; the printed index line is then wrong in a way that makes the path look different from the file.
+importance: medium
+importance_why: It also fires with no user data at all, on fitdocs' own message naming the end marker a page needs, so the printed fix is wrong; the original case needs a colon-delimited shortcode in a page path, an error message or a producer name.
 effort: S
 kind: bug
 area: src/fitdocs/cli.py
@@ -43,6 +43,15 @@ At 0a98d5c, `src/fitdocs/cli.py`:
   -> Index: could not index a/:a:.md: bad
   ```
 - The only other `Console` constructor outside `cli.py` is `src/fitdocs/load/prompts.py:291` (default console), covered by `2026-09-19-prompts-print-swallows-y-n-markup`.
+
+## Update 2026-11-06: seen on fitdocs' own text
+At 35311b53, `fitdocs load --no-prompt` over one hand-written `type: workout` page printed:
+
+```
+LoadDocError: document has no reserved 'load' region -- expected '<!-- fitdocs:begin:load -->' ... '<!-- fitdocs🔚load -->'
+```
+
+The marker fitdocs tells the reader to add has `:end:` replaced by an emoji, because `:end:` is a shortcode. No user text is involved, so any message that prints an end marker is exposed. Which console printed this line was not traced; the failure report's console is the first to check. The line numbers in Evidence above have moved (`grep -n "Console(" src/fitdocs/cli.py | grep -v "emoji=False"` lists them now).
 
 ## How to pick it up
 1. Add `emoji=False` at least at the four sites that print user-derived text, and at the other three for uniformity (a small `_plain_console(stderr=False)` helper would also remove the repeated keyword list).
