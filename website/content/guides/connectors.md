@@ -229,7 +229,7 @@ A relay is a small server that holds a platform application on your behalf, so t
 url = "https://relay.example.com"
 ```
 
-Leave `url` out and the instance uses the built-in default, `https://api.fitdocs.ai`. The address must be `https`. Plain `http` is accepted only for `localhost`, `127.0.0.1`, and `::1`, for testing a relay on your own machine. To use more than one relay, name each instance and set `connector = "relay"` in its table.
+Leave `url` out and the instance uses `https://api.fitdocs.ai`, the maintainer’s relay. The address must be `https`. Plain `http` is accepted only for `localhost`, `127.0.0.1`, and `::1`, for testing a relay on your own machine. To use more than one relay, name each instance and set `connector = "relay"` in its table.
 
 A relay token comes from the relay’s operator, or from registering with a relay that offers registration. With a token in hand:
 
@@ -257,7 +257,6 @@ An instance needs a relay instance to talk to, and the relay behind it has to of
 
 ```toml
 [connectors.relay]
-url = "https://relay.example.com"
 
 [connectors.strava]
 relay = "relay"

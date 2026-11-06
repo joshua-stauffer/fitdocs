@@ -90,7 +90,7 @@ The `strava` connector is Compatible with Strava. It never contacts Strava itsel
 - With `upload = true`, when the relay finds no matching activity, a second request carries the same fields and the page’s base `.fit` file.
 - `fitdocs disconnect NAME` makes one request carrying the stored connection token, to end the connection. With `--local-only` it sends nothing, and the connection stays at the relay until the instance is connected and disconnected again, or access is revoked in Strava’s settings.
 
-The relay holds your connection to Strava, so read its privacy policy, which the pages it serves for the Strava target link. What the relay software keeps, and when it deletes it, is in the [relay guide](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/relay.md#what-the-relay-keeps-and-when-it-deletes-it).
+The relay holds your connection to Strava, so read its privacy policy, which the pages it serves for the Strava target link. The default relay (https://api.fitdocs.ai) publishes its privacy policy at [https://api.fitdocs.ai/privacy](https://api.fitdocs.ai/privacy). What the relay software keeps, and when it deletes it, is in the [relay guide](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/relay.md#what-the-relay-keeps-and-when-it-deletes-it).
 
 ### What a post carries
 

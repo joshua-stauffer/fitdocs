@@ -178,7 +178,6 @@ connector = "folder"
 path = "/Users/you/Documents/WatchExports"
 
 [connectors.relay]
-url = "https://relay.example.com"
 
 [connectors.strava]
 relay = "relay"
