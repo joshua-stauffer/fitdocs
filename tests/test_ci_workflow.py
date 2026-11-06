@@ -270,7 +270,7 @@ def test_matrix_interpreter_is_what_uv_actually_uses() -> None:
 def test_matrix_job_runs_only_the_test_suite_not_build_or_publish() -> None:
     steps = _steps(_supported_job(_workflow()))
     runs = [s["run"].strip() for s in steps if "run" in s]
-    assert "uv run pytest" in runs
+    assert "uv run pytest -n auto" in runs
     for run in runs:
         assert "scripts." not in run, f"matrix job runs a release script: {run!r}"
     assert not any("upload-artifact" in str(s.get("uses", "")) for s in steps)
@@ -460,7 +460,7 @@ def test_every_jobs_test_step_names_the_match_file_and_follows_the_write_step() 
         names = [s.get("name") for s in steps]
         write_idx = names.index("Write the match data outside the checkout")
         test_step = _step_by_name(steps, "Run the test suite")
-        assert test_step["run"].strip() == "uv run pytest", job_name
+        assert test_step["run"].strip() == "uv run pytest -n auto", job_name
         assert test_step.get("env") == {"FITDOCS_FORBIDDEN_STRINGS": _TEST_ENV_VALUE}, (
             f"{job_name}: the test step does not arm the forbidden-strings guard"
         )

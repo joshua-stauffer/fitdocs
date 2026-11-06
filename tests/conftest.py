@@ -9,7 +9,9 @@ and friends) return the dicts later extractor unit-tests consume directly.
 
 from __future__ import annotations
 
-from collections.abc import Generator
+import itertools
+from collections.abc import Callable, Generator
+from pathlib import Path
 
 import pytest
 
@@ -41,13 +43,34 @@ def pytest_runtest_teardown() -> Generator[None, object, object]:
             )
 
 
+@pytest.fixture(scope="session")
+def per_test_directory(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> Callable[[str], Path]:
+    """Make a new directory for one test, cheaply enough to do for every test.
+
+    ``tmp_path_factory.mktemp`` lists the whole base temp directory to choose the
+    next number, so an autouse fixture calling it once per test makes the suite's
+    run time quadratic in its test count: on 32,696 tests that scan was 65% of a
+    serial run. A shared parent and a counter avoid the listing.
+    """
+    parent = tmp_path_factory.mktemp("per-test")
+    counter = itertools.count()
+
+    def make(name: str) -> Path:
+        directory = parent / f"{name}-{next(counter)}"
+        directory.mkdir()
+        return directory
+
+    return make
+
+
 @pytest.fixture(autouse=True)
 def _isolate_index_directory(
-    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+    per_test_directory: Callable[[str], Path], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Give each test its own temporary analytics-index directory."""
-    index_dir = tmp_path_factory.mktemp("fitdocs-index")
-    monkeypatch.setenv("FITDOCS_INDEX_DIR", str(index_dir))
+    monkeypatch.setenv("FITDOCS_INDEX_DIR", str(per_test_directory("fitdocs-index")))
 
 
 @pytest.fixture(autouse=True)

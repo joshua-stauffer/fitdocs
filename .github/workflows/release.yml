@@ -59,7 +59,7 @@ jobs:
         run: uv sync
 
       - name: Run the test suite
-        run: uv run pytest
+        run: uv run pytest -n auto
 
       - name: Lint and check formatting
         run: uv run ruff check . && uv run ruff format --check .

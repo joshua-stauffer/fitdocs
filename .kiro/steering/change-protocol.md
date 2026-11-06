@@ -157,7 +157,7 @@ is a finding to report — not a state to leave behind.
 
 | Change class | Green means |
 |---|---|
-| `src/`, `tests/`, `pyproject.toml` | `uv run pytest && uv run ruff check . && uv run ruff format --check . && uv run mypy` (scope is config-driven via `[tool.mypy].files`, not a path argument, so it cannot drift from this row) |
+| `src/`, `tests/`, `pyproject.toml` | `uv run pytest -n auto && uv run ruff check . && uv run ruff format --check . && uv run mypy` (scope is config-driven via `[tool.mypy].files`, not a path argument, so it cannot drift from this row) |
 | `.kiro/steering/**` | The edited doc read end to end, plus a grep across `.kiro/steering/` and `CLAUDE.md` for statements the edit just contradicted — every copy of the rule moves in the same change |
 | `.claude/skills/**` | The skill exercised once end to end on a real target, or an explicit statement of why it cannot be run and what was inspected instead |
 | `.claude/hooks/**` | A synthetic payload fed to every branch — at least one that fires and one that passes — with the output shown. Hooks fail silent; only execution proves them |

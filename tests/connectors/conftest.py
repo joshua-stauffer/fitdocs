@@ -10,7 +10,7 @@ Two autouse fixtures run before every test in this package:
   ``urllib.request.urlopen`` -- never a real socket.
 * :func:`_isolated_connector_environment` calls
   :func:`isolate_connector_environment` with a fresh
-  ``tmp_path_factory.mktemp("connector-env")`` tree -- deliberately not the
+  ``per_test_directory("connector-env")`` tree -- deliberately not the
   test's own ``tmp_path``, since a test may use ``tmp_path`` as the sandbox
   data root it builds, and the isolation location must sit outside any data
   root a test constructs. ``isolate_connector_environment`` itself is a
@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import os
 import socket
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from datetime import date, datetime
 from pathlib import Path
 from typing import NoReturn, TypeVar
@@ -77,7 +77,7 @@ def isolate_connector_environment(
 
     The caller chooses ``base_dir``; it must sit outside any sandbox data root
     a test itself builds (the autouse fixture below passes a fresh
-    ``tmp_path_factory.mktemp("connector-env")`` tree for exactly this
+    ``per_test_directory("connector-env")`` tree for exactly this
     reason, distinct from a test's own ``tmp_path``).
     """
     credentials_dir = base_dir / "credentials-dir"
@@ -107,10 +107,9 @@ def _forbid_network_sockets(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture(autouse=True)
 def _isolated_connector_environment(
-    monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory
+    monkeypatch: pytest.MonkeyPatch, per_test_directory: Callable[[str], Path]
 ) -> None:
-    base_dir = tmp_path_factory.mktemp("connector-env")
-    isolate_connector_environment(monkeypatch, base_dir)
+    isolate_connector_environment(monkeypatch, per_test_directory("connector-env"))
 
 
 class FakeTransport:

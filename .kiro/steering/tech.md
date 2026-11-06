@@ -139,7 +139,7 @@ ran, not that it could fail. Gate and named anti-patterns:
 ### Common Commands
 ```bash
 # Dev: uv sync
-# Test: uv run pytest
+# Test: uv run pytest -n auto  (a single file: uv run pytest <path>)
 # Lint: uv run ruff check . && uv run ruff format --check . && uv run mypy
 # Run: uv run fitdocs <command>
 ```

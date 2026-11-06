@@ -46,7 +46,7 @@ same three continuous integration runs on every push and pull request that
 changes anything outside `.kiro/specs/` (Req 5.2):
 
 ```
-uv run pytest
+uv run pytest -n auto
 ```
 
 ```

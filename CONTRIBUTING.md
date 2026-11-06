@@ -27,7 +27,7 @@ Every change is accepted only after three gates pass on the exact revision
 being proposed. Run all three locally before opening a change:
 
 ```
-uv run pytest
+uv run pytest -n auto
 ```
 
 ```
