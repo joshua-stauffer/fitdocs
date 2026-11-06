@@ -52,6 +52,10 @@ env:
   # for the same intent and is kept alongside it.
   TERM: dumb
   NO_COLOR: "1"
+  # Lists the slowest tests in every run's log, so a new slow test shows up in
+  # the run that added it. It is set here so the test step's command stays the
+  # one CONTRIBUTING.md names.
+  PYTEST_ADDOPTS: "--durations=25"
 
 jobs:
   gates:
@@ -109,7 +113,10 @@ jobs:
       # forbidden-strings guard (tests/_forbidden_strings.py): unset, it skips
       # its scan of every tracked file, so a new doc or fixture would merge
       # unscanned. `runner.temp` is the same directory as `$RUNNER_TEMP`.
+      # The suite's time budget, and the stop for a hung test. Identical commits
+      # took 3m20s-5m16s here because runners vary, so this sits above that range.
       - name: Run the test suite
+        timeout-minutes: 7
         env:
           FITDOCS_FORBIDDEN_STRINGS: ${{ runner.temp }}/forbidden-strings.txt
         run: uv run pytest -n auto
@@ -179,5 +186,8 @@ jobs:
       # Deliberately unarmed: no secret, so fork PRs keep their 3.12/3.13
       # results. The forbidden-strings scan does not depend on the
       # interpreter; `gates` (3.11) runs it, and these runs skip its tests.
+      # The suite's time budget, and the stop for a hung test. Identical commits
+      # took 3m20s-5m16s here because runners vary, so this sits above that range.
       - name: Run the test suite
+        timeout-minutes: 7
         run: uv run pytest -n auto

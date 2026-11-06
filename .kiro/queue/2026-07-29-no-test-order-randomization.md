@@ -81,3 +81,16 @@ reproducible from the commands in that round's report.
 Whether randomization runs by default is a maintainer call: it trades
 reproducibility for detection, and this repo's review process is unusually
 dependent on a mutation producing the same result twice.
+
+## Update 2026-11-06
+
+The suite now runs on pytest-xdist, whose default `load` mode keeps collection order
+within each worker, so this gap is unchanged in CI. `--dist worksteal` does reorder,
+and one full run at 974aa3d5 exposed a real case:
+`tests/load/channels/test_power.py::test_power_tss_name_is_the_real_shipped_object_by_identity`
+fails after `tests/metrics/test_stress.py:518` runs `importlib.reload(stress)`, which
+rebinds `power_tss` to a new function object. It passes in file order because
+`tests/load/` sorts before `tests/metrics/`.
+
+`uv run pytest -n 4 --dist worksteal` is now a cheap way to look for more of these,
+with no new dependency.
