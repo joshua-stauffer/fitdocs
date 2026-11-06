@@ -18,6 +18,7 @@ from typer.testing import CliRunner
 
 import fitdocs.cli as cli_module
 from fitdocs.cli import app
+from fitdocs.connectors import disconnect as disconnect_module
 from fitdocs.connectors import registry as connector_registry
 from fitdocs.connectors.credentials import CredentialStore, StoredCredentials
 from fitdocs.connectors.http import HttpResponse, TransportError
@@ -486,3 +487,15 @@ def test_the_command_is_registered_with_a_local_only_option() -> None:
     result = runner.invoke(app, ["disconnect", "--help"])
     assert result.exit_code == 0
     assert "--local-only" in result.output
+
+
+def test_the_local_only_help_covers_every_style_that_revokes() -> None:
+    # The declared text, since rich wraps --help output to the terminal width.
+    help_text = cli_module._DISCONNECT_LOCAL_ONLY_OPTION.help
+    words = {
+        AuthStyle.RELAY_TOKEN: "Relay",
+        AuthStyle.OAUTH_BROWSER: "browser-consent",
+    }
+    assert set(words) == disconnect_module._REVOKING_STYLES
+    for word in words.values():
+        assert word in help_text

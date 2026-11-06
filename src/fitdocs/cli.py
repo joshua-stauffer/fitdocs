@@ -579,9 +579,11 @@ _DISCONNECT_LOCAL_ONLY_OPTION = typer.Option(
     False,
     "--local-only",
     help=(
-        "Relay instances only: forget the stored token without asking the "
-        "relay to revoke it (the token stays valid until its operator "
-        "revokes it)."
+        "Relay and browser-consent instances: forget the stored token without "
+        "asking the relay to revoke it. A relay token stays valid until its "
+        "operator revokes it; a browser-consent connection stays at the relay "
+        "until the instance is connected and disconnected again, or access is "
+        "revoked in the service's settings."
     ),
 )
 _PULL_NAMES_ARGUMENT = typer.Argument(
@@ -1815,8 +1817,8 @@ def disconnect_command(
     out: Path | None = _OUT_OPTION,
     local_only: bool = _DISCONNECT_LOCAL_ONLY_OPTION,
 ) -> None:
-    """Forget one connector instance's stored credentials, revoking a relay
-    token at the relay first.
+    """Forget one connector instance's stored credentials, first asking the
+    relay to revoke them for a relay or browser-consent instance.
 
     (relay-server design: CliRelay, DisconnectEngine; Req 14.1-14.7, 15.1.)
 
@@ -1826,8 +1828,8 @@ def disconnect_command(
     naming every configured instance), and the credentials directory checked
     to lie outside the data root. Nothing is written under the data root.
     The work is :func:`~fitdocs.connectors.disconnect.run_disconnect`; a relay
-    instance with a stored token makes exactly one revocation request unless
-    ``--local-only`` is given.
+    or browser-consent instance with a stored token makes exactly one
+    revocation request unless ``--local-only`` is given.
 
     Exit codes: ``0`` credentials removed, or none to remove; ``1`` the relay
     (or the network) did not confirm the revocation, and the stored file is
