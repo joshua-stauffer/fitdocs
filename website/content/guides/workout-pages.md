@@ -22,7 +22,7 @@ A YAML header with the key facts, so other tools, Obsidian's Dataview, or an LLM
 title: Run 2026-09-16 11:32
 type: workout
 generator: fitdocs
-doc_version: 11
+doc_version: 12
 date: '2026-09-16'
 start_time: '2026-09-16T11:32:05+02:00'
 sport: Run
@@ -41,10 +41,15 @@ sources:
 load_value: 72.6
 load_methodology: threshold
 load_basis: pace
+publish: intervals
 ---
 ```
 
-`sources` lists every archived `.fit` file of the workout, with the one the page is built from last. The `source_` keys describe that file. `source_device` is a short fingerprint of the recording device, never its serial number.
+`sources` lists every archived `.fit` file of the workout, with the one the page is built from last. The `source_` keys describe that file. `source_device` is a short fingerprint of the recording device, never its serial number. `publish` appears only if you add it, and names where the page is [posted](publishing.md).
+
+## Published links
+
+If you’ve [published](publishing.md) this workout, a line near the top of the page, above Notes, links to each post. A page that hasn’t been posted shows nothing here. Fitdocs fills this in when you run `fitdocs publish --yes`, so it’s not a place for your own writing.
 
 ## Notes 
 
@@ -69,6 +74,10 @@ On a run recorded with running dynamics, from the watch itself or from a pod lik
 ## Splits
 
 Your device laps (manual button presses or workout steps) and automatic per-kilometre splits, each with distance, time, heart rate, and pace. The fastest and slowest splits are marked.
+
+## Your post
+
+A `post` region that’s yours, with no heading of its own and a hidden comment that renders as nothing. Write a page’s own post here, and `fitdocs publish` sends those words instead of a template. See [Publishing posts](publishing.md#write-your-own-post).
 
 ## Morning Of
 
@@ -98,9 +107,11 @@ Watches record a strength session's time and heart rate, not what you lifted. St
 |---|---|---|
 | Notes section | you | kept exactly |
 | Workout section (strength) | you | kept exactly |
-| Race tag keys in frontmatter (`effort`, …) | you | kept exactly |
+| `post` region | you | kept exactly |
+| Race tag keys and the `publish` key in frontmatter | you | kept exactly |
 | Training load section | fitdocs | kept (recomputed only when you ask) |
 | Morning Of block | fitdocs | refreshed from your wellness series |
+| `published` region | fitdocs | carried over; `fitdocs publish --yes` refills it and replaces hand edits |
 | Everything else | fitdocs | rebuilt from the archived `.fit` files |
 
 Edit your sections between their `<!-- fitdocs:begin:… -->` and `<!-- fitdocs:end:… -->` markers. Don't add new markers: fitdocs won't rebuild a page that has a marker it doesn't recognize. The full rules are in the [ownership contract](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/ownership-contract.md).

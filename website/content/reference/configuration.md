@@ -7,7 +7,7 @@ order: 2
 
 # Configuration
 
-Fitdocs reads three things: where your data root is, `fitdocs.toml` (your settings), and `athlete.toml` (your thresholds). Every setting has a default, so all of them are optional. If you use a connector, its key is kept separately, outside the data root (see [Connector credentials](#connector-credentials)).
+Fitdocs reads three things: where your data root is, `fitdocs.toml` (your settings), and `athlete.toml` (your thresholds). Every setting has a default, apart from the keys a connector instance requires, so you write only what you want to change. If you use a connector, its key or token is kept separately, outside the data root (see [Connector credentials](#connector-credentials)).
 
 ## The data root
 
@@ -136,7 +136,7 @@ Which source's value to use when several record the same wellness signal on the 
 
 | Key | Default | |
 |---|---|---|
-| `precedence` | `[]` (built-in order: `garmin-export`, `apple-health`, `intervals-icu`) | Sources, best first. Sources you leave out follow in the built-in order. |
+| `precedence` | `[]` (built-in order: `garmin-export`, `garmin-personal`, `apple-health`, `intervals-icu`) | Sources, best first. Sources you leave out follow in the built-in order. |
 | `metric_precedence` | `{}` | A source list for one signal, such as `hrv_rmssd_ms`, replacing `precedence` for it |
 
 ```toml
@@ -155,23 +155,54 @@ One table per connector instance. `<name>` is yours to choose: lowercase letters
 
 | Key | Default | |
 |---|---|---|
-| `connector` | the instance's name | Which connector to use: `intervals` or `folder` |
+| `connector` | the instance's name | Which connector to use: `folder`, `intervals`, `garmin`, `relay`, or `strava` |
 | `lookback_days` | `30` | How many days before the newest activity already recorded each pull starts listing (0 to 3650). Also how far back wellness is re-checked. |
-| `wellness` | `false` | Also pull wellness. Only for a connector that has it (`intervals`). |
+| `wellness` | `false` | Also pull wellness. Only for a connector that has it (`intervals`, `garmin`). |
 | `sources` | `["GARMIN_CONNECT"]` | (`intervals`) Which of intervals.icu's upload sources to keep |
+| `publish_upload` | `false` | (`intervals`) When a publish finds no matching activity, upload the page's base `.fit` file |
 | `path` | required | (`folder`) The folder to read. Relative paths resolve from the data root. It can't be, contain, or sit inside the inbox. |
 | `settle_seconds` | `2` (the inbox's default) | (`folder`) How long a file must sit unchanged before it's read |
+| `url` | `"https://api.fitdocs.ai"` | (`relay`) The relay's address: `https`, or `http` only for `localhost`, `127.0.0.1`, and `::1`. No query, fragment, or user information. |
+| `relay` | required | (`strava`) The name of a configured `relay` instance |
+| `upload` | `false` | (`strava`) When a publish finds no matching activity, send the page's base `.fit` file and have the relay create the activity |
 
 ```toml
 [connectors.intervals]
 wellness = true
 
+[connectors.garmin]
+wellness = true
+
 [connectors.watch-exports]
 connector = "folder"
 path = "/Users/you/Documents/WatchExports"
+
+[connectors.relay]
+
+[connectors.strava]
+relay = "relay"
 ```
 
-Fitdocs refuses a setting here with the same name as a connector's key, like `api_key`. See [Pulling from intervals.icu](../guides/connectors.md).
+A `garmin` instance takes no keys of its own, and its pacing and per-pull limit are fixed. Fitdocs refuses a setting here with the same name as that connector's own credential: `api_key` on `intervals` and `garmin`, `token` on `relay` and `strava`. See [Connectors](../guides/connectors.md).
+
+### `[publish]`
+
+The templates `fitdocs publish` composes a post from. For each field, a target's own `[publish.targets.<name>]` table comes first, then `[publish]`, then the default.
+
+| Key | Default | |
+|---|---|---|
+| `title` | `"{title}"` | Title template. It must fit on one line. |
+| `description` | one line each for distance, time, pace, speed, average heart rate, average power, and elevation gain, when the page records them | Description template |
+
+```toml
+[publish]
+title = "{title}{? - {distance_km} km}"
+
+[publish.targets.club-feed]
+description = "{?Load: {load_value} ({load_methodology})}"
+```
+
+Each name under `[publish.targets]` must be a configured publish target. A mistake in this table stops every `fitdocs publish` run with exit code 2. See [Publishing posts](../guides/publishing.md#or-use-a-template).
 
 ## `athlete.toml`
 
@@ -214,13 +245,13 @@ Fitdocs keeps two things outside your data root, so they don't travel with your 
 
 ### Connector credentials
 
-`fitdocs connect` stores keys outside the data root, in the first of these that's set:
+`fitdocs connect` stores keys and tokens outside the data root, in the first of these that's set:
 
 1. `FITDOCS_CREDENTIALS_DIR` (an absolute path)
 2. `$XDG_CONFIG_HOME/fitdocs/credentials`
 3. `~/.config/fitdocs/credentials`
 
-A credentials folder inside the data root is refused. An environment variable named `FITDOCS_CONNECTOR_<INSTANCE>_<FIELD>` supplies a value without storing it and always wins over a stored one, for example `FITDOCS_CONNECTOR_INTERVALS_API_KEY`.
+A credentials folder inside the data root is refused. An environment variable named `FITDOCS_CONNECTOR_<INSTANCE>_<FIELD>` supplies a value without storing it and wins over a stored one, for example `FITDOCS_CONNECTOR_INTERVALS_API_KEY`. The exception is `fitdocs disconnect`, which acts only on what's stored, and removes one instance's file and nothing else.
 
 ### The analytics index location
 

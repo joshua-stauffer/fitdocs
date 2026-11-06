@@ -13,7 +13,37 @@ This page mirrors [`CHANGELOG.md`](https://github.com/joshua-stauffer/fitdocs/bl
 
 ## Unreleased
 
-Nothing yet.
+### Upgrading
+
+This release changes the page format. After upgrading, run `fitdocs regen` once, then `fitdocs check`:
+
+```sh
+fitdocs regen
+fitdocs check
+```
+
+The regen adds the two new regions to every page, rewrites chart files in a smaller form, refreshes each folder's `AGENTS.md`, and rebuilds the wellness series. It keeps every region and key you wrote. Until you run it, `fitdocs publish` reports a page written by an older fitdocs that opts in to a target as out of date.
+
+If you installed the agent skills by copying, copy them again.
+
+### Added
+
+- **Publishing.** `fitdocs publish` turns workout pages into posts and sends them to the publish targets you configured as connectors. A page is posted only to the targets its `publish` key names, and a run without `--yes` is a dry run: it sends nothing and prints what each post would carry. The `[publish]` table sets the templates. See [Publishing posts](guides/publishing.md).
+- **Two new regions on every workout page.** The `post` region is yours: write the page's own post there. The `published` region is fitdocs': `fitdocs publish --yes` fills it with links to the posted activities and replaces hand edits. The `publish` frontmatter key is yours, like the race-tag keys.
+- **Publishing to intervals.icu.** The `intervals` connector is a publish target. For a page that opts in, `fitdocs publish --yes` sets the matching activity's name and description, and with `publish_upload = true` it uploads the page's base `.fit` file when no activity matches. `fitdocs connect` and `fitdocs pull` still only read. See [Publishing to intervals.icu](guides/connectors.md#publishing-to-intervalsicu).
+- **The `garmin` connector** reads a Garmin Connect account with a personal API key you create. `fitdocs pull` fetches each activity's original `.fit` file, at most 200 per pull, and `wellness = true` adds Garmin's daily summaries, sleep, heart rate variability, and weight under a new source, `garmin-personal`. It only reads. Under the default `[identity] precedence`, the first `fitdocs sync` after a pull makes the Garmin original the main file of each page that holds another copy of the activity, so those pages re-render and some may be renamed. See [what the first sync does](guides/connectors.md#what-the-first-sync-does-to-an-existing-wiki).
+- **The `relay` connector**, for a fitdocs relay. `fitdocs connect NAME` checks and stores a relay token, and `--register [--email ADDRESS]` registers an address with a relay that offers registration. See [Connecting to a relay](guides/connectors.md#connecting-to-a-relay).
+- **The `strava` connector**, Compatible with Strava, reaches Strava only through a relay that offers the Strava target. For a page whose `publish` key names the instance, `fitdocs publish --yes` updates the name and description of its Strava activity, and with `upload = true` a publish that finds no matching activity sends the page's base `.fit` file for the relay to create the activity. `fitdocs connect NAME` opens the relay's connect page in your browser, unless you pass `--no-browser`. See [Strava](guides/connectors.md#strava).
+- **`fitdocs disconnect NAME [--local-only]`** forgets an instance's stored credentials. For a relay or Strava instance it first asks the relay to revoke the token or end the connection, and keeps the file if the relay can't confirm. `--local-only` removes the file without contacting the relay. See [Commands](reference/cli.md#fitdocs-disconnect-name).
+
+### Changed
+
+- **The network.** `fitdocs publish --yes` and `fitdocs disconnect` can now send requests, and `fitdocs connect NAME --register` sends the email address you give. [Privacy and the network](guides/privacy-and-network.md) lists each command and where its requests go.
+- **A bare `fitdocs pull`** pulls only instances whose connector fetches activities or wellness, so it skips `relay` and `strava` instances and doesn't contact them.
+- **The wellness source order** is now `garmin-export`, `garmin-personal`, `apple-health`, `intervals-icu`. In a data root that already holds wellness, the first `fitdocs sync` or `fitdocs regen` after upgrading rebuilds the series once, and until then `fitdocs check` reports it as stale.
+- **Governed contracts.** The ownership contract moves from version 16 to 19, and the document format (`doc_version`) from 11 to 12: run `fitdocs regen`. The `fitdocs.toml` settings gain the optional `[publish]` table and the connector keys `url`, `relay`, `upload`, and `publish_upload`, and `[wellness] precedence` accepts `garmin-personal`. An older fitdocs reports a credentials file holding a relay token as malformed, so don't share a credentials folder with an older version.
+
+This release also makes chart files much smaller and carries other changes and fixes. The [full changelog](https://github.com/joshua-stauffer/fitdocs/blob/main/CHANGELOG.md) lists every change, with the action each contract change needs.
 
 ## 0.2.0 — 2026-10-19
 
