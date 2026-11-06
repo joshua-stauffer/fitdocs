@@ -10,7 +10,7 @@ date: "2026-02-06"
 sport: "Run"
 ---
 
-<!-- fitdocs:generated: regeneration rewrites this page except what this directory's AGENTS.md says is yours -->
+<!-- fitdocs:generated: regeneration rewrites this page except what the nearest AGENTS.md says is yours -->
 
 # Tempo run A
 

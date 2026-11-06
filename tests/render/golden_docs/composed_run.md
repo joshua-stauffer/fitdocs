@@ -22,7 +22,7 @@ sources:
 - fit-archive/342343358b73a6ca63025f603e5b78f4b0077e4dbc924f6cd3ee097bbf69b4f2.fit
 ---
 
-<!-- fitdocs:generated: regeneration rewrites this page except what this directory's AGENTS.md says is yours -->
+<!-- fitdocs:generated: regeneration rewrites this page except what the nearest AGENTS.md says is yours -->
 
 # Run 2042-04-13 23:20
 

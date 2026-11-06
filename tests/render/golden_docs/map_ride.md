@@ -19,7 +19,7 @@ sources:
 - fit-archive/233c91935d99b5b445fe98a28dab43bc445c298c24acf238a6933f50216a834b.fit
 ---
 
-<!-- fitdocs:generated: regeneration rewrites this page except what this directory's AGENTS.md says is yours -->
+<!-- fitdocs:generated: regeneration rewrites this page except what the nearest AGENTS.md says is yours -->
 
 # Ride 2021-09-07 19:46
 

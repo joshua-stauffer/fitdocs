@@ -19,7 +19,7 @@ sources:
 - fit-archive/2babe570f8dbed08a99fe864dc7574d7b2f014e4304aa0a4de3e4e3210b7d0c9.fit
 ---
 
-<!-- fitdocs:generated: regeneration rewrites this page except what this directory's AGENTS.md says is yours -->
+<!-- fitdocs:generated: regeneration rewrites this page except what the nearest AGENTS.md says is yours -->
 
 # Run 2021-09-07 19:46
 

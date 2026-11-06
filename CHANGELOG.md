@@ -185,7 +185,7 @@ recorded as one.
 - The comment at the top of every generated page no longer names regions, which
   no one sentence could get right for every page type. Generated document
   contract: it now reads `<!-- fitdocs:generated: regeneration rewrites this
-  page except what this directory's AGENTS.md says is yours -->`. A page keeps
+  page except what the nearest AGENTS.md says is yours -->`. A page keeps
   the earlier comment until it is next regenerated, and both mark it as written
   by fitdocs. Action: none beyond the `fitdocs regen` this release already asks
   for.

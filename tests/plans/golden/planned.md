@@ -12,7 +12,7 @@ modality: "strength"
 indoor: true
 ---
 
-<!-- fitdocs:generated: regeneration rewrites this page except what this directory's AGENTS.md says is yours -->
+<!-- fitdocs:generated: regeneration rewrites this page except what the nearest AGENTS.md says is yours -->
 
 # Strength circuit
 

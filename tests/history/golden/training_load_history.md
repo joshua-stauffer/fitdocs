@@ -18,7 +18,7 @@ pages_with_load: 5
 criterion_points: 2
 ---
 
-<!-- fitdocs:generated: regeneration rewrites this page except what this directory's AGENTS.md says is yours -->
+<!-- fitdocs:generated: regeneration rewrites this page except what the nearest AGENTS.md says is yours -->
 
 # Training Load History
 

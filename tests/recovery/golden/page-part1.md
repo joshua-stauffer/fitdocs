@@ -9,7 +9,7 @@ window_start: "2025-02-01"
 window_end: "2025-05-01"
 ---
 
-<!-- fitdocs:generated: regeneration rewrites this page except what this directory's AGENTS.md says is yours -->
+<!-- fitdocs:generated: regeneration rewrites this page except what the nearest AGENTS.md says is yours -->
 
 # Recovery
 Data source: Garmin

@@ -10,7 +10,7 @@ goal: "A block built to exercise every reconciliation grammar row."
 mesocycle_days: 7
 ---
 
-<!-- fitdocs:generated: regeneration rewrites this page except what this directory's AGENTS.md says is yours -->
+<!-- fitdocs:generated: regeneration rewrites this page except what the nearest AGENTS.md says is yours -->
 
 # Reconcile fixture block
 

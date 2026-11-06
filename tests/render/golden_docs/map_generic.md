@@ -16,7 +16,7 @@ sources:
 - fit-archive/41f7b7a3161b321b3ef05b7178f9f241392d94701660499c20d037a0c893cbb6.fit
 ---
 
-<!-- fitdocs:generated: regeneration rewrites this page except what this directory's AGENTS.md says is yours -->
+<!-- fitdocs:generated: regeneration rewrites this page except what the nearest AGENTS.md says is yours -->
 
 # Workout 2021-09-07 19:46
 

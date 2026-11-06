@@ -972,8 +972,8 @@ as a damaged one.
 """
 
 DOC_BANNER: Final[str] = (
-    f"{GENERATED_PREFIX}: regeneration rewrites this page except what this "
-    "directory's AGENTS.md says is yours -->"
+    f"{GENERATED_PREFIX}: regeneration rewrites this page except what the nearest "
+    "AGENTS.md says is yours -->"
 )
 """The one-line HTML-comment provenance banner every generated document carries.
 
