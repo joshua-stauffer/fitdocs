@@ -3,7 +3,7 @@ id: 2026-11-04-relay-intervals-revocation-conditions
 title: The relay-intervals rewrite should decide whether token revocation stays conditional
 status: open
 importance: low
-importance_why: Only matters once the relay route to intervals.icu is built, and that is gated; it costs one decision during the rewrite that the spec batch already plans.
+importance_why: Only matters once the relay route to intervals.icu is built, and that is gated; it costs one maintainer decision, taken in a spec revision before /kiro-impl relay-intervals.
 effort: S
 kind: inconsistency
 area: relay-intervals, relay-server
@@ -55,3 +55,11 @@ on the deployed server at its low volume.
 Exempt revocation calls from the budget's refusal, or accept the budget-conditional
 behaviour at this volume and word the hosted policy page to match? The page
 currently promises unconditional revocation for intervals.icu.
+
+## Update 2026-11-06
+The rewrite this item defers to no longer exists. `.kiro/steering/roadmap.md:4460-4462`
+(reverted 2026-11-05) says relay-intervals keeps the lift in its own tasks and "No
+cross-spec rewrite is due". Nothing now schedules this decision, so run the resume
+command above before `/kiro-impl relay-intervals`, whichever way its gate opens
+(`.kiro/specs/relay-intervals/research.md:388`, still pending on this date). Read "the
+rewritten requirements" in step 3 as that spec revision. Pinned at a6038449.
