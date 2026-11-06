@@ -29,3 +29,6 @@ An athlete renewing a key may need to delete the old one first and has to discov
 
 ## How to pick it up
 Record what the maintainer observes in `research.md`, then add it to the section, stating only what was observed.
+
+## Update 2026-11-06: nothing left to add
+Draft PR 5 gives the steps for creating a key, from Garmin's public Personal API FAQ, in the website guide and `docs/connectors.md`, and the maintainer confirmed they match creating a real key. The maintainer also decided the docs will not mention how many keys Garmin allows: that is a Garmin policy or implementation detail. This item can close once PR 5 merges.
