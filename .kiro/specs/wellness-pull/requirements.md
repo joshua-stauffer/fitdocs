@@ -199,7 +199,7 @@ Terms used below:
 
 #### Acceptance Criteria
 1. If intervals.icu answers a wellness request as unauthorized, the fitdocs CLI shall end the instance's pull, report a rejected key with the step to reconnect, and not repeat the request.
-2. If intervals.icu answers a wellness request as forbidden, the fitdocs CLI shall end the instance's wellness pull, quote the service's message with every secret removed, and name the next steps: that intervals.icu may be withholding data it received from Garmin, that setting `wellness = false` stops the request, and that Garmin's own data export is the route for Garmin wellness.
+2. If intervals.icu answers a wellness request as forbidden, the fitdocs CLI shall end the instance's wellness pull, quote the service's message with every secret removed, and name the next steps: that intervals.icu may be withholding data it received from Garmin, that setting `wellness = false` stops the request, and that Garmin's own data export is the route for Garmin wellness. *(amended by Amendment 2: the `garmin` connector is named as a route beside the export)*
 3. If a wellness request is still rate-limited, or still meets a server error, after the transport's bounded retries, the fitdocs CLI shall end the instance's wellness pull, stating which, and that the next pull resumes where this one stopped.
 4. If a wellness listing request or an athlete-settings request is answered with any other status that is not success, the fitdocs CLI shall end the instance's wellness pull, naming the status.
 5. If an instance's wellness pull ends early, the fitdocs CLI shall keep every wellness delivery already made and recorded, leave the wellness mark where it was, and continue with the remaining instances.
@@ -265,3 +265,18 @@ word-for-word; nothing is renumbered.
   `tests/connectors/test_intervals_wellness.py` names all five.
 - Nothing in the wellness listing, packaging or ledger changes; the publish
   behavior is intervals-publish Requirements 3-8.
+
+## Amendment 2 (2026-11-06): the forbidden message names the garmin connector
+
+Existing criteria and approvals are preserved word-for-word; nothing is
+renumbered.
+
+- Requirement 9 criterion 2 (tagged in place): the last next step reads
+  "Garmin's own data export or the garmin connector is the route for Garmin
+  wellness". The `garmin` connector, landed by garmin-connector, reads Garmin
+  wellness directly, and an athlete refused at intervals.icu should hear of it.
+  The pins in `tests/connectors/test_intervals_wellness.py` and
+  `tests/connectors/test_intervals_wellness_pull.py` carry the sentence, and
+  design.md's status mapping quotes it.
+- Requirement 12 criterion 2 is unchanged: the documentation still describes
+  the export route, and also names the connector.

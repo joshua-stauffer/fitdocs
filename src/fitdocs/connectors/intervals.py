@@ -177,8 +177,8 @@ WELLNESS_REFUSED_MESSAGE: Final[str] = (
     "intervals.icu refused the {request} (HTTP 403): {message}. "
     "intervals.icu may be withholding data it received from Garmin. "
     "Set wellness = false in this instance's table to stop requesting wellness; "
-    "Garmin's own data export is the route for Garmin wellness "
-    "(see the wellness guide)."
+    "Garmin's own data export or the garmin connector is the route for "
+    "Garmin wellness (see the wellness guide)."
 )
 _WELLNESS_ID_RE = re.compile(WELLNESS_ID_PATTERN)
 

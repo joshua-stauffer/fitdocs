@@ -442,8 +442,8 @@ def test_wellness_listing_refusal_keeps_delivered_activity(
         + redacted
         + ". intervals.icu may be withholding data it received from Garmin. "
         "Set wellness = false in this instance's table to stop requesting wellness; "
-        "Garmin's own data export is the route for Garmin wellness "
-        "(see the wellness guide)."
+        "Garmin's own data export or the garmin connector is the route for "
+        "Garmin wellness (see the wellness guide)."
     )
     state = _state(root)
     files = _files(root)

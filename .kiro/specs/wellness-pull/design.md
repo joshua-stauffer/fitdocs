@@ -951,8 +951,9 @@ def package_wellness(self, session: ConnectorSession, days: tuple[WellnessDay, .
 `ConnectorError(WELLNESS_REFUSED_MESSAGE)` = "intervals.icu refused the
 {request} (HTTP 403): {message}. intervals.icu may be withholding data it
 received from Garmin. Set wellness = false in this instance's table to stop
-requesting wellness; Garmin's own data export is the route for Garmin
-wellness (see the wellness guide)."; 429 →
+requesting wellness; Garmin's own data export or the garmin connector is the
+route for Garmin wellness (see the wellness guide)." (requirements Amendment
+2); 429 →
 `ConnectorError(RATE_LIMITED_MESSAGE)`; 5xx →
 `ConnectorError(UNAVAILABLE_MESSAGE)` (both existing, both say the next pull
 resumes); any other → `ConnectorError(WELLNESS_STATUS_MESSAGE)`. Messages use

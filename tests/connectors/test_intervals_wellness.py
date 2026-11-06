@@ -489,8 +489,8 @@ def test_403_is_connector_error_with_garmin_remedies(tmp_path: Path) -> None:
         "intervals.icu refused the wellness listing (HTTP 403): service-sentinel. "
         "intervals.icu may be withholding data it received from Garmin. "
         "Set wellness = false in this instance's table to stop requesting wellness; "
-        "Garmin's own data export is the route for Garmin wellness "
-        "(see the wellness guide)."
+        "Garmin's own data export or the garmin connector is the route for "
+        "Garmin wellness (see the wellness guide)."
     )
 
 
@@ -1188,8 +1188,8 @@ def test_athlete_status_mapping(tmp_path: Path, status: int) -> None:
             "intervals.icu refused the athlete settings request (HTTP 403): "
             "service-sentinel. intervals.icu may be withholding data it received "
             "from Garmin. Set wellness = false in this instance's table to stop "
-            "requesting wellness; Garmin's own data export is the route for Garmin "
-            "wellness (see the wellness guide)."
+            "requesting wellness; Garmin's own data export or the garmin connector "
+            "is the route for Garmin wellness (see the wellness guide)."
             if status == 403
             else "intervals.icu is limiting requests (HTTP 429) and still was after "
             "fitdocs's retries; this pull stopped, and the next pull resumes "
@@ -1237,8 +1237,8 @@ def test_athlete_status_redacts_every_credential_form(
             + message
             + ". intervals.icu may be withholding data it received from Garmin. "
             "Set wellness = false in this instance's table to stop requesting "
-            "wellness; Garmin's own data export is the route for Garmin wellness "
-            "(see the wellness guide).",
+            "wellness; Garmin's own data export or the garmin connector is the "
+            "route for Garmin wellness (see the wellness guide).",
         )
         if status == 403
         else (
