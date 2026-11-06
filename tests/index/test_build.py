@@ -1054,7 +1054,11 @@ with open_index(Path(os.environ["INDEX_DB"]), read_only=True) as connection:
     )
     try:
         deadline = time.monotonic() + 10
-        while not ready.exists() and time.monotonic() < deadline:
+        # ``write_text`` creates the file before writing to it, so wait for the
+        # content: a file that exists can still be empty.
+        while time.monotonic() < deadline and not (
+            ready.exists() and ready.read_text()
+        ):
             time.sleep(0.01)
         assert ready.exists()
         assert ready.read_text() == "1"

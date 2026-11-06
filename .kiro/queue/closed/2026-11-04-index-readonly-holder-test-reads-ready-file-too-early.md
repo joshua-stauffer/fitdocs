@@ -1,7 +1,7 @@
 ---
 id: 2026-11-04-index-readonly-holder-test-reads-ready-file-too-early
 title: An index test polls for a ready file and reads it before the writer has finished
-status: open
+status: done
 importance: low
 importance_why: Test-only, and the product is unaffected; but it turns a full CI run red with nothing wrong, as it did once on 2026-11-04.
 effort: S
@@ -41,3 +41,8 @@ minutes. The next session may also spend time looking for a product defect.
 2. Scan the rest of the file for the same pattern.
 3. To check it, hold the reader between creating and writing the file, and confirm the
    parent waits rather than failing. Done means that holds and the test passes.
+
+## Resolution
+Done 2026-11-06 on chore/suite-slow. The parent now waits for the file's content, not its existence. The same race was in `tests/index/test_lock.py`'s `_wait_for_ready`, which failed on run 42239862684 (`supported-pythons (3.12)`) once CI ran in parallel, so that is fixed too. The other polls on `exists()` in the suite never read the file.
+
+Verified as this item asked: holding the child between creating and writing the file turned both tests red with `assert '' == ...`, and both pass under the same hold after the fix.

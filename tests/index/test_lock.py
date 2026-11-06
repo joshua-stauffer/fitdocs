@@ -48,7 +48,9 @@ except WriterBusy:
 def _wait_for_ready(child: subprocess.Popen[str], ready: Path) -> None:
     deadline = time.monotonic() + 5
     while time.monotonic() < deadline:
-        if ready.exists():
+        # ``write_text`` creates the file before writing to it, so a file that
+        # exists can still be empty.
+        if ready.exists() and ready.read_text(encoding="utf-8"):
             return
         if child.poll() is not None:
             stdout, stderr = child.communicate()
