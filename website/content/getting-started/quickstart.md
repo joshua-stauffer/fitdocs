@@ -90,7 +90,7 @@ fitdocs check
 
 ## Where to go next
 
-- **Stop pointing at folders by hand:** set up the [inbox](../guides/inbox.md) so a plain `fitdocs sync` picks up new files, or [pull from intervals.icu](../guides/connectors.md) automatically.
+- **Stop pointing at folders by hand:** set up the [inbox](../guides/inbox.md) so a plain `fitdocs sync` picks up new files, or [pull from intervals.icu or Garmin Connect](../guides/connectors.md) automatically.
 - **Get load numbers you trust:** [Training load](../guides/training-load.md) and [Benchmarks and race tags](../guides/benchmarks.md).
 - **Add sleep, HRV, and resting heart rate:** [Wellness and recovery](../guides/wellness.md).
 - **Ask questions across years of training:** [The analytics index](../guides/analytics.md) and [Dashboards](../guides/dashboards.md).

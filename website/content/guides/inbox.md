@@ -33,14 +33,14 @@ Anything that produces a `.fit` file works. Some examples:
 
 | Source | How files arrive |
 |---|---|
-| **intervals.icu** | `fitdocs pull` fetches your original files with the `intervals` connector. See [Pulling from intervals.icu](connectors.md). |
+| **intervals.icu** | `fitdocs pull` fetches your original files with the `intervals` connector. See [Connectors](connectors.md). |
 | **Apple Watch** via HealthFit | Turn on HealthFit's automatic export to iCloud Drive, then point `[inbox].path` at that folder. |
-| **Garmin Connect** | Export the original file for an activity and save or unzip it into the inbox. |
+| **Garmin Connect** | `fitdocs pull` fetches your original files with the `garmin` connector. See [Connectors](connectors.md#garmin). Or export the original file for an activity and save or unzip it into the inbox. |
 | **Stryd PowerCenter** | Download the activity's FIT file. It carries running dynamics that phone-side copies often drop. |
 | **Another app's export folder** | Point a `folder` connector at it, and `fitdocs pull` copies new files in. |
 | **Your own script** | Anything that copies `.fit` files into the folder. |
 
-The inbox takes wellness too: an Apple Health export, the JSON files from a Garmin data export, or intervals.icu wellness. See [Wellness and recovery](wellness.md).
+The inbox takes wellness too: an Apple Health export, the JSON files from a Garmin data export, or what the `garmin` and `intervals` connectors pull. See [Wellness and recovery](wellness.md).
 
 The same workout from several sources makes one page. If your watch's original, HealthFit's phone copy, and a Stryd file all record one run, fitdocs puts them on one page. It builds the page from the best file (a Garmin original first, by default) and fills in any channel that file lacks, like Stryd's running dynamics, from the others. See [Your workout pages](workout-pages.md#several-files-one-workout).
 

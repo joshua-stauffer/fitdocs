@@ -56,7 +56,7 @@ If a release needs more than that, its entry in the [changelog](../changelog.md)
 uv tool uninstall fitdocs    # or: pipx uninstall fitdocs
 ```
 
-Uninstalling removes the tool, not your data. Your workout pages, archives, settings, and athlete profile stay where they are. So do the two things fitdocs keeps outside your data root: the analytics index in `~/.cache/fitdocs/index/` and any connector keys in `~/.config/fitdocs/credentials/` (or wherever you pointed them). Delete those yourself if you don't need them.
+Uninstalling removes the tool, not your data. Your workout pages, archives, settings, and athlete profile stay where they are. So do the two things fitdocs keeps outside your data root: the analytics index in `~/.cache/fitdocs/index/` and any connector keys and tokens in `~/.config/fitdocs/credentials/` (or wherever you pointed them). Delete those yourself if you don't need them. Deleting a relay token or Strava connection token doesn't revoke it, so run `fitdocs disconnect` for those instances before you uninstall.
 
 ## Install from source
 

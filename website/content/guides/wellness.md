@@ -1,6 +1,6 @@
 ---
 title: Wellness and recovery
-description: Bring in resting heart rate, HRV, sleep, and other daily signals from Apple Health, a Garmin export, or intervals.icu. See them on each workout page and on one recovery page.
+description: Bring in resting heart rate, HRV, sleep, and other daily signals from Apple Health, a Garmin export, Garmin Connect, or intervals.icu. See them on each workout page and on one recovery page.
 section: Guides
 order: 7
 ---
@@ -39,7 +39,11 @@ Fitdocs doesn’t read the whole export ZIP, or Garmin’s monitoring and sleep 
 
 ### intervals.icu
 
-If you use the intervals.icu connector, set `wellness = true` on it and run `fitdocs pull --sync`. See [Pulling from intervals.icu](connectors.md).
+If you use the intervals.icu connector, set `wellness = true` on it and run `fitdocs pull --sync`. See [Connectors](connectors.md#wellness-from-intervalsicu).
+
+### Garmin Connect
+
+If you use the `garmin` connector, set `wellness = true` on it and run `fitdocs pull --sync`. It reads Garmin’s daily summaries, sleep, heart rate variability, and weight from your account, with no export step, under the source `garmin-personal`. See [Wellness from Garmin](connectors.md#wellness-from-garmin).
 
 ## What fitdocs keeps
 
@@ -54,7 +58,7 @@ Each value belongs to a day, and a night’s sleep belongs to the morning you wo
 
 ## When sources disagree
 
-Your watch, your phone, and intervals.icu often record the same signal. Fitdocs keeps every source’s value and marks one per day and signal as the one to use. By default it prefers the device’s own export, then Apple Health, then intervals.icu (`garmin-export`, `apple-health`, `intervals-icu`). To choose differently, set the order, for everything or per signal:
+Your watch, your phone, and intervals.icu often record the same signal. Fitdocs keeps every source’s value and marks one per day and signal as the one to use. By default it prefers Garmin’s own export, then the Garmin connector, then Apple Health, then intervals.icu (`garmin-export`, `garmin-personal`, `apple-health`, `intervals-icu`). To choose differently, set the order, for everything or per signal:
 
 ```toml
 # <data-root>/fitdocs.toml
@@ -66,6 +70,8 @@ hrv_rmssd_ms = ["intervals-icu", "garmin-export"]
 ```
 
 Fitdocs never mixes or averages sources. A change takes effect on your next sync or `fitdocs regen`.
+
+In a data root that already holds wellness, the first `fitdocs sync` or `fitdocs regen` after you upgrade to a version with the `garmin-personal` source rebuilds the series once. Until then, `fitdocs check` reports the series as stale.
 
 ## The Morning Of block
 
@@ -97,6 +103,6 @@ Each mean and normal range comes from a single source.
 
 ## Taking an import back out
 
-To withdraw a file you imported, delete its entry from `wellness-archive/`, remove its copy from the inbox, and run `fitdocs regen`. If it came from intervals.icu, you may need to correct it there as well.
+To withdraw a file you imported, delete its entry from `wellness-archive/`, remove its copy from the inbox, and run `fitdocs regen`. If a connector delivered it, you may need to correct it at the service as well.
 
 The full details are in the repository: the [wellness guide](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/wellness.md) (every supported field, the day rules, and the CSV format) and the [recovery guide](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/recovery.md) (the method and its sources).
