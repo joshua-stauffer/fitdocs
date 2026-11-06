@@ -166,7 +166,7 @@ A pull fetches at most 200 activities. When more remain, the report has one defe
 
 `fitdocs pull garmin --since YYYY-MM-DD` lists only the activities from the start of that local day, with the same pacing and limit. On an instance that has pulled before, a `--since` backfill continues only when you run it again with the same `--since`. A plain pull won’t finish it.
 
-Wellness has no such limit. With `wellness = true`, the first pull covers the whole range in one go: from the start of your history, or from `--since`, to today. A year of wellness takes about 27 requests, so twelve years is about 330 requests, or 6 to 8 minutes. If a wellness request fails, the next pull starts that range again.
+Wellness has no such limit. With `wellness = true`, the first pull covers the whole range: from the start of your history, or from `--since`, to today. A year of wellness takes about 27 requests, so twelve years is about 330 requests, or 6 to 8 minutes. If a wellness request fails, the next pull starts that range again.
 
 ### Wellness from Garmin
 
