@@ -48,4 +48,4 @@ Both tests read `CHANGELOG.md`. Under the maintainer's 2026-11-03 rule that only
 Done when a rehearsed cut, as above, leaves the full suite green. Do this on a branch before the release commit, so the cut commit needs no test edits.
 
 ## Update 2026-11-06: fixed on chore/pre-cut-fixes
-Both tests are deleted (commit "test: delete two changelog tests that fail on a correct release cut"). A rehearsed cut on that branch printed `32667 passed, 47 skipped` with no failures, on Python 3.11. Left open for the maintainer to close.
+Both tests are deleted (commit "test: delete two changelog tests that fail on a correct release cut"). A rehearsed cut on that branch printed `32668 passed, 47 skipped` with no failures, on Python 3.11. Left open for the maintainer to close.
