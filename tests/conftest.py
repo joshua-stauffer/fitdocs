@@ -9,10 +9,36 @@ and friends) return the dicts later extractor unit-tests consume directly.
 
 from __future__ import annotations
 
+from collections.abc import Generator
+
 import pytest
 
 from fitdocs import plugins
 from tests.fixtures import builder
+from tests.support import network
+
+network.install()
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_teardown() -> Generator[None, object, object]:
+    """Fail a test that tried to leave this machine, once its own teardown has run.
+
+    The attempt was already refused. This is what makes it visible when the code
+    under test handled the refusal and the test would otherwise pass.
+    """
+    try:
+        return (yield)
+    finally:
+        attempts = network.take_attempts()
+        if attempts:
+            pytest.fail(
+                f"this test tried to reach {sorted(set(attempts))}. Tests stay on "
+                "this machine: inject a fake instead (map tiles: "
+                'monkeypatch.setattr("fitdocs.tiles._default_fetch", '
+                "tile_factory.fetch_stub()), from tests/support/tiles.py).",
+                pytrace=False,
+            )
 
 
 @pytest.fixture(autouse=True)

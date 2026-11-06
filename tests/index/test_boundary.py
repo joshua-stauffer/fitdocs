@@ -19,6 +19,7 @@ from typer.testing import CliRunner
 from fitdocs.cli import app
 from fitdocs.index.store import open_index, read_bookkeeping
 from tests.fixtures import builder
+from tests.support import tiles as tile_factory
 
 _REPO_ROOT = Path(__file__).parents[2]
 _SOURCE_ROOT = _REPO_ROOT / "src" / "fitdocs"
@@ -131,7 +132,10 @@ def _untouched_command_observation(
         "XDG_CACHE_HOME": str(sandbox / "xdg-cache"),
         "PYTHONDONTWRITEBYTECODE": "1",
     }
-    with patch.dict(os.environ, environment, clear=True):
+    with (
+        patch.dict(os.environ, environment, clear=True),
+        patch("fitdocs.tiles._default_fetch", tile_factory.fetch_stub()),
+    ):
         synced = CliRunner().invoke(app, ["sync", str(source), "--out", str(root)])
         assert synced.exit_code == 0, synced.output
         built = CliRunner().invoke(app, ["index", "--out", str(root)])

@@ -133,6 +133,8 @@ files = [
     "tests/test_cli.py",
     "tests/support/tiles.py",
     "tests/support/test_tiles.py",
+    "tests/support/network.py",
+    "tests/support/test_network.py",
     "tests/test_plugin_regression.py",
     "tests/metrics/test_sources.py",
     "tests/metrics/test_constant_guard.py",

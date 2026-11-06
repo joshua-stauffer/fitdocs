@@ -726,6 +726,7 @@ def test_cli_sync_printed_summary_matches_load_report_buckets(
     print the table is captured independently of the table-printing code --
     a swapped or miscounted row in ``_report_load`` reddens this test without
     needing a second, hand-maintained expectation of the counts."""
+    monkeypatch.setattr("fitdocs.tiles._default_fetch", tile_factory.fetch_stub())
     source = tmp_path / "src"
     data_root = tmp_path / "data"
     source.mkdir()

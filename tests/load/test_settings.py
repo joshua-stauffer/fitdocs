@@ -607,6 +607,7 @@ class _FieldFreeCalculator:
 def test_invalid_sufficiency_value_in_data_root_aborts_load_pass_before_writing(
     isolated_registry: None,
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An invalid ``[load.sufficiency]`` value in a real data root's
     ``fitdocs.toml`` makes ``fitdocs load`` exit at the configuration exit
@@ -626,6 +627,7 @@ def test_invalid_sufficiency_value_in_data_root_aborts_load_pass_before_writing(
     prompting needed) and asserts bytes actually change. Half B then asserts
     the *invalid*-config run through that same path changes nothing.
     """
+    monkeypatch.setattr("fitdocs.tiles._default_fetch", tile_factory.fetch_stub())
     runner = CliRunner()
     calc = _FieldFreeCalculator()
     try:
@@ -972,6 +974,7 @@ def test_empty_priority_list_is_rejected() -> None:
 def test_invalid_priority_value_in_data_root_aborts_load_pass_before_writing(
     isolated_registry: None,
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An invalid ``[load.priority]`` value in a real data root's
     ``fitdocs.toml`` makes ``fitdocs load`` exit at the configuration exit
@@ -982,6 +985,7 @@ def test_invalid_priority_value_in_data_root_aborts_load_pass_before_writing(
     identical CLI path) is the control proving a write can happen at all, so
     Half B's "nothing changed" is not vacuous.
     """
+    monkeypatch.setattr("fitdocs.tiles._default_fetch", tile_factory.fetch_stub())
     runner = CliRunner()
     calc = _FieldFreeCalculator()
     try:
