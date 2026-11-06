@@ -11,11 +11,12 @@ from __future__ import annotations
 
 import itertools
 from collections.abc import Callable, Generator
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
-from fitdocs import plugins
+from fitdocs import inbox, plugins
 from tests.fixtures import builder
 from tests.support import network
 
@@ -63,6 +64,19 @@ def per_test_directory(
         return directory
 
     return make
+
+
+@pytest.fixture
+def no_settle_wait(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Drop the inbox's default 2 s wait, for a test that drains with no settings.
+
+    A test that writes a settings file says ``settle_seconds = 0`` there instead.
+    """
+    monkeypatch.setattr(
+        inbox,
+        "DEFAULT_INBOX_SETTINGS",
+        replace(inbox.DEFAULT_INBOX_SETTINGS, settle_seconds=0.0),
+    )
 
 
 @pytest.fixture(autouse=True)

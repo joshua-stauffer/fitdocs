@@ -541,11 +541,12 @@ def test_test_step_env_names_the_file_the_write_step_writes() -> None:
 def test_the_test_step_env_really_arms_the_forbidden_strings_guard(
     tmp_path: Path,
 ) -> None:
-    """Runs the real write step and then the real test step's `env:` against
-    the guard's own test module. Without the variable that module skips its
-    scans (the defect: CI ran pytest with it unset); with it, it must run
-    them and skip nothing. The needle is built at run time so no tracked file
-    contains it."""
+    """Runs the real write step and then the real test step's `env:` against one
+    test in the guard's own module that calls `require()`. Without the variable
+    that test skips (the defect: CI ran pytest with it unset); with it, the test
+    must run. Only that test is selected, so this proves the env arms the guard,
+    not that every scan in the module runs armed. The needle is built at run time
+    so no tracked file contains it."""
     needle = "ci-armed-guard-needle-" + secrets.token_hex(8)
     steps = dict(_test_step_jobs())["gates"]
     write_body = _run_body(steps, "Write the match data outside the checkout")
@@ -566,6 +567,10 @@ def test_the_test_step_env_really_arms_the_forbidden_strings_guard(
         "-p",
         "no:cacheprovider",
         "tests/test_forbidden_strings.py",
+        # One cheap test that calls `require()` is enough to tell armed from
+        # unarmed, and running the whole module twice took 12 s.
+        "-k",
+        "test_scan_members_flags_content_and_name_but_not_a_clean_member",
     ]
     base_env = os.environ.copy()
     base_env.pop("FITDOCS_FORBIDDEN_STRINGS", None)

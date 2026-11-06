@@ -81,6 +81,7 @@ from tests.fixtures import builder
 from tests.wellness.builders_intervals import intervals_delivery_bytes, intervals_record
 
 runner = CliRunner()
+pytestmark = pytest.mark.usefixtures("no_settle_wait")
 
 _STUB_CALCULATOR_ID = "stub-analytics-index-parity"
 _RELAY_TOKEN = "fdr1_" + "e" * 16 + "_" + "e" * 52

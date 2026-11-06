@@ -642,7 +642,7 @@ def test_drain_inbox_path_line_is_not_wrapped_across_lines(tmp_path: Path) -> No
     data_root.mkdir()
     long_name = "x" * 100 + "-incoming"
     (data_root / "fitdocs.toml").write_text(
-        f'[inbox]\npath = "{long_name}"\n', encoding="utf-8"
+        f'[inbox]\npath = "{long_name}"\nsettle_seconds = 0\n', encoding="utf-8"
     )
     inbox = data_root / long_name
     assert len(str(inbox)) > 80  # the wrap point is inside the path

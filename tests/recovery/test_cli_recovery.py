@@ -413,6 +413,7 @@ def test_caller_guard_allows_imports_and_report_annotations() -> None:
     assert _callers(source) == ["recovery_command"]
 
 
+@pytest.mark.usefixtures("no_settle_wait")
 @pytest.mark.parametrize("command", ["sync", "regen", "load", "history"])
 def test_other_commands_do_not_write_recovery(tmp_path: Path, command: str) -> None:
     from hashlib import sha256

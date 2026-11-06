@@ -29,6 +29,7 @@ longer on a cold one that must warm online once.
 from __future__ import annotations
 
 import copy
+import json
 import os
 import re
 import shutil
@@ -728,6 +729,28 @@ def _install_wheel_offline(
     )
 
 
+_HELP_SWEEP = """
+import json
+import sys
+
+import fitdocs
+from typer.testing import CliRunner
+
+from fitdocs.cli import app
+
+runner = CliRunner()
+passed = []
+failed = {}
+for command in sys.argv[1:]:
+    result = runner.invoke(app, [command, "--help"])
+    if result.exit_code == 0:
+        passed.append(command)
+    else:
+        failed[command] = f"{result.exception!r} {result.output}"
+print(json.dumps({"package": fitdocs.__file__, "passed": passed, "failed": failed}))
+"""
+
+
 @pytest.fixture(scope="module")
 def _installed_tool_from_wheel(
     tmp_path_factory: pytest.TempPathFactory,
@@ -811,22 +834,30 @@ def test_installed_tool_version_matches_manifest_and_help_lists_every_command(
 def test_installed_tool_runs_every_released_commands_help_successfully(
     _installed_tool_from_wheel: tuple[Path, dict[str, str], Path, Path],
 ) -> None:
-    """Task 7.1's named observable: "the installed console script runs
-    every released command's help successfully"."""
-    exe, env, _tool_dir, cwd_dir = _installed_tool_from_wheel
+    """Task 7.1 named this observable as "the installed console script runs every
+    released command's help successfully". Each command's help now runs through
+    ``fitdocs.cli:app``, the console script's entry point, in one interpreter from
+    the installed environment, because a process per command took 10 s. The console
+    script itself runs only for ``--version`` and top-level ``--help`` (the test
+    above), so this gives up per-process isolation for each command's help."""
+    _exe, env, tool_dir, cwd_dir = _installed_tool_from_wheel
     assert _EXPECTED_COMMANDS, (
         "no released commands were collected -- the typer introspection is "
         "looking at the wrong app"
     )
 
-    failures: list[tuple[str, int, str]] = []
-    for command in _EXPECTED_COMMANDS:
-        result = _run([str(exe), command, "--help"], env, cwd=cwd_dir)
-        if result.returncode != 0:
-            failures.append((command, result.returncode, result.stderr))
-    assert not failures, (
-        f"these installed command(s)' --help did not exit 0: {failures}"
+    result = _run(
+        [str(tool_dir / "fitdocs" / "bin" / "python"), "-c", _HELP_SWEEP]
+        + list(_EXPECTED_COMMANDS),
+        env,
+        cwd=cwd_dir,
     )
+
+    assert result.returncode == 0, result.stderr
+    swept = json.loads(result.stdout)
+    assert Path(swept["package"]).is_relative_to(tool_dir), swept["package"]
+    assert swept["failed"] == {}
+    assert swept["passed"] == list(_EXPECTED_COMMANDS)
 
 
 def test_installed_distribution_metadata_declares_every_required_field(

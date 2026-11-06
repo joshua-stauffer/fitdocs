@@ -79,6 +79,7 @@ def stage_root(root: Path) -> tuple[Path, Path, int]:
     (root / "fitdocs.toml").write_text(
         '[load]\ndefault_calculator = "threshold"\n'
         '[wellness]\nprecedence = ["intervals-icu", "garmin-export"]\n'
+        "[inbox]\nsettle_seconds = 0\n"
     )
     for index, (day, peak, sport) in enumerate(
         [

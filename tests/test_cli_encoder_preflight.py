@@ -32,6 +32,7 @@ from tests.support import tiles as tile_factory
 from tests.wellness.builders_intervals import intervals_list_bytes, intervals_record
 
 runner = CliRunner()
+pytestmark = pytest.mark.usefixtures("no_settle_wait")
 
 Snapshot = dict[str, tuple[str, bytes | None, int | None]]
 

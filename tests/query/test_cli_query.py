@@ -764,10 +764,12 @@ def test_real_busy_holder_uses_fixture_pid_not_controlled_pid(
 ) -> None:
     root, index_dir = copy_indexed_root
     monkeypatch.setenv("FITDOCS_INDEX_DIR", str(index_dir.parent))
+    monkeypatch.setattr("fitdocs.query.sandbox.LOCK_RETRY_WINDOW_S", 0.2)
     with hold_index(index_dir / "index.duckdb", read_only=False) as holder_pid:
         result = _invoke(["SELECT 1", "--out", str(root)])
     assert result.exit_code == 1
     assert "waiting for another process" in result.stderr
+    assert "still locked after" in result.stderr
     assert str(holder_pid) in result.stderr
     assert holder_pid != 4317
     assert tuple(Path(os.environ["HOME"]).iterdir()) == ()

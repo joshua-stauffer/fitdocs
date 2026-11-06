@@ -89,6 +89,7 @@ from tests.connectors.conftest import (
 from tests.fixtures import builder
 
 runner = CliRunner()
+pytestmark = pytest.mark.usefixtures("no_settle_wait")
 
 
 @dataclass(frozen=True)
