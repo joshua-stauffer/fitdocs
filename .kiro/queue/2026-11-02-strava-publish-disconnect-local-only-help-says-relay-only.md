@@ -30,3 +30,6 @@ Wrong guidance about whether a token stays valid after a local-only disconnect.
 
 ## How to pick it up
 Update the help, check `_LOCAL_ONLY_NOTES` wording for the browser style, and update the tests that assert the help string.
+
+## Update 2026-11-06: fixed on chore/pre-cut-fixes
+The option help and the command docstring now cover browser-consent instances, and agree with `_LOCAL_ONLY_NOTES`. `test_the_local_only_help_covers_every_style_that_revokes` compares the styles the help names with `_REVOKING_STYLES`. It pins that both are named, not the sentences about what stays valid, which were checked by reading. Left open for the maintainer to close.

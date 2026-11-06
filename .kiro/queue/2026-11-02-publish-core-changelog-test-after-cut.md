@@ -46,3 +46,6 @@ FAILED tests/test_ownership_contract.py::test_changelog_names_contract_version_n
 Both tests read `CHANGELOG.md`. Under the maintainer's 2026-11-03 rule that only code is under test, a doc-binding test a change would turn red is deleted by default, not updated, so delete them. Repointing them through `read_unreleased_since(..., V0_2_0)`, as `tests/connectors/test_intervals_changelog.py` does, is the alternative if the maintainer wants them kept.
 
 Done when a rehearsed cut, as above, leaves the full suite green. Do this on a branch before the release commit, so the cut commit needs no test edits.
+
+## Update 2026-11-06: fixed on chore/pre-cut-fixes
+Both tests are deleted (commit "test: delete two changelog tests that fail on a correct release cut"). A rehearsed cut on that branch printed `32667 passed, 47 skipped` with no failures, on Python 3.11. Left open for the maintainer to close.

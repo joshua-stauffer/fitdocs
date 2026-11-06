@@ -60,3 +60,6 @@ The marker fitdocs tells the reader to add has `:end:` replaced by an emoji, bec
 
 ## Open questions
 Whether to extend the same treatment to the twenty default consoles. They were not audited here; some may print athlete-derived names.
+
+## Update 2026-11-06: fixed on chore/pre-cut-fixes
+`src/fitdocs/cli.py` now defines a `Console` subclass that defaults to `emoji=False`, so every console built there is covered, default ones included. That answers the open question: the sighting above came from a default `Console()` in `_print_detail`, which this item's list did not include, and no string under `src/` means an emoji code. Not changed: `src/fitdocs/load/prompts.py:292` builds its own console (see `2026-09-19-prompts-print-swallows-y-n-markup`), and default consoles still parse markup, as the class docstring says. A scan of `cli.py` found six f-string prints on such consoles, all fixed labels or fixed text around a process id, so no bracket-loss case was shown; table cells were not audited. Left open for the maintainer to close.

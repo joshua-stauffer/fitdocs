@@ -31,3 +31,6 @@ An athlete blocked at intervals.icu is pointed only at the manual export, agains
 
 ## How to pick it up
 Amend wellness-pull Req 12.2. Proposed text: "Garmin's own data export or the garmin connector is the route for Garmin wellness (see the wellness guide)." Update the four code pins, which test code and so are updated, not deleted.
+
+## Update 2026-11-06: fixed on chore/pre-cut-fixes
+The message and its four pins use the proposed sentence, recorded as wellness-pull Amendment 2. Correction to this item: the sentence is bound by Requirement 9 criterion 2 (`requirements.md:202`), not 12.2. Requirement 12 criterion 2 covers the documentation, which already names both routes, and was not changed. Restoring the old sentence reds six test cases. Left open for the maintainer to close.

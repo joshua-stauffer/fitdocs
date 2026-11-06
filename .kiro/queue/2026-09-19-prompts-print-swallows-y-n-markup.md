@@ -10,7 +10,7 @@ area: athlete-benchmarks, src/fitdocs/load/prompts.py
 created: 2026-09-19
 surfaced_by: /kiro-impl distribution (6.2 soft-wrap fix reviewer)
 pinned_at: b29bde8
-resume_command: "do: add markup=False (and highlight=False) to every self._console.print in src/fitdocs/load/prompts.py and pin one default=False confirm's rendered options"
+resume_command: "do: add markup=False, highlight=False and emoji=False to every self._console.print in src/fitdocs/load/prompts.py and pin one default=False confirm's rendered options"
 context:
   - src/fitdocs/load/prompts.py
   - tests/load/
@@ -28,3 +28,6 @@ Verified by the 6.2 soft-wrap fix reviewer with a one-line Console probe (2026-0
 
 ## How to pick it up
 Nine one-word edits plus one test with a default=False confirm. Done when the rendered prompt contains `[y/N]`.
+
+## Update 2026-11-06: prompts also substitute emoji
+`src/fitdocs/load/prompts.py:292` builds `console or Console()` from rich directly, so it does not get the `emoji=False` default that `src/fitdocs/cli.py` now sets. Typing `:a:` at `RichInteractionSession().ask_int("n")` printed `'🅰' is not a whole number`. Fix both defects in the same edit, and pin that the typed text comes back as typed.
