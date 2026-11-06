@@ -1,16 +1,16 @@
 ---
 id: 2026-11-06-suite-two-minute-budget
-title: The root suite takes 18 min serial and 25-30 in CI; one temp-dir scan is 65% of it, and the suite already passes in parallel
+title: The CI test step takes 3m20s-5m16s against a 2-minute target; the maintainer has to choose the CI target
 status: open
-importance: high
-importance_why: Every push waits about 28 min for ci.yml, and a 20-line fixture change plus pytest-xdist measured 17m43s down to 1m21s locally with every test still green.
+importance: medium
+importance_why: The local target is met and CI fell from about 28 min, but the 7-minute CI budget is a placeholder until the maintainer sets the real target.
 effort: M
 kind: chore
 area: tests/conftest.py, tests/connectors/conftest.py, pyproject.toml, .github/workflows/ci.yml, tests/test_ci_workflow.py, conftest.py, tests/test_bytecode_hygiene.py
 created: 2026-11-06
 surfaced_by: maintainer-requested test suite audit (target: 2 minutes for the complete suite)
 pinned_at: a6038449
-resume_command: "do: Reach the 2-minute suite target in .kiro/queue/2026-11-06-suite-two-minute-budget.md: stop per-test mktemp in the two autouse fixtures, add pytest-xdist to the dev group and CI, then fix the slow tests the item lists, verifying wall time in a real CI run"
+resume_command: "do: Ask the maintainer for the CI target in .kiro/queue/2026-11-06-suite-two-minute-budget.md (see its Update section), then set timeout-minutes in .github/workflows/ci.yml to match, adding shards only if they choose a target the current 4-vCPU run cannot meet"
 context:
   - tests/conftest.py
   - tests/connectors/conftest.py
@@ -69,7 +69,7 @@ Tried and rejected, so nobody repeats them:
   maintenance decision (`2026-11-06-test-suite-pruning-decisions`), not a speed
   one.
 
-CI has not been measured with any of this. The same suite takes 1,528-1,796 s
+This paragraph predates the work; the measured result is in the Update section below. The same suite takes 1,528-1,796 s
 serial in CI against 1,063 s locally (1.4-1.7x, and one earlier run spread from
 1,094 to 1,685 s across jobs), and a 4-vCPU runner may be hyperthreaded. That
 puts `-n 4` with the fixture change at roughly 3-5 min in CI, and with the slow
@@ -111,6 +111,20 @@ tests fixed at roughly 2-3 min. These are estimates until a real run.
 
 Done means a real CI run of the test step within the budget the maintainer sets,
 and the suite still green on all three interpreters.
+
+## Update 2026-11-06: what landed
+
+The maintainer approved steps 1-4 and 6 of "How to pick it up" and ruled out step 5 (local bytecode) for now. Landed: the fixtures, `pytest-xdist` with `uv run pytest -n auto` in CI, the release gates and the documented validation, the settle, lock wait, nested pytest, `--help` and tile fixes, `--durations=25` in CI's log, and `timeout-minutes: 7` on the test step.
+
+Measured:
+
+- Local, full suite: 1m17s with `-n auto`, 1m49s with `-n 4`.
+- CI, with 4 workers on all three interpreters: 3m20s-5m16s over nine job runs. Identical commits varied by more than 50%, so one run says little. About 45-55 s of each is startup and collection.
+
+Not done, on purpose:
+
+- **The real-SIGINT tests keep 14 trials.** Cutting them to 5 was tried and reverted. With the regression `analytics-query/design.md` names, on the locked duckdb 1.5.6, a reviewer measured 3 misses in 13 runs at 5 trials (10 hangs in 45 trials, about 22% per trial, so about 29% missed at 5 trials and about 3% at 14). The saving was an estimated 4-5 s of wall time, on the check for a critical Ctrl-C hang. These tests do not saturate the runner: `src/fitdocs/query/sandbox.py:23` caps DuckDB at 2 threads.
+- **No shards.** They would be the way to reach 2 minutes in CI: 2 shards per interpreter is 6 jobs, and splitting by path can silently drop a new directory unless something checks the partition. Pruning (`2026-11-06-test-suite-pruning-decisions`) saves little time, as noted under Evidence, so it would not close the gap.
 
 ## Open questions
 

@@ -71,6 +71,6 @@ opens an external socket fails.
 ## Resolution
 Done 2026-11-06 on chore/tile-offline, at the maintainer's request. The four tests inject `tile_factory.fetch_stub()`. `tests/support/network.py` is a suite-wide audit hook that refuses and records any connection off the machine, and `tests/conftest.py` fails the test at teardown when one was recorded, because `TileStore` swallows the refusal and a plain refusal would pass.
 
-Verified: with the guard on and the tests unfixed, exactly these four errored at teardown naming `tile.openstreetmap.org`, and 198 others passed. With the fix, a full run (32,663 passed) logged only the guard's own refused test probes. That logger also ran in child Python processes that inherit `PYTHONPATH`, and they showed no traffic before or after the fix. All 17 named mutations of the guard went red.
+Verified: with the guard on and the tests unfixed, exactly these four errored at teardown naming `tile.openstreetmap.org`, and every other test in that run passed. With the fix, a full run (32,663 passed) logged only the guard's own refused test probes. That logger also ran in child Python processes that inherit `PYTHONPATH`, and they showed no traffic before or after the fix. All 17 named mutations of the guard went red.
 
 Still out of scope: the guard covers the pytest process only. `2026-09-19-offline-test-infrastructure-warm-cache-dependence` tracks subprocess tests.
