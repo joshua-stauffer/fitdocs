@@ -32,10 +32,5 @@ Athletes would be sent to a missing policy page during consent.
 2. If it is not served, fix the deploy or reword docs/connectors.md at that line.
 3. Close this item with the date checked.
 
-## Update 2026-11-06: the docs imply which relay offers the Strava target
-`/privacy` exists only while a relay has the Strava target configured: `strava_routes` returns no routes otherwise (`relay/src/fitdocs_relay/strava/routes.py:121-126`, the path at `:95`). So these lines of `docs/connectors.md` read as saying the default relay offers Strava:
-- `:860-861`, the sentence this item names;
-- `:705`, "`url` defaults to the maintainer's relay";
-- `:839`, a Strava example whose relay instance has no `url`, so it uses the default.
-
-Draft PR 5 keeps this off the website: its Strava examples set `url`, and it names no relay's privacy address. When this item is checked, decide what `docs/connectors.md` says and bring the website into line with it.
+## Update 2026-11-06: the default relay offers the Strava target
+The maintainer confirmed on 2026-11-06 that the default relay serves Strava, so the sentences that say or imply it in `docs/connectors.md` (`:705`, `:839`, `:860-861`) stand, and draft PR 5 names the default relay and this address too. `/privacy` exists only while a relay has the Strava target configured (`relay/src/fitdocs_relay/strava/routes.py:121-126`, the path at `:95`). What remains is step 1: the maintainer opens the URL, then closes this item with the date.

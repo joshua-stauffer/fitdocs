@@ -1,7 +1,7 @@
 ---
 id: 2026-11-02-strava-publish-disconnect-local-only-help-says-relay-only
 title: "`fitdocs disconnect --local-only` help says relay instances only, but it also works for a browser-consent (Strava) instance"
-status: open
+status: done
 importance: medium
 importance_why: "Help text is what an athlete reads before choosing a flag that skips revocation at Strava; it understates where the flag applies."
 effort: S
@@ -33,3 +33,6 @@ Update the help, check `_LOCAL_ONLY_NOTES` wording for the browser style, and up
 
 ## Update 2026-11-06: fixed on chore/pre-cut-fixes
 The option help and the command docstring now cover browser-consent instances, and agree with `_LOCAL_ONLY_NOTES`. `test_the_local_only_help_covers_every_style_that_revokes` compares the styles the help names with `_REVOKING_STYLES`. It pins that both are named, not the sentences about what stays valid, which were checked by reading. Left open for the maintainer to close.
+
+## Resolution
+2026-11-06. The option help and command docstring cover browser-consent instances, on `main` at 4f5a4812. Restoring the old help reds `test_the_local_only_help_covers_every_style_that_revokes`. The maintainer approved closing.

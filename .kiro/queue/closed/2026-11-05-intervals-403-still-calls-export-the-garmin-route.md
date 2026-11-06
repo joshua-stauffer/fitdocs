@@ -1,7 +1,7 @@
 ---
 id: 2026-11-05-intervals-403-still-calls-export-the-garmin-route
 title: The intervals 403 message still calls the export the route for Garmin wellness
-status: open
+status: done
 importance: medium
 importance_why: A printed next step contradicts the corrected docs now that a Garmin connector ships.
 effort: S
@@ -34,3 +34,6 @@ Amend wellness-pull Req 12.2. Proposed text: "Garmin's own data export or the ga
 
 ## Update 2026-11-06: fixed on chore/pre-cut-fixes
 The message and its four pins use the proposed sentence, recorded as wellness-pull Amendment 2. Correction to this item: the sentence is bound by Requirement 9 criterion 2 (`requirements.md:202`), not 12.2. Requirement 12 criterion 2 covers the documentation, which already names both routes, and was not changed. Restoring the old sentence reds six test cases. Left open for the maintainer to close.
+
+## Resolution
+2026-11-06. The message and its four pins name the connector, on `main` at ed8fe073, recorded as wellness-pull Amendment 2 against Requirement 9 criterion 2. Restoring the old sentence reds six test cases. The maintainer approved closing.

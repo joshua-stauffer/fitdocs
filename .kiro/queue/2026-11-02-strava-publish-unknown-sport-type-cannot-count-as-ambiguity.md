@@ -2,7 +2,7 @@
 id: 2026-11-02-strava-publish-unknown-sport-type-cannot-count-as-ambiguity
 title: "A listed Strava activity with an unknown or missing sport type cannot make a resolution ambiguous"
 status: open
-importance: medium
+importance: high
 importance_why: "Can pick the wrong activity (update the wrong page) or upload a duplicate; both change what an athlete sees on Strava."
 effort: M
 kind: bug
@@ -34,3 +34,6 @@ Wrong activity updated or a duplicate activity uploaded for the athlete.
 
 ## Open questions
 Is refusing (MANY) on an unknown-typed near-start activity acceptable when it blocks legitimate publishes after Strava adds a new sport type?
+
+## Update 2026-11-06: raised to high
+The default relay now serves Strava with a real athlete, so this code runs against real activities, and a wrong update or duplicate upload lands on an athlete's public account. The behavioural consequences are still reported by reviewers, not reproduced: step 1's failing tests are the first thing to do.

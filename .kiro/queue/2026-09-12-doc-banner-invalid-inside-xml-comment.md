@@ -51,3 +51,6 @@ user-owned region of any kind"). Whatever marker the fix introduces, the
 region-less document type needs region-less wording, and
 `tests/history/test_page.py` should pin that the history page's banner
 names no region.
+
+## Update 2026-11-06: most of this is resolved by the banner reword
+`DOC_BANNER` now holds no `--` and names no region (wiki-contract Amendment 16), and `tests/test_contract.py` pins that it parses inside an XML comment. So the defect in this item's title is gone, along with the region-less wording in "Also". What remains is smaller: `history/engine.py`, `recovery/engine.py` and `dashboards/storage.py` each spell `f"{GENERATED_PREFIX} -->"` themselves, and `docs/ownership-contract.md` does not say what marks a chart. Close it if a shared constant isn't wanted; importance should drop either way.

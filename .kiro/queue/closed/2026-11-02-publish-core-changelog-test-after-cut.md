@@ -1,7 +1,7 @@
 ---
 id: 2026-11-02-publish-core-changelog-test-after-cut
 title: Two changelog tests fail on the next release cut, against the runbook's promise that no test needs editing
-status: open
+status: done
 importance: medium
 importance_why: A correct 0.3.0 cut commit goes red in CI and in the tag's gates job, and the fix is a few lines; nothing wrong reaches a user.
 effort: XS
@@ -49,3 +49,6 @@ Done when a rehearsed cut, as above, leaves the full suite green. Do this on a b
 
 ## Update 2026-11-06: fixed on chore/pre-cut-fixes
 Both tests are deleted (commit "test: delete two changelog tests that fail on a correct release cut"). A rehearsed cut on that branch printed `32668 passed, 47 skipped` with no failures, on Python 3.11. Left open for the maintainer to close.
+
+## Resolution
+2026-11-06. Both tests are deleted, on `main` at af8198a6. A rehearsed cut (the seven-file edit in a scratch worktree) printed `32668 passed, 47 skipped` with no failures, on Python 3.11. The maintainer approved closing.
