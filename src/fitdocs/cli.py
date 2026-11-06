@@ -217,11 +217,11 @@ import time
 from datetime import UTC, date, datetime, tzinfo
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Final, NoReturn
+from typing import TYPE_CHECKING, Any, Final, NoReturn
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import typer
-from rich.console import Console
+from rich.console import Console as RichConsole
 from rich.table import Table
 
 from fitdocs import AthleteInputs, basemap
@@ -357,6 +357,20 @@ if TYPE_CHECKING:
     from fitdocs.index.handoff import HandoffCollector
     from fitdocs.index.refresh import IndexReport, ProgressCallback
     from fitdocs.morning.engine import MorningReport
+
+
+class Console(RichConsole):
+    """A rich console that prints text as written.
+
+    Rich replaces ``:name:`` with an emoji by default, even with markup off, so
+    the ``:end:`` in a printed ``<!-- fitdocs:end:load -->`` marker became a
+    glyph. Nothing fitdocs prints is meant as an emoji code.
+    """
+
+    def __init__(self, **kwargs: Any) -> None:
+        kwargs.setdefault("emoji", False)
+        super().__init__(**kwargs)
+
 
 _EXIT_SUCCESS: int = 0
 """Everything written and/or skipped; no failures (an all-skipped run, too)."""

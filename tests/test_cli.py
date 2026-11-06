@@ -22,12 +22,15 @@ from __future__ import annotations
 
 import ast
 import inspect
+import io
 from collections.abc import Callable, Sequence
 from datetime import UTC
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 import pytest
+from rich.console import Console as RichConsole
+from rich.table import Table
 from typer.testing import CliRunner
 
 from fitdocs import Activity, DerivedMetrics, Modality, parse_fit
@@ -39,7 +42,7 @@ from fitdocs.load import engine as load_engine_module
 from fitdocs.load import registry as load_registry
 from fitdocs.load import settings as load_settings_module
 from fitdocs.load.docedit import RegionState, classify_load_region
-from fitdocs.load.engine import apply_load
+from fitdocs.load.engine import DocLoadEntry, LoadReport, apply_load
 from fitdocs.load.types import (
     Computed,
     InteractionSession,
@@ -1641,3 +1644,52 @@ def test_apply_load_call_sites_pass_no_default_calculator_argument() -> None:
             assert "session" in call_keywords, (
                 f"_run_load_pass call in {name} is missing the required session keyword"
             )
+
+
+_EMOJI_CODES = "<!-- fitdocs:end:load --> :a:"
+
+
+def _printed_through(make_console: Callable[..., RichConsole], **kwargs: bool) -> str:
+    stream = io.StringIO()
+    console = make_console(file=stream, width=200, color_system=None, **kwargs)
+    console.print(_EMOJI_CODES)
+    return stream.getvalue()
+
+
+def test_plain_rich_replaces_the_codes_the_console_tests_print() -> None:
+    """The control: without it, the tests below could pass on text rich ignores."""
+    assert _EMOJI_CODES not in _printed_through(RichConsole)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [{}, {"markup": False, "highlight": False, "soft_wrap": True}],
+    ids=["default", "markup-off"],
+)
+def test_cli_consoles_print_emoji_codes_as_written(kwargs: dict[str, bool]) -> None:
+    assert _EMOJI_CODES in _printed_through(cli_module.Console, **kwargs)
+
+
+def test_a_table_cell_prints_emoji_codes_as_written() -> None:
+    table = Table()
+    table.add_column("Reason")
+    table.add_row(":a:")
+    stream = io.StringIO()
+    cli_module.Console(file=stream, width=200, color_system=None).print(table)
+    assert ":a:" in stream.getvalue()
+
+
+def test_the_load_report_prints_a_region_marker_as_written(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    marker = "<!-- fitdocs:end:load -->"
+    cli_module._report_load(
+        LoadReport(
+            computed=(),
+            restored=(),
+            unsupported=(),
+            skipped=(),
+            failures=(DocLoadEntry(doc="workouts/a.md", detail=f"expected {marker}"),),
+        )
+    )
+    assert marker in capsys.readouterr().out
