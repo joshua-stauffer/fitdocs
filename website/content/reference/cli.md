@@ -76,7 +76,7 @@ For a `relay` or `strava` instance, it first makes one request asking the relay 
 
 ### `fitdocs pull [NAMES...]`
 
-Fetches new activities, and wellness where it's turned on, from every configured connector instance that pulls, or just the ones you name, and delivers them into the inbox. Without names it skips `relay` and `strava` instances, which have nothing to pull. Naming one reports that and exits `1`, with no request.
+Fetches new activities, and wellness where it's turned on, from every configured connector instance that pulls, or just the ones you name, and delivers them into the inbox. Without names it skips `relay` and `strava` instances, which have nothing to pull. Naming one reports an error and exits `1`, with no request.
 
 | Option | Meaning |
 |---|---|

@@ -178,12 +178,13 @@ connector = "folder"
 path = "/Users/you/Documents/WatchExports"
 
 [connectors.relay]
+url = "https://relay.example.com"
 
 [connectors.strava]
 relay = "relay"
 ```
 
-A `garmin` instance takes no keys of its own, and its pacing and per-pull limit are fixed. Fitdocs refuses a setting here with the same name as a connector's credential, like `api_key` or `token`. See [Connectors](../guides/connectors.md).
+A `garmin` instance takes no keys of its own, and its pacing and per-pull limit are fixed. Fitdocs refuses a setting here with the same name as that connector's own credential: `api_key` on `intervals` and `garmin`, `token` on `relay` and `strava`. See [Connectors](../guides/connectors.md).
 
 ### `[publish]`
 
