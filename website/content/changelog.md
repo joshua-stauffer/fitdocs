@@ -22,7 +22,7 @@ fitdocs regen
 fitdocs check
 ```
 
-The regen adds the two new regions to every page, rewrites chart files in a smaller form, refreshes each folder's `AGENTS.md`, and rebuilds the wellness series once. It keeps every region and key you wrote. Until you run it, `fitdocs publish` reports a page written by an older fitdocs as out of date.
+The regen adds the two new regions to every page, rewrites chart files in a smaller form, refreshes each folder's `AGENTS.md`, and rebuilds the wellness series. It keeps every region and key you wrote. Until you run it, `fitdocs publish` reports a page written by an older fitdocs as out of date.
 
 If you installed the agent skills by copying, copy them again.
 

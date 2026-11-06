@@ -59,7 +59,7 @@ Name pages to look at only those, by file name or path, and add `--to club-feed`
 
 ## Write your own post
 
-Every workout page has a `post` region that’s yours. A fresh one holds a hidden comment that renders as nothing. To give a page its own post, write the title on one line, then a blank line, then the description:
+A workout page has a `post` region that’s yours. A fresh one holds a hidden comment that renders as nothing. To give a page its own post, write the title on one line, then a blank line, then the description:
 
 ```markdown
 <!-- fitdocs:begin:post -->
