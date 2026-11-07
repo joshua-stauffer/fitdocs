@@ -1,5 +1,12 @@
 # Brief: post-templates
 
+> **Changed at requirements (2026-11-07).** `requirements.md` governs where the two differ.
+> The template is `post-template.toml`, not the markdown form shown below, so the rules about
+> a YAML directive and `-->` in SQL no longer apply. The command is `fitdocs post-template`,
+> with `check` and `refill`; filling needs no command, and the `fill` form below is folded
+> into `refill`. A waiting refusal names how to find the cause, because `fitdocs publish`
+> stays offline and cannot know it.
+
 ## Problem
 
 An athlete who publishes their workouts wants each post to say things the page
