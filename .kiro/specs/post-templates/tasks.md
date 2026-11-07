@@ -162,7 +162,7 @@
   - _Requirements: 3.3, 3.10, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 5.6, 5.7, 5.8, 5.9, 6.5, 10.4, 10.9, 10.11_
   - _Depends: 1.2, 1.4, 2.1, 2.2_
 
-- [ ] 3.2 Run the automatic pass
+- [x] 3.2 Run the automatic pass
   - Collect the candidates, the waiting pages in the window, in file-name order. Return an empty report when there are none.
   - Load every ledger on disk. An unreadable ledger is reported as unavailable, counting the candidates as waiting, and nothing is written.
   - Drop the candidates with a landed post. What remains is the Eligible pages; return an empty report when none remain.
@@ -381,3 +381,8 @@
   - TIMED_OUT is RETURNED as a row code, not raised. 3.2 stops when `result.code is FillCode.TIMED_OUT` and names `result.variables[-1].name`.
   - `publish.outcomes` was added to design.md Allowed Dependencies.
 - 3.1 → 3.3: `_fill_page` returns ATHLETES_TEXT before composing, whatever `writing` is. Req 9.4 requires `check` with named pages to show the variables and the composed post for a page in ANY state, Athlete's included, while refill reports a named Athlete's page as left alone (10.5). So 3.3's check path must compose an Athlete's page without writing, for example with a compose-only helper or a flag. It must not change refill's behavior.
+- 3.2 rulings:
+  - The 30 s pass budget starts after the candidate scan, the ledger load and the gate, and before `open_resolver`. So the open wait on a busy index and the SQL `check` count against it, but the page scan does not.
+  - The fill-path `waiting` counts every row that is not FILLED, NOT_ATTEMPTED included.
+  - The unreadable-ledger next step is "fix the file it names, then run fitdocs sync again". Never advise removing a publish record: that re-sends posts and makes landed pages Eligible.
+  - The empty-Eligible return comes before the gate is looked at, per Flow 7.6.

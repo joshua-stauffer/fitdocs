@@ -2,9 +2,11 @@
 
 Requirements 3.3, 3.10, 4.1 to 4.6, 5.6 to 5.9, 6.5, 10.4, 10.9 and 10.11. This
 module holds the per-page pieces: reading a page once as bytes
-(:func:`read_for_fill`) and filling one page (:func:`_fill_page`). The pass,
-``check`` and ``refill`` callers extend it; they pick the pages and give each
-call its resolver, its statement timeout and whether it may write.
+(:func:`read_for_fill`) and filling one page (:func:`_fill_page`). The pass
+(:func:`run_pass`, task 3.2; Requirements 2.5, 6.2 to 6.4, 6.6 to 6.8, 7.1 to
+7.3 and 8.5), ``check`` and ``refill`` callers extend it; they pick the pages
+and give each call its resolver, its statement timeout and whether it may
+write.
 
 The resolver is declared here as a protocol and ``resolve.SessionResolver``
 satisfies it structurally, so this module imports neither ``resolve`` nor
@@ -13,9 +15,10 @@ satisfies it structurally, so this module imports neither ``resolve`` nor
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import date
+from pathlib import Path
 from typing import Final, Protocol
 
 from fitdocs.contract import (
@@ -31,32 +34,47 @@ from fitdocs.docmerge import replace_region
 from fitdocs.post_template.model import (
     Binding,
     FillCode,
+    FillReport,
     PageResult,
     RegionState,
+    TemplateSummary,
     Unavailable,
     VariableOutcome,
 )
 from fitdocs.post_template.region import classify, render_filled
 from fitdocs.post_template.template import PostTemplate, Variable
 from fitdocs.publish.compose import Refusal, compose_post
-from fitdocs.publish.ledger import PublishLedger, has_landed_post
+from fitdocs.publish.ledger import (
+    PublishLedger,
+    PublishLedgerError,
+    has_landed_post,
+    load_ledgers,
+)
 from fitdocs.publish.outcomes import PublishCode
 from fitdocs.publish.pages import (
     PageStatus,
     PageView,
     SelectedPage,
     _status,
+    select_pages,
     source_shas,
 )
 from fitdocs.publish.request import Post
 from fitdocs.publish.values import page_values
 
 __all__ = [
+    "PASS_BUDGET_S",
+    "PASS_STATEMENT_TIMEOUT_S",
+    "IndexGate",
     "OpenResolver",
     "PageRead",
     "Resolver",
     "read_for_fill",
+    "run_pass",
 ]
+
+PASS_STATEMENT_TIMEOUT_S: Final = 5.0  # 7.1
+PASS_BUDGET_S: Final = 30.0  # 7.2
 
 
 class Resolver(Protocol):
@@ -296,4 +314,143 @@ def _fill_page(
         )
     return _result(
         read, FillCode.FILLED, variables=variables, post=composed, changed=True
+    )
+
+
+@dataclass(frozen=True)
+class IndexGate:
+    """Whether the sync's index refresh left an index the pass may read."""
+
+    open: bool
+    reason: str | None  # fitdocs-written, set when closed
+    next_step: str | None
+
+
+def _pass_report(
+    template: PostTemplate,
+    *,
+    waiting: int,
+    unavailable: Unavailable | None = None,
+    problems: tuple[str, ...] = (),
+    rows: tuple[PageResult, ...] = (),
+    stopped: FillCode | None = None,
+    stopped_variable: str | None = None,
+) -> FillReport:
+    return FillReport(
+        command="pass",
+        writing=True,
+        template=TemplateSummary(template.path.name, template.since, template.digest),
+        template_problems=problems,
+        waiting=waiting,
+        unavailable=unavailable,
+        rows=rows,
+        athletes_left_out=0,
+        published_left_out=0,
+        older_template=0,
+        stopped=stopped,
+        stopped_variable=stopped_variable,
+    )
+
+
+def _waiting_candidates(data_root: Path, since: date) -> list[PageRead]:
+    """Waiting pages in the window, in file-name order, landed flag unset."""
+    candidates: list[PageRead] = []
+    for page in select_pages(data_root, (), cwd=data_root):
+        read = read_for_fill(page, since=since, ledgers=())
+        if (
+            isinstance(read, PageRead)
+            and read.state is RegionState.WAITING
+            and read.in_window
+        ):
+            candidates.append(read)
+    return candidates
+
+
+def run_pass(
+    data_root: Path,
+    template: PostTemplate,
+    *,
+    gate: IndexGate,
+    open_resolver: OpenResolver,
+    monotonic: Callable[[], float],
+) -> FillReport:
+    """Fill the Eligible pages: Waiting, in the window, with no landed post.
+
+    The budget starts when the gate has passed, and is checked before each
+    page. Nothing is written unless the gate is open, the resolver opened and
+    the template's SQL was accepted.
+    """
+    candidates = _waiting_candidates(data_root, template.since)
+    if not candidates:
+        return _pass_report(template, waiting=0)
+    try:
+        ledgers = load_ledgers(data_root, {})
+    except PublishLedgerError as exc:
+        return _pass_report(
+            template,
+            waiting=len(candidates),
+            unavailable=Unavailable(
+                f"the publish records cannot be read ({exc})",
+                "fix the file it names, then run fitdocs sync again",
+            ),
+        )
+    eligible = [
+        read
+        for read in candidates
+        if not has_landed_post(ledgers.values(), source_shas(read.view.frontmatter))
+    ]
+    if not eligible:
+        return _pass_report(template, waiting=0)
+    if not gate.open:
+        return _pass_report(
+            template,
+            waiting=len(eligible),
+            unavailable=Unavailable(
+                gate.reason or "the index is not ready",
+                gate.next_step or "run fitdocs index",
+            ),
+        )
+    started = monotonic()
+    resolver = open_resolver()
+    if isinstance(resolver, Unavailable):
+        return _pass_report(template, waiting=len(eligible), unavailable=resolver)
+    try:
+        problems = resolver.check(template)
+        if problems:
+            return _pass_report(template, waiting=len(eligible), problems=problems)
+        rows: list[PageResult] = []
+        stopped: FillCode | None = None
+        stopped_variable: str | None = None
+        left_over = f"the {PASS_BUDGET_S:g} second budget ran out"
+        done = 0
+        while done < len(eligible):
+            if monotonic() - started >= PASS_BUDGET_S:
+                stopped = FillCode.NOT_ATTEMPTED
+                break
+            result = _fill_page(
+                eligible[done],
+                template,
+                resolver,
+                writing=True,
+                timeout_s=PASS_STATEMENT_TIMEOUT_S,
+            )
+            rows.append(result)
+            done += 1
+            if result.code is FillCode.TIMED_OUT:
+                stopped = FillCode.TIMED_OUT
+                stopped_variable = result.variables[-1].name
+                left_over = f"{stopped_variable} timed out on an earlier page"
+                break
+        rows.extend(
+            _result(read, FillCode.NOT_ATTEMPTED, detail=left_over)
+            for read in eligible[done:]
+        )
+    finally:
+        resolver.close()
+    return _pass_report(
+        template,
+        waiting=sum(row.code is not FillCode.FILLED for row in rows),
+        rows=tuple(rows),
+        stopped=stopped,
+        stopped_variable=stopped_variable,
     )
