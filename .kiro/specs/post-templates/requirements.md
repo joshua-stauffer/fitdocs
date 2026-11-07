@@ -20,7 +20,8 @@ With this feature the athlete writes one file, once. Every new page then arrives
 - **Athlete's:** a page whose `post` region is neither Waiting nor Filled.
 - **Fill:** to write composed text into a Waiting or Filled page's `post` region.
 - **Fill Pass:** the automatic step in `fitdocs sync` and `fitdocs pull --sync` that fills pages.
-- **Landed post:** a publish record confirming that a page's post is on a configured publish target.
+- **Landed post:** a publish record confirming that a page's post is on a publish target.
+- **Eligible:** a Waiting page in the window with no landed post.
 
 ### Decisions taken at requirements (2026-11-07, maintainer)
 
@@ -138,8 +139,8 @@ With this feature the athlete writes one file, once. Every new page then arrives
 #### Acceptance Criteria
 
 1. When `fitdocs sync`, with or without a source, or `fitdocs pull --sync` finishes its index refresh, the fitdocs CLI shall run the Fill Pass in the same command, so that a page that command created holds its filled text when the command ends.
-2. The Fill Pass shall consider every top-level workout page in the window that is Waiting, whether or not the page has opted in to any publish target.
-3. If a page has a landed post on any configured publish target, then the Fill Pass shall leave it unchanged, so that moving `since` back never queues updates in bulk.
+2. The Fill Pass shall consider every top-level workout page that is Eligible, whether or not the page has opted in to any publish target.
+3. If a Waiting page has a landed post, then the Fill Pass shall leave it unchanged, so that moving `since` back never queues updates in bulk.
 4. If that command's index refresh did not end refreshed, unchanged or built, or reported any page error or data-source error, then the Fill Pass shall write no page and shall report the reason and the next step, because a number computed over an incomplete index would be wrong and would stay in the post.
 5. The Fill Pass shall fill a page only when the index's copy of that page is identical to the current file.
 6. When a Waiting page is not filled, the Fill Pass shall leave it Waiting and retry it on the next run, with no action from the athlete.
@@ -161,8 +162,8 @@ With this feature the athlete writes one file, once. Every new page then arrives
 2. The Fill Pass shall stop starting new work 30 seconds after it begins.
 3. If a statement times out or the 30 seconds run out, then the Fill Pass shall stop, keep the pages it already wrote and leave the rest Waiting for the next run.
 4. When the Fill Pass stops early, the fitdocs CLI shall say so and shall name the variable that timed out, when one did.
-5. When the Fill Pass has filled a page or left a page in the window Waiting, the fitdocs CLI shall print the number filled, the number waiting and at most five lines of causes, each with a count, one example page and the next step.
-6. While no page in the window is Waiting, the Fill Pass shall print nothing.
+5. When the Fill Pass has filled a page or left an Eligible page unfilled, the fitdocs CLI shall print the number filled, the number waiting and at most five lines of causes, each with a count, one example page and the next step.
+6. While the post template is accepted and no page is Eligible, the Fill Pass shall print nothing.
 
 ### Requirement 8: What keeps a filled post stable
 
@@ -199,7 +200,7 @@ With this feature the athlete writes one file, once. Every new page then arrives
 #### Acceptance Criteria
 
 1. The fitdocs CLI shall provide `fitdocs post-template refill [PAGES...] [--yes]`, which writes nothing without `--yes`.
-2. When `refill` runs without PAGES, it shall consider every page in the window that is Waiting or Filled, leaving out a Waiting page with a landed post.
+2. When `refill` runs without PAGES, it shall consider every page in the window that is Eligible or Filled.
 3. When `refill` is given PAGES, it shall consider each named page that is Waiting or Filled, in or out of the window and with or without a landed post.
 4. `refill` shall use the current post template, and each page it writes shall record that template's digest.
 5. If a named page is Athlete's, then `refill` shall leave it unchanged and report that it holds the athlete's own text.
@@ -230,11 +231,11 @@ With this feature the athlete writes one file, once. Every new page then arrives
 
 #### Acceptance Criteria
 
-1. If an opted-in page is in the window, is Waiting and has no landed post on any configured publish target, then `fitdocs publish` shall refuse that page for each selected target it opts in to and send nothing for it, in a dry run and with `--yes` alike.
+1. If an opted-in page is Eligible, then `fitdocs publish` shall refuse that page for each selected target it opts in to and send nothing for it, in a dry run and with `--yes` alike.
 2. The fitdocs CLI shall add one code for this refusal to the end of the closed publish vocabulary, leave every existing code and its explanation unchanged, and count the new code as a failure, so that the run exits 1.
 3. The new code's fixed explanation shall say the page is waiting for its post and shall name both ways forward: `fitdocs post-template check` to see why, and writing the post by hand.
 4. When a Waiting page is filled, or the athlete makes any edit to its `post` region, `fitdocs publish` shall no longer refuse it for waiting.
-5. While a page is out of the window or has a landed post, `fitdocs publish` shall treat it as it does today, including sending the per-target template for a Waiting page.
+5. While a Waiting page is not Eligible, `fitdocs publish` shall treat it as it does today, including sending the per-target template.
 6. The `fitdocs publish` command shall give a refusal it already gives for a page's state or facts ahead of the new code.
 7. While no post template file exists, `fitdocs publish` shall never give the new code.
 8. If the post template file fails a check in Requirement 1, then `fitdocs publish` shall stop with a configuration error (exit 2) before any request and before any write, on every invocation, naming the file and the problem.

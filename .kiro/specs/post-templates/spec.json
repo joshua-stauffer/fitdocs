@@ -1,16 +1,16 @@
 {
   "feature_name": "post-templates",
   "created_at": "2026-11-07T07:49:34Z",
-  "updated_at": "2026-11-07T08:10:24Z",
+  "updated_at": "2026-11-07T08:50:25Z",
   "language": "en",
-  "phase": "requirements-generated",
+  "phase": "design-generated",
   "approvals": {
     "requirements": {
       "generated": true,
-      "approved": false
+      "approved": true
     },
     "design": {
-      "generated": false,
+      "generated": true,
       "approved": false
     },
     "tasks": {
