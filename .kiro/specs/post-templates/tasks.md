@@ -307,7 +307,7 @@
   - _Requirements: 11.3, 13.1, 13.2_
   - _Depends: 5.1, 5.2_
 
-- [ ] 6. Contract, documentation and records
+- [x] 6. Contract, documentation and records
 
 - [x] 6.1 State the changed guarantees in the contract
   - In the code contract and `docs/ownership-contract.md`:
@@ -337,7 +337,7 @@
   - Done when the docs build and the skill packaging tests pass, and the recipe's SQL has been run once and its result recorded in Implementation Notes.
   - _Requirements: 14.5, 14.6, 14.7_
 
-- [ ] 6.3 Move the steering copies and record the amendments
+- [x] 6.3 Move the steering copies and record the amendments
   - Update `tech.md` (the read-back sentence and the commands that make no connector request), `structure.md` (the new package's import rule, `query`'s third importer, and `post_template`'s imports of `publish`) and `product.md` (the publishing capability).
   - Add amendments to `publish-core`, `wiki-contract`, `analytics-index` (Req 5.6's second exception) and `analytics-query`, each naming the documentation-binding tests deleted in this spec.
   - Mark Phase 16 in the roadmap, and add a queue item for the website copy.
@@ -404,3 +404,4 @@
   - 6.3: `.kiro/steering/tech.md:~18` (read-back sentence); `.kiro/steering/product.md:~78` ("page's own computed values"). 6.3 will turn red `tests/connectors/test_network_statements.py:~883` and `tests/dashboards/test_published.py:~155` (both pin the tech.md read-back sentence); delete and name them.
   - No generated-AGENTS.md constant contradicts the feature (declaration.py `_REGIONS` and `_REDERIVABILITY_DOCS` are still true), so no golden moves.
 - 6.2: deleted doc-binding test, which 6.3 names: `tests/test_agent_skill.py::test_every_code_the_publishing_section_names_is_a_vocabulary_value`. Recipe SQL run once, without a test, via scratchpad run_recipe.py over the tests/post_template/_index.py synthetic index. Check had no problems, and week_load gave MON 35, AM 80, PM 105 and REST 0, from `SELECT round(sum(load_value))::INT FROM pages WHERE load_methodology = 'threshold' AND date >= date_trunc('week', $as_of) AND start_time_local <= $as_of`. The reviewer re-ran the skill TOML verbatim through refill --format json with the same result.
+- 6.3: amendments added: publish-core 1, wiki-contract 17, analytics-index 4 and analytics-query 2. Each names all 12 doc-binding tests deleted in this spec. The 6.3 deletions: test_network_statements.py::test_analytics_index_is_published_in_steering_without_changing_network_scope, ::test_recovery_is_named_in_the_no_connector_request_list; query/test_changelog_entry.py::test_steering_publishes_query_network_and_sandbox_contract; dashboards/test_published.py::test_tech_states_the_exception_and_the_shared_sandbox, ::test_structure_states_the_dashboards_imports_and_the_query_importers, ::test_the_steering_bullet_finder_refuses_a_missing_or_repeated_bullet. Roadmap Phase 16 stays [ ] until the merge. Queue: 2026-11-07-site-copy-post-templates.

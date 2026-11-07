@@ -388,3 +388,37 @@ Pinned by `tests/index/test_fingerprint.py` (the `morning` parameter of
 `test_render_fingerprint_ignores_each_region` and the unknown-region
 regression) and `tests/index/test_refresh.py`
 (`test_morning_edit_updates_document_tier_without_deriving`).
+
+## Amendment 4 (2026-11-07): the second named exception to Requirement 5.6, landed by post-templates
+
+Phase 16 `post-templates` adds a second exception to Requirement 5.6. Besides
+the chart regions of dashboard pages (Amendment 1), the index is read to
+produce one more kind of document content: the `post` region of a workout
+page, filled once by the post-fill pass or on request by
+`fitdocs post-template refill`. After that the text is carried like text the
+athlete wrote, and `regen` never queries to keep it. Every other workout,
+history and block document content still never reads the index.
+
+Every published copy of the rule carries both exceptions: `tech.md`'s
+Architecture paragraph and the ownership contract's analytics-index section.
+The sentence pins that used to read the old wording are deleted, and are named
+below. The pass reads the index only through
+`fitdocs.query`'s sandboxed session, requires the index to hold the exact
+file it fills, and refreshes the index once after writing, so the next
+`fitdocs query` reports no drift. `SCHEMA_VERSION` does not change.
+
+Documentation-binding tests deleted by the `post-templates` spec and not
+replaced (Requirement 14.8 of `post-templates`; twelve):
+
+- `tests/publish/test_docs.py::test_the_code_table_equals_the_vocabulary_in_order`
+- `tests/test_ownership_contract.py::test_every_never_read_back_sentence_carries_the_named_exception`
+- `tests/index/test_contract_docs.py::test_index_contract_publishes_location_order_key_refusal_and_permissions`
+- `tests/index/test_contract_docs.py::test_index_is_counted_as_an_external_location_not_an_owned_data_root_path`
+- `tests/test_publish_contract_docs.py::test_hand_authored_places_name_the_post_region`
+- `tests/test_agent_skill.py::test_every_code_the_publishing_section_names_is_a_vocabulary_value`
+- `tests/connectors/test_network_statements.py::test_analytics_index_is_published_in_steering_without_changing_network_scope`
+- `tests/connectors/test_network_statements.py::test_recovery_is_named_in_the_no_connector_request_list`
+- `tests/query/test_changelog_entry.py::test_steering_publishes_query_network_and_sandbox_contract`
+- `tests/dashboards/test_published.py::test_tech_states_the_exception_and_the_shared_sandbox`
+- `tests/dashboards/test_published.py::test_structure_states_the_dashboards_imports_and_the_query_importers`
+- `tests/dashboards/test_published.py::test_the_steering_bullet_finder_refuses_a_missing_or_repeated_bullet`

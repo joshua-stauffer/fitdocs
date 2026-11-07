@@ -75,11 +75,13 @@ inside a vendor platform.
    - **Where the text comes from.** By default it is composed from a
      per-target template, with values filled in from the page. An
      athlete-owned `post` region on the page overrides it. Numbers always
-     come from the page's own computed values. *(Planned by Phase 16 of the
-     roadmap, discovery 2026-11-07: a template whose variables are SQL over the
-     analytics index can write a new page's `post` region once, as of the
-     workout's start. The athlete's own words always win, and regeneration
-     carries the text unchanged.)*
+     come from the page's own computed values, or from a template variable the
+     athlete defined as SQL over the analytics index. With a
+     `post-template.toml` in the data root, the sync that creates a page writes
+     its `post` region once, as of the workout's start. The athlete's own words
+     always win, regeneration carries the text unchanged, and
+     `fitdocs post-template check|refill` shows and redoes the fill.
+     `fitdocs publish` refuses a page still waiting for its fill.
    - **When it posts.** A page posts only once it has opted in.
      `fitdocs publish` is a dry run unless told `--yes`.
    - **What comes back.** Every outcome is one of fitdocs's own codes.

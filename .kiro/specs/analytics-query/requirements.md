@@ -295,3 +295,33 @@ the `fitdocs-dashboards` pointer to the `fitdocs-analytics` skill.
 Pinned by `tests/query/test_statement.py` (column types on both paths, the
 `params` split, the timeout rulings), `tests/query/test_command.py` (the
 session tests) and `tests/query/test_format.py` (the defaulted field).
+
+## Amendment 2 (2026-11-07): a third importer and a new caller of the session, landed by post-templates
+
+`fitdocs.post_template.resolve` becomes the third importer of `fitdocs.query`
+(after `fitdocs.cli` and `fitdocs.dashboards.binding`), using
+`fitdocs.query.command` and `fitdocs.query.statement`. `tests/query/test_boundary.py`
+adds it to `_QUERY_IMPORTERS`.
+
+The session gains `QuerySession.page_is_current(page_key, path, data)`, which
+says whether the index's recorded fingerprint for the page equals the
+fingerprint of the given file. It reads the bookkeeping once per session.
+Template SQL runs through the existing named-parameter path with a two-row cap
+and the caller's timeout. `fitdocs query`'s statement path, outcomes, messages
+and exit codes are unchanged.
+
+Documentation-binding tests deleted by the `post-templates` spec and not
+replaced (Requirement 14.8 of `post-templates`; twelve):
+
+- `tests/publish/test_docs.py::test_the_code_table_equals_the_vocabulary_in_order`
+- `tests/test_ownership_contract.py::test_every_never_read_back_sentence_carries_the_named_exception`
+- `tests/index/test_contract_docs.py::test_index_contract_publishes_location_order_key_refusal_and_permissions`
+- `tests/index/test_contract_docs.py::test_index_is_counted_as_an_external_location_not_an_owned_data_root_path`
+- `tests/test_publish_contract_docs.py::test_hand_authored_places_name_the_post_region`
+- `tests/test_agent_skill.py::test_every_code_the_publishing_section_names_is_a_vocabulary_value`
+- `tests/connectors/test_network_statements.py::test_analytics_index_is_published_in_steering_without_changing_network_scope`
+- `tests/connectors/test_network_statements.py::test_recovery_is_named_in_the_no_connector_request_list`
+- `tests/query/test_changelog_entry.py::test_steering_publishes_query_network_and_sandbox_contract`
+- `tests/dashboards/test_published.py::test_tech_states_the_exception_and_the_shared_sandbox`
+- `tests/dashboards/test_published.py::test_structure_states_the_dashboards_imports_and_the_query_importers`
+- `tests/dashboards/test_published.py::test_the_steering_bullet_finder_refuses_a_missing_or_repeated_bullet`

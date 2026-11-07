@@ -625,3 +625,43 @@ its comment until it is next regenerated and is still recognized by
 carries no version or time. Pinned by `tests/test_contract.py` and
 `tests/render/test_views.py::test_regeneration_replaces_the_earlier_banner`. No
 existing criterion or amendment is renumbered.
+
+## Amendment 17 (2026-11-07): the post region's states, `post-template.toml` and the second read-back exception, landed by post-templates
+
+Phase 16 `post-templates` changes three ownership statements. `CONTRACT_VERSION` rides the
+unreleased `"19"`.
+
+1. **The `post` region.** fitdocs may write the region only while it is
+   waiting (whitespace, the fresh placeholder or a fitdocs provenance comment)
+   or filled (a stamp line and text whose digest matches the stamp), and never
+   while it is the athlete's. Any edit to filled text makes it the athlete's.
+   The earlier statement that fitdocs never touches the region after creating
+   it no longer holds; the statement that it never replaces the athlete's text
+   does.
+2. **`post-template.toml`.** The template file in the data root is
+   user-owned and read-only to fitdocs. It is not an owned path.
+3. **The second read-back exception.** The first is the dashboards exception
+   (analytics-index Amendment 1). A filled `post` region is the second: the
+   post-fill pass produces its text from the index once, and `regen` carries
+   it afterwards as a snapshot without querying. Deleting the index still
+   costs only rebuild time.
+
+Pinned by `tests/test_contract.py` (the waiting predicate and the stamp
+grammar), `tests/post_template/test_region.py` (the three states, by bytes),
+`tests/test_confinement.py` (the two writing entry points and that `check`
+writes nothing) and `tests/post_template/test_boundary.py` (the package's
+imports). The ownership-contract prose is not pinned by a test. Documentation-binding tests deleted by the `post-templates` spec and not
+replaced (Requirement 14.8 of `post-templates`; twelve):
+
+- `tests/publish/test_docs.py::test_the_code_table_equals_the_vocabulary_in_order`
+- `tests/test_ownership_contract.py::test_every_never_read_back_sentence_carries_the_named_exception`
+- `tests/index/test_contract_docs.py::test_index_contract_publishes_location_order_key_refusal_and_permissions`
+- `tests/index/test_contract_docs.py::test_index_is_counted_as_an_external_location_not_an_owned_data_root_path`
+- `tests/test_publish_contract_docs.py::test_hand_authored_places_name_the_post_region`
+- `tests/test_agent_skill.py::test_every_code_the_publishing_section_names_is_a_vocabulary_value`
+- `tests/connectors/test_network_statements.py::test_analytics_index_is_published_in_steering_without_changing_network_scope`
+- `tests/connectors/test_network_statements.py::test_recovery_is_named_in_the_no_connector_request_list`
+- `tests/query/test_changelog_entry.py::test_steering_publishes_query_network_and_sandbox_contract`
+- `tests/dashboards/test_published.py::test_tech_states_the_exception_and_the_shared_sandbox`
+- `tests/dashboards/test_published.py::test_structure_states_the_dashboards_imports_and_the_query_importers`
+- `tests/dashboards/test_published.py::test_the_steering_bullet_finder_refuses_a_missing_or_repeated_bullet`

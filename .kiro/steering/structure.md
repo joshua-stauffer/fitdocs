@@ -136,7 +136,8 @@ markdown; fixture `.fit` files under `tests/fixtures/`.
   import it.
 - `query` (the read side) imports `index` (location, store, schema, bookkeeping,
   corpus, fingerprint, producer types, registry) and `athlete`; only `cli`
-  and `dashboards` import it; it never imports `duckdb` or an index writer.
+  and the two modules `dashboards.binding` and `post_template.resolve` import
+  it; it never imports `duckdb` or an index writer.
 - `dashboards` (the chart pages under `dashboards/`) imports `query` (in
   `dashboards.binding` only), the chart kit facade (`render.charts.kit`, and
   `kit.format` in `dashboards.region` only), `units` (in `dashboards.binding`
@@ -145,6 +146,20 @@ markdown; fixture `.fit` files under `tests/fixtures/`.
   imports them) and `yaml` (in `dashboards.directive` only); only
   `cli` imports it, and only lazily; it never imports `duckdb`, `index` or a
   clock.
+- `post_template` (the post template and the fill of a workout page's `post`
+  region) imports `publish` (`compose`, `ledger`, `outcomes`, `pages`,
+  `request`, `template` and `values`, which give it the grammar, the composer,
+  the ledgers and the page reader), `contract`, `docio`, `docmerge`, `layout`
+  and `settings`, and `query` in `post_template.resolve` alone (`query.command`
+  and `query.statement`, so `query` has three importers: `cli`,
+  `dashboards.binding` and `post_template.resolve`). It never imports
+  `duckdb`, `index`, `dashboards`, `render`, `load`, `metrics`, `ingest`,
+  `sync` or a network module, and calls no clock or randomness (the CLI
+  injects the monotonic clock). Only `cli` imports it, and only lazily: the sync
+  pass and `fitdocs publish`'s preflight import it only after checking that
+  `post-template.toml` exists, while `fitdocs post-template` imports it
+  unconditionally. `publish` imports nothing from it:
+  publish learns of a waiting page from the contract and its own ledger.
 - `recovery` imports `wellness`, `history`, `citation`, `contract`,
   `layout`, `declaration`, `units`, the chart kit facade and the render
   layer's attribution helpers; only `cli` imports `recovery.engine`.
@@ -168,7 +183,9 @@ markdown; fixture `.fit` files under `tests/fixtures/`.
   `dashboards` or `identity`, no network module of its own, and calls no clock
   or randomness (the CLI injects both). Outside its package, only `cli`
   imports it (the command imports it lazily), apart from the two `connectors`
-  modules above (`connectors.protocol` and `connectors.registry`); `connectors` never reads a page.
+  modules above (`connectors.protocol` and `connectors.registry`) and four
+  `post_template` modules (`engine`, `model`, `region` and `template`);
+  `connectors` never reads a page.
 - `LoadCalculator` implementations declare their required inputs so the CLI
   can prompt for missing data generically — no calculator-specific prompting
   code in the CLI.

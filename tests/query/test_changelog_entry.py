@@ -11,7 +11,6 @@ from tests._changelog_view import V0_1_0, read_unreleased_since
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _CHANGELOG_PATH = _REPO_ROOT / "CHANGELOG.md"
-_TECH_PATH = _REPO_ROOT / ".kiro/steering/tech.md"
 _PYPROJECT_PATH = _REPO_ROOT / "pyproject.toml"
 _ANALYTICS_URL = (
     "https://github.com/joshua-stauffer/fitdocs/blob/main/docs/analytics.md"
@@ -127,23 +126,6 @@ def test_unreleased_entry_names_all_query_publication_details() -> None:
 def test_synthetic_changelog_pins_each_default_format_clause() -> None:
     entry = _unreleased_query_entry(_VALID_SYNTHETIC_CHANGELOG)
     _assert_default_format_claim(entry)
-
-
-def test_steering_publishes_query_network_and_sandbox_contract() -> None:
-    tech = _TECH_PATH.read_text(encoding="utf-8")
-    network = tech.split("## Network and Credentials", 1)[1].split(
-        "## Development Standards", 1
-    )[0]
-    flat_network = " ".join(network.split())
-
-    assert (
-        "`check`, `query`, `history`, `plan`, `derive-benchmarks`, `index`, and "
-        "rendering — makes no connector request"
-    ) in flat_network
-    assert (
-        "`fitdocs query` runs agent SQL read-only under a locked DuckDB "
-        "configuration with external access and extension loading off."
-    ) in flat_network
 
 
 def test_entry_parser_rejects_missing_unreleased_or_added_headers() -> None:

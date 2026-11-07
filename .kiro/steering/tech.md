@@ -15,9 +15,11 @@ wellness inbox file → wellness.intake → wellness-archive/
 
 The `fitdocs` CLI runs no server and no background jobs. One database: a
 derived, disposable analytics index outside the data root, rebuilt from the documents and archived `.fit`
-files, never read back into a document, except the chart regions and chart
-assets of dashboard pages under `dashboards/`; workout, history and block
-documents never read it. Workout documents and their derived
+files, never read back into a document, with two named exceptions: the chart
+regions and chart assets of dashboard pages under `dashboards/`, and the
+`post` region of a workout page, which the post-template pass fills once from
+the index and which is carried afterwards like any text the athlete wrote.
+Nothing else in a workout, history or block document reads it. Workout documents and their derived
 values remain re-derivable from archived `.fit` sources and the athlete
 profile; the index itself is a cache, not state, and deleting it costs only
 rebuild time. The index's `wellness_daily` rows additionally come from the
@@ -82,8 +84,8 @@ retries, waits out a rate-limit response itself within its own bounded budget)
 and `fitdocs publish --yes` (for each page it
 sends to a target, any of a listing, an update and an upload request, one at
 a time); every other command — `sync`, `regen`,
-`load`, `dashboard`, `recovery`, `check`, `query`, `history`, `plan`, `derive-benchmarks`, `index`, and
-rendering — makes no connector request, whether or not connectors are
+`load`, `dashboard`, `recovery`, `check`, `query`, `history`, `plan`, `derive-benchmarks`, `index`,
+`post-template`, and rendering — makes no connector request, whether or not connectors are
 configured, and keeps its existing map-tile behavior (rendering a map may fetch missing
 basemap tiles unless tile requests are disabled). `fitdocs publish` without
 `--yes` and `fitdocs publish --targets` make none. For a Strava instance,
@@ -95,8 +97,9 @@ network paths go through the standard library's `urllib` only, sending the one c
 fitdocs User-Agent; connectors add no runtime dependency (beyond the
 standard library they use only the already-required `tomli_w`). `fitdocs
 query` runs agent SQL read-only under a locked DuckDB configuration with
-external access and extension loading off. `fitdocs dashboard` and the
-dashboard pass run chart SQL through the same sandbox. Every DuckDB connection fitdocs
+external access and extension loading off. `fitdocs dashboard`, the
+dashboard pass, `fitdocs post-template` and the post-fill pass run their SQL
+through the same sandbox. Every DuckDB connection fitdocs
 opens has extension auto-install, extension auto-load and external file
 access disabled; the allow-list binds fitdocs's own connections, not an
 outside client that opens the index file. Connector credentials and
