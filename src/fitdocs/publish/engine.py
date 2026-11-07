@@ -28,11 +28,17 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
-from datetime import datetime
+from datetime import date, datetime
 from functools import cache
 from pathlib import Path
 
-from fitdocs.contract import POST_REGION, InvalidPublishKey, document_publish_targets
+from fitdocs.contract import (
+    POST_REGION,
+    InvalidPublishKey,
+    document_date,
+    document_publish_targets,
+    is_waiting_post,
+)
 from fitdocs.docio import write_bytes_if_changed
 from fitdocs.docmerge import RegionError
 from fitdocs.publish.compose import (
@@ -46,6 +52,7 @@ from fitdocs.publish.compose import (
 from fitdocs.publish.ledger import (
     PublicationRecord,
     PublishLedger,
+    has_landed_post,
     save_ledger,
     workout_page_key,
 )
@@ -105,6 +112,8 @@ class PublishPlan:
     settings: PublishSettings
     ledgers: Mapping[str, PublishLedger]  # every ledger; the run works on a copy
     posting: bool  # --yes
+    # The post template's `since`; None when there is no template (Req 12.7).
+    post_template_since: date | None = None
 
 
 @dataclass(frozen=True)
@@ -327,6 +336,10 @@ def _decide_pair(
                 detail="the ledger key for this page is also recorded by "
                 + ", ".join(others),
             )
+    if plan.post_template_since is not None and _is_eligible(
+        plan.post_template_since, view, run, subject
+    ):
+        return _row(page, target, PublishCode.POST_WAITING)
     post = _compose(plan, view, target, values)
     if isinstance(post, Refusal):
         return _row(page, target, post.code, detail=post.detail)
@@ -336,6 +349,20 @@ def _decide_pair(
         return _row(page, target, decision, decision=decision)
     row = _row(page, target, decision, decision=decision, post=post)
     return _Pending(row=row, subject=subject, record=record, post=post, digest=digest)
+
+
+def _is_eligible(
+    since: date, view: PageView, run: _Run, subject: CompletedActivity
+) -> bool:
+    """A Waiting page in the window with no landed post in any ledger (Req 12.1)."""
+    assert view.regions is not None  # a CURRENT page carries its regions
+    day = document_date(view.frontmatter)
+    return (
+        day is not None
+        and day >= since
+        and is_waiting_post(view.regions[POST_REGION])
+        and not has_landed_post(run.ledgers.values(), subject.source_shas)
+    )
 
 
 def _post_pair(run: _Run, target: str, pending: _Pending) -> ResultRow:

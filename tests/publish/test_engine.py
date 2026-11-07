@@ -11,6 +11,7 @@ Posts are pinned as literals. Digests in the ledger are computed with
 
 from __future__ import annotations
 
+import dataclasses
 import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -990,12 +991,4 @@ class TestDryRun:
 def replace_ledgers(
     plan: PublishPlan, ledgers: Mapping[str, PublishLedger]
 ) -> PublishPlan:
-    return PublishPlan(
-        data_root=plan.data_root,
-        pages=plan.pages,
-        considered=plan.considered,
-        configured=plan.configured,
-        settings=plan.settings,
-        ledgers=ledgers,
-        posting=plan.posting,
-    )
+    return dataclasses.replace(plan, ledgers=ledgers)

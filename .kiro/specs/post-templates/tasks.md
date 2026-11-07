@@ -216,7 +216,7 @@
   - _Boundary: FillReportRendering_
   - _Depends: 1.6_
 
-- [ ] 4. The waiting refusal in publish
+- [x] 4. The waiting refusal in publish
 
 - [x] 4.1 (P) Append the waiting outcome code
   - Append `post_waiting` after the last existing code, counted as a failure and not returned by a target. Its explanation says the page is waiting for its post from the post template and names `fitdocs post-template check` and writing the post by hand.
@@ -229,7 +229,7 @@
   - _Requirements: 12.2, 12.3_
   - _Boundary: PublishWaitingRefusal_
 
-- [ ] 4.2 Refuse an Eligible page when publishing
+- [x] 4.2 Refuse an Eligible page when publishing
   - Give the publish plan an optional template `since`, defaulting to none, so existing plans are unchanged.
   - When it is set, refuse with `post_waiting` each selected target of an opted-in page that is in the window, waiting and has no landed post in any ledger. Do this after the page-state, facts and ledger-conflict refusals and before composing. Treat every other page as today.
   - Done when engine tests show:
@@ -389,3 +389,4 @@
 - 3.3: `run_check`/`run_refill` share `_fill_entries` (30 s statements, stop at the first timeout; INDEX_BEHIND detail gains "; run fitdocs index"). `_fill_page(show_athletes=True)` lets check compose an Athlete's page; refill and the pass never set it. Rulings (design.md): with a refused template check gives `waiting` and `older_template` = None and no rows; with the template parsed but the index unavailable or SQL refused, named pages still get NOT_ATTEMPTED rows with state, window and landed; refill always opens the resolver and runs check (10.15); `landed_changed` = FILLED or WOULD_FILL with a landed post. 3.4 renderers must hide `waiting`, `older_template` and `landed` when None.
 - 3.4: `post_template.report` has `render_pass_text` and `render_text`/`render_json` for check and refill. It prints engine reasons as written, hides None counts and None landed flags, and groups VALUE_MISSING cause lines by `row.detail` (the placeholder). Cause lines are capped at 5, sorted by count, then FillCode order, then variable. The NEXT_STEPS wording was written at implementation; only value_missing came from the design. Refill's `older_template` is None (the engine `_report` default). The naming note goes only on the published left-out line. report imports engine for the timeout constants only (design.md).
 - 4.1: `PublishCode.POST_WAITING` was appended last with flags "F" (failure, so exit 1), and the relay copy was synced. DELETED doc-binding test, for 6.3 to name: `tests/publish/test_docs.py::test_the_code_table_equals_the_vocabulary_in_order`, along with its orphaned `_yes_no` helper and `OUTCOMES` import. The guide's table still lacks the row; 6.2 adds it.
+- 4.2: `PublishPlan.post_template_since: date | None = None`. `_decide_pair` refuses with POST_WAITING when the page is in the window (`document_date >= since`), Waiting, and not landed in ANY ledger on disk (`run.ledgers`). The check runs after the page-state, facts and conflict checks and before composing. The test helper `replace_ledgers` (tests/publish/test_engine.py) now uses `dataclasses.replace`, so plan fields are no longer dropped silently. 5.3 must pass `post_template_since` into the plan.
