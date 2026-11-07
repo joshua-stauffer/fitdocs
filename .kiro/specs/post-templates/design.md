@@ -363,7 +363,7 @@ class FillReport:
     def failed(self) -> bool: ...             # any problem, unavailable, or failing row
 ```
 
-When a run stops before reaching pages (gate closed, ledgers or index unavailable, SQL refused), `rows` is empty and `waiting` holds the number of Eligible pages. The renderers therefore need nothing beyond the report.
+When a run stops before reaching pages (gate closed, ledgers or index unavailable, SQL refused), `rows` is empty and `waiting` holds the number of Eligible pages, or of candidates when the ledgers are unreadable. The renderers therefore need nothing beyond the report.
 
 ### PostTemplateFile (`post_template/template.py`)
 
