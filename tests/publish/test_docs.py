@@ -35,7 +35,7 @@ from fitdocs.publish.ledger import (
     workout_page_key,
 )
 from fitdocs.publish.links import published_content
-from fitdocs.publish.outcomes import OUTCOMES, PublishCode
+from fitdocs.publish.outcomes import PublishCode
 from fitdocs.publish.report import (
     render_json,
     render_targets_json,
@@ -122,31 +122,6 @@ def _fenced(body: str, language: str) -> list[str]:
 def _code(cell: str) -> str:
     assert cell.startswith("`") and cell.endswith("`"), cell
     return cell[1:-1]
-
-
-def _yes_no(flag: bool) -> str:
-    return "yes" if flag else "no"
-
-
-# ------------------------------------------------------------ the code table
-
-
-def test_the_code_table_equals_the_vocabulary_in_order() -> None:
-    rows = _table(_section("Outcome codes"))
-    expected = [
-        [
-            f"`{info.code.value}`",
-            info.explanation,
-            _yes_no(info.landed),
-            _yes_no(info.failure),
-            _yes_no(info.from_target),
-            _yes_no(info.stops_target),
-            _yes_no(info.target_state),
-        ]
-        for info in OUTCOMES.values()
-    ]
-    assert len(expected) == 35, "the vocabulary this page was written against moved"
-    assert rows == expected
 
 
 # ------------------------------------------------------- the placeholder table

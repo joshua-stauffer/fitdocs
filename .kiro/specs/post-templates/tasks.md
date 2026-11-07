@@ -218,7 +218,7 @@
 
 - [ ] 4. The waiting refusal in publish
 
-- [ ] 4.1 (P) Append the waiting outcome code
+- [x] 4.1 (P) Append the waiting outcome code
   - Append `post_waiting` after the last existing code, counted as a failure and not returned by a target. Its explanation says the page is waiting for its post from the post template and names `fitdocs post-template check` and writing the post by hand.
   - Regenerate the relay's shared copy with the sync script, and run the relay's own tests.
   - Delete `tests/publish/test_docs.py::test_the_code_table_equals_the_vocabulary_in_order`, a documentation-binding test this turns red, and record it for 6.3. 6.2 adds the row to the guide's table.
@@ -388,3 +388,4 @@
   - The empty-Eligible return comes before the gate is looked at, per Flow 7.6.
 - 3.3: `run_check`/`run_refill` share `_fill_entries` (30 s statements, stop at the first timeout; INDEX_BEHIND detail gains "; run fitdocs index"). `_fill_page(show_athletes=True)` lets check compose an Athlete's page; refill and the pass never set it. Rulings (design.md): with a refused template check gives `waiting` and `older_template` = None and no rows; with the template parsed but the index unavailable or SQL refused, named pages still get NOT_ATTEMPTED rows with state, window and landed; refill always opens the resolver and runs check (10.15); `landed_changed` = FILLED or WOULD_FILL with a landed post. 3.4 renderers must hide `waiting`, `older_template` and `landed` when None.
 - 3.4: `post_template.report` has `render_pass_text` and `render_text`/`render_json` for check and refill. It prints engine reasons as written, hides None counts and None landed flags, and groups VALUE_MISSING cause lines by `row.detail` (the placeholder). Cause lines are capped at 5, sorted by count, then FillCode order, then variable. The NEXT_STEPS wording was written at implementation; only value_missing came from the design. Refill's `older_template` is None (the engine `_report` default). The naming note goes only on the published left-out line. report imports engine for the timeout constants only (design.md).
+- 4.1: `PublishCode.POST_WAITING` was appended last with flags "F" (failure, so exit 1), and the relay copy was synced. DELETED doc-binding test, for 6.3 to name: `tests/publish/test_docs.py::test_the_code_table_equals_the_vocabulary_in_order`, along with its orphaned `_yes_no` helper and `OUTCOMES` import. The guide's table still lacks the row; 6.2 adds it.

@@ -134,6 +134,7 @@ PINNED_FAILURE = frozenset(
         C.NOT_ATTEMPTED,
         C.PUBLISHED_NOT_WRITTEN,
         C.LOCAL_RECORD_UNREADABLE,
+        C.POST_WAITING,
     }
 )
 PINNED_TARGET = frozenset(
@@ -228,6 +229,24 @@ def test_local_record_unreadable_fails_and_comes_from_a_target() -> None:
     info = OUTCOMES[C.LOCAL_RECORD_UNREADABLE]
     assert (info.landed, info.failure, info.from_target) == (False, True, True)
     assert (info.stops_target, info.target_state) == (False, False)
+
+
+def test_post_waiting_is_appended_last_and_is_a_core_failure() -> None:
+    members = list(PublishCode)
+    assert members[-1] is C.POST_WAITING
+    assert members[-2] is C.LOCAL_RECORD_UNREADABLE
+    assert C.POST_WAITING.value == "post_waiting"
+    assert len(members) == 36
+    info = OUTCOMES[C.POST_WAITING]
+    assert (info.landed, info.failure, info.from_target) == (False, True, False)
+    assert (info.stops_target, info.target_state) == (False, False)
+    assert C.POST_WAITING in FAILURE_CODES
+    assert C.POST_WAITING not in TARGET_CODES
+    assert explanation(C.POST_WAITING) == (
+        "This page is waiting for its post from the post template, so nothing is "
+        "sent from it; run `fitdocs post-template check` on the page to see why, "
+        "or write the post by hand."
+    )
 
 
 def test_target_codes_exclude_offline_core_assigned_and_listing_only_codes() -> None:

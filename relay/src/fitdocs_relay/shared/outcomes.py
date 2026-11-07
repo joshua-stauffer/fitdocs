@@ -52,6 +52,7 @@ class PublishCode(StrEnum):
     PUBLISHED_NOT_WRITTEN = "published_not_written"
     READY = "ready"
     LOCAL_RECORD_UNREADABLE = "local_record_unreadable"
+    POST_WAITING = "post_waiting"
 
 
 @dataclass(frozen=True)
@@ -328,6 +329,15 @@ _TABLE: Final[tuple[CodeInfo, ...]] = (
             "This target could not read its own local record of this connection's "
             "activities, so it could not rule out that the activity already exists "
             "and uploaded nothing."
+        ),
+    ),
+    _info(
+        PublishCode.POST_WAITING,
+        "F",
+        (
+            "This page is waiting for its post from the post template, so nothing is "
+            "sent from it; run `fitdocs post-template check` on the page to see why, "
+            "or write the post by hand."
         ),
     ),
 )
