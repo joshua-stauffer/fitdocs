@@ -1067,6 +1067,43 @@ POST_PLACEHOLDER: Final[str] = (
 )
 """A fresh ``post`` region: a hidden instruction that renders as nothing."""
 
+POST_PLACEHOLDER_WORDINGS: Final[tuple[str, ...]] = (POST_PLACEHOLDER,)
+"""Every fresh-placeholder wording fitdocs has ever written into a ``post`` region.
+
+A wording is appended here when :data:`POST_PLACEHOLDER` changes; never removed, so
+pages written by an older release are still recognized as waiting."""
+
+POST_FILL_STAMP: Final[re.Pattern[str]] = re.compile(
+    r"<!-- fitdocs:post-fill"
+    r" template=(?P<template>[0-9a-f]{64})"
+    r" as_of=(?P<as_of>[0-9]{4}-[0-9]{2}-[0-9]{2}"
+    r"T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{6})?)"
+    r" text=(?P<text>[0-9a-f]{64}) -->"
+)
+"""The provenance comment fitdocs writes as the first line of a filled ``post`` region.
+
+Unanchored: callers use ``fullmatch`` on one line, or ``sub`` over a region."""
+
+
+_OWN_COMMENTS: Final[re.Pattern[str]] = re.compile(
+    "|".join(
+        [*(re.escape(w) for w in POST_PLACEHOLDER_WORDINGS), POST_FILL_STAMP.pattern]
+    )
+)
+"""Every wording and the stamp as one alternation, so one pass removes them all."""
+
+
+def is_waiting_post(content: str) -> bool:
+    """True when ``content`` is only whitespace once fitdocs's own comments are removed.
+
+    One pass removes every exact :data:`POST_PLACEHOLDER_WORDINGS` occurrence and
+    every :data:`POST_FILL_STAMP` match, so a wording spliced inside a stamp cannot
+    manufacture one. Any other comment, an unclosed one included, leaves text
+    behind, so the region is the athlete's.
+    """
+    return not _OWN_COMMENTS.sub("", content).strip()
+
+
 PUBLISHED_PLACEHOLDER: Final[str] = ""
 """The empty content of a fresh ``published`` region (filled by publishing)."""
 

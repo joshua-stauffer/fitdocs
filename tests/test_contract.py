@@ -1682,3 +1682,123 @@ def test_doc_version_is_twelve_and_its_history_names_the_two_regions() -> None:
     assert "Raised from ``11`` to ``12`` by publish-core (Req 13.2)." in history
     assert "an empty ``published`` region directly after the title" in history
     assert "a ``post`` region directly before the ``morning`` region" in history
+
+
+# --- post-templates 1.1: waiting post regions --------------------------------
+
+_STAMP = (
+    "<!-- fitdocs:post-fill template="
+    + "a" * 64
+    + " as_of=2026-11-07T08:30:00 text="
+    + "b" * 64
+    + " -->"
+)
+
+
+def test_the_placeholder_wordings_include_the_current_placeholder() -> None:
+    assert contract.POST_PLACEHOLDER in contract.POST_PLACEHOLDER_WORDINGS
+    assert contract.POST_PLACEHOLDER_WORDINGS
+
+
+def test_every_placeholder_wording_is_waiting() -> None:
+    for wording in contract.POST_PLACEHOLDER_WORDINGS:
+        assert contract.is_waiting_post(wording)
+        assert contract.is_waiting_post(f"\n{wording}\n\n")
+
+
+def test_an_empty_or_whitespace_region_is_waiting() -> None:
+    assert contract.is_waiting_post("")
+    assert contract.is_waiting_post(" \n\t\n ")
+
+
+def test_a_stamp_with_nothing_below_it_is_waiting() -> None:
+    assert contract.is_waiting_post(_STAMP)
+    assert contract.is_waiting_post(_STAMP + "\n  \n")
+    assert contract.is_waiting_post(_STAMP.replace("08:30:00", "08:30:00.123456"))
+
+
+def test_text_is_not_waiting_with_or_without_a_stamp() -> None:
+    assert not contract.is_waiting_post("My own title")
+    assert not contract.is_waiting_post(_STAMP + "\nTitle")
+    assert not contract.is_waiting_post(contract.POST_PLACEHOLDER + "\nTitle")
+
+
+def test_the_athletes_own_comment_is_not_waiting() -> None:
+    assert not contract.is_waiting_post("<!-- my note -->")
+    assert not contract.is_waiting_post(_STAMP + "\n<!-- my note -->")
+
+
+def test_an_unclosed_comment_is_not_waiting() -> None:
+    assert not contract.is_waiting_post("<!-- never closed")
+    assert not contract.is_waiting_post(_STAMP[: -len(" -->")])
+
+
+def test_the_new_post_names_stay_out_of_the_public_surface() -> None:
+    for name in ("POST_PLACEHOLDER_WORDINGS", "POST_FILL_STAMP", "is_waiting_post"):
+        assert name not in contract.__all__
+
+
+def test_a_stamp_followed_by_text_on_its_line_is_not_waiting() -> None:
+    assert not contract.is_waiting_post(_STAMP + " my note")
+
+
+def test_a_malformed_digest_is_not_a_stamp() -> None:
+    assert not contract.is_waiting_post(_STAMP.replace("a" * 64, "a" * 63))
+    assert not contract.is_waiting_post(_STAMP.replace("a" * 64, "A" * 64))
+    assert not contract.is_waiting_post(_STAMP.replace("b" * 64, "B" * 64))
+
+
+def test_another_fitdocs_comment_is_not_a_stamp() -> None:
+    assert not contract.is_waiting_post(_STAMP.replace("post-fill", "post-fill-x"))
+    assert not contract.is_waiting_post(_STAMP.replace("post-fill", "note"))
+    assert not contract.is_waiting_post("<!-- fitdocs:note -->")
+
+
+def test_a_malformed_as_of_is_not_a_stamp() -> None:
+    assert not contract.is_waiting_post(
+        _STAMP.replace("2026-11-07T08:30:00", "2026-11-07 08:30:00")
+    )
+    assert not contract.is_waiting_post(
+        _STAMP.replace("2026-11-07T08:30:00", "2026-11-07")
+    )
+
+
+def test_arabic_indic_digits_in_as_of_are_not_a_stamp() -> None:
+    assert not contract.is_waiting_post(_STAMP.replace("2026", "٢٠٢٦"))
+
+
+def test_a_wording_spliced_inside_a_stamp_does_not_make_one() -> None:
+    spliced = _STAMP.replace("template=", "template=" + contract.POST_PLACEHOLDER)
+    assert not contract.is_waiting_post(spliced)
+
+
+def _altered(old: str, new: str) -> str:
+    assert _STAMP.count(old) == 1
+    return _STAMP.replace(old, new)
+
+
+def test_a_short_text_digest_is_not_a_stamp() -> None:
+    assert not contract.is_waiting_post(_altered("b" * 64, "b" * 63))
+    assert not contract.is_waiting_post(_altered("b" * 64, "b" * 65))
+
+
+def test_a_near_miss_wording_is_not_the_placeholder() -> None:
+    assert "description." in contract.POST_PLACEHOLDER
+    near = contract.POST_PLACEHOLDER.replace("description.", "descriptionX")
+    assert near != contract.POST_PLACEHOLDER
+    assert not contract.is_waiting_post(near)
+
+
+def test_every_own_comment_in_a_region_is_removed() -> None:
+    assert contract.is_waiting_post(contract.POST_PLACEHOLDER + "\n" + _STAMP)
+    assert contract.is_waiting_post(_STAMP + "\n" + _STAMP)
+
+
+def test_stamp_fields_must_have_the_exact_shape() -> None:
+    for old, new in (
+        ("08:30:00", "08:30:00.123"),
+        (" template=", "  template="),
+        (" -->", "-->"),
+        ("2026-11-07", "2026-11-7"),
+    ):
+        assert not contract.is_waiting_post(_altered(old, new)), (old, new)

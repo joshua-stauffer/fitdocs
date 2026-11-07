@@ -1189,3 +1189,11 @@ def test_recovery_assets_subdirectory_reuses_the_shared_constant() -> None:
         and node.target.id == "RECOVERY_ASSETS_SUBDIR"
     )
     assert ast.dump(value) == "Name(id='ASSETS_SUBDIR', ctx=Load())"
+
+
+def test_post_template_path_is_the_data_root_file() -> None:
+    from fitdocs import layout
+
+    root = Path("/some/data-root")
+    assert layout.POST_TEMPLATE_FILE == "post-template.toml"
+    assert layout.post_template_path(root) == root / "post-template.toml"

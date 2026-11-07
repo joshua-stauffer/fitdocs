@@ -18,7 +18,7 @@
 
 - [ ] 1. Foundation: shared additions outside the new package
 
-- [ ] 1.1 Recognize a waiting post region and name the template's location
+- [x] 1.1 Recognize a waiting post region and name the template's location
   - Add three things to the contract:
     - the tuple of every fresh-placeholder wording fitdocs has written (today one);
     - the provenance comment's grammar;
@@ -359,3 +359,7 @@
   - _Requirements: 13.4, 13.5, 14.9_
 
 ## Implementation Notes
+
+- 1.1: `contract.POST_FILL_STAMP` is an unanchored, ASCII-only (`[0-9]`, not `\d`) compiled regex with groups `template`, `as_of`, `text`. Use `fullmatch` on one line. `is_waiting_post` removes the wordings and stamps in ONE `sub` over a single alternation (`contract._OWN_COMMENTS`), so a wording spliced into a stamp cannot manufacture one. 2.2 should reuse these, not re-spell the grammar.
+- 1.1 → 2.2: the grammar accepts an `as_of` that `datetime.fromisoformat` rejects (e.g. month 13). `classify` must not crash on it: treat an unparseable stamp as not fitdocs's own (the athlete's), and test it.
+- 1.1 review took 3 rounds, all on the stamp grammar's tests (uppercase hex, digest length on BOTH digests, trailing text on the stamp line, field spacing, fraction width, 1-digit month/day, `re.escape`, `count=1`). The production code was correct from round 1. Sweep every grammar element before reporting.

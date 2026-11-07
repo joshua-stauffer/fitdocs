@@ -193,7 +193,8 @@ contract (Req 2.1) is generated from this tuple, and the confinement guard (Req
 7.5, 7.6) asserts that no run creates, modifies, or deletes anything outside it.
 
 Two exclusions are deliberate. The user-owned files at the data root --
-``fitdocs.toml`` (:data:`SETTINGS_FILE`) and ``athlete.toml`` -- are *not* owned:
+``fitdocs.toml`` (:data:`SETTINGS_FILE`), ``athlete.toml`` and
+``post-template.toml`` (:data:`POST_TEMPLATE_FILE`) -- are *not* owned:
 fitdocs reads them and writes only its own keys into the profile, preserving the
 rest (Req 2.7, 6.4). And a location the user's settings configure fitdocs to
 write into is not listed here either (Req 2.10): the permitted set for any given
@@ -363,6 +364,18 @@ def history_asset_rel_path(chart: str) -> str:
 def archive_path(data_root: Path, sha256: str) -> Path:
     """The archived source path: ``<data_root>/fit-archive/<sha256>.fit``."""
     return data_root / ARCHIVE_DIR / f"{sha256}.fit"
+
+
+POST_TEMPLATE_FILE: Final[str] = "post-template.toml"
+"""The athlete's post template at the data root (post-templates Req 1.1).
+
+User-owned and read-only to fitdocs, like :data:`SETTINGS_FILE`: it is not in
+:data:`OWNED_PATHS`."""
+
+
+def post_template_path(data_root: Path) -> Path:
+    """Compose ``<data-root>/post-template.toml`` without filesystem I/O."""
+    return data_root / POST_TEMPLATE_FILE
 
 
 def settings_path(data_root: Path) -> Path:
