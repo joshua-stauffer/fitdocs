@@ -52,7 +52,7 @@
   - _Requirements: 6.3, 12.1_
   - _Boundary: publish.ledger_
 
-- [ ] 1.5 (P) Ask the query session whether the index holds this exact file
+- [x] 1.5 (P) Ask the query session whether the index holds this exact file
   - Add to the query session a check that the index's recorded document fingerprint for a page key equals the fingerprint of the given path and bytes. Read bookkeeping once per session.
   - Done when tests over a built synthetic index show true for an indexed page, false after a one-byte change to it, false for an absent key and for no key, and a single bookkeeping read across many calls.
   - _Requirements: 6.5, 9.6, 10.10_
@@ -364,3 +364,4 @@
 - 1.1 → 2.2: the grammar accepts an `as_of` that `datetime.fromisoformat` rejects (e.g. month 13). `classify` must not crash on it: treat an unparseable stamp as not fitdocs's own (the athlete's), and test it.
 - 1.1 review took 3 rounds, all on the stamp grammar's tests (uppercase hex, digest length on BOTH digests, trailing text on the stamp line, field spacing, fraction width, 1-digit month/day, `re.escape`, `count=1`). The production code was correct from round 1. Sweep every grammar element before reporting.
 - 1.2: `docmerge.replace_region(markdown, id, content) -> str | None` writes content verbatim and returns None only when the region is absent; damage raises `RegionError`. It does NOT check that `content` is free of marker lines, so 3.1's comment-marker refusal on composed text is what keeps a fill from writing a page `extract_regions` rejects. Review lesson: decoys with a different id cannot discriminate a literal-id pattern, so use same-id lookalikes that are not markers, and content with surrounding whitespace.
+- 1.5: `QuerySession.page_is_current(page_key, path, data)` reads bookkeeping lazily once per session through `command.read_bookkeeping`, and lets read errors propagate. That read is the one `command.py` connection read without the `interrupt_quietly` / `is_user_interrupt` → `KeyboardInterrupt` conversion that `run` and `open_session` have. So a SIGINT landing there would surface as `RuntimeError("Query interrupted")`. 2.4's `SessionResolver.page_is_current`, or the engine, must convert it so that refill exits 130 (Req 10.14) and the pass stops cleanly (Req 6.12). Pin it with a test.

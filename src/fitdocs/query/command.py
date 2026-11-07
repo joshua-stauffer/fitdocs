@@ -14,6 +14,7 @@ from fitdocs.athlete import AthleteFileError
 from fitdocs.index import registry
 from fitdocs.index.bookkeeping import Bookkeeping
 from fitdocs.index.corpus import CorpusScan, scan_workout_pages
+from fitdocs.index.fingerprint import document_fingerprint
 from fitdocs.index.location import IndexLocation, resolve_index_location
 from fitdocs.index.schema import SCHEMA_VERSION
 from fitdocs.index.store import (
@@ -407,6 +408,8 @@ class QuerySession:
         self._connection = connection
         self._timer = timer
         self._closed = False
+        self._bookkeeping: Bookkeeping | None = None
+        self._bookkeeping_read = False
 
     def screen(self, sql: str) -> ScreenedStatement:
         """Classify ``sql`` without executing it."""
@@ -444,6 +447,24 @@ class QuerySession:
             if not isinstance(exc, KeyboardInterrupt) and is_user_interrupt(exc):
                 raise KeyboardInterrupt from exc
             raise
+
+    def page_is_current(self, page_key: str | None, path: str, data: bytes) -> bool:
+        """Whether the index holds exactly this file for this page.
+
+        ``path`` is data-root-relative POSIX. False for a None key or a page the
+        index does not hold. Reads bookkeeping once per session.
+        """
+        if page_key is None:
+            return False
+        if not self._bookkeeping_read:
+            self._bookkeeping = read_bookkeeping(self._connection)
+            self._bookkeeping_read = True
+        if self._bookkeeping is None:
+            return False
+        state = self._bookkeeping.pages.get(page_key)
+        if state is None:
+            return False
+        return state.document_fingerprint == document_fingerprint(path, data)
 
     def close(self) -> None:
         """Interrupt anything still running, then close; safe to repeat."""

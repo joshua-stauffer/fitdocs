@@ -3003,3 +3003,75 @@ def test_open_session_bookkeeping_interrupt_interrupts_then_closes(
         command.open_session(root, _env(home, index_dir.parent))
     assert (type(raised.value.__cause__) is RuntimeError) is wrapped
     assert events == ["interrupt", "close"]
+
+
+def _indexed_pages(index_dir: Path) -> dict[str, str]:
+    with open_index(index_dir / "index.duckdb", read_only=True) as conn:
+        book = read_bookkeeping(conn)
+    assert book is not None
+    return {key: page.path for key, page in book.pages.items()}
+
+
+def test_page_is_current_compares_the_exact_path_and_bytes(
+    indexed_root: tuple[Path, Path], tmp_path: Path
+) -> None:
+    root, index_dir, home = _copy(indexed_root, tmp_path)
+    pages = _indexed_pages(index_dir)
+    assert len(pages) >= 2
+    (first_key, first_path), (second_key, second_path) = list(pages.items())[:2]
+    assert first_path != second_path
+    first_bytes = (root / first_path).read_bytes()
+    second_bytes = (root / second_path).read_bytes()
+    assert first_bytes != second_bytes
+    with command.open_session(root, _env(home, index_dir.parent)) as session:
+        assert isinstance(session, command.QuerySession)
+        assert session.page_is_current(first_key, first_path, first_bytes) is True
+        assert session.page_is_current(second_key, second_path, second_bytes) is True
+        # one byte changed (same length, so only the content differs)
+        flipped = bytes([first_bytes[0] ^ 1]) + first_bytes[1:]
+        assert session.page_is_current(first_key, first_path, flipped) is False
+        assert (
+            session.page_is_current(first_key, first_path, first_bytes + b"\n") is False
+        )
+        # same bytes at a different path, and another page's file under this key
+        assert session.page_is_current(first_key, second_path, first_bytes) is False
+        assert session.page_is_current(first_key, second_path, second_bytes) is False
+        assert session.page_is_current(first_key, first_path, second_bytes) is False
+        # absent key and no key, with bytes that are otherwise the indexed file
+        assert session.page_is_current("absent-key", first_path, first_bytes) is False
+        assert session.page_is_current(None, first_path, first_bytes) is False
+        assert session.page_is_current(None, second_path, second_bytes) is False
+
+
+def test_page_is_current_reads_bookkeeping_once_per_session(
+    indexed_root: tuple[Path, Path], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, index_dir, home = _copy(indexed_root, tmp_path)
+    pages = list(_indexed_pages(index_dir).items())[:2]
+    assert len(pages) == 2
+    reads: list[object] = []
+    actual = command.read_bookkeeping
+
+    def counting(connection: Any) -> Any:
+        reads.append(connection)
+        return actual(connection)
+
+    env = _env(home, index_dir.parent)
+    monkeypatch.setattr(command, "read_bookkeeping", counting)
+
+    def ask_all(session: Any) -> None:
+        for key, path in pages * 2:
+            assert session.page_is_current(key, path, (root / path).read_bytes())
+        assert not session.page_is_current("absent-key", pages[0][1], b"")
+
+    with command.open_session(root, env) as session:
+        assert isinstance(session, command.QuerySession)
+        reads.clear()  # opening checks readability with its own read
+        ask_all(session)
+        ask_all(session)
+        assert len(reads) == 1
+    with command.open_session(root, env) as another:
+        assert isinstance(another, command.QuerySession)
+        reads.clear()
+        ask_all(another)
+        assert len(reads) == 1
