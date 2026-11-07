@@ -3094,7 +3094,8 @@ def publish_command(
     Every preflight check runs, in the design's order, before any request or
     write, each failure exiting ``2`` and naming what to fix: the data root;
     the settings document, the inbox settings, the connectors table and the
-    ``[publish]`` table (validated on every invocation, Req 4.8); the ``--to``
+    ``[publish]`` table (validated on every invocation, Req 4.8), then the post
+    template when its file exists (post-templates Req 12.8); the ``--to``
     names; PAGES; the ledgers; and, only with ``--yes`` and a selected target
     that authenticates, the per-user credentials directory. The run itself
     is :func:`~fitdocs.publish.engine.run_publish` with the real clock, a
@@ -3158,6 +3159,15 @@ def publish_command(
         publish_settings = load_publish_settings(
             document, settings_file=settings_path(data_root), targets=sorted(by_name)
         )
+        template_since: date | None = None
+        if os.path.lexists(post_template_path(data_root)):
+            # A refused template is a SettingsError: exit 2 before any request
+            # or write, --targets included (post-templates Req 12.8). With no
+            # file nothing from the package is imported (Req 1.3).
+            from fitdocs.post_template.template import load_post_template
+
+            loaded = load_post_template(data_root)
+            template_since = None if loaded is None else loaded.since
     except SettingsError as exc:
         _config_error(str(exc))
 
@@ -3237,6 +3247,7 @@ def publish_command(
         settings=publish_settings,
         ledgers=ledgers,
         posting=yes,
+        post_template_since=template_since,
     )
     try:
         report = run_publish(

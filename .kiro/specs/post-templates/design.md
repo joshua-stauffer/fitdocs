@@ -674,7 +674,7 @@ _run_dashboard_pass(data_root, index_report)
 - `KeyboardInterrupt` exits 130 (10.14).
 - The text renderer prints to stdout, and the wait notice goes to stderr through `_query_environment`.
 
-**Publish preflight (12.8).** Inside the existing `try` that loads the settings, `post_template = load_post_template(data_root)` runs. `PostTemplateError` is a `SettingsError`, so `_config_error` gives exit 2 before any request or write, `--targets` included. `PublishPlan(..., post_template_since=None if post_template is None else post_template.since)`.
+**Publish preflight (12.8).** Inside the existing `try` that loads the settings, when `post-template.toml` lexists (so a dangling symlink is refused, and with no file nothing from `post_template` is imported; 5.3 ruling), `post_template = load_post_template(data_root)` runs. `PostTemplateError` is a `SettingsError`, so `_config_error` gives exit 2 before any request or write, `--targets` included. `PublishPlan(..., post_template_since=None if post_template is None else post_template.since)`.
 
 ### PublishWaitingRefusal (`publish/engine.py`, `outcomes.py`, `ledger.py`; `contract.py`)
 
