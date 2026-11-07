@@ -17,6 +17,7 @@ from fitdocs.publish.ledger import (
     PublicationRecord,
     PublishLedger,
     PublishLedgerError,
+    has_landed_post,
     load_ledgers,
     save_ledger,
     workout_page_key,
@@ -608,3 +609,63 @@ class TestSaveFailures:
         assert str(target) in str(raised.value)
         assert target.is_dir()
         assert sorted(p.name for p in target.parent.iterdir()) == ["t1.toml"]
+
+
+def _rec(sha: str, pid: str, digest: str | None) -> PublicationRecord:
+    return PublicationRecord(
+        page=workout_page_key(sha), publication_id=pid, digest=digest
+    )
+
+
+def test_has_landed_post_finds_a_landed_record_on_the_last_ledger() -> None:
+    first = _ledger(_rec(SHA_A, ID_1, None), _rec(SHA_B, ID_2, None), target="t1")
+    second = _ledger(_rec(SHA_C, ID_3, SHA_D), _rec(SHA_B, ID_1, SHA_D), target="t2")
+    assert has_landed_post([first, second], [SHA_A, SHA_B]) is True
+
+
+def test_has_landed_post_matches_on_a_later_record_and_later_digest() -> None:
+    ledger = _ledger(_rec(SHA_C, ID_1, SHA_D), _rec(SHA_B, ID_2, SHA_D))
+    assert has_landed_post([ledger], [SHA_A, SHA_B]) is True
+    assert has_landed_post(iter([ledger]), (SHA_B,)) is True
+
+
+def test_has_landed_post_ignores_records_without_a_digest() -> None:
+    first = _ledger(_rec(SHA_A, ID_1, None), target="t1")
+    second = _ledger(_rec(SHA_B, ID_2, None), target="t2")
+    assert has_landed_post([first, second], [SHA_A, SHA_B]) is False
+
+
+def test_has_landed_post_ignores_a_landed_record_for_another_page() -> None:
+    first = _ledger(_rec(SHA_C, ID_1, SHA_D), target="t1")
+    second = _ledger(_rec(SHA_C, ID_2, SHA_D), _rec(SHA_A, ID_3, None), target="t2")
+    assert has_landed_post([first, second], [SHA_A, SHA_B]) is False
+
+
+def test_has_landed_post_is_false_for_no_ledgers_or_no_digests() -> None:
+    ledger = _ledger(_rec(SHA_A, ID_1, SHA_D))
+    assert has_landed_post([], [SHA_A]) is False
+    assert has_landed_post([ledger], []) is False
+
+
+def test_has_landed_post_agrees_with_the_publish_decision() -> None:
+    from fitdocs.publish.engine import decide
+    from fitdocs.publish.outcomes import PublishCode
+
+    for digest in (None, SHA_D):
+        record = _rec(SHA_A, ID_1, digest)
+        landed = decide(record, SHA_D) is not PublishCode.WOULD_POST
+        assert has_landed_post([_ledger(record)], [SHA_A]) is landed
+
+
+def test_has_landed_post_reads_first_and_last_matching_record_and_digest() -> None:
+    ledger = _ledger(_rec(SHA_A, ID_1, None), _rec(SHA_B, ID_2, SHA_D))
+    assert has_landed_post([ledger], [SHA_A, SHA_B]) is True
+    first_landed = _ledger(_rec(SHA_A, ID_1, SHA_D), _rec(SHA_B, ID_2, None))
+    assert has_landed_post([first_landed], [SHA_A, SHA_B]) is True
+    assert has_landed_post([first_landed], [SHA_B, SHA_A]) is True
+
+
+def test_has_landed_post_finds_a_landed_record_on_the_first_ledger() -> None:
+    first = _ledger(_rec(SHA_C, ID_3, None), _rec(SHA_A, ID_1, SHA_D), target="t1")
+    second = _ledger(_rec(SHA_B, ID_2, None), target="t2")
+    assert has_landed_post([first, second], [SHA_A, SHA_B]) is True

@@ -46,7 +46,7 @@
   - _Requirements: 1.7, 1.12_
   - _Boundary: publish.template_
 
-- [ ] 1.4 (P) Tell whether a page has a landed post
+- [x] 1.4 (P) Tell whether a page has a landed post
   - Add a ledger function answering whether any record matching the page's source digests, in any ledger given, carries a landed digest. This is the rule publish's decision already uses.
   - Done when tests cover a landed record on a second ledger, a record with no digest (not landed), and a record for another page's digest (not matched).
   - _Requirements: 6.3, 12.1_

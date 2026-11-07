@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import re
 import tomllib
-from collections.abc import Collection, Mapping
+from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -90,6 +90,18 @@ class PublishLedger:
         """A ledger with ``record`` replacing the one for its page, or added."""
         kept = tuple(r for r in self.records if r.page != record.page)
         return replace(self, records=(*kept, record))
+
+
+def _is_landed(record: PublicationRecord) -> bool:
+    """Whether the record carries a landed digest (the post is on its target)."""
+    return record.digest is not None
+
+
+def has_landed_post(ledgers: Iterable[PublishLedger], shas: Collection[str]) -> bool:
+    """A record for one of ``shas`` carries a landed digest in any ledger."""
+    return any(
+        _is_landed(record) for ledger in ledgers for record in ledger.matching(shas)
+    )
 
 
 class PublishLedgerError(Exception):
