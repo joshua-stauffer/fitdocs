@@ -85,7 +85,7 @@ from fitdocs.connectors.protocol import (
 from fitdocs.connectors.pull import PullOptions, run_pull
 from fitdocs.connectors.secrets import Redactor
 from fitdocs.connectors.settings import ConnectorInstance, load_connectors_settings
-from fitdocs.contract import MORNING_REGION
+from fitdocs.contract import MORNING_REGION, POST_FILL_STAMP
 from fitdocs.declaration import DECLARATION_FILENAME
 from fitdocs.docmerge import extract_regions
 from fitdocs.history import run_history
@@ -116,6 +116,12 @@ from fitdocs.load.types import InteractionSession
 from fitdocs.performance import derive_benchmarks
 from fitdocs.plans import run_plan
 from fitdocs.plans.reconcile import run_reconcile
+from fitdocs.publish.ledger import (
+    PublicationRecord,
+    PublishLedger,
+    save_ledger,
+    workout_page_key,
+)
 from fitdocs.publish.outcomes import PublishCode
 from fitdocs.publish.request import PublishResult
 from fitdocs.quarantine import load_quarantine
@@ -1639,6 +1645,90 @@ def _wrote_a_ledger_and_a_published_region(touched: Sequence[str]) -> bool:
     return ledger and page
 
 
+# --- the post-template writers (post-templates task 5.4; Req 11.3, 13.1, 13.2) ---
+#
+# The template is staged on top of an already-built external index, so the
+# measured run finds waiting pages, resolves the template's SQL against the real
+# index and fills the `post` region. `_POST_SANDBOX` lets the non-vacuity check
+# read the touched pages back (path-only predicates such as
+# `_wrote_document_and_index` would be satisfied by a page rewritten without its
+# region filled). A publish ledger holding a record for no fixture page is staged
+# too, so every page stays Eligible and the run must leave the ledger alone.
+
+_POST_TEMPLATE_SINCE: Final[str] = "2000-01-01"
+_POST_SANDBOX: Path | None = None
+_POST_LEDGER_TARGET: Final[str] = "beta"
+_POST_LEDGER_KEY: Final[str] = f"data/{PUBLISH_STATE_DIR}/{_POST_LEDGER_TARGET}.toml"
+
+
+def _post_template_text(since: str) -> str:
+    return (
+        f"since = {since}\n"
+        'title = "Run {n}"\n\n'
+        "[vars.n]\n"
+        'sql = "SELECT count(*)::INT FROM pages WHERE start_time_local <= $as_of"\n'
+    )
+
+
+def _stage_post_template(data_root: Path, since: str) -> None:
+    global _POST_SANDBOX
+    _POST_SANDBOX = data_root.parent
+    save_ledger(
+        data_root,
+        PublishLedger(
+            _POST_LEDGER_TARGET,
+            "scripted-beta",
+            (PublicationRecord(workout_page_key("ab" * 32), "cd" * 16),),
+        ),
+    )
+    (data_root / "post-template.toml").write_text(
+        _post_template_text(since), encoding="utf-8"
+    )
+
+
+def _prepare_sync_with_post_template(data_root: Path, source_dir: Path) -> None:
+    _prepare_sync_with_index(data_root, source_dir)
+    _stage_post_template(data_root, _POST_TEMPLATE_SINCE)
+
+
+def _prepare_post_template_refill(data_root: Path, source_dir: Path) -> None:
+    _prepare_index_build(data_root, source_dir)
+    _run_cli_index(data_root, source_dir)
+    _stage_post_template(data_root, _POST_TEMPLATE_SINCE)
+
+
+def _run_cli_post_template(data_root: Path, source_dir: Path, *args: str) -> Result:
+    index_dir = source_dir.parent / "index-cache"
+    with patch.dict(os.environ, {"FITDOCS_INDEX_DIR": str(index_dir)}):
+        return _CLI_RUNNER.invoke(
+            app, ["post-template", *args, "--out", str(data_root)]
+        )
+
+
+def _run_post_template_refill(data_root: Path, source_dir: Path) -> None:
+    result = _run_cli_post_template(data_root, source_dir, "refill", "--yes")
+    assert result.exit_code == 0, result.output
+
+
+def _wrote_a_filled_post_region_and_the_index(touched: Sequence[str]) -> bool:
+    """A workout page the run rewrote now carries the fill stamp in its `post`
+    region, the run wrote the external index file, and the publish ledger staged
+    beside the template was not touched (Req 11.3)."""
+    assert _POST_SANDBOX is not None
+    filled = any(
+        re.fullmatch(rf"data/{WORKOUTS_DIR}/[^/]+\.md", key)
+        and not key.endswith("/AGENTS.md")
+        and any(
+            POST_FILL_STAMP.fullmatch(line)
+            for line in extract_regions(
+                (_POST_SANDBOX / key).read_text(encoding="utf-8")
+            )["post"].splitlines()
+        )
+        for key in touched
+    )
+    return filled and _wrote_index_file(touched) and _POST_LEDGER_KEY not in touched
+
+
 def _stage_recovery_pages(data_root: Path, source_dir: Path) -> None:
     workout_page(data_root, "recovery-older", date(2024, 8, 13), 37)
     workout_page(data_root, "recovery-latest", date(2024, 8, 19), 83)
@@ -1881,6 +1971,20 @@ WRITING_ENTRY_POINTS: Final[tuple[EntryPoint, ...]] = (
         run=_run_publish,
         non_vacuous=_wrote_a_ledger_and_a_published_region,
     ),
+    # post-templates task 5.4: the sync's post-fill pass and the refill command
+    # fill a `post` region and refresh the external index.
+    EntryPoint(
+        id="sync-with-post-template",
+        prepare=_prepare_sync_with_post_template,
+        run=_run_cli_sync_with_index,
+        non_vacuous=_wrote_a_filled_post_region_and_the_index,
+    ),
+    EntryPoint(
+        id="post-template-refill",
+        prepare=_prepare_post_template_refill,
+        run=_run_post_template_refill,
+        non_vacuous=_wrote_a_filled_post_region_and_the_index,
+    ),
 )
 
 
@@ -1944,6 +2048,8 @@ _EXTERNAL_INDEX_ENTRY_IDS: Final[frozenset[str]] = frozenset(
         "dashboard",
         "dashboard-freeze",
         "sync-with-dashboards",
+        "sync-with-post-template",
+        "post-template-refill",
     }
 )
 
@@ -3787,3 +3893,112 @@ def test_publish_non_vacuity_needs_the_ledger_and_a_page(
     touched: tuple[str, ...], expected: bool
 ) -> None:
     assert _wrote_a_ledger_and_a_published_region(touched) is expected
+
+
+def _entry(entry_id: str) -> EntryPoint:
+    return next(entry for entry in WRITING_ENTRY_POINTS if entry.id == entry_id)
+
+
+def _drive(entry: EntryPoint, sandbox: Path) -> tuple[str, ...]:
+    """Prepare and run ``entry`` in ``sandbox``; the paths the run touched."""
+    sandbox.mkdir()
+    data_root = sandbox / "data"
+    data_root.mkdir()
+    source_dir = sandbox / "src"
+    _stage_sources(source_dir)
+    entry.prepare(data_root, source_dir)
+    before = _snapshot(sandbox)
+    entry.run(data_root, source_dir)
+    return _touched(before, _snapshot(sandbox))
+
+
+@pytest.mark.parametrize(
+    "entry_id", ["sync-with-post-template", "post-template-refill"]
+)
+def test_post_template_non_vacuity_sees_a_filled_region_and_not_a_waiting_one(
+    entry_id: str, tmp_path: Path
+) -> None:
+    """A template whose ``since`` is after every page leaves the regions Waiting,
+    so the entry's own check must say the run filled nothing, while the same
+    entry with the staged ``since`` does."""
+    entry = _entry(entry_id)
+    assert entry.non_vacuous(_drive(entry, tmp_path / "filled")) is True
+
+    def waiting_prepare(data_root: Path, source_dir: Path) -> None:
+        entry.prepare(data_root, source_dir)
+        _stage_post_template(data_root, "2999-01-01")
+
+    waiting = EntryPoint(entry_id, waiting_prepare, entry.run, entry.non_vacuous)
+    touched = _drive(waiting, tmp_path / "waiting")
+    assert waiting.non_vacuous(touched) is False
+    # Even when a page and the index are reported touched (as a run that rewrote
+    # the page without filling it would), a region without the stamp is not a fill.
+    page = next(
+        path.relative_to(tmp_path / "waiting").as_posix()
+        for path in sorted((tmp_path / "waiting" / "data" / WORKOUTS_DIR).glob("*.md"))
+        if path.name != "AGENTS.md"
+    )
+    assert _wrote_a_workout_document((page,)) is True
+    assert waiting.non_vacuous((page, "index-cache/x/index.duckdb")) is False
+
+
+def test_post_template_check_writes_nothing_and_makes_no_request(
+    tmp_path: Path,
+) -> None:
+    """``post-template check`` changes no byte or mtime of the data root, and the
+    index directory is as it was apart from a query spill directory.
+
+    The fixture leaves pages the template would fill, and the run is asserted to
+    say so, so a check that resolved nothing could not pass. The suite-wide
+    network guard is live here and its record is asserted empty; without this
+    assertion the suite's teardown guard would fail the test instead (taking
+    the record clears it).
+    """
+    from tests.support import network
+
+    sandbox = tmp_path
+    data_root = sandbox / "data"
+    data_root.mkdir()
+    source_dir = sandbox / "src"
+    _stage_sources(source_dir)
+    _prepare_post_template_refill(data_root, source_dir)
+    index_directory = source_dir.parent / "index-cache"
+    index_before = _snapshot(index_directory)
+    before = _snapshot(data_root)
+
+    pages = sorted(
+        path.stem
+        for path in (data_root / WORKOUTS_DIR).glob("*.md")
+        if path.name != "AGENTS.md"
+    )
+    assert len(pages) >= 2
+    result = _run_cli_post_template(data_root, source_dir, "check", *pages)
+    bare = _run_cli_post_template(data_root, source_dir, "check")
+
+    assert bare.exit_code == 0, bare.output
+    assert result.exit_code == 0, result.output
+    assert "Pages: would_fill 3" in result.output, result.output
+    assert re.search(r"^Eligible pages: [1-9]", result.output, re.M), result.output
+    assert _touched(before, _snapshot(data_root)) == ()
+    index_after = _snapshot(index_directory)
+    assert [
+        key
+        for key in _touched(index_before, index_after)
+        if not key.startswith("query-spill-")
+    ] == []
+    assert network.take_attempts() == ()
+
+
+@pytest.mark.parametrize(
+    "entry_id", ["sync-with-post-template", "post-template-refill"]
+)
+def test_post_template_writers_leave_the_publish_ledger_alone(
+    entry_id: str, tmp_path: Path
+) -> None:
+    """The staged ledger holds no landed post for any page, so every page is
+    filled, yet the ledger's bytes and mtime are unchanged (Req 11.3)."""
+    entry = _entry(entry_id)
+    touched = _drive(entry, tmp_path / "run")
+    assert entry.non_vacuous(touched) is True
+    assert (tmp_path / "run" / _POST_LEDGER_KEY).is_file()
+    assert _POST_LEDGER_KEY not in touched

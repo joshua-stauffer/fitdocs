@@ -244,7 +244,7 @@
   - _Requirements: 5.10, 12.1, 12.4, 12.5, 12.6, 12.7, 12.9, 12.10_
   - _Depends: 1.1, 1.4, 2.2, 4.1_
 
-- [ ] 5. Integration in the CLI
+- [x] 5. Integration in the CLI
 
 - [x] 5.1 Fill pages in the sync that creates them
   - Add the index gate: open only for refreshed, unchanged or built with no page or data-source error. Its reasons are worded like the dashboard pass's.
@@ -296,7 +296,7 @@
   - _Requirements: 1.3, 8.6, 12.1, 12.2, 12.8, 12.10_
   - _Depends: 4.2, 5.1_
 
-- [ ] 5.4 Hold the new writers to the confinement and network guards
+- [x] 5.4 Hold the new writers to the confinement and network guards
   - Register `sync-with-post-template` and `post-template-refill` as writing entry points, each with a non-vacuous check that a region was filled. Add both ids to `_EXTERNAL_INDEX_ENTRY_IDS`, because both refresh the external index.
   - Show that `post-template check` writes nothing.
   - Show that the pass and the command make no request under the suite-wide network guard (`tests.support.network`, installed by `tests/conftest.py`), which fails any test that reaches a non-loopback host.
@@ -393,3 +393,4 @@
 - 5.1: `cli._index_gate(report)` and `cli._run_post_fill_pass(data_root, report)` sit between the index and dashboard passes at both sync sites: the explicit-source sync body and `_run_drain_passes`, which serves no-source sync and `pull --sync`. The pass checks `lexists` before any import. A refused template prints one line naming `fitdocs post-template check`. Pass lines go to stdout. The second refresh (`handoff=None`) runs only when pages were written, after the pass text is printed. The needs_rebuild next step is "run fitdocs index". Test World fixture: tests/post_template/test_sync_pass.py.
 - 5.2: `fitdocs post-template check|refill [PAGES] [--yes] [--format] [--out]`, where `--out` is the shared data-root override, not an output file. Checks run in this order: --yes with check, then the template, then PAGES, then the ledgers. Refill with refused SQL prints the report and exits 2. In JSON mode the post-write refresh prints to stderr. The CLI count is now 18. The shared fixture `_index.py` `page_text` now writes a `published` region (pages were DAMAGED before; no earlier test relied on status), pinned by `test_index_fixture.py`. Not yet in confinement WRITING_ENTRY_POINTS (5.4).
 - 5.3: publish's settings preflight loads the template only when `post-template.toml` lexists (lazy import; the ruling is recorded in design.md). A refused template gives exit 2 with every problem line, before `--targets` too, and `post_template_since` reaches the single `PublishPlan` construction for both the dry run and `--yes`. The page half of Req 8.6 (keeping its text after the template is deleted) is PRESERVED-ONLY here: the post-unlink `pw.sync()` assertion cannot fail, and the real cover is `test_sync_pass.py::test_regen_with_the_index_deleted_keeps_the_filled_region`.
+- 5.4: tests/test_confinement.py registers `sync-with-post-template` and `post-template-refill` in WRITING_ENTRY_POINTS, with `_wrote_a_filled_post_region_and_the_index`: a stamped post region, the index written, and the staged publish ledger untouched. It reads the sandbox via the module global `_POST_SANDBOX`, set only by `_stage_post_template`. Both ids are in `_EXTERNAL_INDEX_ENTRY_IDS`. `check` (bare and named) writes no byte and makes no request.
