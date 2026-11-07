@@ -51,6 +51,9 @@ _PACKAGE: Final = "fitdocs.post_template"
 _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
     "fitdocs.post_template": frozenset(),
     "fitdocs.post_template.model": frozenset({"fitdocs.publish.request"}),
+    "fitdocs.post_template.region": frozenset(
+        {"fitdocs.contract", "fitdocs.post_template.model", "fitdocs.publish.request"}
+    ),
     "fitdocs.post_template.template": frozenset(
         {
             "fitdocs.layout",

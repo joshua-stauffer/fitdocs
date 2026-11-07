@@ -91,7 +91,7 @@
   - _Boundary: PostTemplateFile_
   - _Depends: 1.1, 1.3, 1.6_
 
-- [ ] 2.2 (P) Classify a post region and write filled text
+- [x] 2.2 (P) Classify a post region and write filled text
   - Decide a region's state from its bytes, as waiting, filled or the athlete's, in that order. Waiting is the contract's predicate from 1.1. Filled means a stamp line matching the contract's grammar, with text below it whose digest matches the stamp.
   - Produce a filled region from a composed post, a template digest and an as-of. Double every brace in the title and description, and put the stamp line above the text.
   - Extend the package import table with this module's entry.
@@ -372,3 +372,4 @@
   - `failed` is true for template problems, `unavailable`, or any row code outside {FILLED, WOULD_FILL, UNCHANGED, ATHLETES_TEXT}. So INDEX_BEHIND and PAGE_NOT_CURRENT fail in both check and refill, and pages a bare refill leaves out are counts, not failures.
   - The boundary guard in tests/post_template/test_boundary.py has an equality-pinned `_ALLOWED_IMPORT_TARGETS`, and each later module task appends ONE entry. The resolver task (2.3) adds `fitdocs.query` for resolve.py only. query is not in `_FORBIDDEN_TARGETS`, but the per-module table forbids it everywhere else.
 - 2.1: `post_template.template` has `parse_post_template(data, *, path)` and `load_post_template(data_root) -> PostTemplate | None`. `PostTemplateError(SettingsError)` has `.problems`; each problem is `<path>: <key>: <reason>`, already prefixed with the path, and grammar positions read "line L, column C of the value". Problems come in rule order: required keys, unknown keys, since, title, description, vars shape, vars names. The unused-variable check is skipped only when title or description fails to PARSE. The digest follows the design recipe (compact JSON, sorted vars, SQL rstrip of CR/LF).
+- 2.2 → 3.1: `region.classify` hashes everything after the stamp's first `\n` exactly as written (UTF-8; a trailing newline counts; `render_filled` writes none). The engine must read page BYTES as publish does (`docio.read_document` → `read_bytes`), not `read_text`, which turns CRLF into LF and would hide an athlete's CRLF edit. Sync's own `read_text`/`write_text` (sync.py ~2074/2614) already normalizes CRLF on regen; that is existing behavior and out of scope. 2.2 dropped the design's "rest not blank" / "\n exists" guards as dead: Waiting is checked first and `is_waiting_post` covers both. The reviewer confirmed this with a 20k-input differential.
