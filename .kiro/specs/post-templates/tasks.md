@@ -143,7 +143,7 @@
 
 - [ ] 3. The fill engine and its reports
 
-- [ ] 3.1 Fill one page
+- [x] 3.1 Fill one page
   - Read each page once. Decide its state, whether it is in the window and whether it has a landed post.
   - Build the binding from the page's recorded start and base digest. With no aware start, report no start time.
   - Require the index to hold this exact file. Resolve the variables in name order, stopping the page at the first failure.
@@ -375,3 +375,9 @@
 - 2.2 → 3.1: `region.classify` hashes everything after the stamp's first `\n` exactly as written (UTF-8; a trailing newline counts; `render_filled` writes none). The engine must read page BYTES as publish does (`docio.read_document` → `read_bytes`), not `read_text`, which turns CRLF into LF and would hide an athlete's CRLF edit. Sync's own `read_text`/`write_text` (sync.py ~2074/2614) already normalizes CRLF on regen; that is existing behavior and out of scope. 2.2 dropped the design's "rest not blank" / "\n exists" guards as dead: Waiting is checked first and `is_waiting_post` covers both. The reviewer confirmed this with a 20k-input differential.
 - 2.3: `post_template.resolve` has `open_resolver(data_root, env) -> SessionResolver | Unavailable`, plus `SessionResolver.check`/`close` and `_interruptible`, the Ctrl-C conversion that 2.4 must reuse for `resolve` and `page_is_current`. `check` only parses and keeps no parameters, so `resolve` re-screens to learn which names to bind (ruling in design.md). Shared fixture: `tests/post_template/_index.py` and `conftest.py` (`indexed_post_root` module-scoped, `post_root_copy` per test) give pages MON, AM, PM and REST with sha256 keys; `EXAMPLE_SQL`/`EXAMPLE_SHARE` are `{MON:100, AM:56, PM:24, REST:None}`. The lint list grew by 11 names beyond the design; design.md records them.
 - 2.4: `SessionResolver.resolve(variable, binding, *, timeout_s) -> VariableOutcome` re-screens, binds only the screened names, and runs with `max_rows=2`. Shape is checked before absence. `to_text` refuses bool, float, datetime, time and other types with "cast it to text" advice, and refuses line breaks and comment markers; tab and other control characters pass, per the design (queued as a question). "" and 0 are values; only zero rows or NULL are absent. A TIMESTAMPTZ result is recognized by `query.statement.TIMESTAMPTZ_HINT` and refused with the timestamp advice. `page_is_current`, `screen` and `run` all go through `_interruptible`.
+- 3.1 rulings:
+  - `engine` imports the private `publish.pages._status`, so a page is read once and its status and bytes come from the same read. A public alias is queued.
+  - `refs[-1]` (case kept) is the base digest, the same as `index/corpus.py` `page_key`.
+  - TIMED_OUT is RETURNED as a row code, not raised. 3.2 stops when `result.code is FillCode.TIMED_OUT` and names `result.variables[-1].name`.
+  - `publish.outcomes` was added to design.md Allowed Dependencies.
+- 3.1 → 3.3: `_fill_page` returns ATHLETES_TEXT before composing, whatever `writing` is. Req 9.4 requires `check` with named pages to show the variables and the composed post for a page in ANY state, Athlete's included, while refill reports a named Athlete's page as left alone (10.5). So 3.3's check path must compose an Athlete's page without writing, for example with a compose-only helper or a flag. It must not change refill's behavior.

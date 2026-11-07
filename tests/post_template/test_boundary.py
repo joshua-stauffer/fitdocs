@@ -50,6 +50,22 @@ _PACKAGE: Final = "fitdocs.post_template"
 #: APPEND one entry here when you add a module under `fitdocs/post_template/`.
 _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
     "fitdocs.post_template": frozenset(),
+    "fitdocs.post_template.engine": frozenset(
+        {
+            "fitdocs.contract",
+            "fitdocs.docio",
+            "fitdocs.docmerge",
+            "fitdocs.post_template.model",
+            "fitdocs.post_template.region",
+            "fitdocs.post_template.template",
+            "fitdocs.publish.compose",
+            "fitdocs.publish.ledger",
+            "fitdocs.publish.outcomes",
+            "fitdocs.publish.pages",
+            "fitdocs.publish.request",
+            "fitdocs.publish.values",
+        }
+    ),
     "fitdocs.post_template.model": frozenset({"fitdocs.publish.request"}),
     "fitdocs.post_template.region": frozenset(
         {"fitdocs.contract", "fitdocs.post_template.model", "fitdocs.publish.request"}

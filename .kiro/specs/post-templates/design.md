@@ -50,7 +50,7 @@
 - `post_template` may import:
   - the standard library;
   - `fitdocs.contract`, `fitdocs.docio`, `fitdocs.docmerge`, `fitdocs.layout` and `fitdocs.settings`;
-  - `fitdocs.publish.compose`, `publish.ledger`, `publish.pages`, `publish.request`, `publish.template` and `publish.values`;
+  - `fitdocs.publish.compose`, `publish.ledger`, `publish.outcomes` (engine, for the composer's refusal codes; added at 3.1), `publish.pages`, `publish.request`, `publish.template` and `publish.values`;
   - `fitdocs.query.command` and `fitdocs.query.statement`, in `post_template.resolve` only.
 - `post_template` never imports `duckdb`, `fitdocs.index`, `dashboards`, `render`, `load`, `metrics`, `ingest`, `sync` or a network module. It calls no clock: `monotonic` and the timer are injected.
 - `fitdocs.publish` never imports `post_template`. It receives `since` through `PublishPlan`.
