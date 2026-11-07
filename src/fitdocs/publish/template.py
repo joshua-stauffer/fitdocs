@@ -145,6 +145,22 @@ def parse_template(text: str, *, names: Collection[str]) -> Template:
     return Template(text, tuple(top))
 
 
+def is_placeholder_name(name: str) -> bool:
+    """True when ``name`` follows the grammar ``parse_template`` accepts for names."""
+    return _NAME.fullmatch(name) is not None
+
+
+def template_names(template: Template) -> frozenset[str]:
+    """Every placeholder name ``template`` uses, inside optional clauses or not."""
+    found: set[str] = set()
+    for part in template.parts:
+        if isinstance(part, Placeholder):
+            found.add(part.name)
+        elif isinstance(part, Clause):
+            found.update(p.name for p in part.parts if isinstance(p, Placeholder))
+    return frozenset(found)
+
+
 def render(template: Template, values: Mapping[str, str | None]) -> str | MissingValue:
     """Fill ``template``; the first bare placeholder without a value is missing."""
     out: list[str] = []

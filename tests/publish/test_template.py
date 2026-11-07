@@ -14,8 +14,10 @@ from fitdocs.publish.template import (
     Template,
     TemplateSyntaxError,
     Text,
+    is_placeholder_name,
     parse_template,
     render,
+    template_names,
 )
 
 NAMES = ("x", "y", "dist_2", "km")
@@ -313,3 +315,55 @@ def test_stray_brace_reason_is_one_line_and_omits_following_text() -> None:
     assert "secret" not in err.reason and "here" not in err.reason
     assert "invalid placeholder" in err.reason
     assert "\n" not in str(err)
+
+
+NAME_CASES = (
+    ("x", True),
+    ("dist_2", True),
+    ("a1_b2", True),
+    ("_x", False),
+    ("2x", False),
+    ("X", False),
+    ("xY", False),
+    ("a-b", False),
+    ("", False),
+    ("é", False),
+    ("aé", False),
+    ("a\n", False),
+    ("a b", False),
+    ("a.b", False),
+)
+
+
+@pytest.mark.parametrize(("name", "valid"), NAME_CASES)
+def test_is_placeholder_name_boundaries(name: str, valid: bool) -> None:
+    assert is_placeholder_name(name) is valid
+
+
+@pytest.mark.parametrize(("name", "valid"), NAME_CASES)
+def test_is_placeholder_name_agrees_with_the_parser(name: str, valid: bool) -> None:
+    try:
+        parse_template("{" + name + "}", names=(name,))
+        parses = True
+    except TemplateSyntaxError:
+        parses = False
+    assert is_placeholder_name(name) is parses
+
+
+def test_template_names_collects_bare_and_clause_uses() -> None:
+    template = parse("{dist_2} {?{y} km {y}} {?a {km}b} {{z}} {dist_2}")
+    assert template_names(template) == frozenset({"dist_2", "y", "km"})
+
+
+def test_template_names_sees_a_name_used_only_outside_clauses() -> None:
+    template = parse("{x} and {km} {?at {y}}")
+    assert template_names(template) == frozenset({"x", "km", "y"})
+
+
+def test_template_names_sees_a_name_used_only_in_a_clause() -> None:
+    template = parse("run {?at {dist_2} and {km}}")
+    assert template_names(template) == frozenset({"dist_2", "km"})
+
+
+def test_template_names_empty_without_placeholders() -> None:
+    assert template_names(parse("plain {{text}}")) == frozenset()

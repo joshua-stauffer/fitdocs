@@ -40,7 +40,7 @@
   - _Requirements: 5.6_
   - _Boundary: RegionSplice_
 
-- [ ] 1.3 (P) Expose the placeholder-name rule and a template's names
+- [x] 1.3 (P) Expose the placeholder-name rule and a template's names
   - Export, from the publish template grammar, a check that a name follows the placeholder-name grammar, and a function returning every placeholder name a parsed template uses, inside optional clauses or not.
   - Done when tests show both on valid and invalid names, and on a template whose only use of a name is inside an optional clause.
   - _Requirements: 1.7, 1.12_
