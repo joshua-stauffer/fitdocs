@@ -1,12 +1,12 @@
 ---
 id: 2026-11-07-post-template-landed-note-compares-region-not-landed-post
-title: Make refill's "next publish will update" note compare with the landed post
+title: "Make refill's \"next publish will update\" note compare with the landed post"
 status: open
 importance: low
-importance_why: The note can promise an update that publish then reports as unchanged.
+importance_why: "The note can promise an update that publish then reports as unchanged."
 effort: S
 kind: bug
-area: post-templates, src/fitdocs/post_template/model.py, docs/publishing.md
+area: "post-templates, src/fitdocs/post_template/model.py, docs/publishing.md"
 created: 2026-11-07
 surfaced_by: /kiro-impl post-templates
 pinned_at: e1fdf861

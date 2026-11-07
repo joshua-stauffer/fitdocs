@@ -1,12 +1,12 @@
 ---
 id: 2026-11-07-post-template-control-characters-in-values
-title: Refuse control characters in post-template variable values
+title: "Refuse control characters in post-template variable values"
 status: open
 importance: medium
-importance_why: A NUL or ESC from a variable reaches a published post title, while page values and the template title already refuse them.
+importance_why: "A NUL or ESC from a variable reaches a published post title, while page values and the template title already refuse them."
 effort: S
 kind: gap
-area: post-templates, src/fitdocs/post_template/resolve.py
+area: "post-templates, src/fitdocs/post_template/resolve.py"
 created: 2026-11-07
 surfaced_by: /kiro-impl post-templates
 pinned_at: e1fdf861

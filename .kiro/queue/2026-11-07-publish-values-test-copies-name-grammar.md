@@ -1,12 +1,12 @@
 ---
 id: 2026-11-07-publish-values-test-copies-name-grammar
-title: Use is_placeholder_name in tests/publish/test_values.py instead of a copied regex
+title: "Use is_placeholder_name in tests/publish/test_values.py instead of a copied regex"
 status: open
 importance: low
-importance_why: A third copy of the placeholder-name grammar can drift silently.
+importance_why: "A third copy of the placeholder-name grammar can drift silently."
 effort: S
 kind: chore
-area: publish-core, tests/publish/test_values.py
+area: "publish-core, tests/publish/test_values.py"
 created: 2026-11-07
 surfaced_by: /kiro-impl post-templates
 pinned_at: e1fdf861

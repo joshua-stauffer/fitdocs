@@ -1,12 +1,12 @@
 ---
 id: 2026-11-07-post-template-timestamptz-text-cast-depends-on-host-tz
-title: Make a TIMESTAMPTZ-to-text cast in a post template independent of the host time zone
+title: "Make a TIMESTAMPTZ-to-text cast in a post template independent of the host time zone"
 status: open
 importance: medium
-importance_why: The same template fills different text on different machines, which breaks the stable-post promise.
+importance_why: "The same template fills different text on different machines, which breaks the stable-post promise."
 effort: S
 kind: bug
-area: post-templates, analytics-query, src/fitdocs/query/sandbox.py
+area: "post-templates, analytics-query, src/fitdocs/query/sandbox.py"
 created: 2026-11-07
 surfaced_by: /kiro-impl post-templates
 pinned_at: e1fdf861

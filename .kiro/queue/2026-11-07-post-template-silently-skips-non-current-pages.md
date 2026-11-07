@@ -1,12 +1,12 @@
 ---
 id: 2026-11-07-post-template-silently-skips-non-current-pages
-title: Report non-current pages a bare refill or check skips
+title: "Report non-current pages a bare refill or check skips"
 status: open
 importance: low
-importance_why: After a DOC_VERSION bump an athlete sees only the Template line and no reason nothing was filled.
+importance_why: "After a DOC_VERSION bump an athlete sees only the Template line and no reason nothing was filled."
 effort: S
 kind: gap
-area: post-templates, src/fitdocs/post_template/engine.py
+area: "post-templates, src/fitdocs/post_template/engine.py"
 created: 2026-11-07
 surfaced_by: /kiro-impl post-templates
 pinned_at: e1fdf861

@@ -1,12 +1,12 @@
 ---
 id: 2026-11-07-post-template-bom-and-array-vars-messages
-title: Improve post-template.toml messages for a UTF-8 BOM and [[vars]]
+title: "Improve post-template.toml messages for a UTF-8 BOM and [[vars]]"
 status: open
 importance: low
-importance_why: Two common hand-editing mistakes produce confusing messages.
+importance_why: "Two common hand-editing mistakes produce confusing messages."
 effort: S
 kind: gap
-area: post-templates, src/fitdocs/post_template/template.py
+area: "post-templates, src/fitdocs/post_template/template.py"
 created: 2026-11-07
 surfaced_by: /kiro-impl post-templates
 pinned_at: e1fdf861

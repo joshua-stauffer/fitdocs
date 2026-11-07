@@ -1,12 +1,12 @@
 ---
 id: 2026-11-07-agent-skill-orphaned-code-scan-controls
-title: Remove or re-home the agent-skill code-scan positive controls
+title: "Remove or re-home the agent-skill code-scan positive controls"
 status: open
 importance: low
-importance_why: Two positive-control tests now guard a scanner with no real consumer, and one reads skill text (Req 14.8).
+importance_why: "Two positive-control tests now guard a scanner with no real consumer, and one reads skill text (Req 14.8)."
 effort: S
 kind: chore
-area: tests/test_agent_skill.py
+area: "tests/test_agent_skill.py"
 created: 2026-11-07
 surfaced_by: /kiro-impl post-templates
 pinned_at: e1fdf861

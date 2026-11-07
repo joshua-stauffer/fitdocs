@@ -1,12 +1,12 @@
 ---
 id: 2026-11-07-post-template-gate-closes-on-wellness-producer-error
-title: Decide whether a derived.wellness index error should block post-template fills
+title: "Decide whether a derived.wellness index error should block post-template fills"
 status: open
 importance: low
-importance_why: A persistent wellness-series read error silently blocks every fill while `fitdocs index` reports success.
+importance_why: "A persistent wellness-series read error silently blocks every fill while `fitdocs index` reports success."
 effort: S
 kind: inconsistency
-area: post-templates, analytics-index, src/fitdocs/cli.py
+area: "post-templates, analytics-index, src/fitdocs/cli.py"
 created: 2026-11-07
 surfaced_by: /kiro-impl post-templates
 pinned_at: e1fdf861

@@ -1,12 +1,12 @@
 ---
 id: 2026-11-07-emptied-published-post-sends-default-template
-title: Decide what publish does with an emptied post region on an already-published page
+title: "Decide what publish does with an emptied post region on an already-published page"
 status: open
 importance: medium
-importance_why: Emptying a published page's post and running `publish --yes` overwrites the posted activity with the target's default text.
+importance_why: "Emptying a published page's post and running `publish --yes` overwrites the posted activity with the target's default text."
 effort: M
 kind: spec-work
-area: post-templates, publish-core, src/fitdocs/publish/engine.py
+area: "post-templates, publish-core, src/fitdocs/publish/engine.py"
 created: 2026-11-07
 surfaced_by: /kiro-impl post-templates
 pinned_at: e1fdf861

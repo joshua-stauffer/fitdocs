@@ -1,12 +1,12 @@
 ---
 id: 2026-11-07-post-template-check-shows-nothing-for-index-behind
-title: Show values in check for a page the index does not hold as it is now
+title: "Show values in check for a page the index does not hold as it is now"
 status: open
 importance: low
-importance_why: Right after emptying a region, check PAGE shows no values, although Req 9.6 reads as if it should show them with a flag.
+importance_why: "Right after emptying a region, check PAGE shows no values, although Req 9.6 reads as if it should show them with a flag."
 effort: S
 kind: inconsistency
-area: post-templates, src/fitdocs/post_template/engine.py
+area: "post-templates, src/fitdocs/post_template/engine.py"
 created: 2026-11-07
 surfaced_by: /kiro-impl post-templates
 pinned_at: e1fdf861

@@ -1,12 +1,12 @@
 ---
 id: 2026-11-07-post-template-refill-cannot-clear-older-template-count
-title: Let refill update the stamp when the template changed but the text did not
+title: "Let refill update the stamp when the template changed but the text did not"
 status: open
 importance: low
-importance_why: `check` keeps counting a page as "Filled from an earlier template" after a refill that produced the same text.
+importance_why: "`check` keeps counting a page as \"Filled from an earlier template\" after a refill that produced the same text."
 effort: S
 kind: bug
-area: post-templates, src/fitdocs/post_template/engine.py
+area: "post-templates, src/fitdocs/post_template/engine.py"
 created: 2026-11-07
 surfaced_by: /kiro-impl post-templates
 pinned_at: e1fdf861

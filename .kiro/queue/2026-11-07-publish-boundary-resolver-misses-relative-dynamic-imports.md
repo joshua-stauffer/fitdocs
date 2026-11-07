@@ -1,12 +1,12 @@
 ---
 id: 2026-11-07-publish-boundary-resolver-misses-relative-dynamic-imports
-title: Resolve relative dynamic imports in the publish boundary guard
+title: "Resolve relative dynamic imports in the publish boundary guard"
 status: open
 importance: low
-importance_why: The publish guard's forbidden-name layer misses `import_module('.x','pkg')` and `__import__` forms with fromlist or level.
+importance_why: "The publish guard's forbidden-name layer misses `import_module('.x','pkg')` and `__import__` forms with fromlist or level."
 effort: S
 kind: gap
-area: publish-core, tests/publish/test_boundary.py
+area: "publish-core, tests/publish/test_boundary.py"
 created: 2026-11-07
 surfaced_by: /kiro-impl post-templates
 pinned_at: e1fdf861

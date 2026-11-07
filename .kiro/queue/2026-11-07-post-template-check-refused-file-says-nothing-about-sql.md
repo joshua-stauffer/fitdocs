@@ -1,12 +1,12 @@
 ---
 id: 2026-11-07-post-template-check-refused-file-says-nothing-about-sql
-title: Say the SQL was not checked when check's template file is refused
+title: "Say the SQL was not checked when check's template file is refused"
 status: open
 importance: low
-importance_why: A refused file hides that its SQL was never checked.
+importance_why: "A refused file hides that its SQL was never checked."
 effort: S
 kind: gap
-area: post-templates, src/fitdocs/post_template/engine.py
+area: "post-templates, src/fitdocs/post_template/engine.py"
 created: 2026-11-07
 surfaced_by: /kiro-impl post-templates
 pinned_at: e1fdf861

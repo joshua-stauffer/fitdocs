@@ -1,12 +1,12 @@
 ---
 id: 2026-11-07-post-template-check-only-parses-sql
-title: Bind-check post-template SQL once in check instead of failing every page
+title: "Bind-check post-template SQL once in check instead of failing every page"
 status: open
 importance: low
-importance_why: An unknown column passes check, then fails every page as STATEMENT_FAILED.
+importance_why: "An unknown column passes check, then fails every page as STATEMENT_FAILED."
 effort: S
 kind: gap
-area: post-templates, src/fitdocs/post_template/resolve.py
+area: "post-templates, src/fitdocs/post_template/resolve.py"
 created: 2026-11-07
 surfaced_by: /kiro-impl post-templates
 pinned_at: e1fdf861

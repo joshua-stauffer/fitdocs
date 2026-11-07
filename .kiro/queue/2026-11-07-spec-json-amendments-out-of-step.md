@@ -1,12 +1,12 @@
 ---
 id: 2026-11-07-spec-json-amendments-out-of-step
-title: Bring spec.json amendments arrays in step with requirements.md headings
+title: "Bring spec.json amendments arrays in step with requirements.md headings"
 status: open
 importance: low
-importance_why: Tools reading spec.json miss amendments that requirements.md records.
+importance_why: "Tools reading spec.json miss amendments that requirements.md records."
 effort: S
 kind: chore
-area: .kiro/specs/*/spec.json
+area: ".kiro/specs/*/spec.json"
 created: 2026-11-07
 surfaced_by: /kiro-impl post-templates
 pinned_at: e1fdf861

@@ -1,12 +1,12 @@
 ---
 id: 2026-11-07-post-template-resolve-next-steps-use-backticks
-title: Drop markdown backticks from the resolver's plain-text next steps
+title: "Drop markdown backticks from the resolver's plain-text next steps"
 status: open
 importance: low
-importance_why: The text output prints literal backticks next to engine steps without them.
+importance_why: "The text output prints literal backticks next to engine steps without them."
 effort: S
 kind: chore
-area: post-templates, src/fitdocs/post_template/resolve.py
+area: "post-templates, src/fitdocs/post_template/resolve.py"
 created: 2026-11-07
 surfaced_by: /kiro-impl post-templates
 pinned_at: e1fdf861

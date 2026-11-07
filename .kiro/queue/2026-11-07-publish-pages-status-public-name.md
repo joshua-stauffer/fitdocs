@@ -1,12 +1,12 @@
 ---
 id: 2026-11-07-publish-pages-status-public-name
-title: Give publish.pages._status a public name
+title: "Give publish.pages._status a public name"
 status: open
 importance: low
-importance_why: post_template.engine is the only module in src/fitdocs importing a private name from another module.
+importance_why: "post_template.engine is the only module in src/fitdocs importing a private name from another module."
 effort: S
 kind: chore
-area: publish-core, post-templates, src/fitdocs/publish/pages.py
+area: "publish-core, post-templates, src/fitdocs/publish/pages.py"
 created: 2026-11-07
 surfaced_by: /kiro-impl post-templates
 pinned_at: e1fdf861

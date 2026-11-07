@@ -1,12 +1,12 @@
 ---
 id: 2026-11-07-post-template-resolve-drops-failure-hints
-title: Keep the query module's failure hint in post-template STATEMENT_FAILED details
+title: "Keep the query module's failure hint in post-template STATEMENT_FAILED details"
 status: open
 importance: low
-importance_why: Users lose the actionable hint (e.g. out of memory) that `fitdocs query` prints for the same failure.
+importance_why: "Users lose the actionable hint (e.g. out of memory) that `fitdocs query` prints for the same failure."
 effort: S
 kind: gap
-area: post-templates, src/fitdocs/post_template/resolve.py
+area: "post-templates, src/fitdocs/post_template/resolve.py"
 created: 2026-11-07
 surfaced_by: /kiro-impl post-templates
 pinned_at: e1fdf861
