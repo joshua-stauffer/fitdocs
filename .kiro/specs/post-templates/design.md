@@ -171,7 +171,9 @@ tests/post_template/
 - `src/fitdocs/skills/fitdocs-workouts/SKILL.md` — the recipe (14.7).
 - `.kiro/steering/tech.md`, `structure.md`, `product.md` — rule copies (14.4).
 - Amendments recorded in `.kiro/specs/{publish-core,wiki-contract,analytics-index,analytics-query}/requirements.md`.
-- Doc-binding tests turned red are deleted and named in those amendments (14.8). The expected ones are `tests/index/test_contract_docs.py`, `tests/dashboards/test_published.py`, `tests/connectors/test_network_statements.py` and `tests/test_ownership_contract.py`.
+- Doc-binding tests turned red are deleted and named in those amendments (14.8). The expected ones are pins in `tests/index/test_contract_docs.py`, `tests/dashboards/test_published.py`, `tests/connectors/test_network_statements.py` and `tests/test_ownership_contract.py`, plus `tests/publish/test_docs.py::test_the_code_table_equals_the_vocabulary_in_order`, which pins the guide's code table at 35 rows.
+- `contract.__all__` does not change: `POST_PLACEHOLDER_WORDINGS` and `is_waiting_post` are internal names that `publish` and `post_template` import directly, so the surface pin in `tests/test_public_api.py` stays as it is.
+- The CLI count pins move from 17 to 18: `tests/test_cli_skill.py`, `tests/query/test_cli_query.py`, `tests/index/test_cli_index.py`, and the `cli.py` module docstring with its command list.
 
 ## System Flows
 
@@ -331,10 +333,18 @@ class Unavailable:
     next_step: str         # "run fitdocs index", and so on
 
 @dataclass(frozen=True)
+class TemplateSummary:
+    path: str              # data-root-relative
+    since: date
+    digest: str
+
+@dataclass(frozen=True)
 class FillReport:
     command: Literal["pass", "check", "refill"]
     writing: bool
+    template: TemplateSummary | None     # None when the file was refused
     template_problems: tuple[str, ...]   # 1.x and 2.x, located
+    waiting: int                         # pass: Eligible pages left unfilled, on every path (7.5, 6.4); check and refill: 0
     unavailable: Unavailable | None      # gate closed, index unavailable, ledgers unreadable
     rows: tuple[PageResult, ...]
     athletes_left_out: int               # 10.6
@@ -344,8 +354,12 @@ class FillReport:
     @property
     def wrote(self) -> tuple[str, ...]: ...   # pages written this run
     @property
+    def counts(self) -> Mapping[str, int]: ...  # rows per code, in FillCode order
+    @property
     def failed(self) -> bool: ...             # any problem, unavailable, or failing row
 ```
+
+When a run stops before reaching pages (gate closed, ledgers or index unavailable, SQL refused), `rows` is empty and `waiting` holds the number of Eligible pages. The renderers therefore need nothing beyond the report.
 
 ### PostTemplateFile (`post_template/template.py`)
 
@@ -530,7 +544,8 @@ class IndexGate:
 def run_pass(data_root: Path, template: PostTemplate, *, gate: IndexGate,
              open_resolver: OpenResolver, monotonic: Callable[[], float]) -> FillReport: ...
 def run_check(data_root: Path, template: PostTemplate | PostTemplateError,
-              pages: tuple[SelectedPage, ...], *, open_resolver: OpenResolver) -> FillReport: ...
+              pages: tuple[SelectedPage, ...], *, ledgers: Mapping[str, PublishLedger] | PublishLedgerError,
+              open_resolver: OpenResolver) -> FillReport: ...
 def run_refill(data_root: Path, template: PostTemplate, pages: tuple[SelectedPage, ...],
                *, writing: bool, ledgers: Mapping[str, PublishLedger],
                open_resolver: OpenResolver) -> FillReport: ...
@@ -630,7 +645,7 @@ _run_dashboard_pass(data_root, index_report)
 - A missing template gives exit 2 naming the path (9.8, 10.15).
 - `check` catches `PostTemplateError` and reports it as problems with exit 1 (9.2, 9.7). `refill` treats it as exit 2.
 - `select_pages` errors give exit 2 (11.1).
-- For `refill`, `load_ledgers(data_root, {})` errors give exit 2 (10.15).
+- `refill`, and `check` with PAGES, load `load_ledgers(data_root, {})` before running, because both need the landed flag (9.3). `check` without PAGES does not need them. An error gives exit 2 for `refill` (10.15). For `check` it is reported as one more problem with exit 1, and the template and SQL checks still run (9.2, 9.7). Pages are then shown without a landed flag.
 - `run_refill` problems from SQL `check` give exit 2. An unavailable index gives exit 1. Failing rows give exit 1 (10.15).
 - After `refill --yes` writes, call `_run_index_pass(data_root, handoff=None)` once (10.13).
 - `KeyboardInterrupt` exits 130 (10.14).
@@ -744,7 +759,7 @@ Morning Run
 | SQL refused (2.1 to 2.4) | pass, check, refill | one line, check exit 1, refill exit 2 |
 | Index not built, needs rebuild, busy or unverified | pass, check, refill | pass one line, check and refill exit 1 |
 | Index refresh errors | pass | one line, nothing written |
-| Ledger unreadable | pass, refill | pass one line, refill exit 2 |
+| Ledger unreadable | pass, check, refill | pass one line, check exit 1, refill exit 2 |
 | Variable failure on a page | pass, check, refill | page row, others continue |
 | Timeout or budget | pass, refill | stop, rest not attempted |
 | Page edited mid-run, write error | pass, refill | `page_changed` or `write_failed` row |
