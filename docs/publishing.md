@@ -216,15 +216,22 @@ offset its device recorded, or no archived file, reports
 For each page and target, the post is composed offline, from the page and the
 settings file alone, so the same page and settings always compose the same
 bytes. The text comes from the page's own `post` region when it holds any, and
-from the target's template otherwise. The title is one line.
+from the target's template otherwise, except that with a
+[post template](#post-templates) a page that is waiting to be filled and is in
+its window and unpublished is refused with `post_waiting` instead. The title is
+one line.
 
 ### The `post` region
 
-Every workout page carries an athlete-owned `post` region between the lines
+Every workout page carries a `post` region between the lines
 `<!-- fitdocs:begin:post -->` and `<!-- fitdocs:end:post -->`. A fresh page
-holds one hidden comment in it that renders as nothing. fitdocs carries its
-content through every rewrite verbatim and never changes it, publishing
-included. Write the page's own post there:
+holds one hidden comment in it that renders as nothing, the placeholder fitdocs
+writes into a new page. The text you write there
+is yours: fitdocs carries it through every rewrite verbatim and never changes
+it, publishing included. The only text fitdocs writes into the region is the
+text it filled from your [post template](#post-templates) while the region was
+Waiting, and `fitdocs post-template refill` rewrites that text only while you
+have not edited it. Write the page's own post there:
 
 ```markdown
 <!-- fitdocs:begin:post -->
@@ -241,7 +248,9 @@ The rules, in order:
    wherever they appear and never posted. A comment that is never closed
    reports the page with `post_invalid`.
 2. Blank lines at the start and the end are dropped. When nothing is left, the
-   page uses the target's template.
+   page uses the target's template, unless a post template is waiting to fill
+   the page (in its window, with no landed post), in which case publishing
+   refuses it with `post_waiting`.
 3. Otherwise the first line, with surrounding whitespace removed, is the
    title. When another line follows, it must be blank, or the page reports
    `post_invalid`. The lines after that blank line are the description. A
@@ -381,6 +390,191 @@ the last post that landed for that page and target, and for no other reason.
 Each target's post is composed separately, so one page can send different posts
 to two targets with different templates.
 
+## Post templates
+
+A post template writes each new page's post for you, including numbers the page
+does not hold, such as this workout's load in the week so far. You write one
+file, `post-template.toml`, at the top of the data root. After `fitdocs sync`
+creates a page, fitdocs fills the page's `post` region from the file, and
+`fitdocs publish` then sends that text as it would send text you wrote. Without
+the file, nothing here applies and no command behaves differently.
+
+The file is yours: fitdocs reads it and never creates, changes or deletes it.
+The values come from the [analytics index](analytics.md), so the feature needs
+the index built once with `fitdocs index` before the first fill. After that,
+`fitdocs sync` keeps it fresh and fills the pages it creates.
+
+### The file
+
+```toml
+since = 2026-11-07
+
+title = "{title}"
+description = '''
+{?{week_load} load so far this week.}
+'''
+
+[vars.week_load]
+sql = '''
+SELECT round(sum(load_value))::INT
+FROM pages
+WHERE load_methodology = 'threshold'
+  AND date >= date_trunc('week', $as_of)
+  AND start_time_local <= $as_of
+'''
+```
+
+- `since` and `title` are required; `description` and `vars` are optional.
+  Any other top-level key is refused.
+- `since` is a TOML date with no time, written `since = 2026-11-07`. A page is
+  in the window when its recorded local date is on or after `since`; only pages
+  in the window are filled by `fitdocs sync`.
+- **Set `since` to the day you create the file.** Do not copy an example date
+  from the past: every page dated since then, and still waiting, would be
+  filled by the next sync.
+- `title` and `description` use the [template syntax](#template-syntax) of the
+  settings file. A name in braces is one of the [page placeholders](#placeholders)
+  or a variable you declare. The title is one line. Neither may contain `<!--`,
+  `-->` or `--!>`.
+- Each entry of `vars` is a table with exactly one key, `sql`, holding text. The
+  variable's name follows the placeholder-name grammar, is not the name of a
+  page placeholder, and is used by the title or the description.
+
+A variable's SQL is one `SELECT` that the [`fitdocs query`](analytics.md)
+sandbox accepts, and it must reference `$as_of`. It has exactly two parameters:
+
+| Parameter | Bound to |
+|---|---|
+| `$as_of` | the page's recorded start, as local wall-clock time without an offset; it equals the page's `start_time_local` in the index |
+| `$page_key` | the identity the index uses for the page, its `page_key` |
+
+Any other parameter is refused. Use `$as_of` to look only at what existed when
+the workout began, as the example does with `start_time_local <= $as_of`.
+
+The statement's result becomes the variable's text by these rules:
+
+- No rows, or a NULL, means the variable has no value: it is never written as
+  `0` or as an empty value, and an optional clause that needs it is dropped.
+- More than one row or more than one column is an error for that page.
+- An integer is written as its digits, a decimal without an exponent, a date as
+  `YYYY-MM-DD`, and text as returned.
+- A floating-point value (such as a bare `sum` over a `DOUBLE` column) is an
+  error: cast it in the SQL, for example `round(...)::INT`. A boolean, a
+  timestamp and any other type are errors too: cast them to text.
+- Text holding a line break, `<!--`, `-->` or `--!>` is an error.
+
+An error leaves that page as it was and is reported; the other pages carry on.
+A statement that times out is the exception: the sync pass allows 5 seconds per
+statement and 30 seconds in all, `check` and `refill` allow 30 seconds per
+statement, and each stops at the first timeout. The pages not reached stay
+Waiting (or are reported `not_attempted`).
+A placeholder or variable outside an optional clause that has no value leaves
+the page unfilled with `value_missing`, and an empty title with `title_empty`.
+
+### The three states of a `post` region
+
+fitdocs decides a page's state from the bytes of its `post` region alone:
+
+- **Waiting**: the region holds nothing but whitespace and fitdocs's own hidden
+  comments (the placeholder a new page carries, and the comment fitdocs writes
+  when it fills). A new page starts Waiting.
+- **Filled**: fitdocs wrote the text and you have not touched it. The region
+  holds a hidden comment recording the template and the as-of, then the post.
+- **Yours**: anything else. Text you wrote, or text you changed by a single
+  character, or filled text whose comment you removed.
+
+fitdocs writes only Waiting and Filled regions and never writes yours. To
+return a region to the template, empty it: delete the text (with or without the
+comment). The region is then Waiting. The next `fitdocs sync` fills it again
+only if the page is in the window and has no landed post; otherwise the way back
+is to run `fitdocs index`, then `fitdocs post-template refill PAGE --yes`,
+naming the page. (Emptying the region changes the page, so a refill before
+`fitdocs index` reports `index_behind` and writes nothing.)
+
+**Warning:** if you empty the region of a page that is already published and then
+run `fitdocs publish --yes`, publish does not refuse it (a landed post is not
+refused as waiting). It sends the target's own template and updates the posted
+activity. Run `fitdocs index` and refill the page first.
+
+A filled post is a snapshot, written as finished text. What keeps it stable:
+
+- Nothing re-runs a query except a fill or a refill. A later workout, a load
+  recomputation, a rebuilt or deleted index and `fitdocs regen` all leave the
+  text byte for byte.
+- `fitdocs publish` composes offline, reads no index, and sends the text as written, including any
+  braces in a value.
+- Editing the template, or deleting the file, does not change a page already
+  filled. `fitdocs post-template check` counts the pages whose text came from an
+  earlier template.
+
+`fitdocs sync` fills a page in the sync that creates it, and on every run fills
+any page that is Waiting, in the window, and has no landed post on any target. A page that records no start time stays Waiting.
+
+### The checks are a lint
+
+Before anything is written, fitdocs refuses a variable that does not reference `$as_of`, that reads the
+clock or randomness (such as `now()`, `current_date` or `random()`), that uses
+`query` or `query_table`, or that samples. This is a lint, not a guarantee that a
+statement gives the same answer later. It cannot catch:
+
+- `first` and `any_value`, which pick an arbitrary row;
+- `LIMIT` without `ORDER BY`;
+- a table whose contents depend on today's date;
+- a statement that references `$as_of` without constraining by it.
+
+Constrain by `$as_of`, and order what you limit. The author of the query owns
+whether its numbers are right.
+
+### `fitdocs post-template`
+
+```bash
+fitdocs post-template check [PAGES...] [--format text|json]
+fitdocs post-template refill [PAGES...] [--yes] [--format text|json]
+```
+
+`PAGES` are file names in `workouts/` (with or without `.md`) or paths, as
+`fitdocs publish` takes them. `--out PATH` overrides the data root. Both forms
+read the publish ledgers first; the command checks the template, then PAGES,
+then the ledgers.
+
+- `check` writes nothing. It reports the file's problems and the SQL's
+  problems, how many pages the next sync would fill, and how many filled pages
+  came from an earlier template. Name pages to see, for each (in any state, in
+  or out of the window), its state, whether a post has landed, each variable's
+  value or why it has none, and the composed post. `check` exits 1 when it finds
+  a problem and 2 when `post-template.toml` is missing, a named page is unknown
+  or `--yes` is given.
+- `refill` recomputes posts. Without `--yes` it writes nothing and shows what
+  would change. With `--yes` it writes, then refreshes the index once.
+- A bare `refill` takes every page in the window with no landed post that is
+  Waiting or Filled. It leaves published pages
+  alone and reports how many. **Naming a page refills it**, published or not, in
+  or out of the window, and the report names a page whose text changes while a
+  post has landed (publishing it again would update the target). A page that is
+  yours is reported as left alone.
+- `refill` exits 2 before any write for a missing or refused template, an
+  unknown page, unreadable ledgers or refused SQL. An unavailable index or a
+  failed page gives exit 1, and an interrupt exits 130.
+
+### A waiting page and `fitdocs publish`
+
+With a template in place, `fitdocs publish` refuses with `post_waiting` a page
+that opts in to a target and is Waiting, in the window, and has no landed post,
+because nothing has filled its post yet and the target's template would
+otherwise be sent. It counts as a failure and sends nothing. Ways out:
+
+- Build the index with `fitdocs index` if you have not, then run
+  `fitdocs sync` to fill the page.
+- Run `fitdocs post-template check PAGE` to see why the page was not filled, a
+  missing value or a refused statement for example, and
+  `fitdocs index` then `fitdocs post-template refill PAGE --yes` to fill it
+  now.
+- Write the post by hand in the page's `post` region.
+
+A page that is out of the window, or that already has a landed post on any
+target, is not refused. `fitdocs publish` reads the template file for `since`,
+and a broken file stops it with exit 2 before any request.
+
 ## Posting with `--yes`
 
 A run without `--yes` sends no request and writes nothing: no ledger, no page,
@@ -470,6 +664,7 @@ sentences written by fitdocs.
 | `published_not_written` | The outcomes were recorded, but this page's published region could not be rewritten; the next `fitdocs publish --yes` rewrites it. | no | yes | no | no | no |
 | `ready` | This target is configured and has the credentials it needs. | no | no | no | no | yes |
 | `local_record_unreadable` | This target could not read its own local record of this connection's activities, so it could not rule out that the activity already exists and uploaded nothing. | no | yes | yes | no | no |
+| `post_waiting` | This page is waiting for its post from the post template, so nothing is sent from it; run `fitdocs post-template check` on the page to see why, or write the post by hand. | no | yes | no | no | no |
 
 ## The publish ledger
 

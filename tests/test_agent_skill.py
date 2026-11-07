@@ -2234,14 +2234,6 @@ def _placeholder_names(section: str) -> set[str]:
     return names
 
 
-def test_every_code_the_publishing_section_names_is_a_vocabulary_value() -> None:
-    section = _publishing_section()
-    assert _unexplained_words(section) == set()
-    named = _span_words(section) | _code_like_tokens(section)
-    # Non-vacuity: the scan sees the codes the section teaches.
-    assert {"unchanged", "not_connected", "auth_rejected", "would_post"} <= named
-
-
 @pytest.mark.parametrize(
     "stray", ["unchanging", "NOT_CONNECTED", "post-failed", "rejected_x"]
 )

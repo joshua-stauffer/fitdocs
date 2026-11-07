@@ -17,6 +17,27 @@ recorded as one.
 
 ### Added
 
+- Post templates. A `post-template.toml` at the top of the data root holds a
+  title, a description and SQL variables over the analytics index, bound to
+  `$as_of` (the workout's recorded start) and `$page_key`. `fitdocs sync` and
+  `fitdocs pull --sync` then fill each new page's `post` region with the
+  finished text, and `fitdocs publish` sends it as it sends any post. The new
+  `fitdocs post-template check` and `fitdocs post-template refill [--yes]`
+  commands check the file and recompute posts; a bare `refill` leaves
+  published pages alone and naming a page refills it. A new outcome code,
+  `post_waiting`, makes `fitdocs publish` refuse an opted-in page that is
+  still waiting for its post. The generated document and ownership contract
+  (contract version 19, the version this release already moves to) now says
+  that fitdocs may write a `post` region while it is waiting (empty, or only
+  fitdocs's own hidden comments) or filled (text fitdocs wrote and you have not
+  edited), and never while it is yours; that `post-template.toml` is
+  user-owned and read-only to fitdocs; and that a filled `post` region is the
+  second exception to the index never being read back into a document. The
+  document format version (12) is unchanged. Action: none to keep today's
+  behavior; with no `post-template.toml` nothing changes. To use it, run
+  `fitdocs index` once, then create the file and set `since` to the day you
+  create it, because a date in the past fills every page since then. See
+  [the publishing guide](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/publishing.md#post-templates).
 - The `relay` connector, for a fitdocs relay: configure `[connectors.NAME]`
   with `connector = "relay"` and an optional `url` (default
   `https://api.fitdocs.ai`), then run `fitdocs connect NAME` and paste the

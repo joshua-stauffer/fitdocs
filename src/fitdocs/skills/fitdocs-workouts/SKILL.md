@@ -195,8 +195,13 @@ athlete asks you to.
 
 A page carries a `post` region; pages written by an older fitdocs gain it
 with `fitdocs regen`. Left empty (or holding only its hidden comment), the
-configured template composes the post. To give one page its own
-post, write the title on one line, then a blank line, then the description.
+configured template composes the post, unless the athlete has a post template
+(see below) waiting to fill an in-window, unpublished page, in which case
+`fitdocs publish` refuses the page with `post_waiting`. An emptied region is
+filled again from the post template by the next `fitdocs sync` only when the
+page is in the window and has no landed post.
+To give one page its own post, write the title on one line, then a blank line,
+then the description.
 The text may use placeholders such as `{title}`, `{distance_km}` and
 `{moving_time}`, and optional clauses: `{?Distance: {distance_km} km}`
 renders only when every placeholder inside it has a value. Write `{{` and
@@ -226,6 +231,60 @@ says, and do not retry it on your own judgment. `not_connected`,
 `fitdocs connect` for that target; `credentials_unreadable` means the athlete
 must fix the credentials file or connect again. Never run `fitdocs connect`
 yourself.
+
+### Post templates
+
+An athlete can keep a `post-template.toml` at the top of the data root, so that
+`fitdocs sync` writes each new page's post, numbers included, into its `post`
+region. The file is the athlete's: never create or edit it unless they ask.
+The values come from the analytics index, so `fitdocs index` must have been run
+once. `fitdocs post-template check [PAGES...]` reads the file, checks its SQL and
+shows what a page would get, and writes nothing. `fitdocs post-template refill
+[PAGES...]` recomputes posts and writes only with `--yes`; a bare `refill`
+leaves published pages alone, and naming a page refills it. Only run `refill
+--yes` when the athlete asks. A region the athlete wrote or edited is theirs
+and is never overwritten; emptying it returns it to the template, which
+`fitdocs sync` fills again only for an in-window page with no landed post, and
+otherwise `fitdocs index` then `fitdocs post-template refill PAGE --yes`
+(the index must be current) does. Warn the athlete that
+emptying an already-published page's region and then running
+`fitdocs publish --yes` sends the target's own template and updates the posted
+activity; publish does not refuse it. A page
+refused by `fitdocs publish` as `post_waiting` is waiting for its post: tell the
+athlete, and suggest `fitdocs index`, then `fitdocs sync`, or writing the post by
+hand.
+
+A worked recipe: say how much training load the week holds up to and including
+this workout, for one methodology. It sums each page's own `pages.load_value`
+for that methodology up to the workout's start, so the number is the week as
+of this workout. It never reads the week's running total. The numbers below are
+invented.
+
+```toml
+# Set `since` to the day you create this file. A date in the past fills every
+# page since then.
+since = 2026-11-07
+
+title = "{title}"
+description = """
+{?{week_load} load points this week so far.}
+"""
+
+[vars.week_load]
+sql = """
+SELECT round(sum(load_value))::INT
+FROM pages
+WHERE load_methodology = 'threshold'
+  AND date >= date_trunc('week', $as_of)
+  AND start_time_local <= $as_of
+"""
+```
+
+With three threshold workouts in a week, of load 35, 45 and 25, their posts
+read `35`, `80` and `105`. The `::INT` is needed because a sum is a
+floating-point number, which a post template refuses; a week with no matching
+workout gives no value, and the clause is dropped. When the athlete asks you to
+write this file, set `since` to the day you create it, and tell them why.
 
 See
 [the publishing guide](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/publishing.md)

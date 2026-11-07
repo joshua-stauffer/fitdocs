@@ -319,7 +319,7 @@
   - Done when the ownership-contract conformance tests pass, a full-text search of the two files finds no sentence still saying fitdocs never touches the `post` region, and the deleted tests are listed in Implementation Notes.
   - _Requirements: 14.1, 14.2, 14.3, 14.8, 14.9_
 
-- [ ] 6.2 Document the feature and carry the recipe
+- [x] 6.2 Document the feature and carry the recipe
   - This task owns every edit to `docs/publishing.md`, `CHANGELOG.md` and the packaged skills. It follows 6.1 because the changelog names the contract version 6.1 settles.
   - Add the `post_waiting` row to the guide's outcome table.
   - Rewrite the workouts skill's paragraph saying an empty region uses the configured template, so that it also covers the post template: an emptied region is filled again from it.
@@ -403,3 +403,4 @@
   - 6.2: `docs/publishing.md:~225` ("carries its content through every rewrite verbatim and never changes it"); `src/fitdocs/skills/fitdocs-workouts/SKILL.md:~196` (empty region gives the configured template); CHANGELOG Unreleased has no entry yet.
   - 6.3: `.kiro/steering/tech.md:~18` (read-back sentence); `.kiro/steering/product.md:~78` ("page's own computed values"). 6.3 will turn red `tests/connectors/test_network_statements.py:~883` and `tests/dashboards/test_published.py:~155` (both pin the tech.md read-back sentence); delete and name them.
   - No generated-AGENTS.md constant contradicts the feature (declaration.py `_REGIONS` and `_REDERIVABILITY_DOCS` are still true), so no golden moves.
+- 6.2: deleted doc-binding test, which 6.3 names: `tests/test_agent_skill.py::test_every_code_the_publishing_section_names_is_a_vocabulary_value`. Recipe SQL run once, without a test, via scratchpad run_recipe.py over the tests/post_template/_index.py synthetic index. Check had no problems, and week_load gave MON 35, AM 80, PM 105 and REST 0, from `SELECT round(sum(load_value))::INT FROM pages WHERE load_methodology = 'threshold' AND date >= date_trunc('week', $as_of) AND start_time_local <= $as_of`. The reviewer re-ran the skill TOML verbatim through refill --format json with the same result.
