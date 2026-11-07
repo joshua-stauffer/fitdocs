@@ -182,7 +182,7 @@
     - the resolver closed on every path, including a raised error.
   - _Requirements: 2.5, 6.2, 6.3, 6.4, 6.6, 6.7, 6.8, 7.1, 7.2, 7.3, 8.5_
 
-- [ ] 3.3 Run check and refill
+- [x] 3.3 Run check and refill
   - **Check without pages:** validate the template, or carry its problems, then check the SQL. Count the Eligible pages, which the next sync will try to fill, and the filled pages whose stamp names another template digest. Write nothing.
   - **Check with pages:** for each named page in any state, in or out of the window, show its state, the window, the landed flag from the ledgers it is given, each variable's value or why it has none, and the composed post or why there is none. Flag a page the index does not hold as it is now.
   - **An unavailable index:** check still reports the template's own problems and says the SQL was not checked and why.
@@ -386,3 +386,4 @@
   - The fill-path `waiting` counts every row that is not FILLED, NOT_ATTEMPTED included.
   - The unreadable-ledger next step is "fix the file it names, then run fitdocs sync again". Never advise removing a publish record: that re-sends posts and makes landed pages Eligible.
   - The empty-Eligible return comes before the gate is looked at, per Flow 7.6.
+- 3.3: `run_check`/`run_refill` share `_fill_entries` (30 s statements, stop at the first timeout; INDEX_BEHIND detail gains "; run fitdocs index"). `_fill_page(show_athletes=True)` lets check compose an Athlete's page; refill and the pass never set it. Rulings (design.md): with a refused template check gives `waiting` and `older_template` = None and no rows; with the template parsed but the index unavailable or SQL refused, named pages still get NOT_ATTEMPTED rows with state, window and landed; refill always opens the resolver and runs check (10.15); `landed_changed` = FILLED or WOULD_FILL with a landed post. 3.4 renderers must hide `waiting`, `older_template` and `landed` when None.

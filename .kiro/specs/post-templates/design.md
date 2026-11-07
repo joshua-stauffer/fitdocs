@@ -326,7 +326,7 @@ class PageResult:
     page: str                      # data-root-relative POSIX path
     state: RegionState | None      # None when the page could not be classified
     in_window: bool
-    landed: bool
+    landed: bool | None                  # None when check could not read the ledgers (3.3 ruling)
     code: FillCode
     detail: str | None
     variables: tuple[VariableOutcome, ...]
@@ -355,7 +355,7 @@ class FillReport:
     rows: tuple[PageResult, ...]
     athletes_left_out: int               # 10.6
     published_left_out: int              # 10.6: a bare refill skips pages with a landed post
-    older_template: int                  # 9.2
+    older_template: int | None           # 9.2; None when check's template was refused (3.3 ruling)
     stopped: FillCode | None             # TIMED_OUT or NOT_ATTEMPTED after budget (7.4)
     stopped_variable: str | None
     @property
@@ -366,7 +366,11 @@ class FillReport:
     def failed(self) -> bool: ...             # any problem, unavailable, or failing row
 ```
 
-When a run stops before reaching pages (gate closed, ledgers or index unavailable, SQL refused), `rows` is empty and `waiting` holds the number of Eligible pages, or of candidates when the ledgers are unreadable. The renderers therefore need nothing beyond the report.
+When a run stops before reaching pages (gate closed, ledgers or index unavailable, SQL refused), `rows` is empty and `waiting` holds the number of Eligible pages, or of candidates when the ledgers are unreadable. The renderers therefore need nothing beyond the report. Rulings at 3.3:
+- When `check` names pages and the template parsed but the index is unavailable or the SQL is refused, it still gives one NOT_ATTEMPTED row per named page carrying state, window and landed flag (Req 9.3). No variable is resolved.
+- When `check`'s template is refused, `waiting` and `older_template` are None (unknowable without `since` and the digest) and there are no rows.
+- `refill` always opens the resolver and runs `check`, even when no page needs the index, so refused SQL and an unavailable index give their exit codes (Req 10.15).
+- `FillReport.landed_changed` names only FILLED or WOULD_FILL rows with a landed post (Req 10.7).
 
 ### PostTemplateFile (`post_template/template.py`)
 

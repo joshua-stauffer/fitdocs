@@ -15,8 +15,8 @@ satisfies it structurally, so this module imports neither ``resolve`` nor
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass, replace
 from datetime import date
 from pathlib import Path
 from typing import Final, Protocol
@@ -42,7 +42,7 @@ from fitdocs.post_template.model import (
     VariableOutcome,
 )
 from fitdocs.post_template.region import classify, render_filled
-from fitdocs.post_template.template import PostTemplate, Variable
+from fitdocs.post_template.template import PostTemplate, PostTemplateError, Variable
 from fitdocs.publish.compose import Refusal, compose_post
 from fitdocs.publish.ledger import (
     PublishLedger,
@@ -63,6 +63,7 @@ from fitdocs.publish.request import Post
 from fitdocs.publish.values import page_values
 
 __all__ = [
+    "COMMAND_STATEMENT_TIMEOUT_S",
     "PASS_BUDGET_S",
     "PASS_STATEMENT_TIMEOUT_S",
     "IndexGate",
@@ -70,11 +71,14 @@ __all__ = [
     "PageRead",
     "Resolver",
     "read_for_fill",
+    "run_check",
     "run_pass",
+    "run_refill",
 ]
 
 PASS_STATEMENT_TIMEOUT_S: Final = 5.0  # 7.1
 PASS_BUDGET_S: Final = 30.0  # 7.2
+COMMAND_STATEMENT_TIMEOUT_S: Final = 30.0  # 10.12, and check
 
 
 class Resolver(Protocol):
@@ -102,7 +106,7 @@ class PageRead:
     view: PageView
     state: RegionState | None  # None unless the page is current
     in_window: bool
-    landed: bool  # a landed publish post is recorded for the page
+    landed: bool | None  # a landed publish post is recorded; None: ledgers unread
 
 
 _COMMENT_MARKERS: Final = ("<!--", "-->", "--!>")
@@ -203,8 +207,12 @@ def _fill_page(
     *,
     writing: bool,
     timeout_s: float,
+    show_athletes: bool = False,
 ) -> PageResult:
     """Compose a page's post and, when ``writing``, splice it into the page.
+
+    ``show_athletes`` is for ``check`` (9.4): an Athlete's page is composed too,
+    never written, and still reports ``ATHLETES_TEXT``.
 
     Every failure path leaves the page's bytes as they were (10.9). A timeout
     is returned as ``TIMED_OUT`` with the variable last in ``variables``, for
@@ -213,7 +221,7 @@ def _fill_page(
     if read.view.status is not PageStatus.CURRENT or read.view.regions is None:
         detail = _NOT_CURRENT_DETAIL.get(read.view.status, read.view.detail)
         return _result(read, FillCode.PAGE_NOT_CURRENT, detail=detail)
-    if read.state is RegionState.ATHLETES:
+    if read.state is RegionState.ATHLETES and not show_athletes:
         return _result(
             read,
             FillCode.ATHLETES_TEXT,
@@ -271,6 +279,15 @@ def _fill_page(
     changed = _text_below_stamp(content) != _text_below_stamp(
         read.view.regions[POST_REGION]
     )
+    if read.state is RegionState.ATHLETES:
+        return _result(
+            read,
+            FillCode.ATHLETES_TEXT,
+            detail="the post region holds the athlete's own text",
+            variables=variables,
+            post=composed,
+            changed=changed,
+        )
     if not changed:
         return _result(
             read,
@@ -454,3 +471,288 @@ def run_pass(
         stopped=stopped,
         stopped_variable=stopped_variable,
     )
+
+
+# --------------------------------------------------------------------------- #
+# check and refill
+# --------------------------------------------------------------------------- #
+
+
+class _NoResolver:
+    """Stands in for a resolver on rows that never reach the index."""
+
+    def check(self, template: PostTemplate) -> tuple[str, ...]:
+        raise AssertionError("this row never reaches the index")
+
+    def page_is_current(self, page_key: str | None, path: str, data: bytes) -> bool:
+        raise AssertionError("this row never reaches the index")
+
+    def resolve(
+        self, variable: Variable, binding: Binding, *, timeout_s: float
+    ) -> VariableOutcome:
+        raise AssertionError("this row never reaches the index")
+
+    def close(self) -> None:
+        raise AssertionError("this row never reaches the index")
+
+
+def _report(
+    command: str,
+    *,
+    writing: bool,
+    template: PostTemplate | None,
+    problems: tuple[str, ...] = (),
+    waiting: int | None,
+    unavailable: Unavailable | None = None,
+    rows: tuple[PageResult, ...] = (),
+    athletes_left_out: int = 0,
+    published_left_out: int = 0,
+    older_template: int | None = 0,
+    stopped: FillCode | None = None,
+    stopped_variable: str | None = None,
+) -> FillReport:
+    assert command in ("check", "refill")
+    return FillReport(
+        command=command,  # type: ignore[arg-type]
+        writing=writing,
+        template=(
+            None
+            if template is None
+            else TemplateSummary(template.path.name, template.since, template.digest)
+        ),
+        template_problems=problems,
+        waiting=waiting,
+        unavailable=unavailable,
+        rows=rows,
+        athletes_left_out=athletes_left_out,
+        published_left_out=published_left_out,
+        older_template=older_template,
+        stopped=stopped,
+        stopped_variable=stopped_variable,
+    )
+
+
+def _read_pages(
+    pages: tuple[SelectedPage, ...],
+    *,
+    since: date,
+    ledgers: Iterable[PublishLedger],
+) -> list[PageRead | PageResult]:
+    return [read_for_fill(page, since=since, ledgers=ledgers) for page in pages]
+
+
+def _fill_entries(
+    entries: list[PageRead | PageResult],
+    template: PostTemplate,
+    resolver: Resolver,
+    *,
+    writing: bool,
+    show_athletes: bool,
+) -> tuple[tuple[PageResult, ...], FillCode | None, str | None]:
+    """Fill each entry in order; stop at the first timeout (10.12).
+
+    Rows that need no index (an Athlete's page named in a refill, a page that
+    is not current) are decided without the resolver. Returns the rows, and
+    the stop code and variable.
+    """
+    rows: list[PageResult] = []
+    stopped: FillCode | None = None
+    stopped_variable: str | None = None
+    left_over = ""
+    for entry in entries:
+        if isinstance(entry, PageResult):
+            rows.append(entry)
+            continue
+        if stopped is not None:
+            rows.append(_result(entry, FillCode.NOT_ATTEMPTED, detail=left_over))
+            continue
+        needs_index = entry.state in (RegionState.WAITING, RegionState.FILLED) or (
+            show_athletes and entry.state is RegionState.ATHLETES
+        )
+        result = _fill_page(
+            entry,
+            template,
+            resolver if needs_index else _NoResolver(),
+            writing=writing,
+            timeout_s=COMMAND_STATEMENT_TIMEOUT_S,
+            show_athletes=show_athletes,
+        )
+        if result.code is FillCode.INDEX_BEHIND:  # 9.6, 10.10: name the next step
+            result = replace(result, detail=f"{result.detail}; run fitdocs index")
+        rows.append(result)
+        if result.code is FillCode.TIMED_OUT:
+            stopped = FillCode.TIMED_OUT
+            stopped_variable = result.variables[-1].name
+            left_over = f"{stopped_variable} timed out on an earlier page"
+    return tuple(rows), stopped, stopped_variable
+
+
+def _all_pages(data_root: Path) -> tuple[SelectedPage, ...]:
+    return select_pages(data_root, (), cwd=data_root)
+
+
+def run_check(
+    data_root: Path,
+    template: PostTemplate | PostTemplateError,
+    pages: tuple[SelectedPage, ...],
+    *,
+    ledgers: Mapping[str, PublishLedger] | PublishLedgerError,
+    open_resolver: OpenResolver,
+) -> FillReport:
+    """Validate the template and its SQL, count what the next sync would fill,
+    and show each named page. Writes nothing.
+
+    Unreadable ledgers are one more problem, with ``waiting`` None and pages
+    shown without a landed flag. An unavailable index still reports the
+    template's own problems and says the SQL was not checked.
+    """
+    parsed = None if isinstance(template, PostTemplateError) else template
+    problems: tuple[str, ...] = (
+        tuple(template.problems) if isinstance(template, PostTemplateError) else ()
+    )
+    readable = not isinstance(ledgers, PublishLedgerError)
+    ledger_list = (
+        list(ledgers.values()) if not isinstance(ledgers, PublishLedgerError) else []
+    )
+
+    # Without the file there is no `since` and no digest, so neither count is known.
+    waiting: int | None = None if not readable or parsed is None else 0
+    older: int | None = None if parsed is None else 0
+    reads: dict[str, PageRead | PageResult] = {}
+    if parsed is not None:
+        for page in _all_pages(data_root):
+            read = read_for_fill(page, since=parsed.since, ledgers=ledger_list)
+            if isinstance(read, PageRead):
+                if not readable:
+                    read = replace(read, landed=None)
+                elif (
+                    read.state is RegionState.WAITING
+                    and read.in_window
+                    and not read.landed
+                ):
+                    assert waiting is not None
+                    waiting += 1
+                if read.state is RegionState.FILLED and read.view.regions is not None:
+                    _, stamp = classify(read.view.regions[POST_REGION])
+                    if stamp is not None and stamp.template != parsed.digest:
+                        assert older is not None
+                        older += 1
+        for page in pages:
+            read = read_for_fill(page, since=parsed.since, ledgers=ledger_list)
+            if isinstance(read, PageRead) and not readable:
+                read = replace(read, landed=None)
+            reads[page.rel] = read
+    ledger_problems: tuple[str, ...] = ()
+    if isinstance(ledgers, PublishLedgerError):
+        ledger_problems = (
+            f"the publish records cannot be read ({ledgers}); "
+            "fix the file it names, then run the check again",
+        )
+
+    def report(**more: object) -> FillReport:
+        return _report(
+            "check",
+            writing=False,
+            template=parsed,
+            problems=problems + ledger_problems,
+            waiting=waiting,
+            older_template=older,
+            **more,  # type: ignore[arg-type]
+        )
+
+    def unchecked() -> tuple[PageResult, ...]:
+        """Req 9.3: a named page still shows its state, window and landed flag."""
+        if parsed is None:  # no `since`, so no window to show
+            return ()
+        return tuple(
+            entry
+            if isinstance(entry, PageResult)
+            else _result(entry, FillCode.NOT_ATTEMPTED)
+            for entry in (reads[page.rel] for page in pages)
+        )
+
+    resolver = open_resolver()
+    if isinstance(resolver, Unavailable):
+        return report(
+            unavailable=Unavailable(
+                f"the SQL was not checked: {resolver.reason}", resolver.next_step
+            ),
+            rows=unchecked(),
+        )
+    try:
+        if parsed is None:
+            return report()
+        sql_problems = resolver.check(parsed)
+        if sql_problems:
+            problems += sql_problems
+            return report(rows=unchecked())
+        rows, stopped, stopped_variable = _fill_entries(
+            [reads[page.rel] for page in pages],
+            parsed,
+            resolver,
+            writing=False,
+            show_athletes=True,
+        )
+        return report(rows=rows, stopped=stopped, stopped_variable=stopped_variable)
+    finally:
+        resolver.close()
+
+
+def run_refill(
+    data_root: Path,
+    template: PostTemplate,
+    pages: tuple[SelectedPage, ...],
+    *,
+    writing: bool,
+    ledgers: Mapping[str, PublishLedger],
+    open_resolver: OpenResolver,
+) -> FillReport:
+    """Recompute posts: named pages (Waiting or Filled), else the Eligible and
+    unpublished Filled pages in the window.
+
+    A bare refill counts the Athlete's pages and the published pages it leaves
+    out. The ledgers arrive already loaded.
+    """
+    ledger_list = list(ledgers.values())
+    entries: list[PageRead | PageResult] = []
+    athletes = published = 0
+    for read in _read_pages(
+        pages or _all_pages(data_root), since=template.since, ledgers=ledger_list
+    ):
+        if pages or isinstance(read, PageResult):
+            if pages:
+                entries.append(read)
+            continue
+        if read.state is None or not read.in_window:
+            continue
+        if read.state is RegionState.ATHLETES:
+            athletes += 1
+        elif read.landed:
+            published += 1
+        else:
+            entries.append(read)
+
+    def report(**more: object) -> FillReport:
+        return _report(
+            "refill",
+            writing=writing,
+            template=template,
+            waiting=0,
+            athletes_left_out=athletes,
+            published_left_out=published,
+            **more,  # type: ignore[arg-type]
+        )
+
+    resolver = open_resolver()
+    if isinstance(resolver, Unavailable):
+        return report(unavailable=resolver)
+    try:
+        problems = resolver.check(template)
+        if problems:
+            return report(problems=problems)
+        rows, stopped, stopped_variable = _fill_entries(
+            entries, template, resolver, writing=writing, show_athletes=False
+        )
+        return report(rows=rows, stopped=stopped, stopped_variable=stopped_variable)
+    finally:
+        resolver.close()

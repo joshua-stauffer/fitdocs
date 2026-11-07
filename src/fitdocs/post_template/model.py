@@ -72,7 +72,9 @@ class PageResult:
     page: str  # data-root-relative POSIX path
     state: RegionState | None  # None when the page could not be classified
     in_window: bool
-    landed: bool  # the page has a landed publish post (10.7, 9.3)
+    # the page has a landed publish post (10.7, 9.3); None: check could not
+    # read the ledgers, so the flag is not shown
+    landed: bool | None
     code: FillCode
     detail: str | None
     variables: tuple[VariableOutcome, ...]
@@ -109,7 +111,7 @@ class FillReport:
     rows: tuple[PageResult, ...]
     athletes_left_out: int  # 10.6
     published_left_out: int  # 10.6: a bare refill skips pages with a landed post
-    older_template: int  # 9.2
+    older_template: int | None  # 9.2; None: check without a parsed template
     stopped: FillCode | None  # TIMED_OUT or NOT_ATTEMPTED after budget (7.4)
     stopped_variable: str | None
 
@@ -118,6 +120,18 @@ class FillReport:
         """Pages written this run. `PageResult.landed` is a publish record's
         state, not a write, so a written page is one whose code is FILLED."""
         return tuple(row.page for row in self.rows if row.code is FillCode.FILLED)
+
+    @property
+    def landed_changed(self) -> tuple[str, ...]:
+        """Pages whose text changes (or would) and that have a landed post (10.7).
+
+        The next ``fitdocs publish --yes`` updates the posted activity for these.
+        """
+        return tuple(
+            row.page
+            for row in self.rows
+            if row.code in (FillCode.FILLED, FillCode.WOULD_FILL) and row.landed is True
+        )
 
     @property
     def counts(self) -> Mapping[str, int]:
