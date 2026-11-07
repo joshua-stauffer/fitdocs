@@ -75,7 +75,11 @@ inside a vendor platform.
    - **Where the text comes from.** By default it is composed from a
      per-target template, with values filled in from the page. An
      athlete-owned `post` region on the page overrides it. Numbers always
-     come from the page's own computed values.
+     come from the page's own computed values. *(Planned by Phase 16 of the
+     roadmap, discovery 2026-11-07: a template whose variables are SQL over the
+     analytics index can write a new page's `post` region once, as of the
+     workout's start. The athlete's own words always win, and regeneration
+     carries the text unchanged.)*
    - **When it posts.** A page posts only once it has opted in.
      `fitdocs publish` is a dry run unless told `--yes`.
    - **What comes back.** Every outcome is one of fitdocs's own codes.

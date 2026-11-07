@@ -4786,3 +4786,49 @@ task 6.3 (the spec's live check, 7.2, is still the maintainer's).
   daily wellness pull with the athlete's own key. Dependencies: none.
 
 Next: the maintainer's live check (task 7.2), and reading Garmin's Terms of Use before the connector ships.
+
+### Phase 16 — post templates (discovery 2026-11-07)
+
+**Goal**: an athlete defines a workout's post once, as text plus one SQL definition
+per variable, and every new page arrives with its post already written, numbers
+included. Details, measurements and the worked template:
+`.kiro/specs/post-templates/brief.md`.
+
+#### Decisions taken at discovery (2026-11-07)
+
+- **Path C** (maintainer): one new spec, carrying its amendments to `publish-core`,
+  `wiki-contract`, `analytics-index` and `analytics-query`.
+- **The results are written into the page's `post` region** (maintainer), by a pass that
+  runs after the index refresh. `fitdocs publish` stays offline and reads no index.
+  - *Rejected:* a separate values region. The page would show tokens, and every page would
+    gain a region.
+  - *Rejected:* resolving at publish time. Publishing would need a built index, and the
+    text would never appear in the wiki.
+- **`regen` keeps the filled text; re-querying is on request** (maintainer). A separate
+  command re-runs the queries for filled, unedited pages.
+  - *Rejected:* re-querying on every regen. An as-of pins a result against later workouts
+    only. Late imports and load recomputes still move it, and any text change makes the next
+    `fitdocs publish --yes` update the posted activity.
+- **Variables use the existing `{name}` grammar** (maintainer), not `$NAME`, because
+  `{?...}` already handles absent values and `$` stays reserved for SQL parameters.
+- **Defaults stated at discovery, with no objection; requirements review can change them:**
+  `$as_of` is the workout's recorded start and `$page_key` identifies the workout; a page
+  fills only while its `post` is the untouched placeholder and it is dated on or after the
+  template's required `since`; `fitdocs publish` refuses a page still waiting for its fill;
+  one template file.
+
+#### Consequence: the "never read back" rule gets a second named exception
+
+The first was Phase 11's dashboard charts. A workout page's filled `post` text is produced
+from the index once, and then carried like any athlete-owned text, so the page stays
+re-renderable and deleting the index still costs only rebuild time. The rule's copies move
+with the spec, not with this discovery, because they stay true until it lands: `tech.md`,
+`structure.md` (the `query` importer rule), `docs/ownership-contract.md`,
+`docs/publishing.md`, `contract.py`, the `fitdocs-workouts` skill and `product.md`.
+
+#### Specs (dependency order)
+
+- [ ] post-templates — A template file whose variables are SQL over the analytics index fills a
+  new workout page's `post` region once, as of the workout's start. Dependencies: none.
+
+Next: `/kiro-spec-init post-templates`.

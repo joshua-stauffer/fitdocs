@@ -25,6 +25,11 @@ already have fixed it.
 (b) The `REFRESHED_REGIONS` docstring in `src/fitdocs/contract.py` (~996-1000)
 says each region's "owning pass replaces its content after every page-writing
 run". That is false for `published`, which only `fitdocs publish --yes` refills.
+(c) Added 2026-11-07: the module docstring at `src/fitdocs/contract.py:73-85`
+lists `notes` and `workout` as the user-owned regions and omits `post`, which
+`USER_REGIONS` includes (`contract.py:1014`). The `PRESERVED_REGIONS` line there
+needs the same check. `post-templates` will amend the `post` ownership wording, so
+fix this first or with that spec.
 
 ## Why it matters
 Readers of the contract get a wrong list of reserved names and a wrong refresh rule.
