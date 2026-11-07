@@ -16,7 +16,7 @@
 
 ## Tasks
 
-- [ ] 1. Foundation: shared additions outside the new package
+- [x] 1. Foundation: shared additions outside the new package
 
 - [x] 1.1 Recognize a waiting post region and name the template's location
   - Add three things to the contract:
@@ -58,7 +58,7 @@
   - _Requirements: 6.5, 9.6, 10.10_
   - _Boundary: SessionFreshness_
 
-- [ ] 1.6 Create the post-template package, its shared types and its boundary guard
+- [x] 1.6 Create the post-template package, its shared types and its boundary guard
   - Create the package marker and the shared value types the design lists:
     - the fill codes and region states;
     - the binding, variable outcome and page result;
@@ -365,3 +365,9 @@
 - 1.1 review took 3 rounds, all on the stamp grammar's tests (uppercase hex, digest length on BOTH digests, trailing text on the stamp line, field spacing, fraction width, 1-digit month/day, `re.escape`, `count=1`). The production code was correct from round 1. Sweep every grammar element before reporting.
 - 1.2: `docmerge.replace_region(markdown, id, content) -> str | None` writes content verbatim and returns None only when the region is absent; damage raises `RegionError`. It does NOT check that `content` is free of marker lines, so 3.1's comment-marker refusal on composed text is what keeps a fill from writing a page `extract_regions` rejects. Review lesson: decoys with a different id cannot discriminate a literal-id pattern, so use same-id lookalikes that are not markers, and content with surrounding whitespace.
 - 1.5: `QuerySession.page_is_current(page_key, path, data)` reads bookkeeping lazily once per session through `command.read_bookkeeping`, and lets read errors propagate. That read is the one `command.py` connection read without the `interrupt_quietly` / `is_user_interrupt` → `KeyboardInterrupt` conversion that `run` and `open_session` have. So a SIGINT landing there would surface as `RuntimeError("Query interrupted")`. 2.4's `SessionResolver.page_is_current`, or the engine, must convert it so that refill exits 130 (Req 10.14) and the pass stops cleanly (Req 6.12). Pin it with a test.
+- 1.6, rulings recorded:
+  - `FillReport.waiting` is `int | None`, set by the parent and reflected in design.md. None occurs only when `check` cannot read the ledgers; the renderers must then hide the Eligible count, not print 0.
+  - `wrote` is the pages of rows whose code is `FILLED`. `PageResult.landed` means a landed publish post, never "written this run".
+  - `counts` lists only codes that have at least one row, in FillCode order.
+  - `failed` is true for template problems, `unavailable`, or any row code outside {FILLED, WOULD_FILL, UNCHANGED, ATHLETES_TEXT}. So INDEX_BEHIND and PAGE_NOT_CURRENT fail in both check and refill, and pages a bare refill leaves out are counts, not failures.
+  - The boundary guard in tests/post_template/test_boundary.py has an equality-pinned `_ALLOWED_IMPORT_TARGETS`, and each later module task appends ONE entry. The resolver task (2.3) adds `fitdocs.query` for resolve.py only. query is not in `_FORBIDDEN_TARGETS`, but the per-module table forbids it everywhere else.

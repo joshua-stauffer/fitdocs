@@ -350,7 +350,7 @@ class FillReport:
     writing: bool
     template: TemplateSummary | None     # None when the file was refused
     template_problems: tuple[str, ...]   # 1.x and 2.x, located
-    waiting: int                         # pass: Eligible pages left unfilled, or candidates when ledgers are unreadable (7.5, 6.4, 6.8); check: Eligible pages, which the next sync will try to fill (9.2); refill: 0
+    waiting: int | None                  # pass: Eligible pages left unfilled, or candidates when ledgers are unreadable (7.5, 6.4, 6.8); check: Eligible pages, which the next sync will try to fill (9.2), None when check cannot read the ledgers (count not shown); refill: 0
     unavailable: Unavailable | None      # gate closed, index unavailable, ledgers unreadable
     rows: tuple[PageResult, ...]
     athletes_left_out: int               # 10.6
