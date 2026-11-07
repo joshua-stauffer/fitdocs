@@ -507,7 +507,7 @@ def _report(
     rows: tuple[PageResult, ...] = (),
     athletes_left_out: int = 0,
     published_left_out: int = 0,
-    older_template: int | None = 0,
+    older_template: int | None = None,
     stopped: FillCode | None = None,
     stopped_variable: str | None = None,
 ) -> FillReport:

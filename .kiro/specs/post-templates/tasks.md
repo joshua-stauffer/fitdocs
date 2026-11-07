@@ -141,7 +141,7 @@
   - _Boundary: VariableResolver_
   - _Depends: 2.3_
 
-- [ ] 3. The fill engine and its reports
+- [x] 3. The fill engine and its reports
 
 - [x] 3.1 Fill one page
   - Read each page once. Decide its state, whether it is in the window and whether it has a landed post.
@@ -202,7 +202,7 @@
     - a refill row for a page the index does not hold as it is now, giving `index_behind` with `fitdocs index` as the next step, and the page unchanged.
   - _Requirements: 9.2, 9.3, 9.4, 9.5, 9.6, 10.2, 10.3, 10.5, 10.6, 10.7, 10.8, 10.10, 10.12_
 
-- [ ] 3.4 (P) Render the pass, check and refill reports
+- [x] 3.4 (P) Render the pass, check and refill reports
   - Render the pass as text:
     - empty when there is nothing to say;
     - otherwise the filled and waiting counts and any stop note;
@@ -387,3 +387,4 @@
   - The unreadable-ledger next step is "fix the file it names, then run fitdocs sync again". Never advise removing a publish record: that re-sends posts and makes landed pages Eligible.
   - The empty-Eligible return comes before the gate is looked at, per Flow 7.6.
 - 3.3: `run_check`/`run_refill` share `_fill_entries` (30 s statements, stop at the first timeout; INDEX_BEHIND detail gains "; run fitdocs index"). `_fill_page(show_athletes=True)` lets check compose an Athlete's page; refill and the pass never set it. Rulings (design.md): with a refused template check gives `waiting` and `older_template` = None and no rows; with the template parsed but the index unavailable or SQL refused, named pages still get NOT_ATTEMPTED rows with state, window and landed; refill always opens the resolver and runs check (10.15); `landed_changed` = FILLED or WOULD_FILL with a landed post. 3.4 renderers must hide `waiting`, `older_template` and `landed` when None.
+- 3.4: `post_template.report` has `render_pass_text` and `render_text`/`render_json` for check and refill. It prints engine reasons as written, hides None counts and None landed flags, and groups VALUE_MISSING cause lines by `row.detail` (the placeholder). Cause lines are capped at 5, sorted by count, then FillCode order, then variable. The NEXT_STEPS wording was written at implementation; only value_missing came from the design. Refill's `older_template` is None (the engine `_report` default). The naming note goes only on the published left-out line. report imports engine for the timeout constants only (design.md).

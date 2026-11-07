@@ -553,6 +553,19 @@ class TestRefillWriting:
         assert report.failed
         assert _tree(world) == before
 
+    def test_refill_never_computes_the_older_template_count(self, world: World) -> None:
+        template = _template(world)
+        _add(world, template, "aa", "filled-older-template")
+        report = run_refill(
+            world.root,
+            template,
+            (),
+            writing=False,
+            ledgers=_ledgers(world),
+            open_resolver=Opener(PassResolver()),  # type: ignore[arg-type]
+        )
+        assert report.older_template is None
+
     def test_an_unavailable_index_is_reported_and_nothing_is_written(
         self, world: World
     ) -> None:

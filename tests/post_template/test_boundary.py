@@ -70,6 +70,9 @@ _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
     "fitdocs.post_template.region": frozenset(
         {"fitdocs.contract", "fitdocs.post_template.model", "fitdocs.publish.request"}
     ),
+    "fitdocs.post_template.report": frozenset(
+        {"fitdocs.post_template.engine", "fitdocs.post_template.model"}
+    ),
     "fitdocs.post_template.resolve": frozenset(
         {
             "fitdocs.post_template.model",

@@ -272,7 +272,7 @@ Only Waiting and Filled are ever written. fitdocs never moves a page out of Athl
 | FillRegion | post_template.region | States, provenance, filled text | 4.7, 5.1 to 5.5, 8.x | contract (P0), publish.request (P1) | Service, State |
 | VariableResolver | post_template.resolve | SQL check, bind, run, convert | 2.x, 3.x, 13.3 | query.command (P0) | Service |
 | FillEngine | post_template.engine | Select, compose, write, for pass, check and refill | 3.10, 4.x, 5.6 to 5.9, 6.x, 7.1 to 7.4, 9.x, 10.x | publish.pages, ledger, compose (P0) | Service, Batch |
-| FillReportRendering | post_template.report | Text and JSON output | 7.5, 7.6, 11.2 | model (P0) | Service |
+| FillReportRendering | post_template.report | Text and JSON output | 7.5, 7.6, 11.2 | model (P0), engine (timeout constants only; 3.4 ruling) | Service |
 | CliPostTemplate | cli | Pass wiring, command, publish preflight | 1.1 to 1.3, 6.1, 6.4, 6.9 to 6.13, 9.1, 9.7, 9.8, 10.1, 10.13 to 10.15, 11.x, 12.8 | all of the above (P0) | Batch |
 | PublishWaitingRefusal | publish.engine, outcomes, ledger | Refuse Eligible pages | 12.x | contract (P0) | Service |
 | RegionSplice | docmerge | Replace one region's content | 5.6 | — | Service |
@@ -355,7 +355,7 @@ class FillReport:
     rows: tuple[PageResult, ...]
     athletes_left_out: int               # 10.6
     published_left_out: int              # 10.6: a bare refill skips pages with a landed post
-    older_template: int | None           # 9.2; None when check's template was refused (3.3 ruling)
+    older_template: int | None           # 9.2; None when check's template was refused (3.3 ruling) and for refill, which never computes it
     stopped: FillCode | None             # TIMED_OUT or NOT_ATTEMPTED after budget (7.4)
     stopped_variable: str | None
     @property

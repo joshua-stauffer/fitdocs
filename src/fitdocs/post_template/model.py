@@ -111,7 +111,7 @@ class FillReport:
     rows: tuple[PageResult, ...]
     athletes_left_out: int  # 10.6
     published_left_out: int  # 10.6: a bare refill skips pages with a landed post
-    older_template: int | None  # 9.2; None: check without a parsed template
+    older_template: int | None  # 9.2, check only; None: no parsed template, or refill
     stopped: FillCode | None  # TIMED_OUT or NOT_ATTEMPTED after budget (7.4)
     stopped_variable: str | None
 
