@@ -4828,7 +4828,7 @@ with the spec, not with this discovery, because they stay true until it lands: `
 
 #### Specs (dependency order)
 
-- [ ] post-templates — **implemented on `impl/post-templates`; validation and merge pending.** A template file whose variables are SQL over the analytics index fills a
+- [x] post-templates — **implemented and validated (GO) 2026-11-07, merged to `main`.** A template file whose variables are SQL over the analytics index fills a
   new workout page's `post` region once, as of the workout's start. Dependencies: none.
   *(Spec ready 2026-11-07: 14 requirements / 124 criteria, 24 tasks. A same-day revision, before implementation: an emptied `post` region returns to the template, a bare `refill` skips published pages, `check` counts what the next sync would fill, and the docs set `since` to today.)* At requirements the
   maintainer chose the following:
@@ -4837,4 +4837,4 @@ with the spec, not with this discovery, because they stay true until it lands: `
   - exit 1 for a waiting refusal;
   - no fill at all while the index refresh reports any error.
 
-Next: validate `impl/post-templates` (task 7.1) and merge it; the site copy is queued in `.kiro/queue/2026-11-07-site-copy-post-templates.md`.
+Phase 16 is complete. The site copy is queued in `.kiro/queue/2026-11-07-site-copy-post-templates.md`, and the follow-ups from implementation are the `.kiro/queue/2026-11-07-*` items whose `surfaced_by` is `/kiro-impl post-templates`.
