@@ -260,7 +260,33 @@ def _principal_list(session: _Session, args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+MSG_NOT_REVOKED: Final = (
+    "Strava's access could not be revoked; the person must revoke it in "
+    "their Strava settings"
+)
+
+
+def _revoked_at_strava(session: _Session, principal_id: str) -> bool:
+    """Ask Strava to revoke the principal's grant. False when it did not
+    accept the revoke, including when the attempt raised. A connection exists
+    when this is called; `withdraw` deletes it whatever happens."""
+    try:
+        return _custody(session).withdraw(principal_id)
+    except Exception:  # noqa: BLE001 - the deletion goes on, the caller says so
+        return False
+
+
 def _principal_delete(session: _Session, args: argparse.Namespace) -> int:
+    revoked = True
+    if (
+        session.config.targets is not None
+        and session.config.strava is not None
+        and session.storage.get_principal(args.principal_id) is not None
+        and session.storage.get_connection(args.principal_id, "strava") is not None
+    ):
+        revoked = _revoked_at_strava(session, args.principal_id)
+    if not revoked:
+        _err(session.redact(MSG_NOT_REVOKED))
     if not session.tokens.delete_principal(args.principal_id):
         return _fail(
             session.redact,
@@ -340,10 +366,9 @@ def _strava_webhook(config: RelayConfig, args: argparse.Namespace) -> int:
     return _print(strava_cli.webhook_delete(api))
 
 
-def _reencrypt(session: _Session, args: argparse.Namespace) -> int:
-    del args
+def _custody(session: _Session) -> Custody:
     targets, strava = _strava_parts(session.config)
-    custody = Custody(
+    return Custody(
         session.storage,
         Keyring(targets.keys),
         StravaApi(strava, outbound=urllib_outbound),
@@ -353,7 +378,11 @@ def _reencrypt(session: _Session, args: argparse.Namespace) -> int:
         monotonic=time.monotonic,
         sleep=time.sleep,
     )
-    return _print(strava_cli.reencrypt(custody))
+
+
+def _reencrypt(session: _Session, args: argparse.Namespace) -> int:
+    del args
+    return _print(strava_cli.reencrypt(_custody(session)))
 
 
 _SESSION_COMMANDS: Final[dict[tuple[str, str], Callable[..., int]]] = {

@@ -815,7 +815,7 @@ def test_withdraw_revokes_once_with_the_refresh_token_then_deletes(
         "ann", "strava", NewToken("tok-ann", "v", None), now=NOW
     )
     world.outbound.expect("POST", REVOKE_URL, reply(200, {}))
-    world.custody.withdraw("ann")
+    assert world.custody.withdraw("ann") is True
     assert world.revoke_calls() == 1 and len(world.outbound.calls) == 1
     (call,) = world.outbound.calls
     assert call.form == {"token": REFRESH}
@@ -836,7 +836,7 @@ def test_withdraw_deletes_whatever_strava_answered(
 ) -> None:
     connect(world)
     world.outbound.expect("POST", REVOKE_URL, answer)  # type: ignore[arg-type]
-    world.custody.withdraw("ann")
+    assert world.custody.withdraw("ann") is False
     assert world.revoke_calls() == 1
     assert world.store.get_connection("ann", "strava") is None
 
@@ -853,7 +853,7 @@ def test_withdraw_makes_no_call_when_the_budget_refuses_and_still_deletes(
 ) -> None:
     w = build(store, limits=Limits(HUGE, HUGE, 0, HUGE))
     connect(w)
-    w.custody.withdraw("ann")
+    assert w.custody.withdraw("ann") is False
     assert w.outbound.calls == []
     assert store.get_connection("ann", "strava") is None
 
@@ -863,8 +863,8 @@ def test_withdraw_of_unreadable_tokens_makes_no_call_and_deletes(
 ) -> None:
     put_raw(world.store, "ann", UNKNOWN)
     put_raw(world.store, "bea", CURRENT, refresh=None)
-    world.custody.withdraw("ann")
-    world.custody.withdraw("bea")
+    assert world.custody.withdraw("ann") is False
+    assert world.custody.withdraw("bea") is False
     assert world.outbound.calls == []
     assert world.store.get_connection("ann", "strava") is None
     assert world.store.get_connection("bea", "strava") is None
@@ -874,7 +874,7 @@ def test_withdraw_without_a_connection_calls_nothing_and_changes_nothing(
     world: World,
 ) -> None:
     connect(world, "bea")
-    world.custody.withdraw("ann")
+    assert world.custody.withdraw("ann") is True
     assert world.outbound.calls == []
     assert world.store.get_connection("bea", "strava") is not None
 

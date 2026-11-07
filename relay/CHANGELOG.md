@@ -8,6 +8,15 @@ breaking change for deployments is marked `**Breaking for deployments:**`.
 - Deploy contract version: 1
 - Envelope version: 1
 - Seam version: 1
+- Changed: `principal delete ID` now asks Strava to revoke the principal's
+  connection before it deletes the principal, when the relay offers Strava and
+  the principal has a connection. A revoke Strava does not accept never stops
+  the deletion: the command still prints `deleted ID`, exits 0 and adds one line
+  on standard error saying the person must revoke access in their Strava
+  settings. Without a Strava connection, or without Strava configured, it
+  behaves as before. `tokens.delete_principal` on the extension seam is
+  unchanged and does not revoke. Deploy contract version 1, envelope version 1
+  and seam version 1 are unchanged.
 - Dependencies. The floors now exclude versions with published advisories and
   versions the relay does not work on: `starlette>=1.7` (below it, request log
   records carry no route), `cryptography>=50.0.0`, and a new direct floor,

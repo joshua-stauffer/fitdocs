@@ -245,23 +245,31 @@ class Custody:
             return PublishCode.NOT_CONNECTED
         return PublishCode.UNAVAILABLE
 
-    def withdraw(self, principal_id: str) -> None:
+    def withdraw(self, principal_id: str) -> bool:
+        """Revoke at Strava when possible, then delete the connection.
+
+        True when Strava accepted the revoke or there was no connection; False
+        when no revoke was accepted (unreadable tokens, no refresh token, the
+        budget spent, or a failure Strava or the network gave). The connection
+        is deleted either way, and an exception from the revoke is re-raised
+        after the delete."""
         connection = self._storage.get_connection(principal_id, STRAVA)
         if connection is None:
-            return
+            return True
         try:
-            self._revoke_once(connection)
+            return self._revoke_once(connection)
         finally:
             self._storage.delete_connection(
                 principal_id, STRAVA, generation=None, now=self._clock()
             )
 
-    def _revoke_once(self, connection: StoredConnection) -> None:
+    def _revoke_once(self, connection: StoredConnection) -> bool:
         tokens = self._open(connection)
         if tokens is None or tokens[1] is None:
-            return
-        if self._budget.spend(connection.principal_id).allowed:
-            self._api.revoke(tokens[1], timeout=REVOKE_TIMEOUT_S)
+            return False
+        if not self._budget.spend(connection.principal_id).allowed:
+            return False
+        return self._api.revoke(tokens[1], timeout=REVOKE_TIMEOUT_S) is None
 
     def forget_account(self, athlete_id: str) -> bool:
         return self._storage.delete_connection_by_account(

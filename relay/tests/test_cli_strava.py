@@ -7,6 +7,7 @@ Every test calls `cli.main` in-process. Strava is the scripted outbound
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,17 +20,23 @@ from tests.strava.scripted_strava import Call, ScriptedOutbound, reply
 from fitdocs_relay import cli
 from fitdocs_relay.config import PostgresTarget, SqliteTarget
 from fitdocs_relay.crypto import Keyring, new_key, parse_keys
+from fitdocs_relay.identity import TokenService
 from fitdocs_relay.outbound import OutboundError
 from fitdocs_relay.storage import open_storage
 from fitdocs_relay.storage.interface import (
     NewConnection,
     NewPrincipal,
+    NewToken,
     SealedTokens,
+    StorageUnreachable,
 )
 from fitdocs_relay.storage.migrate import migrate
+from fitdocs_relay.strava.budget import StravaBudget
+from fitdocs_relay.strava.config import Limits
 
 P = "FITDOCS_RELAY_"
 API: Final = "https://api.example/v3"
+OAUTH: Final = "https://oauth.example/oauth"
 VIEW: Final = f"{API}/push_subscriptions?" + urlencode(
     {"client_id": "4711", "client_secret": "client-secret-Zq9"}
 )
@@ -78,6 +85,7 @@ def strava_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         "STRAVA_CLIENT_SECRET": CLIENT_SECRET,
         "STRAVA_WEBHOOK_TOKEN": WEBHOOK_TOKEN,
         "STRAVA_API_URL": API,
+        "STRAVA_OAUTH_URL": OAUTH,
     }
     for name, value in values.items():
         monkeypatch.setenv(P + name, value)
@@ -429,3 +437,250 @@ def test_reencrypt_refuses_a_database_that_is_not_current(
     result = run("reencrypt")
     assert result.code == 1 and result.out == ""
     assert "run 'fitdocs-relay migrate'" in result.err
+
+
+# --- principal delete revokes at Strava ---------------------------------------------
+
+REVOKE: Final = f"{OAUTH}/revoke"
+NOT_REVOKED: Final = cli.MSG_NOT_REVOKED + "\n"
+
+
+def stored(
+    target: SqliteTarget | PostgresTarget, principal: str
+) -> tuple[bool, bool, bool]:
+    """(principal, tokens, connection) still in storage."""
+    store = open_storage(target)
+    try:
+        return (
+            store.get_principal(principal) is not None,
+            store.find_token("tok-ann") is not None,
+            store.get_connection(principal, "strava") is not None,
+        )
+    finally:
+        store.close()
+
+
+def seed_deletable(
+    target: SqliteTarget | PostgresTarget, key: str = KEY_NEW, *, connect: bool = True
+) -> None:
+    store = open_storage(target)
+    try:
+        migrate(store, now=1)
+        store.create_principal(NewPrincipal("ann", None), now=1)
+        if connect:
+            ring = Keyring(parse_keys(key))
+            store.put_connection(
+                NewConnection(
+                    "ann",
+                    "strava",
+                    "acct-ann",
+                    SealedTokens(
+                        ring.seal("access-tok", context=ctx("ann", "access")),
+                        ring.seal("refresh-tok", context=ctx("ann", "refresh")),
+                        1_900_000_000,
+                    ),
+                ),
+                now=1,
+            )
+            assert store.issue_connection_token(
+                "ann", "strava", NewToken("tok-ann", "v", None), now=1
+            )
+        else:
+            store.mint_token(
+                NewToken("tok-ann", "v", None),
+                principal_id="ann",
+                new_principal=None,
+                now=1,
+            )
+    finally:
+        store.close()
+
+
+@pytest.mark.parametrize(
+    ("answer", "warned"),
+    [
+        (reply(200, {}), False),
+        (reply(401), True),
+        (reply(403), True),
+        (reply(500), True),
+        (reply(429), True),
+        (OutboundError("timeout"), True),
+    ],
+    ids=["accepted", "401", "403", "500", "429", "unreachable"],
+)
+def test_principal_delete_asks_strava_once_and_deletes_whatever_it_answers(
+    strava_env: Path,
+    database_target: SqliteTarget | PostgresTarget,
+    monkeypatch: pytest.MonkeyPatch,
+    run: Callable[..., Result],
+    scripted: ScriptedOutbound,
+    answer: object,
+    warned: bool,
+) -> None:
+    use(database_target, monkeypatch)
+    seed_deletable(database_target)
+    assert stored(database_target, "ann") == (True, True, True)
+    scripted.expect("POST", REVOKE, answer)  # type: ignore[arg-type]
+    result = run("principal", "delete", "ann")
+    assert (result.code, result.out) == (0, "deleted ann\n")
+    assert result.err == (NOT_REVOKED if warned else "")
+    assert len(result.calls) == 1
+    assert result.calls[0].form == {"token": "refresh-tok"}
+    assert stored(database_target, "ann") == (False, False, False)
+    assert_no_secret(result)
+    assert "refresh-tok" not in result.err + result.out
+
+
+def test_principal_delete_with_the_budget_spent_makes_no_call_and_deletes(
+    strava_env: Path,
+    database_target: SqliteTarget | PostgresTarget,
+    monkeypatch: pytest.MonkeyPatch,
+    run: Callable[..., Result],
+) -> None:
+    monkeypatch.setenv(P + "STRAVA_READ_RATE_LIMIT", "1,1")
+    use(database_target, monkeypatch)
+    seed_deletable(database_target)
+    store = open_storage(database_target)
+    try:  # the one call the window allows is already spent
+        budget = StravaBudget(
+            store, Limits(10, 10, 1, 1), clock=lambda: int(time.time())
+        )
+        assert budget.spend("ann").allowed
+    finally:
+        store.close()
+    result = run("principal", "delete", "ann")
+    assert (result.code, result.out, result.err) == (0, "deleted ann\n", NOT_REVOKED)
+    assert result.calls == []
+    assert stored(database_target, "ann") == (False, False, False)
+
+
+def test_principal_delete_with_unreadable_tokens_makes_no_call_and_deletes(
+    strava_env: Path,
+    database_target: SqliteTarget | PostgresTarget,
+    monkeypatch: pytest.MonkeyPatch,
+    run: Callable[..., Result],
+) -> None:
+    use(database_target, monkeypatch)
+    seed_deletable(database_target, KEY_OTHER)
+    result = run("principal", "delete", "ann")
+    assert (result.code, result.out, result.err) == (0, "deleted ann\n", NOT_REVOKED)
+    assert result.calls == []
+    assert stored(database_target, "ann") == (False, False, False)
+
+
+def test_principal_delete_with_a_raising_revoke_still_deletes_and_warns(
+    strava_env: Path,
+    database_target: SqliteTarget | PostgresTarget,
+    monkeypatch: pytest.MonkeyPatch,
+    run: Callable[..., Result],
+) -> None:
+    use(database_target, monkeypatch)
+    seed_deletable(database_target)
+    # Nothing is scripted, so the one revoke attempt raises UnscriptedCall.
+    result = run("principal", "delete", "ann")
+    assert (result.code, result.out, result.err) == (0, "deleted ann\n", NOT_REVOKED)
+    assert len(result.calls) == 1
+    assert stored(database_target, "ann") == (False, False, False)
+    assert_no_secret(result)
+
+
+def test_principal_delete_without_a_connection_makes_no_call(
+    strava_env: Path,
+    database_target: SqliteTarget | PostgresTarget,
+    monkeypatch: pytest.MonkeyPatch,
+    run: Callable[..., Result],
+) -> None:
+    use(database_target, monkeypatch)
+    seed_deletable(database_target, connect=False)
+    result = run("principal", "delete", "ann")
+    assert (result.code, result.out, result.err) == (0, "deleted ann\n", "")
+    assert result.calls == []
+    assert stored(database_target, "ann") == (False, False, False)
+
+
+def test_principal_delete_of_an_unknown_principal_fails_without_a_call(
+    strava_env: Path,
+    database_target: SqliteTarget | PostgresTarget,
+    monkeypatch: pytest.MonkeyPatch,
+    run: Callable[..., Result],
+) -> None:
+    use(database_target, monkeypatch)
+    seed_deletable(database_target)
+    result = run("principal", "delete", "zed")
+    assert (result.code, result.out, result.err) == (
+        1,
+        "",
+        "unknown principal: zed\n",
+    )
+    assert result.calls == []
+    assert stored(database_target, "ann") == (True, True, True)
+
+
+def test_principal_delete_without_strava_configured_is_unchanged(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    target = SqliteTarget(path=tmp_path / "plain.sqlite3")
+    monkeypatch.setenv(P + "DATABASE_URL", f"sqlite:///{target.path}")
+    monkeypatch.setenv(P + "TOKEN_PEPPER", PEPPER)
+    for name in (
+        "STRAVA_CLIENT_ID",
+        "STRAVA_CLIENT_SECRET",
+        "STRAVA_WEBHOOK_TOKEN",
+        "PUBLIC_URL",
+        "ENCRYPTION_KEYS",
+    ):
+        monkeypatch.delenv(P + name, raising=False)
+    seed_deletable(target)  # a connection exists, but the relay does not offer Strava
+    assert stored(target, "ann") == (True, True, True)
+
+    def forbidden(*_: object, **__: object) -> None:
+        raise AssertionError("Strava must not be called")
+
+    monkeypatch.setattr(cli, "urllib_outbound", forbidden)
+    use(target, monkeypatch)
+    assert cli.main(["principal", "delete", "ann"]) == 0
+    captured = capsys.readouterr()
+    assert (captured.out, captured.err) == ("deleted ann\n", "")
+    assert stored(target, "ann") == (False, False, False)
+
+
+def test_a_failed_revoke_is_reported_even_when_the_delete_then_raises(
+    strava_env: Path,
+    database_target: SqliteTarget | PostgresTarget,
+    monkeypatch: pytest.MonkeyPatch,
+    run: Callable[..., Result],
+    scripted: ScriptedOutbound,
+) -> None:
+    use(database_target, monkeypatch)
+    seed_deletable(database_target)
+    scripted.expect("POST", REVOKE, reply(500))
+
+    def broken(self: object, principal_id: str) -> bool:
+        raise StorageUnreachable("down")
+
+    monkeypatch.setattr(TokenService, "delete_principal", broken)
+    result = run("principal", "delete", "ann")
+    assert result.code != 0 and result.out == ""
+    assert NOT_REVOKED in result.err
+    assert len(result.calls) == 1
+
+
+def test_a_custody_that_cannot_be_built_counts_as_not_revoked_and_deletes(
+    strava_env: Path,
+    database_target: SqliteTarget | PostgresTarget,
+    monkeypatch: pytest.MonkeyPatch,
+    run: Callable[..., Result],
+) -> None:
+    use(database_target, monkeypatch)
+    seed_deletable(database_target)
+
+    def broken(*_: object, **__: object) -> None:
+        raise ValueError("SENTINEL-keyring")
+
+    monkeypatch.setattr(cli, "Keyring", broken)
+    result = run("principal", "delete", "ann")
+    assert (result.code, result.out, result.err) == (0, "deleted ann\n", NOT_REVOKED)
+    assert result.calls == []
+    assert stored(database_target, "ann") == (False, False, False)

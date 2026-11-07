@@ -409,7 +409,7 @@ token's hash, the pepper or the database password.
 | `migrate --check` | `schema <current> -> <expected>`, changing nothing. When changes are pending it also prints `migrations are pending` on standard error and exits 3. |
 | `principal create [--label L]` | The new principal's identifier. |
 | `principal list` | One line per principal: identifier, label, created. |
-| `principal delete ID` | `deleted ID`. Deleting a principal deletes its tokens and every record it owns. |
+| `principal delete ID` | `deleted ID`. Deleting a principal deletes its tokens and every record it owns. When the relay offers Strava and the principal has a Strava connection, it first asks Strava to revoke the grant. If Strava did not accept the revoke, it also prints `Strava's access could not be revoked; the person must revoke it in their Strava settings` on standard error. The principal is deleted and the exit code is 0 whether or not the revoke succeeded; a database failure still exits 1. |
 | `token mint (--principal ID \| --new-principal) [--label L] [--principal-label L]` | The token alone. On standard error: `token_id=<id>` then `principal_id=<id>`. |
 | `token list [--principal ID]` | One line per token: identifier, principal, label, created, `active` or `revoked`, and the revocation time (empty when active). |
 | `token revoke TOKEN_ID` | `revoked TOKEN_ID`, or `already revoked TOKEN_ID`. |
@@ -629,7 +629,13 @@ then gets `token-revoked`), when:
 - Strava refuses to renew a connection's tokens. A redirect, a server error or
   an unreachable Strava is transient: the stored tokens stay as they are.
 - The principal is deleted (`principal delete`), which deletes its tokens
-  outright as well.
+  outright as well. The command first asks Strava to revoke the connection's
+  access, with one call that counts against the call budget. The deletion goes
+  ahead whatever happens to that call, so when Strava is unreachable, refuses,
+  the budget is spent or the stored tokens cannot be decrypted, the command
+  prints the standard error line above and the person must revoke the relay's
+  access in their Strava settings. A wrapper that deletes principals through
+  `tokens.delete_principal` on the extension seam does not revoke at Strava.
 - The same Strava account is connected again from another principal: the
   connection moves, and the earlier one is deleted.
 
