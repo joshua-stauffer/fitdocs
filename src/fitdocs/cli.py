@@ -298,7 +298,7 @@ from fitdocs.inbox import (
     validate_inbox_paths,
 )
 from fitdocs.index.location import IndexLocationError
-from fitdocs.layout import block_doc_path, settings_path
+from fitdocs.layout import block_doc_path, post_template_path, settings_path
 from fitdocs.load.engine import DocLoadEntry, LoadReport, apply_load
 from fitdocs.load.profile import PROFILE_FILENAME, ProfileError
 from fitdocs.load.prompts import NonInteractiveSession, RichInteractionSession
@@ -357,6 +357,7 @@ if TYPE_CHECKING:
     from fitdocs.index.handoff import HandoffCollector
     from fitdocs.index.refresh import IndexReport, ProgressCallback
     from fitdocs.morning.engine import MorningReport
+    from fitdocs.post_template.engine import IndexGate
 
 
 class Console(RichConsole):
@@ -779,6 +780,104 @@ def _run_dashboard_pass(data_root: Path, index_report: IndexReport | None) -> No
         )
 
 
+_POST_GATE_NEXT_STEPS: Final[dict[str, str]] = {
+    "not_built": "run fitdocs index",
+    "needs_rebuild": "run fitdocs index",
+    "busy": "run fitdocs sync again once the other command has finished",
+    "staged": "run fitdocs index",
+    "failed": "run fitdocs index",
+}
+_POST_GATE_ERRORS_REASON: Final = "the index refresh reported errors, listed above"
+_POST_GATE_ERRORS_NEXT: Final = "fix what it lists, then run fitdocs sync again"
+
+
+def _index_gate(report: IndexReport | None) -> IndexGate:
+    """Whether the index refresh left an index the post-fill pass may read (Req 6.4).
+
+    Open only for REFRESHED, UNCHANGED and BUILT whose result carries no page error
+    and no data-source error; the reasons read like the dashboard pass's.
+    """
+    from fitdocs.index.refresh import Outcome
+    from fitdocs.post_template.engine import IndexGate
+
+    if report is None:
+        return IndexGate(
+            open=False, reason=_DASHBOARD_RAISED_REASON, next_step="run fitdocs index"
+        )
+    if report.outcome not in {Outcome.REFRESHED, Outcome.UNCHANGED, Outcome.BUILT}:
+        return IndexGate(
+            open=False,
+            reason=_DASHBOARD_NOT_REFRESHED_REASONS[report.outcome.value],
+            next_step=_POST_GATE_NEXT_STEPS[report.outcome.value],
+        )
+    result = report.result
+    if result is not None and (result.page_errors or result.producer_errors):
+        return IndexGate(
+            open=False,
+            reason=_POST_GATE_ERRORS_REASON,
+            next_step=_POST_GATE_ERRORS_NEXT,
+        )
+    return IndexGate(open=True, reason=None, next_step=None)
+
+
+def _run_post_fill_pass(
+    data_root: Path, report: IndexReport | None
+) -> IndexReport | None:
+    """Fill the Waiting pages the sync just wrote, between the index and dashboards.
+
+    With no template file it imports nothing from the package and prints nothing
+    (Req 1.3). A refused template is one line (6.7). When a page was written the
+    index is refreshed once more and that report is returned, so the dashboard
+    pass sees it (6.9, 6.10); otherwise the input comes back. Any ``Exception``
+    becomes one line and never reaches the exit code (6.11); a ``BaseException``
+    propagates (6.12).
+    """
+    if not os.path.lexists(post_template_path(data_root)):
+        return report
+    console = Console(markup=False, emoji=False, highlight=False, soft_wrap=True)
+    try:
+        from fitdocs.post_template.engine import run_pass
+        from fitdocs.post_template.report import render_pass_text
+        from fitdocs.post_template.resolve import open_resolver
+        from fitdocs.post_template.template import (
+            PostTemplateError,
+            load_post_template,
+        )
+
+        try:
+            template = load_post_template(data_root)
+        except PostTemplateError as exc:
+            first = " ".join(exc.problems[0].split())
+            more = (
+                f" (and {len(exc.problems) - 1} more)" if len(exc.problems) > 1 else ""
+            )
+            console.print(
+                f"Post template: not filled; {first}{more}; "
+                "run fitdocs post-template check to see every problem."
+            )
+            return report
+        if template is None:
+            return report
+        fill = run_pass(
+            data_root,
+            template,
+            gate=_index_gate(report),
+            open_resolver=lambda: open_resolver(data_root, _query_environment()),
+            monotonic=time.monotonic,
+        )
+        text = render_pass_text(fill)
+        if text:
+            console.print(text)
+        if fill.wrote:
+            return _run_index_pass(data_root, handoff=None)
+    except Exception as exc:
+        console.print(
+            f"Post template: not filled; {type(exc).__name__}: "
+            f"{' '.join(str(exc).split())}."
+        )
+    return report
+
+
 def _report_index_pass(report: IndexReport) -> None:
     from fitdocs.index.refresh import Outcome
 
@@ -1028,6 +1127,7 @@ def sync_command(
         # (plan-resolution Req 8.1, 8.2, 8.5).
         plan_report = _run_plan_pass(data_root, today=_today(), chained=True)
         index_report = _run_index_pass(data_root, handoff=handoff)
+        index_report = _run_post_fill_pass(data_root, index_report)
         _run_dashboard_pass(data_root, index_report)
         _report_plugin_errors(plugin_report)
         # A per-file OR a per-document (load) OR a reconciling-pass failure
@@ -1123,6 +1223,7 @@ def _run_drain_passes(
     # (plan-resolution Req 8.1, 8.2, 8.5), same as the explicit-source path.
     plan_report = _run_plan_pass(data_root, today=_today(), chained=True)
     index_report = _run_index_pass(data_root, handoff=handoff)
+    index_report = _run_post_fill_pass(data_root, index_report)
     _run_dashboard_pass(data_root, index_report)
     _report_plugin_errors(plugin_report)
     # Per-file failures, load failures and a reconciling-pass failure drive

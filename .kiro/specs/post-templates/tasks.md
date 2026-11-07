@@ -246,7 +246,7 @@
 
 - [ ] 5. Integration in the CLI
 
-- [ ] 5.1 Fill pages in the sync that creates them
+- [x] 5.1 Fill pages in the sync that creates them
   - Add the index gate: open only for refreshed, unchanged or built with no page or data-source error. Its reasons are worded like the dashboard pass's.
   - Add the post-fill pass, called between the index pass and the dashboard pass on both sync paths:
     - With no template file it imports nothing from the new package and prints nothing.
@@ -390,3 +390,4 @@
 - 3.4: `post_template.report` has `render_pass_text` and `render_text`/`render_json` for check and refill. It prints engine reasons as written, hides None counts and None landed flags, and groups VALUE_MISSING cause lines by `row.detail` (the placeholder). Cause lines are capped at 5, sorted by count, then FillCode order, then variable. The NEXT_STEPS wording was written at implementation; only value_missing came from the design. Refill's `older_template` is None (the engine `_report` default). The naming note goes only on the published left-out line. report imports engine for the timeout constants only (design.md).
 - 4.1: `PublishCode.POST_WAITING` was appended last with flags "F" (failure, so exit 1), and the relay copy was synced. DELETED doc-binding test, for 6.3 to name: `tests/publish/test_docs.py::test_the_code_table_equals_the_vocabulary_in_order`, along with its orphaned `_yes_no` helper and `OUTCOMES` import. The guide's table still lacks the row; 6.2 adds it.
 - 4.2: `PublishPlan.post_template_since: date | None = None`. `_decide_pair` refuses with POST_WAITING when the page is in the window (`document_date >= since`), Waiting, and not landed in ANY ledger on disk (`run.ledgers`). The check runs after the page-state, facts and conflict checks and before composing. The test helper `replace_ledgers` (tests/publish/test_engine.py) now uses `dataclasses.replace`, so plan fields are no longer dropped silently. 5.3 must pass `post_template_since` into the plan.
+- 5.1: `cli._index_gate(report)` and `cli._run_post_fill_pass(data_root, report)` sit between the index and dashboard passes at both sync sites: the explicit-source sync body and `_run_drain_passes`, which serves no-source sync and `pull --sync`. The pass checks `lexists` before any import. A refused template prints one line naming `fitdocs post-template check`. Pass lines go to stdout. The second refresh (`handoff=None`) runs only when pages were written, after the pass text is printed. The needs_rebuild next step is "run fitdocs index". Test World fixture: tests/post_template/test_sync_pass.py.
