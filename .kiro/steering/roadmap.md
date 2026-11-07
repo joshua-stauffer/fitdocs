@@ -4830,7 +4830,7 @@ with the spec, not with this discovery, because they stay true until it lands: `
 
 - [ ] post-templates — A template file whose variables are SQL over the analytics index fills a
   new workout page's `post` region once, as of the workout's start. Dependencies: none.
-  *(Spec ready 2026-11-07: 14 requirements / 122 criteria, 24 tasks.)* At requirements the
+  *(Spec ready 2026-11-07: 14 requirements / 124 criteria, 24 tasks. A same-day revision, before implementation: an emptied `post` region returns to the template, a bare `refill` skips published pages, `check` counts what the next sync would fill, and the docs set `since` to today.)* At requirements the
   maintainer chose the following:
   - a TOML template, `post-template.toml`;
   - automatic filling in the sync that creates the page, with `fitdocs post-template check|refill` for the rest;
