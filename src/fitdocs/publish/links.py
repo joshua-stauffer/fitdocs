@@ -9,12 +9,11 @@ unchanged, the `post` region included.
 
 from __future__ import annotations
 
-import re
 from collections.abc import Sequence
 from typing import Final
 
 from fitdocs.contract import PUBLISHED_REGION
-from fitdocs.docmerge import begin_marker, end_marker, extract_regions
+from fitdocs.docmerge import extract_regions, replace_region
 
 PUBLISHED_PREFIX: Final[str] = "Published: "
 LINK_SEPARATOR: Final[str] = " · "
@@ -51,16 +50,7 @@ def replace_published(markdown: str, content: str) -> str:
     Raises `RegionError` on damaged markers and `PublishedRegionMissing` when
     the page has no such region.
     """
-    if PUBLISHED_REGION not in extract_regions(markdown):
+    result = replace_region(markdown, PUBLISHED_REGION, content)
+    if result is None:
         raise PublishedRegionMissing("the page has no published region to rewrite")
-    begin = begin_marker(PUBLISHED_REGION)
-    end = end_marker(PUBLISHED_REGION)
-    pattern = re.compile(
-        rf"^{re.escape(begin)}\n(?:.*?\n)?{re.escape(end)}$",
-        re.MULTILINE | re.DOTALL,
-    )
-    replacement = f"{begin}\n{content}\n{end}"
-    result, count = pattern.subn(lambda _match: replacement, markdown, count=1)
-    if count != 1:  # unreachable while extract_regions and this pattern agree
-        raise PublishedRegionMissing("could not locate the published region markers")
     return result

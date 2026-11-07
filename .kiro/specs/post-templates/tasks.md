@@ -33,7 +33,7 @@
     Each test dies on its named mutation: emptying the tuple, skipping the stamp removal, or treating any comment as fitdocs's own.
   - _Requirements: 1.1, 5.1, 5.10, 5.11, 13.5_
 
-- [ ] 1.2 (P) Splice one region's content generically
+- [x] 1.2 (P) Splice one region's content generically
   - Add a region splice to the region-marker module that replaces only one region's inner content. It gives nothing when the region is absent, and raises the region error on damaged markers.
   - Make the published-region splice delegate to it, behavior unchanged.
   - Done when the existing published-region tests pass unchanged, and new tests show adjacent markers spliced, every byte outside the region unchanged, an absent region reported, and damage raised.
@@ -363,3 +363,4 @@
 - 1.1: `contract.POST_FILL_STAMP` is an unanchored, ASCII-only (`[0-9]`, not `\d`) compiled regex with groups `template`, `as_of`, `text`. Use `fullmatch` on one line. `is_waiting_post` removes the wordings and stamps in ONE `sub` over a single alternation (`contract._OWN_COMMENTS`), so a wording spliced into a stamp cannot manufacture one. 2.2 should reuse these, not re-spell the grammar.
 - 1.1 → 2.2: the grammar accepts an `as_of` that `datetime.fromisoformat` rejects (e.g. month 13). `classify` must not crash on it: treat an unparseable stamp as not fitdocs's own (the athlete's), and test it.
 - 1.1 review took 3 rounds, all on the stamp grammar's tests (uppercase hex, digest length on BOTH digests, trailing text on the stamp line, field spacing, fraction width, 1-digit month/day, `re.escape`, `count=1`). The production code was correct from round 1. Sweep every grammar element before reporting.
+- 1.2: `docmerge.replace_region(markdown, id, content) -> str | None` writes content verbatim and returns None only when the region is absent; damage raises `RegionError`. It does NOT check that `content` is free of marker lines, so 3.1's comment-marker refusal on composed text is what keeps a fill from writing a page `extract_regions` rejects. Review lesson: decoys with a different id cannot discriminate a literal-id pattern, so use same-id lookalikes that are not markers, and content with surrounding whitespace.

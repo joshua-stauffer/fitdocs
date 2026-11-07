@@ -36,6 +36,7 @@ from fitdocs.docmerge import (
     extract_regions,
     merge_regions,
     region_block,
+    replace_region,
 )
 
 
@@ -288,3 +289,99 @@ def test_extract_raises_on_mismatched_end_id() -> None:
     md = f"{begin_marker('notes')}\ncontent\n{end_marker('load')}\n"
     with pytest.raises(RegionError):
         extract_regions(md)
+
+
+# --- replace_region (post-templates 1.2, Req 5.6) -----------------------------
+
+
+def _doc_with_decoys() -> str:
+    """Distinctive text around three regions that all share the inner text "same"."""
+    return (
+        "# Title · \r\n"
+        "before text\t\r\n"
+        + region_block("decoy", "same")
+        + "  \r\nmiddle same\r\n\r\n"
+        + region_block("post", "same")
+        + "\t after \r\nsame\n"
+        + region_block("postal", "same")
+        + "tail without newline same"
+    )
+
+
+def test_replace_region_splices_only_that_region_byte_for_byte() -> None:
+    doc = _doc_with_decoys()
+    result = replace_region(doc, "post", "NEW\nTEXT")
+    expected = doc.replace(
+        region_block("post", "same"), region_block("post", "NEW\nTEXT")
+    )
+    assert expected != doc
+    assert result == expected
+    assert "\r\n" in (result or "")  # line endings outside were not normalised
+
+
+def test_replace_region_splices_adjacent_markers() -> None:
+    doc = f"a\n{begin_marker('post')}\n{end_marker('post')}\nb\n"
+    assert replace_region(doc, "post", "x") == (
+        f"a\n{begin_marker('post')}\nx\n{end_marker('post')}\nb\n"
+    )
+
+
+def test_replace_region_can_empty_a_region_to_adjacent_markers() -> None:
+    doc = region_block("post", "was here")
+    assert replace_region(doc, "post", "") == (
+        f"{begin_marker('post')}\n\n{end_marker('post')}\n"
+    )
+
+
+def test_replace_region_reports_an_absent_region_as_none() -> None:
+    doc = region_block("decoy", "x") + region_block("postal", "y")
+    assert replace_region(doc, "post", "z") is None
+    assert replace_region("no regions here\n", "post", "z") is None
+
+
+def test_replace_region_raises_on_damage_even_in_another_region() -> None:
+    damaged = region_block("post", "x") + begin_marker("other") + "\n"
+    with pytest.raises(RegionError):
+        replace_region(damaged, "post", "z")
+    with pytest.raises(RegionError):
+        replace_region(begin_marker("post") + "\nx\n", "post", "z")
+
+
+def test_replace_published_delegates_to_replace_region(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from fitdocs.publish import links
+
+    calls: list[tuple[str, str, str]] = []
+
+    def spy(markdown: str, region_id: str, content: str) -> str | None:
+        calls.append((markdown, region_id, content))
+        return "SPLICED"
+
+    monkeypatch.setattr(links, "replace_region", spy)
+    doc = region_block("published", "old")
+    assert links.replace_published(doc, "new") == "SPLICED"
+    assert calls == [(doc, "published", "new")]
+
+    monkeypatch.setattr(links, "replace_region", lambda *_a: None)
+    with pytest.raises(links.PublishedRegionMissing):
+        links.replace_published(doc, "new")
+
+
+def test_replace_region_ignores_same_id_lookalikes_that_are_not_markers() -> None:
+    begin, end = begin_marker("post"), end_marker("post")
+    indented = "  " + begin + "\nA\n" + region_block("post", "same")
+    trailing_end = region_block("post", "x\n" + end + " trailing")
+    for doc in (indented, trailing_end):
+        assert list(extract_regions(doc)) == ["post"]  # both are undamaged
+    assert replace_region(indented, "post", "NEW") == (
+        "  " + begin + "\nA\n" + region_block("post", "NEW")
+    )
+    assert replace_region(trailing_end, "post", "NEW") == region_block("post", "NEW")
+
+
+@pytest.mark.parametrize("content", ["x\n", "\n", "  x  ", "\nx", "\t"])
+def test_replace_region_content_round_trips_verbatim(content: str) -> None:
+    result = replace_region(region_block("post", "old"), "post", content)
+    assert result is not None
+    assert extract_regions(result)["post"] == content

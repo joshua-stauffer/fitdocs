@@ -46,6 +46,9 @@ generated content outside regions (Req 10.2, 10.4, 11.3); it raises
 :class:`RegionError` when the existing document is damaged, or when it holds a
 region the fresh render lacks -- silent content loss is forbidden.
 
+:func:`replace_region` replaces one region's inner content in a document and leaves
+every other byte alone; it returns None when the region is absent.
+
 This module is pure: it performs no file I/O and touches only ``re`` from the
 standard library. It imports nothing else from the package -- not even the
 contract whose ids it operates on -- so every layer is free to depend on it.
@@ -114,6 +117,30 @@ def extract_regions(markdown: str) -> dict[str, str]:
     return {
         region_id: content for region_id, (content, _, _) in _scan(markdown).items()
     }
+
+
+def replace_region(markdown: str, region_id: str, content: str) -> str | None:
+    """``markdown`` with only that region's inner content replaced; None when absent.
+
+    Every byte outside the region's inner span is kept verbatim. Raises
+    :class:`RegionError` when any region in ``markdown`` is damaged. The pattern
+    ``^begin\\n(?:.*?\\n)?end$`` lets adjacent markers (an empty region) match.
+    """
+    if region_id not in extract_regions(markdown):
+        return None
+    begin = begin_marker(region_id)
+    end = end_marker(region_id)
+    pattern = re.compile(
+        rf"^{re.escape(begin)}\n(?:.*?\n)?{re.escape(end)}$",
+        re.MULTILINE | re.DOTALL,
+    )
+    replacement = f"{begin}\n{content}\n{end}"
+    result, count = pattern.subn(lambda _match: replacement, markdown, count=1)
+    if count != 1:  # unreachable while extract_regions and this pattern agree
+        raise RegionError(
+            f"region '{region_id}' was found but its markers could not be located"
+        )
+    return result
 
 
 def merge_regions(fresh: str, existing: str) -> str:
