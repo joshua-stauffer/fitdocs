@@ -19,11 +19,19 @@
 - [ ] 1. Foundation: shared additions outside the new package
 
 - [ ] 1.1 Recognize a waiting post region and name the template's location
-  - Add the tuple of every fresh-placeholder wording fitdocs has written (today one), and a predicate that is true exactly when a region's content equals one of them.
+  - Add three things to the contract:
+    - the tuple of every fresh-placeholder wording fitdocs has written (today one);
+    - the provenance comment's grammar;
+    - a predicate that is true exactly when a region's content is only whitespace once every placeholder wording and every provenance comment is removed.
   - Add the template file's name and path helper to the data-root layout. Leave the owned paths unchanged, and name the file in their docstring among the user-owned files.
-  - Keep both new contract names out of `contract.__all__`, so the public-surface pin in `tests/test_public_api.py` does not move.
-  - Done when tests show every listed wording is waiting, a one-character change, CRLF or an empty region is not, and the path helper gives `<data-root>/post-template.toml`. Each test dies on its named mutation (emptying the tuple, comparing after `strip()`).
-  - _Requirements: 1.1, 5.1, 13.5_
+  - Keep the new contract names out of `contract.__all__`, so the public-surface pin in `tests/test_public_api.py` does not move.
+  - Done when tests show:
+    - every listed wording, an empty region, a whitespace-only region and a provenance comment with nothing below it are all waiting;
+    - text with or without a comment is not waiting, nor is the athlete's own hidden comment or an unclosed comment;
+    - the path helper gives `<data-root>/post-template.toml`.
+
+    Each test dies on its named mutation: emptying the tuple, skipping the stamp removal, or treating any comment as fitdocs's own.
+  - _Requirements: 1.1, 5.1, 5.10, 5.11, 13.5_
 
 - [ ] 1.2 (P) Splice one region's content generically
   - Add a region splice to the region-marker module that replaces only one region's inner content. It gives nothing when the region is absent, and raises the region error on damaged markers.
@@ -55,7 +63,9 @@
     - the fill codes and region states;
     - the binding, variable outcome and page result;
     - the unavailable reason and the template summary;
-    - the report, including its waiting count and its derived counts. The pass sets the waiting count on every path; check and refill set it to 0.
+    - the report, including its waiting count, its counts of the athlete's and published pages left out, and its derived counts.
+
+    The pass sets the waiting count on every path. Check sets it to the Eligible count, and refill to 0.
   - Add the package's boundary test. It holds:
     - an equality-pinned import table, written so that each later task appends one entry;
     - the forbidden names: `duckdb`, `fitdocs.index`, `dashboards`, `render`, `load`, `metrics`, `ingest`, `sync` and the network-capable standard library;
@@ -82,14 +92,15 @@
   - _Depends: 1.1, 1.3, 1.6_
 
 - [ ] 2.2 (P) Classify a post region and write filled text
-  - Decide a region's state from its bytes, as waiting, filled or the athlete's. Filled means a stamp line matching the design's grammar whose text digest matches the rest.
+  - Decide a region's state from its bytes, as waiting, filled or the athlete's, in that order. Waiting is the contract's predicate from 1.1. Filled means a stamp line matching the contract's grammar, with text below it whose digest matches the stamp.
   - Produce a filled region from a composed post, a template digest and an as-of. Double every brace in the title and description, and put the stamp line above the text.
   - Extend the package import table with this module's entry.
   - Done when tests show:
     - a round trip through publish's region reader, override parser and composer equal to the original post, with braces in a value and a title, `{title}` as literal text in a value, and an empty description;
-    - each edit giving the athlete's state: a changed character, CRLF, a removed stamp and an empty region;
+    - each edit that keeps text giving the athlete's state: a changed character, CRLF, a removed stamp;
+    - deleting the text, with or without the stamp, giving waiting;
     - the stamp line never matching a region marker.
-  - _Requirements: 4.6, 4.7, 5.1, 5.2, 5.3, 5.4, 8.4_
+  - _Requirements: 4.6, 4.7, 5.1, 5.2, 5.3, 5.4, 5.10, 8.4_
   - _Boundary: FillRegion_
   - _Depends: 1.1, 1.6_
 
@@ -172,15 +183,16 @@
   - _Requirements: 2.5, 6.2, 6.3, 6.4, 6.6, 6.7, 6.8, 7.1, 7.2, 7.3, 8.5_
 
 - [ ] 3.3 Run check and refill
-  - **Check without pages:** validate the template, or carry its problems, then check the SQL. Count the filled pages whose stamp names another template digest. Write nothing.
+  - **Check without pages:** validate the template, or carry its problems, then check the SQL. Count the Eligible pages, which the next sync will try to fill, and the filled pages whose stamp names another template digest. Write nothing.
   - **Check with pages:** for each named page in any state, in or out of the window, show its state, the window, the landed flag from the ledgers it is given, each variable's value or why it has none, and the composed post or why there is none. Flag a page the index does not hold as it is now.
   - **An unavailable index:** check still reports the template's own problems and says the SQL was not checked and why.
-  - **Refill without pages:** take every Eligible or filled page in the window, and count the athlete's pages left out.
+  - **Refill without pages:** take every Eligible page and every filled page with no landed post, in the window. Count the athlete's pages and the published pages left out, the latter with a note that naming a page refills it.
   - **Refill with pages:** take each named waiting or filled page, in or out of the window and landed or not, and report a named athlete's page as left alone.
   - Refill gives the changed flag and new text in a dry run, names pages whose text would change and have a landed post, and allows 30 seconds per statement, stopping at the first timeout.
   - Done when engine tests with a fake resolver cover:
     - each selection row of the design's table;
-    - the older-template count;
+    - a bare refill leaving a filled published page untouched and counted, while the same page named is refilled;
+    - the Eligible count and the older-template count from check;
     - the landed naming, with and without writing;
     - a dry run writing nothing;
     - a failed refill keeping the page's text;
@@ -222,13 +234,14 @@
   - When it is set, refuse with `post_waiting` each selected target of an opted-in page that is in the window, waiting and has no landed post in any ledger. Do this after the page-state, facts and ledger-conflict refusals and before composing. Treat every other page as today.
   - Done when engine tests show:
     - the refusal in a dry run and with posting, nothing sent;
-    - no refusal with no template, out of the window, after an edit to the region, or with a landed record on another target (where the per-target template is sent);
+    - the refusal for a page whose region the athlete emptied;
+    - no refusal with no template, out of the window, after the athlete writes text into the region, or with a landed record on another target (where the per-target template is sent);
     - `page_out_of_date` keeping precedence;
     - a filled page deciding `would_post`, then `unchanged` once landed, then `would_update` after a refill changes it.
 
     Publish reads no index and imports nothing from the new package.
   - Build the filled region in these tests with the region module's own renderer, not by hand, so that the round trip is the real one.
-  - _Requirements: 12.1, 12.4, 12.5, 12.6, 12.7, 12.9, 12.10_
+  - _Requirements: 5.10, 12.1, 12.4, 12.5, 12.6, 12.7, 12.9, 12.10_
   - _Depends: 1.1, 1.4, 2.2, 4.1_
 
 - [ ] 5. Integration in the CLI
@@ -255,7 +268,7 @@
 - [ ] 5.2 Add the `fitdocs post-template` command
   - Add `fitdocs post-template check|refill [PAGES...] [--yes] [--format text|json] [--out PATH]`.
   - PAGES resolve as `fitdocs publish` resolves them. `--yes` with `check` is a configuration error.
-  - `refill`, and `check` with PAGES, load the publish ledgers before running.
+  - Both forms load the publish ledgers before running: `check` needs them for the Eligible count and the landed flag, and `refill` to leave out published pages.
   - `check` reports a refused template or unreadable ledgers as problems with exit 1, still running the template and SQL checks, and reports a missing file with exit 2 naming the path.
   - `refill` refuses before any write, with exit 2, a missing or refused template, unknown pages, unreadable ledgers and refused SQL.
   - Move the CLI count pins from 17 to 18: `tests/test_cli_skill.py`, `tests/query/test_cli_query.py`, `tests/index/test_cli_index.py`, and the `cli.py` module docstring with its command list.
@@ -263,10 +276,13 @@
   - Done when end-to-end tests cover:
     - each exit code;
     - `refill` without `--yes` writing nothing, and with it writing, naming a landed page and leaving `fitdocs query` without drift;
+    - a bare `refill --yes` leaving a published page's text unchanged and reporting it, and the same page refilled when named;
+    - an emptied region refilled by the next `fitdocs sync`;
+    - `check` without pages reporting how many pages the next sync would fill;
     - an athlete's page untouched;
     - `check` with pages showing values and the composed post;
     - JSON and text carrying the same results.
-  - _Requirements: 9.1, 9.5, 9.7, 9.8, 10.1, 10.13, 10.14, 10.15, 11.1, 11.2, 11.3_
+  - _Requirements: 5.10, 9.1, 9.2, 9.5, 9.7, 9.8, 10.1, 10.2, 10.6, 10.13, 10.14, 10.15, 11.1, 11.2, 11.3_
   - _Depends: 2.4, 3.3, 3.4_
 
 - [ ] 5.3 Read the template's `since` before publishing
@@ -306,15 +322,18 @@
 - [ ] 6.2 Document the feature and carry the recipe
   - This task owns every edit to `docs/publishing.md`, `CHANGELOG.md` and the packaged skills. It follows 6.1 because the changelog names the contract version 6.1 settles.
   - Add the `post_waiting` row to the guide's outcome table.
-  - Rewrite the workouts skill's paragraph saying an empty region uses the configured template, so that it also covers a filled region.
+  - Rewrite the workouts skill's paragraph saying an empty region uses the configured template, so that it also covers the post template: an emptied region is filled again from it.
   - Add a post-templates section to `docs/publishing.md` covering:
     - the format, `since`, the two parameters and the value rules;
-    - the three states and what keeps a post stable;
+    - setting `since` to the day the file is created, and why: an example date in the past fills every page since then;
+    - building the index once with `fitdocs index` before the first fill;
+    - the three states, including emptying a region to return it to the template, and what keeps a post stable;
+    - that a bare `refill` leaves published pages alone and naming them refills them;
     - the new code and the ways out of a waiting refusal;
     - both commands;
     - the lint's stated limits (`first`, `any_value`, `LIMIT` without `ORDER BY`, tables that depend on today, and `$as_of` referenced without constraining).
   - Add a changelog entry under Unreleased naming the contract change.
-  - Add the worked recipe to the workouts skill: it sums `pages.load_value` for one methodology, never the week's running total, and uses invented numbers. Run the recipe's SQL once against a synthetic index to confirm it works, without adding a test.
+  - Add the worked recipe to the workouts skill: it sums `pages.load_value` for one methodology, never the week's running total, uses invented numbers, and tells the reader to set `since` to the day they create the file. Run the recipe's SQL once against a synthetic index to confirm it works, without adding a test.
   - Done when the docs build and the skill packaging tests pass, and the recipe's SQL has been run once and its result recorded in Implementation Notes.
   - _Requirements: 14.5, 14.6, 14.7_
 

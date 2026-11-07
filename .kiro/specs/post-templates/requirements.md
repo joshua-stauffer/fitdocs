@@ -15,7 +15,7 @@ With this feature the athlete writes one file, once. Every new page then arrives
 - **Variable:** a name the post template declares with one SQL statement.
 - **Page placeholder:** one of the 17 values `fitdocs publish` already reads from a page.
 - **Window:** the pages dated on or after the post template's `since`. A page's date is its recorded local date.
-- **Waiting:** a page whose `post` region is byte-for-byte the fresh placeholder, in any wording fitdocs has ever written.
+- **Waiting:** a page whose `post` region holds nothing but whitespace and fitdocs's own hidden comments. Those comments are the fresh placeholder (in any wording fitdocs has ever written) and the provenance comment. A new page and a region the athlete has emptied are both Waiting.
 - **Filled:** a page whose `post` region holds a provenance comment whose text digest matches the region's text.
 - **Athlete's:** a page whose `post` region is neither Waiting nor Filled.
 - **Fill:** to write composed text into a Waiting or Filled page's `post` region.
@@ -28,6 +28,13 @@ With this feature the athlete writes one file, once. Every new page then arrives
 - **The template is TOML, not markdown.** The athlete's PKM catalogs every `.md` file under the wiki as a page, and a markdown template would also need its own strict YAML parser. This supersedes the example format in `brief.md`.
 - **The command is `fitdocs post-template`, and filling needs no command.** A page fills automatically in the `fitdocs sync` that creates it. The command exists to check the template and to re-run the queries. The brief's separate `fill` form is folded into `refill`.
 - **A page refused for waiting counts as a failure** (exit 1), because nothing was sent.
+
+### Revised before implementation (2026-11-07, maintainer)
+
+- **Left empty, the template is used.** Emptying a `post` region makes it Waiting again, so the next sync, or a named `refill` for a published page, fills it from the template. This is the way back after an edit, and it matches the placeholder's own wording.
+- **A bare `refill` skips published pages.** It reports how many it left out. A named page is always refilled, so a bulk refill of published pages is still possible by naming them.
+- **`check` reports how many pages the next sync would fill**, so the scale of a backfill is visible before it happens.
+- **The guide and the skill tell a new user to set `since` to the day they create the file**, because a copied example date in the past would fill every page since then.
 
 ## Boundary Context
 
@@ -125,12 +132,14 @@ With this feature the athlete writes one file, once. Every new page then arrives
 1. The fitdocs CLI shall decide a page's state from the bytes of its `post` region alone, as Waiting, Filled or Athlete's.
 2. The fitdocs CLI shall never write the `post` region of an Athlete's page.
 3. When a page is filled, the fitdocs CLI shall write a hidden comment above the text, which renders as nothing and holds a digest of the template, the as-of and a digest of the text.
-4. When the athlete changes any of the filled text, removes the provenance comment or empties the region, the fitdocs CLI shall treat the page as Athlete's from then on.
+4. When the athlete changes any of the filled text, or removes the provenance comment while keeping text, the fitdocs CLI shall treat the page as Athlete's.
 5. The fitdocs CLI shall compute the template digest from `title`, `description` and each variable's name and SQL only, so that moving `since` or editing TOML comments does not mark a Filled page as made from an earlier template.
 6. When a page is filled, the fitdocs CLI shall change only the inner content of its `post` region and leave every other byte of the page unchanged.
 7. When a page is filled, the fitdocs CLI shall write it atomically, so that a reader sees the complete previous page or the complete new page.
 8. When a page is about to be written, the fitdocs CLI shall read the region again and write only if its state is unchanged, so that an edit saved during the run wins.
 9. The fitdocs CLI shall write only to pages of the current document format with intact region markers.
+10. When the athlete deletes everything in a `post` region except whitespace and fitdocs's own hidden comments, the fitdocs CLI shall treat the page as Waiting, so that emptying the region returns it to the template.
+11. If a `post` region holds a hidden comment that is not fitdocs's own, or a comment that is never closed, then the fitdocs CLI shall treat the page as Athlete's, so that a note the athlete left there is never overwritten.
 
 ### Requirement 6: Filling automatically when a page is created
 
@@ -185,7 +194,7 @@ With this feature the athlete writes one file, once. Every new page then arrives
 #### Acceptance Criteria
 
 1. The fitdocs CLI shall provide `fitdocs post-template check [PAGES...]`, which writes nothing to the data root and does not refresh the index.
-2. When `check` runs without PAGES, it shall validate the post template and each variable's SQL, report every problem it finds, and report the number of Filled pages made from an earlier template.
+2. When `check` runs without PAGES, it shall validate the post template and each variable's SQL, report every problem it finds, report the number of Eligible pages (which the next sync will try to fill), and report the number of Filled pages made from an earlier template.
 3. When `check` runs with PAGES, it shall show for each page its state, whether it is in the window, whether it has a landed post, each variable's value or why it has none, and the composed post or why there is none.
 4. When `check` is given a page in any state, in or out of the window, it shall show what the template would give for that page.
 5. If the index is not built, needs a rebuild or is busy, then `check` shall still validate the post template file, shall say that the SQL was not checked and why, and shall count as a failure.
@@ -200,11 +209,11 @@ With this feature the athlete writes one file, once. Every new page then arrives
 #### Acceptance Criteria
 
 1. The fitdocs CLI shall provide `fitdocs post-template refill [PAGES...] [--yes]`, which writes nothing without `--yes`.
-2. When `refill` runs without PAGES, it shall consider every page in the window that is Eligible or Filled.
+2. When `refill` runs without PAGES, it shall consider every page in the window that is Eligible, or Filled with no landed post.
 3. When `refill` is given PAGES, it shall consider each named page that is Waiting or Filled, in or out of the window and with or without a landed post.
 4. `refill` shall use the current post template, and each page it writes shall record that template's digest.
 5. If a named page is Athlete's, then `refill` shall leave it unchanged and report that it holds the athlete's own text.
-6. When `refill` runs without PAGES, it shall report the number of Athlete's pages it left out.
+6. When `refill` runs without PAGES, it shall report the number of Athlete's pages it left out and the number of pages it left out because they have a landed post. It shall say that naming a page refills it.
 7. When a page's text would change and the page has a landed post, `refill` shall name the page and say that the next `fitdocs publish --yes` will update the posted activity, with or without `--yes`.
 8. When `refill` runs without `--yes`, it shall show for each page whether its text would change, and the new text when it would.
 9. If a refill cannot compose a new post for a Filled page, then `refill` shall keep the page's existing text and report the page and the reason.
@@ -234,7 +243,7 @@ With this feature the athlete writes one file, once. Every new page then arrives
 1. If an opted-in page is Eligible, then `fitdocs publish` shall refuse that page for each selected target it opts in to and send nothing for it, in a dry run and with `--yes` alike.
 2. The fitdocs CLI shall add one code for this refusal to the end of the closed publish vocabulary, leave every existing code and its explanation unchanged, and count the new code as a failure, so that the run exits 1.
 3. The new code's fixed explanation shall say the page is waiting for its post and shall name both ways forward: `fitdocs post-template check` to see why, and writing the post by hand.
-4. When a Waiting page is filled, or the athlete makes any edit to its `post` region, `fitdocs publish` shall no longer refuse it for waiting.
+4. When a Waiting page is filled, or the athlete writes text into its `post` region, `fitdocs publish` shall no longer refuse it for waiting.
 5. While a Waiting page is not Eligible, `fitdocs publish` shall treat it as it does today, including sending the per-target template.
 6. The `fitdocs publish` command shall give a refusal it already gives for a page's state or facts ahead of the new code.
 7. While no post template file exists, `fitdocs publish` shall never give the new code.
@@ -264,9 +273,9 @@ With this feature the athlete writes one file, once. Every new page then arrives
 2. The ownership contract shall state that `post-template.toml` is user-owned and read-only to fitdocs.
 3. The ownership contract shall name a filled `post` region as the second exception to the rule that the index is never read back into a document, and shall state that the text is then carried as a snapshot, so that a page stays re-renderable and deleting the index still costs only rebuild time.
 4. The change that lands this feature shall move every published copy of the changed rules, in steering, in the published documents, in the contract text in code and in the packaged skill.
-5. The publishing guide shall document the template format, `since`, the two parameters, the value rules, the three region states, what keeps a post stable, the new outcome code, the ways out of a waiting refusal and the commands.
+5. The publishing guide shall document the template format, `since`, the two parameters, the value rules, the three region states (including that emptying a region returns it to the template), what keeps a post stable, the new outcome code, the ways out of a waiting refusal and the commands. It shall tell the reader to set `since` to the day they create the file, and shall state that the feature needs the index built once with `fitdocs index`.
 6. The publishing guide shall state that the `$as_of` requirement and the clock and randomness check are a lint and not a guarantee of stability, and shall name what they cannot catch: `first`, `any_value`, `LIMIT` without `ORDER BY`, tables that depend on today, and a statement that references `$as_of` without constraining by it.
-7. The packaged skill shall carry a worked recipe that sums each page's load for one methodology, rather than reading the week's running total, and that uses invented numbers.
+7. The packaged skill shall carry a worked recipe that sums each page's load for one methodology, rather than reading the week's running total, uses invented numbers, and tells the reader to set `since` to the day they create the file.
 8. The project shall add no test that reads documentation, a changelog or a spec; a doc-binding test this change turns red shall be deleted and named in the amendment.
 9. The contract version shall stay at the unreleased version if no release has been cut when this lands, and shall otherwise move by one.
 10. The documentation site shall not be edited by this spec, because it describes released versions; its copy shall be recorded as a follow-up queue item.

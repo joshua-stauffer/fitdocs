@@ -116,3 +116,14 @@
 - `brief.md` for the discovery probes, the stability table and the rule copies that move.
 - `.kiro/steering/change-protocol.md` for the fixture discrimination gate.
 - [DuckDB `json_serialize_sql`](https://duckdb.org/docs/stable/data/json/sql_to_and_from_json) for the serialized statement form.
+
+## Revision before implementation (2026-11-07, maintainer)
+
+- **Emptying a region makes it Waiting.**
+  - The rule is "only whitespace once fitdocs's own comments are removed". Those comments are the placeholder wordings and the provenance comment.
+  - An emptied region therefore returns to the template, which is the placeholder's own wording ("Left empty, the template is used").
+  - The athlete's own hidden comment keeps a region theirs.
+  - The provenance comment's grammar moves to `contract` (`POST_FILL_STAMP`), because publish's waiting check needs it too.
+- **A bare `refill` skips published pages and counts them.** Named pages are always refilled. Changing posted activities in bulk then always takes naming them, so a template edit followed by `refill --yes` and `publish --yes` cannot rewrite a posted history by accident.
+- **`check` reports the Eligible count**, so a first-time user sees the scale of the first fill. It loads the ledgers in every form to do so.
+- **The guide and the skill set `since` to the day the file is created.** A copied example date in the past would fill every page since. The guide also says the index must be built once.

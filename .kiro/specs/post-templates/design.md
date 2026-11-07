@@ -60,6 +60,7 @@
 ### Revalidation Triggers
 
 - A change to `POST_PLACEHOLDER`'s wording. The old wording must stay in `POST_PLACEHOLDER_WORDINGS`.
+- A change to `POST_FILL_STAMP`. Every filled page carries the old form, so the old grammar must stay recognized.
 - A change to `compose_post`, `read_post_region`, `override_templates` or the template grammar. The fill/publish round trip (4.7) must be re-proven.
 - A change to how the index derives `page_key` or `start_time_local`. The `$as_of` and `$page_key` binding (3.1, 3.2) must be re-checked.
 - A change to `refresh_after_command` outcomes or `RefreshResult` errors. The pass gate (6.4) must be re-checked.
@@ -147,7 +148,7 @@ tests/post_template/
 ### Modified Files
 
 - `src/fitdocs/contract.py`
-  - Adds `POST_PLACEHOLDER_WORDINGS` and `is_waiting_post`.
+  - Adds `POST_PLACEHOLDER_WORDINGS`, `POST_FILL_STAMP` and `is_waiting_post`.
   - Restates the post-region and index-read-back sentences (14.1, 14.3).
   - Updates the contract-19 history text (14.9).
 - `src/fitdocs/layout.py` — adds `POST_TEMPLATE_FILE` and `post_template_path`. `OWNED_PATHS` does not change, and its docstring names the file among the deliberate exclusions (14.2).
@@ -172,7 +173,7 @@ tests/post_template/
 - `.kiro/steering/tech.md`, `structure.md`, `product.md` — rule copies (14.4).
 - Amendments recorded in `.kiro/specs/{publish-core,wiki-contract,analytics-index,analytics-query}/requirements.md`.
 - Doc-binding tests turned red are deleted and named in those amendments (14.8). The expected ones are pins in `tests/index/test_contract_docs.py`, `tests/dashboards/test_published.py`, `tests/connectors/test_network_statements.py` and `tests/test_ownership_contract.py`, plus `tests/publish/test_docs.py::test_the_code_table_equals_the_vocabulary_in_order`, which pins the guide's code table at 35 rows.
-- `contract.__all__` does not change: `POST_PLACEHOLDER_WORDINGS` and `is_waiting_post` are internal names that `publish` and `post_template` import directly, so the surface pin in `tests/test_public_api.py` stays as it is.
+- `contract.__all__` does not change: `POST_PLACEHOLDER_WORDINGS`, `POST_FILL_STAMP` and `is_waiting_post` are internal names that `publish` and `post_template` import directly, so the surface pin in `tests/test_public_api.py` stays as it is.
 - The CLI count pins move from 17 to 18: `tests/test_cli_skill.py`, `tests/query/test_cli_query.py`, `tests/index/test_cli_index.py`, and the `cli.py` module docstring with its command list.
 
 ## System Flows
@@ -225,12 +226,13 @@ stateDiagram-v2
     [*] --> Waiting: new page or regen of a new page
     Waiting --> Filled: fill
     Filled --> Filled: refill
-    Waiting --> Athletes: any edit
-    Filled --> Athletes: any edit, or comment removed
-    Athletes --> Waiting: athlete restores the placeholder exactly
+    Waiting --> Athletes: athlete writes text
+    Filled --> Athletes: athlete edits the text, or removes the comment and keeps text
+    Filled --> Waiting: athlete deletes the text
+    Athletes --> Waiting: athlete empties the region
 ```
 
-Only Waiting and Filled are ever written. Athlete's is terminal for fitdocs.
+Only Waiting and Filled are ever written. fitdocs never moves a page out of Athlete's; only the athlete does, by emptying the region (5.10).
 
 ## Requirements Traceability
 
@@ -244,7 +246,7 @@ Only Waiting and Filled are ever written. Athlete's is terminal for fitdocs.
 | 3.10 | Per-page failure continues | FillEngine | `_fill_page` | — |
 | 4.1, 4.2, 4.3, 4.4, 4.5, 4.6 | Composition | FillEngine | `_compose` | — |
 | 4.7 | Round trip through publish | FillRegion | `render_filled` | — |
-| 5.1, 5.2, 5.3, 5.4, 5.5 | States, provenance and digest | FillRegion, PostTemplateFile | `classify`, `FillStamp`, `PostTemplate.digest` | Region states |
+| 5.1, 5.2, 5.3, 5.4, 5.5, 5.10, 5.11 | States, provenance, digest, emptying reverts | FillRegion, PostTemplateFile, PublishWaitingRefusal | `classify`, `is_waiting_post`, `POST_FILL_STAMP`, `PostTemplate.digest` | Region states |
 | 5.6, 5.7, 5.8, 5.9 | Safe write | FillEngine, RegionSplice | `docmerge.replace_region`, `_write` | sync end |
 | 6.1, 6.9, 6.10, 6.11, 6.12, 6.13 | Pass placement and order | CliPostTemplate | `_run_post_fill_pass` | sync end |
 | 6.2, 6.3, 6.5, 6.6, 6.7, 6.8 | Pass selection and gates | FillEngine | `run_pass` | sync end |
@@ -348,10 +350,11 @@ class FillReport:
     writing: bool
     template: TemplateSummary | None     # None when the file was refused
     template_problems: tuple[str, ...]   # 1.x and 2.x, located
-    waiting: int                         # pass: Eligible pages left unfilled, or candidates when ledgers are unreadable (7.5, 6.4, 6.8); check and refill: 0
+    waiting: int                         # pass: Eligible pages left unfilled, or candidates when ledgers are unreadable (7.5, 6.4, 6.8); check: Eligible pages, which the next sync will try to fill (9.2); refill: 0
     unavailable: Unavailable | None      # gate closed, index unavailable, ledgers unreadable
     rows: tuple[PageResult, ...]
     athletes_left_out: int               # 10.6
+    published_left_out: int              # 10.6: a bare refill skips pages with a landed post
     older_template: int                  # 9.2
     stopped: FillCode | None             # TIMED_OUT or NOT_ATTEMPTED after budget (7.4)
     stopped_variable: str | None
@@ -433,12 +436,21 @@ def classify(content: str) -> tuple[RegionState, FillStamp | None]: ...
 def render_filled(post: Post, *, template_digest: str, as_of: datetime) -> str: ...
 ```
 
-**State model**
-- **Waiting:** `contract.is_waiting_post(content)`, an exact match against `POST_PLACEHOLDER_WORDINGS`.
-- **Filled:** the content has the form `<line>\n<rest>`, where `<line>` fully matches the stamp grammar below and `sha256(rest)` equals the stamp's `text`.
-- **Athlete's:** anything else. That covers an edited text, a removed comment, an empty region, CRLF line endings introduced by an editor, and a placeholder with changed whitespace (5.4).
+**State model**, checked in this order:
+- **Waiting:** `contract.is_waiting_post(content)` (5.10). Remove every exact occurrence of a wording in `POST_PLACEHOLDER_WORDINGS` and every match of `POST_FILL_STAMP`. Waiting means only whitespace remains. That covers:
+  - the untouched placeholder;
+  - an emptied region;
+  - a region where the athlete deleted the text but left the provenance comment.
 
-**Stamp grammar.** One line at the start of the region:
+  Any other comment, including one never closed, leaves text behind, so the page is the athlete's (5.11).
+- **Filled:** the content has the form `<line>\n<rest>`. `<line>` fully matches `POST_FILL_STAMP`, `rest` is not blank, and `sha256(rest)` equals the stamp's `text`.
+- **Athlete's:** anything else (5.4). That covers:
+  - edited text;
+  - text kept with the comment removed;
+  - CRLF line endings introduced by an editor;
+  - a note of the athlete's own in a hidden comment.
+
+**Stamp grammar.** `contract.POST_FILL_STAMP` holds it, because `publish` needs it for the waiting check. The stamp is one line at the start of the region:
 
 `<!-- fitdocs:post-fill template=<64hex> as_of=<YYYY-MM-DDTHH:MM:SS[.ffffff]> text=<64hex> -->`
 
@@ -567,9 +579,9 @@ def run_refill(data_root: Path, template: PostTemplate, pages: tuple[SelectedPag
 | Caller | Pages considered | Writes |
 |---|---|---|
 | `run_pass` | every Eligible page (6.2, 6.3, 8.5) | yes |
-| `run_check` without pages | none; template and SQL only, plus `older_template` count over Filled pages (9.2) | no |
+| `run_check` without pages | none filled; template and SQL, plus the Eligible count as `waiting` and the `older_template` count over Filled pages (9.2) | no |
 | `run_check` with pages | each named page, any state (9.3, 9.4) | no |
-| `run_refill` without pages | Eligible or Filled pages in the window (10.2); Athlete's counted (10.6) | with `writing` |
+| `run_refill` without pages | Eligible pages, and Filled pages with no landed post, in the window (10.2); Athlete's pages and landed pages counted, not refilled (10.6) | with `writing` |
 | `run_refill` with pages | each named Waiting or Filled page; Athlete's reported (10.3, 10.5) | with `writing` |
 
 **Run order (`run_pass`)**
@@ -617,7 +629,9 @@ def render_json(report: FillReport) -> str: ...        # check and refill (11.2)
 
 **JSON** carries the same fields as text, keyed by the model's names, with codes as their string values:
 - `command`, `writing` and `template` (`path`, `since`, `digest`);
-- `problems`, `unavailable`, `pages` (one entry per `PageResult`), `counts`, `athletes_left_out`, `older_template` and `stopped`.
+- `problems`, `unavailable`, `pages` (one entry per `PageResult`), `counts`, `waiting`, `athletes_left_out`, `published_left_out`, `older_template` and `stopped`.
+
+**Refill text** for a bare run that left published pages out ends with one line: `N published pages left out; name a page to refill it.` (10.6).
 
 ### CliPostTemplate (`cli.py`)
 
@@ -650,7 +664,7 @@ _run_dashboard_pass(data_root, index_report)
 - A missing template gives exit 2 naming the path (9.8, 10.15).
 - `check` catches `PostTemplateError` and reports it as problems with exit 1 (9.2, 9.7). `refill` treats it as exit 2.
 - `select_pages` errors give exit 2 (11.1).
-- `refill`, and `check` with PAGES, load `load_ledgers(data_root, {})` before running, because both need the landed flag (9.3). `check` without PAGES does not need them. An error gives exit 2 for `refill` (10.15). For `check` it is reported as one more problem with exit 1, and the template and SQL checks still run (9.2, 9.7). Pages are then shown without a landed flag.
+- Both forms load `load_ledgers(data_root, {})` before running. `check` needs them for the Eligible count and the landed flag, and `refill` to leave out published pages (9.2, 9.3, 10.2). An error gives exit 2 for `refill` (10.15). For `check` it is reported as one more problem with exit 1, and the template and SQL checks still run (9.2, 9.7). The Eligible count is then not shown, and pages are shown without a landed flag.
 - `run_refill` problems from SQL `check` give exit 2. An unavailable index gives exit 1. Failing rows give exit 1 (10.15).
 - After `refill --yes` writes, call `_run_index_pass(data_root, handoff=None)` once (10.13).
 - `KeyboardInterrupt` exits 130 (10.14).
@@ -663,7 +677,8 @@ _run_dashboard_pass(data_root, index_report)
 ```python
 # contract.py
 POST_PLACEHOLDER_WORDINGS: Final[tuple[str, ...]] = (POST_PLACEHOLDER,)
-def is_waiting_post(content: str) -> bool: ...
+POST_FILL_STAMP: Final[re.Pattern[str]]   # the provenance comment's grammar
+def is_waiting_post(content: str) -> bool: ...   # only whitespace once fitdocs's own comments are removed
 
 # ledger.py
 def has_landed_post(ledgers: Iterable[PublishLedger], shas: Collection[str]) -> bool:
@@ -680,7 +695,7 @@ POST_WAITING = "post_waiting"   # flags "F"
 - If `plan.post_template_since` is set, the page's `document_date` is at or after it, `is_waiting_post(view.regions[POST_REGION])` holds, and `has_landed_post(run.ledgers.values(), subject.source_shas)` is false, return a row with `POST_WAITING` (12.1).
 - Page-state, facts and ledger-conflict refusals come first (12.6).
 - With no template, `since` is `None` and the branch never runs (12.7).
-- An edit or a fill changes the region, so the branch no longer matches (12.4, 12.5).
+- A fill, or text the athlete writes, means the branch no longer matches (12.4, 12.5). An emptied region is Waiting again, so an Eligible page is refused until it is refilled (5.10).
 - Publish reads no index and imports nothing new beyond `contract` and `ledger` names (12.9).
 
 ### RegionSplice (`docmerge.py`)
@@ -786,11 +801,12 @@ Every new assertion follows the fixture-discrimination gate in `change-protocol.
   Digest stability under a moved `since` and an added comment (5.5). Fixtures must defeat the rule: a template whose only fault is the `datetime` subclass.
 - **`classify` and `render_filled`.**
   - The round trip through `read_post_region`, `override_templates` and `compose_post` with braces in a value and in a title, placeholder-like text `{title}` in a value, and an empty description (4.7).
-  - Every edit flips the state to Athlete's: a changed character, CRLF, a removed stamp, an empty region (5.4).
-  - Each wording in `POST_PLACEHOLDER_WORDINGS` is Waiting.
+  - Every edit that keeps text flips the state to Athlete's: a changed character, CRLF, a removed stamp with the text kept (5.4).
+  - Each wording in `POST_PLACEHOLDER_WORDINGS` is Waiting, and so are an empty region, a whitespace-only region and a stamp with no text below it (5.10).
+  - A region holding only the athlete's own hidden comment, or an unclosed one, is Athlete's (5.11).
 - **`to_text`, one row per type:** `bool` must not pass as `int`, and `datetime` must not pass as `date` (3.6 to 3.9).
 - **The lint, over a table of serialized forms:** every refused form named in the Resolver section, plus a clean example that passes, so a `return ()` mutation dies on a refused row (2.4).
-- **`_decide_pair`.** A waiting refusal for an Eligible page. No refusal with a landed record on another target, or out of the window, or with no template (12.1, 12.5, 12.7). `page_out_of_date` keeps precedence (12.6).
+- **`_decide_pair`.** A waiting refusal for an Eligible page, including one whose region the athlete emptied (5.10). No refusal with a landed record on another target, or out of the window, or with no template (12.1, 12.5, 12.7). `page_out_of_date` keeps precedence (12.6).
 
 ### Integration tests (real sandboxed index fixture)
 
