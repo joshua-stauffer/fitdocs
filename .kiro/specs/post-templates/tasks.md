@@ -80,7 +80,7 @@
 
 - [ ] 2. Core: the template, the region and the resolver
 
-- [ ] 2.1 (P) Parse and validate the post template
+- [x] 2.1 (P) Parse and validate the post template
   - Read `post-template.toml` into a validated template, collecting every problem across keys rather than stopping at the first. Each problem names the file and key, and for grammar the line and column.
   - Apply the design's rules in order: UTF-8 and TOML, the allowed and required keys, `since` as a TOML date only, title and description text with the comment-marker and single-line rules, `vars` entries with exactly a text `sql`, and variable names that follow the grammar, are not a page placeholder, and are used.
   - Compute the template digest from title, description and each variable's name and SQL only.
@@ -371,3 +371,4 @@
   - `counts` lists only codes that have at least one row, in FillCode order.
   - `failed` is true for template problems, `unavailable`, or any row code outside {FILLED, WOULD_FILL, UNCHANGED, ATHLETES_TEXT}. So INDEX_BEHIND and PAGE_NOT_CURRENT fail in both check and refill, and pages a bare refill leaves out are counts, not failures.
   - The boundary guard in tests/post_template/test_boundary.py has an equality-pinned `_ALLOWED_IMPORT_TARGETS`, and each later module task appends ONE entry. The resolver task (2.3) adds `fitdocs.query` for resolve.py only. query is not in `_FORBIDDEN_TARGETS`, but the per-module table forbids it everywhere else.
+- 2.1: `post_template.template` has `parse_post_template(data, *, path)` and `load_post_template(data_root) -> PostTemplate | None`. `PostTemplateError(SettingsError)` has `.problems`; each problem is `<path>: <key>: <reason>`, already prefixed with the path, and grammar positions read "line L, column C of the value". Problems come in rule order: required keys, unknown keys, since, title, description, vars shape, vars names. The unused-variable check is skipped only when title or description fails to PARSE. The digest follows the design recipe (compact JSON, sorted vars, SQL rstrip of CR/LF).
