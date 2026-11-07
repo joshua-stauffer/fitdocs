@@ -15,11 +15,20 @@ found the same way as at the top level.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import date, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Final, TypeVar
 
-from fitdocs.post_template.model import Unavailable
+from fitdocs.post_template.model import (
+    Binding,
+    FillCode,
+    Unavailable,
+    VariableOutcome,
+)
 from fitdocs.post_template.template import PostTemplate, Variable
 from fitdocs.query.command import (
     OutcomeKind,
@@ -29,6 +38,7 @@ from fitdocs.query.command import (
     open_session,
 )
 from fitdocs.query.statement import (
+    TIMESTAMPTZ_HINT,
     StatementFailed,
     StatementRefused,
     StatementTimedOut,
@@ -41,9 +51,12 @@ __all__ = [
     "REQUIRED_PARAMETER",
     "VOLATILE_FUNCTIONS",
     "VOLATILE_KEYWORDS",
+    "RESOLVE_MAX_ROWS",
     "SessionResolver",
+    "ValueRefusal",
     "lint_findings",
     "open_resolver",
+    "to_text",
 ]
 
 #: Function names whose value differs between runs, or that hide SQL from the
@@ -103,6 +116,13 @@ BOUND_PARAMETERS: Final[frozenset[str]] = frozenset({"as_of", "page_key"})
 #: Longest a check statement may run (the lint is a parse, so this is generous).
 CHECK_STATEMENT_TIMEOUT_S: Final = 30.0
 
+#: One row is a value; the second row is read only to prove there is one too many.
+RESOLVE_MAX_ROWS: Final = 2
+
+#: Line breaks of any kind: the title's class plus NEL and the Unicode separators.
+_LINE_BREAK: Final = re.compile(r"[\n\r\v\f\x85\u2028\u2029]")
+_COMMENT_MARKERS: Final[tuple[str, ...]] = ("<!--", "-->", "--!>")
+
 _HIDES_SQL: Final[frozenset[str]] = frozenset({"query", "query_table"})
 
 _T = TypeVar("_T")
@@ -110,6 +130,64 @@ _T = TypeVar("_T")
 
 def _one_line(message: str) -> str:
     return " ".join(message.split())
+
+
+_TIMESTAMP_ADVICE: Final = (
+    "returned a timestamp; cast it to text, for example "
+    "strftime(..., '%H:%M'), or to DATE"
+)
+
+
+@dataclass(frozen=True)
+class ValueRefusal:
+    """A value the post cannot carry, with advice on how to return one it can."""
+
+    detail: str
+
+
+def to_text(value: object) -> str | ValueRefusal:
+    """The text a non-NULL value stands for, or why it is refused.
+
+    The order matters: a `bool` is an `int` and a `datetime` is a `date`, so
+    each is tested before the type it would otherwise pass as.
+    """
+    if isinstance(value, bool):
+        return ValueRefusal(
+            "returned a boolean; cast it to text, for example "
+            "CASE WHEN ... THEN 'yes' ELSE 'no' END"
+        )
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, Decimal):
+        if not value.is_finite():
+            return ValueRefusal(
+                f"returned {value}, which is not a number; return NULL instead"
+            )
+        return format(value, "f")
+    if isinstance(value, float):
+        return ValueRefusal(
+            "returned a floating-point number, which can print differently "
+            "from run to run; cast it, for example ::DECIMAL(10, 2) or "
+            "round(...)::INTEGER"
+        )
+    if isinstance(value, datetime):
+        return ValueRefusal(_TIMESTAMP_ADVICE)
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, str):
+        if _LINE_BREAK.search(value):
+            return ValueRefusal(
+                "returned text with a line break; return a single line, "
+                "for example with replace(..., chr(10), ' ')"
+            )
+        for marker in _COMMENT_MARKERS:
+            if marker in value:
+                return ValueRefusal(
+                    f"returned text holding {marker!r}, which would open or "
+                    "close a hidden comment; remove it in the SQL"
+                )
+        return value
+    return ValueRefusal(f"returned a {type(value).__name__} value; cast it to text")
 
 
 def _unavailable(reason: SessionUnavailable) -> Unavailable:
@@ -242,6 +320,69 @@ class SessionResolver:
             message = _one_line(str(serialized.get("error_message", "unknown error")))
             return (f"could not be linted: {message}",)
         return lint_findings(serialized)
+
+    def page_is_current(self, page_key: str | None, path: str, data: bytes) -> bool:
+        """Whether the index holds exactly this file for this page."""
+        return self._interruptible(
+            lambda: self._session.page_is_current(page_key, path, data)
+        )
+
+    def resolve(
+        self, variable: Variable, binding: Binding, *, timeout_s: float
+    ) -> VariableOutcome:
+        """One variable's value for one page, or the code that says why not."""
+        sql = variable.sql
+
+        def failed(code: FillCode, detail: str) -> VariableOutcome:
+            return VariableOutcome(variable.name, None, code, detail)
+
+        try:
+            screened = self._interruptible(lambda: self._session.screen(sql))
+        except (StatementRefused, StatementFailed) as error:
+            return failed(FillCode.STATEMENT_FAILED, _one_line(str(error)))
+        if screened.kind != "SELECT" or screened.parameters - BOUND_PARAMETERS:
+            return failed(
+                FillCode.STATEMENT_FAILED,
+                "must be a SELECT that uses only $as_of and $page_key",
+            )
+        values: dict[str, object] = {
+            "as_of": binding.as_of,
+            "page_key": binding.page_key,
+        }
+        params = {name: values[name] for name in screened.parameters}
+        try:
+            result = self._interruptible(
+                lambda: self._session.run(
+                    sql,
+                    params=params,
+                    max_rows=RESOLVE_MAX_ROWS,
+                    timeout_s=timeout_s,
+                )
+            )
+        except StatementTimedOut as error:
+            return failed(FillCode.TIMED_OUT, _one_line(str(error)))
+        except StatementFailed as error:
+            if error.hint == TIMESTAMPTZ_HINT:
+                return failed(FillCode.VALUE_REFUSED, _TIMESTAMP_ADVICE)
+            return failed(FillCode.STATEMENT_FAILED, _one_line(str(error)))
+        except StatementRefused as error:
+            return failed(FillCode.STATEMENT_FAILED, _one_line(str(error)))
+        if len(result.columns) != 1:
+            return failed(
+                FillCode.SHAPE_INVALID,
+                f"must return one column; it returned {len(result.columns)}",
+            )
+        if len(result.rows) > 1:
+            return failed(
+                FillCode.SHAPE_INVALID,
+                "must return at most one row; it returned more than one",
+            )
+        if not result.rows or result.rows[0][0] is None:
+            return VariableOutcome(variable.name, None, None, None)
+        text = to_text(result.rows[0][0])
+        if isinstance(text, ValueRefusal):
+            return failed(FillCode.VALUE_REFUSED, text.detail)
+        return VariableOutcome(variable.name, text, None, None)
 
     def close(self) -> None:
         self._session.close()

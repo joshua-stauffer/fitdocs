@@ -118,10 +118,14 @@ def classify_statement_error(exc: IndexStatementError) -> Restriction | None:
     return None
 
 
+#: The hint for a time-zone timestamp the driver cannot hand over as a value.
+TIMESTAMPTZ_HINT: Final = "cast TIMESTAMP WITH TIME ZONE values to TIMESTAMP"
+
+
 def failure_hint(exc: IndexStatementError) -> str | None:
     """Return a narrow recovery hint for known database failure causes."""
     if "Required module 'pytz'" in str(exc):
-        return "cast TIMESTAMP WITH TIME ZONE values to TIMESTAMP"
+        return TIMESTAMPTZ_HINT
     if type(exc.__cause__).__name__ == "OutOfMemoryException":
         return (
             "the statement needed more than the query sandbox's 1 GB of memory; "

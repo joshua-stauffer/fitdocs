@@ -493,7 +493,7 @@ class SessionResolver:
 
    An `error` node is a refusal with its message. `check` only parses: it neither prepares nor binds, so an unknown column passes `check` and fails per page as `STATEMENT_FAILED`. `check` does not keep each statement's parameters, so `resolve` re-screens to learn which names to bind (2.3 ruling).
 
-**`resolve` (3.1, 3.2, 3.4 to 3.9).**
+**`resolve` (3.1, 3.2, 3.4 to 3.9).** Ruling at 2.4: a TIMESTAMP WITH TIME ZONE result fails in the driver, because pytz is not a dependency. That failure is recognized by the query module's own TIMESTAMPTZ hint and mapped to `VALUE_REFUSED` with the timestamp row's advice, so for a one-row, one-column result the outcome does not depend on whether pytz is installed. Without pytz, the failure comes before the shape check, so a multi-column or multi-row TIMESTAMPTZ result is also refused with the timestamp advice rather than SHAPE_INVALID; the advice is still one the user can act on.
 1. Bind exactly the screened parameter names from the `Binding`. DuckDB errors on an extra or a missing parameter.
 2. `session.run(..., max_rows=2, timeout_s=timeout_s)`.
 3. Check the shape: `len(columns) != 1` or more than one row gives `SHAPE_INVALID`. No rows, or a single `None`, means absent.

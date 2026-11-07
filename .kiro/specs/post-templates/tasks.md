@@ -78,7 +78,7 @@
     - a scan is pointed at an empty directory.
   - _Requirements: 13.1, 13.4_
 
-- [ ] 2. Core: the template, the region and the resolver
+- [x] 2. Core: the template, the region and the resolver
 
 - [x] 2.1 (P) Parse and validate the post template
   - Read `post-template.toml` into a validated template, collecting every problem across keys rather than stopping at the first. Each problem names the file and key, and for grammar the line and column.
@@ -123,7 +123,7 @@
   - _Boundary: VariableResolver_
   - _Depends: 1.5, 2.1_
 
-- [ ] 2.4 Resolve one variable for one page
+- [x] 2.4 Resolve one variable for one page
   - Bind exactly the parameters the statement uses: `$as_of` as the naive local start and `$page_key` as the page key. Run with a two-row cap and the given timeout.
   - Turn the result into text by the design's type table: integers, decimals without exponent, dates and text pass; booleans, floats, timestamps, other types and unsafe text are refused with advice; zero rows or NULL are absent.
   - Map timeouts, failures and refusals to their codes, with the database's message on one line.
@@ -374,3 +374,4 @@
 - 2.1: `post_template.template` has `parse_post_template(data, *, path)` and `load_post_template(data_root) -> PostTemplate | None`. `PostTemplateError(SettingsError)` has `.problems`; each problem is `<path>: <key>: <reason>`, already prefixed with the path, and grammar positions read "line L, column C of the value". Problems come in rule order: required keys, unknown keys, since, title, description, vars shape, vars names. The unused-variable check is skipped only when title or description fails to PARSE. The digest follows the design recipe (compact JSON, sorted vars, SQL rstrip of CR/LF).
 - 2.2 → 3.1: `region.classify` hashes everything after the stamp's first `\n` exactly as written (UTF-8; a trailing newline counts; `render_filled` writes none). The engine must read page BYTES as publish does (`docio.read_document` → `read_bytes`), not `read_text`, which turns CRLF into LF and would hide an athlete's CRLF edit. Sync's own `read_text`/`write_text` (sync.py ~2074/2614) already normalizes CRLF on regen; that is existing behavior and out of scope. 2.2 dropped the design's "rest not blank" / "\n exists" guards as dead: Waiting is checked first and `is_waiting_post` covers both. The reviewer confirmed this with a 20k-input differential.
 - 2.3: `post_template.resolve` has `open_resolver(data_root, env) -> SessionResolver | Unavailable`, plus `SessionResolver.check`/`close` and `_interruptible`, the Ctrl-C conversion that 2.4 must reuse for `resolve` and `page_is_current`. `check` only parses and keeps no parameters, so `resolve` re-screens to learn which names to bind (ruling in design.md). Shared fixture: `tests/post_template/_index.py` and `conftest.py` (`indexed_post_root` module-scoped, `post_root_copy` per test) give pages MON, AM, PM and REST with sha256 keys; `EXAMPLE_SQL`/`EXAMPLE_SHARE` are `{MON:100, AM:56, PM:24, REST:None}`. The lint list grew by 11 names beyond the design; design.md records them.
+- 2.4: `SessionResolver.resolve(variable, binding, *, timeout_s) -> VariableOutcome` re-screens, binds only the screened names, and runs with `max_rows=2`. Shape is checked before absence. `to_text` refuses bool, float, datetime, time and other types with "cast it to text" advice, and refuses line breaks and comment markers; tab and other control characters pass, per the design (queued as a question). "" and 0 are values; only zero rows or NULL are absent. A TIMESTAMPTZ result is recognized by `query.statement.TIMESTAMPTZ_HINT` and refused with the timestamp advice. `page_is_current`, `screen` and `run` all go through `_interruptible`.
