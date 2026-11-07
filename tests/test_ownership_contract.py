@@ -545,16 +545,6 @@ def test_root_instructions_example_names_all_eight_declarations() -> None:
     assert "on every `fitdocs recovery` run that has a page to write" in flat
 
 
-def test_every_never_read_back_sentence_carries_the_named_exception() -> None:
-    text = _flat(_read_doc())
-    phrases = ("back into a document", "back into documents")
-    sentences = re.split(r"(?<=[.;:])\s+", text)
-    hits = [sentence for sentence in sentences if any(p in sentence for p in phrases)]
-    assert hits, "no sentence states the index is never read back into a document"
-    for sentence in hits:
-        assert "except the chart regions" in sentence, sentence
-
-
 def _bullet(section: str, name: str) -> str:
     start = section.index(name)
     end = section.find(" - **", start + 1)

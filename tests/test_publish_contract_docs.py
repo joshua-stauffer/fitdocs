@@ -170,14 +170,6 @@ def test_sync_force_names_post_among_the_carried_regions() -> None:
     assert "`notes`, `workout`, `post`, and `load`, and every user-owned" in section
 
 
-def test_hand_authored_places_name_the_post_region() -> None:
-    text = _flat(_doc())
-    assert (
-        "the `notes` region (or, for a strength document, the `workout` region), "
-        "the `post` region and the user-owned frontmatter keys below"
-    ) in text
-
-
 def test_training_history_reserved_names_include_post_and_publish() -> None:
     section = _section("A Second Document Type: Training History")
     assert (

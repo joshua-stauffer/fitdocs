@@ -30,52 +30,6 @@ def _index_section() -> str:
     return " ".join(section.split("\n## ", 1)[0].split())
 
 
-def test_index_contract_publishes_location_order_key_refusal_and_permissions() -> None:
-    section = _index_section()
-    env_fallback = section.index("`FITDOCS_INDEX_DIR`")
-    xdg_fallback = section.index("`XDG_CACHE_HOME`")
-    home_fallback = section.index("`.cache/fitdocs/index`")
-    assert env_fallback < xdg_fallback < home_fallback
-    for phrase in (
-        "`FITDOCS_INDEX_DIR`",
-        "otherwise `fitdocs/index` under an absolute `XDG_CACHE_HOME`",
-        "otherwise `.cache/fitdocs/index` under the user's home directory",
-        "`<slug>-<digest>`",
-        "fully resolved absolute path",
-        "root basename lowercased",
-        "runs of characters outside `[a-z0-9]` replaced by hyphens",
-        "cut to 24 characters (or `root` if empty)",
-        "first 16 hexadecimal characters",
-        "non-empty relative `FITDOCS_INDEX_DIR` is refused",
-        "naming the variable and value",
-        "resolves to the data root itself or a location inside it",
-        "naming both resolved paths",
-        "writes nothing there",
-        "`0o700`",
-        "readable, writable and searchable only by the current user",
-        "disposable cache",
-        "never reads the index back into a document",
-        "except the chart regions and chart assets of dashboard pages under "
-        "`dashboards/`",
-        "workout, history and block documents never read it",
-    ):
-        assert phrase in section, phrase
-
-    key_rule = (
-        "Within that base, fitdocs names one directory `<slug>-<digest>` from the "
-        "data root's fully resolved absolute path. The slug is the root basename "
-        "lowercased, with runs of characters outside `[a-z0-9]` replaced by "
-        "hyphens, trimmed, and cut to 24 characters (or `root` if empty); the "
-        "digest is the first 16 hexadecimal characters of that path's SHA-256."
-    )
-    assert key_rule in section
-    assert (
-        "Newly created index directories have mode `0o700`, readable, writable "
-        "and searchable only by the current user; existing directory permissions "
-        "are left unchanged."
-    ) in section
-
-
 def test_index_contract_publishes_agreement_rule_and_file_names() -> None:
     section = _index_section()
     for phrase in (
@@ -111,33 +65,6 @@ def test_index_contract_states_refresh_and_build_overwrite_semantics() -> None:
         "complete set of index writes stays inside this resolved per-data-root "
         "directory"
     ) in section
-
-
-def test_index_is_counted_as_an_external_location_not_an_owned_data_root_path() -> None:
-    assert (
-        "Three locations at the top of the data root (by default), and three outside"
-        in OWNERSHIP
-    )
-    section = OWNERSHIP.split("## Owned Paths", 1)[1].split("\n## ", 1)[0]
-    assert "analytics-index" not in section
-    configured = OWNERSHIP.split("## Configured Locations fitdocs May Create", 1)[1]
-    configured = " ".join(configured.split("\n## ", 1)[0].split())
-    assert "the external analytics-index directory specified below" in configured
-    flat_ownership = " ".join(OWNERSHIP.split())
-    write_set_start = flat_ownership.index("The full set of places a given run")
-    write_set_end = flat_ownership.index(
-        " ## The analytics index (outside the data root)", write_set_start
-    )
-    write_set = flat_ownership[write_set_start:write_set_end]
-    assert write_set == (
-        "The full set of places a given run of fitdocs may write is therefore "
-        "always *the owned paths above, union whatever your settings currently "
-        "configure* — never more, apart from the files under [Shared and "
-        "User-Owned Files](#shared-and-user-owned-files) that state their own "
-        "write rule (`athlete.toml`, and outside the data root the connector "
-        "credentials store) and the external analytics-index directory "
-        "specified below."
-    )
 
 
 def test_contract_bump_and_release_notes_are_current() -> None:

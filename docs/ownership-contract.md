@@ -2,7 +2,22 @@
 
 **Contract version:** `19`
 
-**What changed at this version:** The connector credentials store, which sits
+**What changed at this version:** Three guarantees about the `post` region and
+the analytics index change. First, fitdocs may write a workout page's `post`
+region, but only while it is Waiting (empty, or only fitdocs's own hidden comments: the fresh placeholder in any wording it has written, and its stamp comment)
+or Filled (text fitdocs wrote and you have not edited), and never
+while it is yours. `fitdocs sync` and `fitdocs post-template refill` fill it;
+`fitdocs post-template check` and every dry run write nothing. Second,
+`post-template.toml`, at the top of the data root, is user-owned and read-only
+to fitdocs. Third, a Filled `post` region is the second named exception to
+"the index is never read back into a document", after the chart regions of
+dashboard pages: its text is composed from the analytics index and is carried
+afterwards as a snapshot, so regenerating a page, the fill pass, and deleting
+or rebuilding the index leave it as it is; only `fitdocs post-template refill`
+recomposes it. Run `fitdocs sync` to fill waiting regions once a
+template exists; nothing is needed otherwise.
+
+Earlier in this same version, the connector credentials store, which sits
 outside the data root and is not owned by fitdocs, is no longer something
 fitdocs never deletes from. The new `fitdocs disconnect` command removes the
 named connector instance's own credentials file, and nothing else. `connect`,
@@ -93,11 +108,11 @@ named in the next section.
 - `recovery/` — one generated recovery page at `recovery/recovery.md`.
 - `recovery/assets/` — chart images (SVG) referenced by the recovery page.
 
-Two files at the top of the data root are explicitly **not** owned by
+Three files at the top of the data root are explicitly **not** owned by
 fitdocs even though fitdocs reads and, in one case, writes into them —
-`fitdocs.toml` and `athlete.toml`. A third top-level entry (by default), the
+`fitdocs.toml`, `post-template.toml` and `athlete.toml`. A fourth top-level entry (by default), the
 plan-source directory, is read but never owned either -- like `fitdocs.toml`,
-and unlike `athlete.toml`, fitdocs never writes there at all. All three are
+and unlike `athlete.toml`, fitdocs never writes there at all. All four are
 covered under
 [Shared and User-Owned Files](#shared-and-user-owned-files) below, not here,
 because "owned" in this contract means "fitdocs may create, rewrite, or
@@ -323,9 +338,14 @@ specified below.
 The analytics index is a disposable cache, not user data. It can be deleted
 at any time; rebuilding it with `fitdocs index` costs only time. Fitdocs never
 reads the index back into a document or uses it to produce a document value,
-except the chart regions and chart assets of dashboard pages under
-`dashboards/`, which are the only document content produced from the index;
-workout, history and block documents never read it. Fitdocs writes index
+with two named exceptions. The first is the chart regions and chart assets of
+dashboard pages under `dashboards/`. The second is a Filled `post` region of a
+workout page: fitdocs composes its text from the index, writes it, and carries
+it afterwards as a snapshot: regeneration, the fill pass, and rebuilding or
+deleting the index read the region from the page and run no query for it,
+and only `fitdocs post-template refill` recomposes it from the index. Those are the only document content
+produced from the index; workout, history and block documents otherwise never
+read it. Fitdocs writes index
 files only inside the resolved per-data-root index directory, which is outside
 the data root.
 
@@ -384,7 +404,16 @@ verbatim rather than replacing:
   hand-authored content.
 - `post` — user-owned. The page's own post for publishing. fitdocs writes a
   hidden-comment instruction into a brand-new document, which renders as
-  nothing, and never touches this region again.
+  nothing, and may later fill the region from the page's own values and
+  `post-template.toml`, but only while it is Waiting (empty, or only fitdocs's
+  own hidden comments: the fresh instruction in any wording it has written, and
+  its stamp comment) or Filled (text fitdocs wrote,
+  led by a stamp comment, which you have not edited). It never writes the
+  region while it is yours, that is, once you have written or edited it, and
+  it carries the region over verbatim on every regeneration. A Filled region
+  is a snapshot: regeneration, the fill pass, and rebuilding or deleting the
+  index read it from the page and run no query for it, and only
+  `fitdocs post-template refill` recomposes it from the index.
 - `load` — tool-filled. The training-load pass writes into this region, but
   regeneration still carries its existing content over rather than
   overwriting it, on the same footing as the user-owned regions.
@@ -545,7 +574,7 @@ notice.
 
 The supported places for hand-authored content in a generated document are
 the `notes` region (or, for a strength document, the `workout` region), the
-`post` region and the user-owned frontmatter keys below — not the rest of the frontmatter
+`post` region (while it is yours) and the user-owned frontmatter keys below — not the rest of the frontmatter
 block. Anything else you add to frontmatter directly should be treated as
 temporary: it survives only until the document is next regenerated.
 
@@ -887,7 +916,7 @@ and to the recorded sources.
 
 ## Shared and User-Owned Files
 
-Three locations at the top of the data root (by default), and three outside
+Four locations at the top of the data root (by default), and three outside
 it (the connector credentials store, the `.fitdocs/data-root` pointer file,
 and the analytics-index directory), are not part of the owned-path set above,
 and each has a distinct contract:
@@ -919,6 +948,10 @@ and each has a distinct contract:
   land). This file is **read-only to fitdocs**: nothing in fitdocs ever
   creates, writes, or modifies it. An absent file, or an absent table within
   it, degrades to defaults.
+- **`post-template.toml`** — your post template, the title, description and
+  SQL variables fitdocs fills a page's Waiting `post` region from. It is
+  **user-owned and read-only to fitdocs**: fitdocs reads it and never creates,
+  writes, renames or deletes it. An absent file means no region is filled.
 - **The connector credentials store** — one TOML file per configured
   connector instance, holding that instance's stored credentials or tokens.
   It lives outside the data root, in a per-user directory (`$FITDOCS_CREDENTIALS_DIR` when set, else
@@ -980,7 +1013,9 @@ and each has a distinct contract:
   time is read). A file that
   cannot be placed on one page is archived and held rather than added to a
   page. Once its analytics index refresh has succeeded, `sync` (with or
-  without a source) then runs the dashboard pass, described under the
+  without a source) then runs the post-template fill pass, which writes only
+  the `post` regions of pages that are Waiting or Filled (see the
+  `post-template` entry below), and then the dashboard pass, described under the
   `dashboard` entry below.
 - **`sync --force`** — re-processes every discovered file even when its
   source is already archived, but forced re-processing does **not** bypass
@@ -1216,6 +1251,14 @@ and each has a distinct contract:
   [Shared and User-Owned Files](#shared-and-user-owned-files) below). A page
   whose ledger records are ambiguous is left as it is and reported. `fitdocs publish` reads the publish targets from the `[publish]` and
   `[connectors]` tables of `fitdocs.toml`.
+- **`post-template`** — `fitdocs post-template check` writes nothing.
+  `fitdocs post-template refill`, and the fill pass that `sync` and `pull --sync` run after the index refresh and
+  before the dashboard pass, write
+  only the inner content of the `post` region of workout pages, and only while
+  that region is Waiting or Filled, never while it is yours; they rewrite a
+  Filled region only when its text would change. They never write
+  `post-template.toml`, the frontmatter or any other byte of a page, and never
+  create, rename or delete a page.
 - **`connect`** — authenticates one connector instance interactively and
   writes nothing at all under the data root; the only file it creates or
   updates is that instance's own credentials file (and the credentials

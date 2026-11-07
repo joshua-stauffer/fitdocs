@@ -73,6 +73,13 @@ Regions have three ownership classes:
 - ``notes`` and ``workout`` are **user-owned** (:data:`USER_REGIONS`). Their
   content is hand-authored; fitdocs writes an instructive placeholder into a
   brand-new document and never touches the region again.
+- ``post`` is **user-owned** (:data:`USER_REGIONS`) and is the one user-owned
+  region fitdocs may also write. It writes the region only while it is
+  *Waiting* (empty, or only fitdocs's own hidden comments: the fresh
+  placeholder in any wording it has written, and its stamp comment) or *Filled*
+  (a stamped text it wrote and the athlete has not edited), and never while it
+  is the athlete's: once the athlete has written or edited it, fitdocs leaves
+  it alone. Regeneration carries it like every preserved region.
 - ``load`` is **tool-filled** (:data:`TOOL_REGIONS`). The training-load pass
   writes into it, but regeneration must still carry its content over rather
   than overwrite it, so it is preserved on the same footing.
@@ -82,7 +89,7 @@ Regions have three ownership classes:
   run. It is never user-owned or preserved for the user.
 
 :data:`PRESERVED_REGIONS` is the union in document order -- ``("notes",
-"workout", "load")``. The order is part of the contract, not an accident: it is
+"workout", "post", "load")``. The order is part of the contract, not an accident: it is
 the order these preserved regions appear in a rendered document and the order
 every published enumeration of them uses.
 
@@ -449,7 +456,8 @@ Document values follow every change of a page; computed values follow the
 page's rendering. ``fitdocs regen`` brings documents and the index forward
 together after the athlete inputs change, and a build computes every page
 under the athlete inputs current at that build. The disposable index is stored
-outside the data root, is never read back into a document, and is refreshed
+outside the data root, is never read back into a document (apart from the exceptions
+named by contract ``10`` and ``19``), and is refreshed
 after every writing command without changing that command's exit code.
 
 Raised from ``9`` to ``10`` by dashboards (Req 1.1, 1.2, 19.2) because the
@@ -540,9 +548,11 @@ credentials file, as a credential-renewing ``fitdocs pull`` does. Run
 ``fitdocs publish`` does not publish a page stamped with an older
 document-format version.
 
-Raised from ``18`` to ``19`` by relay-server (Req 14.8, 14.9) because the stated
-guarantee about the connector credentials store changed. The store sits outside
-the data root and is not owned by fitdocs; it was never deleted from, and now
+Raised from ``18`` to ``19`` by relay-server (Req 14.8, 14.9) and post-templates
+(Req 14.1-14.3, 14.9) because the stated guarantees about the connector
+credentials store, the ``post`` region and the analytics index changed. The
+store sits outside the data root and is not owned by fitdocs; it was never
+deleted from, and now
 ``fitdocs disconnect`` removes the named instance's own credentials file and
 nothing else, never the directory and never another instance's file.
 ``fitdocs connect``, a credential-renewing ``fitdocs pull``, a
@@ -551,6 +561,22 @@ only operations that write to or remove from the store, one instance's file at a
 time and never under the data root. Which paths fitdocs owns
 under the data root are unchanged. Run ``fitdocs sync`` or ``fitdocs regen`` once
 to refresh the in-tree ownership declarations.
+
+The same version states three further changes (post-templates). First, the
+``post`` region of a workout page may be written by fitdocs only while it is
+Waiting or Filled, and never while it is the athlete's; ``fitdocs sync`` and
+``fitdocs post-template refill`` fill it from the page's own values and the
+template, and ``fitdocs post-template check`` and a dry run write nothing.
+Second, ``post-template.toml``, at the top of the data root, is user-owned and
+read-only to fitdocs: fitdocs reads it and never creates, writes, renames or
+deletes it. Third, a Filled ``post`` region is the second named exception to
+"the index is never read back into a document", after the chart regions and
+assets of dashboard pages: the text of a ``post`` region is composed from
+the analytics index, then carried afterwards as a snapshot, so regeneration,
+the fill pass, and deleting or rebuilding the index leave it as it is; only
+``fitdocs post-template refill`` recomposes it. Workout, history and
+block documents otherwise never read the index. Run ``fitdocs sync`` to fill
+waiting regions once a template exists; nothing is needed otherwise.
 """
 
 # --- document vocabulary -----------------------------------------------------
@@ -1006,13 +1032,18 @@ MORNING_REGION: Final[str] = "morning"
 """The fitdocs-owned region refreshed from wellness data outside the page's files."""
 
 POST_REGION: Final[str] = "post"
-"""The user-owned region holding the page's own post for publishing."""
+"""The user-owned region holding the page's own post for publishing.
+
+fitdocs may also write it, only while Waiting or Filled, never the athlete's."""
 
 PUBLISHED_REGION: Final[str] = "published"
 """The fitdocs-owned region listing links to the page's posted activities."""
 
 USER_REGIONS: Final[tuple[str, ...]] = (NOTES_REGION, WORKOUT_REGION, POST_REGION)
-"""The regions a human authors; fitdocs writes only their initial placeholder."""
+"""The regions a human authors; fitdocs writes only their initial placeholder.
+
+The one exception is ``post``, which fitdocs may also fill while it is Waiting or
+Filled (never while it is the athlete's)."""
 
 TOOL_REGIONS: Final[tuple[str, ...]] = (LOAD_REGION,)
 """The regions fitdocs fills and regeneration preserves."""

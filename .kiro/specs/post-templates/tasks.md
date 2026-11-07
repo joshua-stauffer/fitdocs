@@ -309,7 +309,7 @@
 
 - [ ] 6. Contract, documentation and records
 
-- [ ] 6.1 State the changed guarantees in the contract
+- [x] 6.1 State the changed guarantees in the contract
   - In the code contract and `docs/ownership-contract.md`:
     - the `post` region may be written only while waiting or filled, and never while it is the athlete's;
     - `post-template.toml` is user-owned and read-only;
@@ -394,3 +394,12 @@
 - 5.2: `fitdocs post-template check|refill [PAGES] [--yes] [--format] [--out]`, where `--out` is the shared data-root override, not an output file. Checks run in this order: --yes with check, then the template, then PAGES, then the ledgers. Refill with refused SQL prints the report and exits 2. In JSON mode the post-write refresh prints to stderr. The CLI count is now 18. The shared fixture `_index.py` `page_text` now writes a `published` region (pages were DAMAGED before; no earlier test relied on status), pinned by `test_index_fixture.py`. Not yet in confinement WRITING_ENTRY_POINTS (5.4).
 - 5.3: publish's settings preflight loads the template only when `post-template.toml` lexists (lazy import; the ruling is recorded in design.md). A refused template gives exit 2 with every problem line, before `--targets` too, and `post_template_since` reaches the single `PublishPlan` construction for both the dry run and `--yes`. The page half of Req 8.6 (keeping its text after the template is deleted) is PRESERVED-ONLY here: the post-unlink `pw.sync()` assertion cannot fail, and the real cover is `test_sync_pass.py::test_regen_with_the_index_deleted_keeps_the_filled_region`.
 - 5.4: tests/test_confinement.py registers `sync-with-post-template` and `post-template-refill` in WRITING_ENTRY_POINTS, with `_wrote_a_filled_post_region_and_the_index`: a stamped post region, the index written, and the staged publish ledger untouched. It reads the sandbox via the module global `_POST_SANDBOX`, set only by `_stage_post_template`. Both ids are in `_EXTERNAL_INDEX_ENTRY_IDS`. `check` (bare and named) writes no byte and makes no request.
+- 6.1 deleted doc-binding tests (6.3 names them in the amendments):
+  - `tests/test_ownership_contract.py::test_every_never_read_back_sentence_carries_the_named_exception`
+  - `tests/index/test_contract_docs.py::test_index_contract_publishes_location_order_key_refusal_and_permissions`
+  - `tests/index/test_contract_docs.py::test_index_is_counted_as_an_external_location_not_an_owned_data_root_path`
+  - `tests/test_publish_contract_docs.py::test_hand_authored_places_name_the_post_region`
+- 6.1 reviewer, contradicting copies routed to later tasks:
+  - 6.2: `docs/publishing.md:~225` ("carries its content through every rewrite verbatim and never changes it"); `src/fitdocs/skills/fitdocs-workouts/SKILL.md:~196` (empty region gives the configured template); CHANGELOG Unreleased has no entry yet.
+  - 6.3: `.kiro/steering/tech.md:~18` (read-back sentence); `.kiro/steering/product.md:~78` ("page's own computed values"). 6.3 will turn red `tests/connectors/test_network_statements.py:~883` and `tests/dashboards/test_published.py:~155` (both pin the tech.md read-back sentence); delete and name them.
+  - No generated-AGENTS.md constant contradicts the feature (declaration.py `_REGIONS` and `_REDERIVABILITY_DOCS` are still true), so no golden moves.
