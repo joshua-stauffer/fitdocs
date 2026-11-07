@@ -140,6 +140,8 @@ The two-debug-cycle limit was exhausted; task 8.4 is blocked on the owning
 docs-site repair. CI mode remains unrun. Both UTC failures are preserved;
 neither is replaced by the passing plain or floor checks.
 
+- 2026-11-07 (/kiro-impl post-templates 6.2 review, reported by reviewer subagent): `tests/sitebuild/test_preview.py::test_live_preview_post_delete_wait_requires_last_good_readiness` failed once under `uv run pytest -n auto` over a targeted file set and passed when run alone (5.8 s). Still recurring.
+
 ## How to pick it up
 
 1. Read the live-preview test's delete/break sequence and its bounded
