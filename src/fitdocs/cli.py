@@ -3371,6 +3371,8 @@ def post_template_command(
                     _run_index_pass(data_root, handoff=None)
             else:
                 _run_index_pass(data_root, handoff=None)
+    except IndexLocationError as error:
+        _config_error(str(error))
     except KeyboardInterrupt:
         Console(stderr=True, markup=False, highlight=False, soft_wrap=True).print(
             "Post template run interrupted; every page already written is kept."

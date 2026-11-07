@@ -488,7 +488,7 @@ def test_an_unbuilt_index_gives_one_line_and_leaves_the_page_waiting(
 
     assert result.exit_code == 0, result.output
     assert post_lines(result) == [
-        "Post template: 1 waiting; the index is not built. run fitdocs index."
+        "Post template: 1 waiting; the index is not built. Run fitdocs index."
     ]
     [page] = world.pages()
     assert world.post_region(page) == contract.POST_PLACEHOLDER
@@ -528,7 +528,7 @@ def test_an_index_with_errors_gives_one_line_and_leaves_the_page_waiting(
     assert result.exit_code == 0, result.output
     assert post_lines(result) == [
         "Post template: 1 waiting; the index refresh reported errors, "
-        "listed above. fix what it lists, then run fitdocs sync again."
+        "listed above. Fix what it lists, then run fitdocs sync again."
     ]
     [page] = world.pages()
     assert world.post_region(page) == contract.POST_PLACEHOLDER
@@ -559,7 +559,7 @@ def test_a_refresh_that_raised_leaves_the_page_waiting_and_says_so_once(
     assert result.exit_code == 0, result.output
     assert post_lines(result) == [
         "Post template: 1 waiting; the index refresh raised an error. "
-        "run fitdocs index."
+        "Run fitdocs index."
     ]
     assert calls.names() == ["index", "fill", "dashboard"]
     assert calls.of("dashboard") == [None]

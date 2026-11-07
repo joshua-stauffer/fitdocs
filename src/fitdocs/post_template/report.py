@@ -106,6 +106,10 @@ def _causes(report: FillReport) -> list[str]:
     return lines
 
 
+def _capitalized(sentence: str) -> str:
+    return f"{sentence[:1].upper()}{sentence[1:]}"
+
+
 def render_pass_text(report: FillReport) -> str:
     """The pass report; empty when there is nothing to say (7.6)."""
     if not report.rows and not report.template_problems and report.unavailable is None:
@@ -115,7 +119,7 @@ def render_pass_text(report: FillReport) -> str:
         waiting = "" if report.waiting is None else f" {report.waiting} waiting;"
         lines.append(
             f"Post template:{waiting} {report.unavailable.reason}. "
-            f"{report.unavailable.next_step}."
+            f"{_capitalized(report.unavailable.next_step)}."
         )
     else:
         head = f"Post template: {len(report.wrote)} filled"
@@ -204,7 +208,7 @@ def render_text(report: FillReport) -> str:
     if report.unavailable is not None:
         reason = report.unavailable.reason
         lines.append(
-            f"{reason[:1].upper()}{reason[1:]}. {report.unavailable.next_step}."
+            f"{_capitalized(reason)}. {_capitalized(report.unavailable.next_step)}."
         )
     if report.command == "check" and report.waiting is not None:
         lines.append(f"Eligible pages: {report.waiting}")

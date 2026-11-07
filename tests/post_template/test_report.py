@@ -201,7 +201,7 @@ class TestPassFirstLine:
             waiting=4, unavailable=Unavailable("the index is busy", "run fitdocs index")
         )
         assert render_pass_text(report) == (
-            "Post template: 4 waiting; the index is busy. run fitdocs index."
+            "Post template: 4 waiting; the index is busy. Run fitdocs index."
         )
 
     def test_unavailable_with_unknown_waiting_hides_it(self) -> None:
@@ -210,7 +210,7 @@ class TestPassFirstLine:
             unavailable=Unavailable("the index is busy", "run fitdocs index"),
         )
         text = render_pass_text(report)
-        assert text == "Post template: the index is busy. run fitdocs index."
+        assert text == "Post template: the index is busy. Run fitdocs index."
 
     def test_a_problem_names_the_check_command(self) -> None:
         report = _pass(problems=("post-template.toml: title: bad",), waiting=3)
@@ -694,7 +694,7 @@ class TestJsonHoldsWhatTextShows:
             ("cd" * 32, data["template"]["digest"]),
             ("post-template-x.toml: title: problem 171", data["problems"][0]),
             ("Index is busy 191", data["unavailable"]["reason"]),
-            ("wait and retry 192", data["unavailable"]["next_step"]),
+            ("Wait and retry 192", data["unavailable"]["next_step"].capitalize()),
             ("slow_var", data["stopped_variable"]),
             ("runs/2026-03-01-landed-filled.md", data["pages"][0]["page"]),
             ("wrote it", data["pages"][0]["detail"]),
@@ -849,14 +849,14 @@ class TestCheckAndRefillSections:
             _full_report("check"),
             unavailable=Unavailable("the SQL was not checked: index busy", "retry"),
         )
-        assert "The SQL was not checked: index busy. retry." in _lines(
+        assert "The SQL was not checked: index busy. Retry." in _lines(
             render_text(report)
         )
         assert render_text(report).count("not checked") == 1
 
     def test_refill_prints_unavailable_the_same_way(self) -> None:
         text = render_text(_full_report("refill"))
-        assert "Index is busy 191. wait and retry 192." in _lines(text)
+        assert "Index is busy 191. Wait and retry 192." in _lines(text)
 
     def test_no_unavailable_line_when_available(self) -> None:
         text = render_text(replace(_full_report(), unavailable=None))
@@ -1070,7 +1070,7 @@ class TestRealEngineReports:
         report = _check(world, template, gone)
         text = render_text(report)
         assert (
-            "The SQL was not checked: the index is not built. run fitdocs index."
+            "The SQL was not checked: the index is not built. Run fitdocs index."
             in _lines(text)
         )
         assert text.count("not checked") == 1

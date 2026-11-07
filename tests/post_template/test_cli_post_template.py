@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -228,6 +229,10 @@ def _no_index(env: Env) -> None:
     env.remove_index()
 
 
+def _relative_index_dir(env: Env) -> None:
+    env.monkeypatch.setenv("FITDOCS_INDEX_DIR", "relative/dir")
+
+
 def _interrupt_refill(env: Env) -> None:
     def interrupted(*args: object, **kwargs: object) -> object:
         raise KeyboardInterrupt
@@ -264,6 +269,9 @@ CASES: dict[str, Case] = {
     "check-unknown-page": Case(("check", "no-such-page"), 2, needle="no-such-page"),
     "check-no-index": Case(("check",), 1, setup=_no_index),
     "check-failed-page": Case(("check", stem(REST)), 1, template=SHARE),
+    "check-bad-index-dir": Case(
+        ("check",), 2, setup=_relative_index_dir, needle="FITDOCS_INDEX_DIR"
+    ),
     "check-interrupt": Case(("check",), 130, setup=_interrupt_check),
     "refill-ok": Case(("refill",), 0),
     "refill-yes-ok": Case(("refill", "--yes"), 0, writes_nothing=False, refreshes=1),
@@ -286,6 +294,9 @@ CASES: dict[str, Case] = {
     "refill-failed-page": Case(
         ("refill", "--yes"), 1, template=SHARE, writes_nothing=False, refreshes=1
     ),
+    "refill-bad-index-dir": Case(
+        ("refill", "--yes"), 2, setup=_relative_index_dir, needle="FITDOCS_INDEX_DIR"
+    ),
     "refill-interrupt": Case(("refill", "--yes"), 130, setup=_interrupt_refill),
     "refill-interrupt-in-refresh": Case(
         ("refill", "--yes"), 130, setup=_interrupt_index, writes_nothing=False
@@ -304,6 +315,7 @@ def test_each_exit_cause_has_its_own_code(env: Env, case: Case) -> None:
     result = runner.invoke(app, ["post-template", *case.args, "--out", str(env.root)])
 
     assert result.exit_code == case.code, result.output
+    assert "Traceback" not in result.output
     if case.needle is not None:
         assert case.needle in result.output
     if case.writes_nothing:
@@ -312,6 +324,16 @@ def test_each_exit_cause_has_its_own_code(env: Env, case: Case) -> None:
         assert env.tree() != before
     if case.code != 130:
         assert len(env.index_calls) == case.refreshes
+
+
+def test_the_bad_index_dir_rows_raise_without_the_handler(env: Env) -> None:
+    """The precondition of the two bad-index-dir rows: this setup is an error."""
+    from fitdocs.index.location import IndexLocationError
+
+    _relative_index_dir(env)
+
+    with pytest.raises(IndexLocationError, match="FITDOCS_INDEX_DIR"):
+        resolve_index_location(env.root, dict(os.environ), env.fixture.home)
 
 
 def test_a_clean_write_changes_every_eligible_page(env: Env) -> None:

@@ -345,9 +345,9 @@
   - Done when a search across steering, `CLAUDE.md`, `docs/` and the packaged skills finds no remaining statement the feature contradicted, and each amendment names its deleted tests.
   - _Requirements: 14.4, 14.8, 14.10_
 
-- [ ] 7. Validation
+- [x] 7. Validation
 
-- [ ] 7.1 Validate the whole feature
+- [x] 7.1 Validate the whole feature
   - Run the full validation (`uv run pytest -n auto`, `ruff check`, `ruff format --check`, `mypy`), the relay suite, and the branch's CI.
   - Confirm:
     - `DOC_VERSION` and the placeholder wording are unchanged;
@@ -405,3 +405,4 @@
   - No generated-AGENTS.md constant contradicts the feature (declaration.py `_REGIONS` and `_REDERIVABILITY_DOCS` are still true), so no golden moves.
 - 6.2: deleted doc-binding test, which 6.3 names: `tests/test_agent_skill.py::test_every_code_the_publishing_section_names_is_a_vocabulary_value`. Recipe SQL run once, without a test, via scratchpad run_recipe.py over the tests/post_template/_index.py synthetic index. Check had no problems, and week_load gave MON 35, AM 80, PM 105 and REST 0, from `SELECT round(sum(load_value))::INT FROM pages WHERE load_methodology = 'threshold' AND date >= date_trunc('week', $as_of) AND start_time_local <= $as_of`. The reviewer re-ran the skill TOML verbatim through refill --format json with the same result.
 - 6.3: amendments added: publish-core 1, wiki-contract 17, analytics-index 4 and analytics-query 2. Each names all 12 doc-binding tests deleted in this spec. The 6.3 deletions: test_network_statements.py::test_analytics_index_is_published_in_steering_without_changing_network_scope, ::test_recovery_is_named_in_the_no_connector_request_list; query/test_changelog_entry.py::test_steering_publishes_query_network_and_sandbox_contract; dashboards/test_published.py::test_tech_states_the_exception_and_the_shared_sandbox, ::test_structure_states_the_dashboards_imports_and_the_query_importers, ::test_the_steering_bullet_finder_refuses_a_missing_or_repeated_bullet. Roadmap Phase 16 stays [ ] until the merge. Queue: 2026-11-07-site-copy-post-templates.
+- 7.1, 2026-11-07: validate-impl returned NO-GO on D1 (`post-template check|refill` gave a traceback on IndexLocationError) and was fixed: cli catches it with exit 2, like query. It also fixed N5, capitalizing the next step. Final decision GO. Evidence: full suite 33888+ passed; relay 2776 passed; ruff and mypy clean; relay copies in sync; boundary guards pass; DOC_VERSION 12, CONTRACT_VERSION "19" (unreleased), POST_PLACEHOLDER unchanged; CLI count 17 -> 18; no new dependency. All 124 criteria are mapped. The end-to-end probe (sync, index, fill, check, publish, empty, index, refill, publish) lined up at every step.
