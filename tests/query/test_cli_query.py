@@ -810,8 +810,8 @@ def test_registered_command_count_and_module_help_count() -> None:
 
     command = typer.main.get_command(app)
     assert isinstance(command, typer.core.TyperGroup)
-    assert len(command.commands) == 17
-    assert "Seventeen" in (cli.__doc__ or "")[:400]
+    assert len(command.commands) == 18
+    assert "Eighteen" in (cli.__doc__ or "")[:400]
 
 
 @pytest.mark.parametrize(

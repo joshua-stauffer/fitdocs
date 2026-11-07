@@ -86,3 +86,20 @@ def test_the_design_example_gives_each_page_its_documented_share(
         assert shares == EXAMPLE_SHARE
     finally:
         session.close()
+
+
+def test_every_page_is_current_and_in_the_post_waiting_state(
+    indexed_post_root: IndexedPostRoot,
+) -> None:
+    from datetime import date
+
+    from fitdocs.post_template.engine import PageRead, read_for_fill
+    from fitdocs.post_template.model import RegionState
+    from fitdocs.publish.pages import select_pages
+
+    pages = select_pages(indexed_post_root.root, (), cwd=indexed_post_root.root)
+    assert len(pages) == len(PAGES)
+    for selected in pages:
+        read = read_for_fill(selected, since=date(2021, 1, 1), ledgers=[])
+        assert isinstance(read, PageRead), read
+        assert read.state is RegionState.WAITING

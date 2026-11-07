@@ -606,7 +606,7 @@ def test_module_docstring_describes_command_count_and_exit_behavior() -> None:
     import fitdocs.cli as cli_module
 
     doc = cli_module.__doc__ or ""
-    assert "Seventeen" in doc[:400]
+    assert "Eighteen" in doc[:400]
     normalized = " ".join(doc.split())
     command_list = normalized.split("Two further commands", maxsplit=1)[0]
     assert "* ``fitdocs index [--out PATH] [--rebuild]``" in command_list

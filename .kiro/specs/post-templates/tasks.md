@@ -265,7 +265,7 @@
   - _Requirements: 1.3, 6.1, 6.4, 6.7, 6.9, 6.10, 6.11, 6.12, 6.13, 7.6, 8.1, 8.2, 8.3_
   - _Depends: 2.4, 3.2, 3.4_
 
-- [ ] 5.2 Add the `fitdocs post-template` command
+- [x] 5.2 Add the `fitdocs post-template` command
   - Add `fitdocs post-template check|refill [PAGES...] [--yes] [--format text|json] [--out PATH]`.
   - PAGES resolve as `fitdocs publish` resolves them. `--yes` with `check` is a configuration error.
   - Both forms load the publish ledgers before running: `check` needs them for the Eligible count and the landed flag, and `refill` to leave out published pages.
@@ -391,3 +391,4 @@
 - 4.1: `PublishCode.POST_WAITING` was appended last with flags "F" (failure, so exit 1), and the relay copy was synced. DELETED doc-binding test, for 6.3 to name: `tests/publish/test_docs.py::test_the_code_table_equals_the_vocabulary_in_order`, along with its orphaned `_yes_no` helper and `OUTCOMES` import. The guide's table still lacks the row; 6.2 adds it.
 - 4.2: `PublishPlan.post_template_since: date | None = None`. `_decide_pair` refuses with POST_WAITING when the page is in the window (`document_date >= since`), Waiting, and not landed in ANY ledger on disk (`run.ledgers`). The check runs after the page-state, facts and conflict checks and before composing. The test helper `replace_ledgers` (tests/publish/test_engine.py) now uses `dataclasses.replace`, so plan fields are no longer dropped silently. 5.3 must pass `post_template_since` into the plan.
 - 5.1: `cli._index_gate(report)` and `cli._run_post_fill_pass(data_root, report)` sit between the index and dashboard passes at both sync sites: the explicit-source sync body and `_run_drain_passes`, which serves no-source sync and `pull --sync`. The pass checks `lexists` before any import. A refused template prints one line naming `fitdocs post-template check`. Pass lines go to stdout. The second refresh (`handoff=None`) runs only when pages were written, after the pass text is printed. The needs_rebuild next step is "run fitdocs index". Test World fixture: tests/post_template/test_sync_pass.py.
+- 5.2: `fitdocs post-template check|refill [PAGES] [--yes] [--format] [--out]`, where `--out` is the shared data-root override, not an output file. Checks run in this order: --yes with check, then the template, then PAGES, then the ledgers. Refill with refused SQL prints the report and exits 2. In JSON mode the post-write refresh prints to stderr. The CLI count is now 18. The shared fixture `_index.py` `page_text` now writes a `published` region (pages were DAMAGED before; no earlier test relied on status), pinned by `test_index_fixture.py`. Not yet in confinement WRITING_ENTRY_POINTS (5.4).

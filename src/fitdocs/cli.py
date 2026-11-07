@@ -2,7 +2,7 @@
 
 A thin typer shell (design: CliApp, ``src/fitdocs/cli.py``): it parses flags,
 resolves configuration, calls the engine, and reports -- it contains no
-rendering or file-pipeline logic of its own. Seventeen commands are registered
+rendering or file-pipeline logic of its own. Eighteen commands are registered
 on top of the baseline ``--version`` / ``--help`` shell. The tree-processing
 commands documented here are:
 
@@ -55,6 +55,15 @@ statement against the analytics index in a sandbox, or describe its schema.
   carries a failure code, 1 when one does, 2 on a configuration error found
   before any request or write, and 130 when interrupted with every outcome
   already received kept (publish-core Req 7.1, 7.10, 8.9).
+* ``fitdocs post-template {check|refill} [PAGES...] [--yes]
+[--format text|json] [--out PATH]``
+  -- check the data root's post template and the SQL in it (read-only), or
+  recompute the filled ``post`` regions of the named pages, or of every
+  Eligible and unpublished page; ``refill`` without ``--yes`` writes nothing,
+  and with it refreshes the index once after writing. It exits 0 when nothing
+  failed, 1 for a problem ``check`` reports, an unavailable index or a failed
+  page, 2 on a configuration error found before any write, and 130 when
+  interrupted (post-templates Req 9, 10, 11).
 
 Two further commands describe the installed tool rather than a tree and sit
 outside the list above: ``fitdocs plugins`` and ``fitdocs skill [NAME]`` --
@@ -206,6 +215,7 @@ Requirements 1.3, 1.4, 1.5, 2.1, 3.5, 8.1, 8.2, 8.3, 8.4, 8.6, 14.1, 14.2, 14.4.
 
 from __future__ import annotations
 
+import contextlib
 import getpass
 import json
 import math
@@ -529,6 +539,29 @@ _PUBLISH_FORMAT_OPTION = typer.Option(
     "--format",
     case_sensitive=False,
     help="Report format: text or json.",
+)
+
+
+class _PostTemplateForm(StrEnum):
+    CHECK = "check"
+    REFILL = "refill"
+
+
+_POST_TEMPLATE_FORM_ARGUMENT = typer.Argument(
+    help="What to do: check the template and its SQL, or refill the posts.",
+)
+_POST_TEMPLATE_PAGES_ARGUMENT = typer.Argument(
+    None,
+    help=(
+        "Workout pages to show (check) or refill, each a file name in workouts/ "
+        "(with or without .md) or a path. Omit to count (check) or refill every "
+        "Eligible and unpublished page."
+    ),
+)
+_POST_TEMPLATE_YES_OPTION = typer.Option(
+    False,
+    "--yes",
+    help="Write the refilled posts. Without it nothing is written.",
 )
 _FORCE_OPTION = typer.Option(
     False,
@@ -3226,6 +3259,112 @@ def publish_command(
         typer.echo(render_text(report) + "\n" + NO_PUBLISH_TARGET)
     else:
         typer.echo(render_text(report))
+    _finish(failed=report.failed)
+
+
+@app.command("post-template")
+def post_template_command(
+    form: _PostTemplateForm = _POST_TEMPLATE_FORM_ARGUMENT,
+    pages: list[str] | None = _POST_TEMPLATE_PAGES_ARGUMENT,
+    yes: bool = _POST_TEMPLATE_YES_OPTION,
+    output_format: _PublishFormat = _PUBLISH_FORMAT_OPTION,
+    out: Path | None = _OUT_OPTION,
+) -> None:
+    """Check the post template, or recompute the posts it fills.
+
+    (post-templates design: CliPostTemplate; Req 5.10, 9.1, 9.2, 9.5, 9.7, 9.8,
+    10.1, 10.2, 10.6, 10.13-10.15, 11.1-11.3.)
+
+    ``check`` is read-only: it reports the template's problems, the SQL's
+    problems and how many pages the next sync would fill, and for named pages
+    each value and the composed post. ``refill`` recomputes the named pages
+    (Waiting or Filled), or else every Eligible and unpublished page, and
+    writes only with ``--yes``. Both load the publish ledgers first. ``refill``
+    refuses with exit ``2``, before any write, a missing or refused template,
+    unknown pages, unreadable ledgers and refused SQL; ``check`` reports a
+    refused template or unreadable ledgers as problems with exit ``1``. An
+    unavailable index or a failed page gives ``1``; an interrupt ``130``.
+    """
+    # Imported here, not at module top, so importing fitdocs.cli loads none of
+    # the post-template package (pinned by the no-template tests).
+    from fitdocs.post_template.engine import run_check, run_refill
+    from fitdocs.post_template.report import render_json, render_text
+    from fitdocs.post_template.resolve import open_resolver
+    from fitdocs.post_template.template import PostTemplateError, load_post_template
+    from fitdocs.publish.ledger import PublishLedgerError, load_ledgers
+    from fitdocs.publish.pages import PageSelectionError, select_pages
+
+    data_root = _resolved_data_root(out)
+    checking = form is _PostTemplateForm.CHECK
+    if checking and yes:
+        _config_error("fitdocs post-template check writes nothing and takes no --yes.")
+
+    template: Any
+    try:
+        template = load_post_template(data_root)
+    except PostTemplateError as exc:
+        if checking:
+            template = exc
+        else:
+            _config_error("\n".join(exc.problems))
+    if template is None:
+        _config_error(
+            f"{post_template_path(data_root)}: there is no post template; "
+            "create it, then run this command again."
+        )
+
+    try:
+        selected = select_pages(data_root, pages, cwd=Path.cwd()) if pages else ()
+    except PageSelectionError as exc:
+        _config_error(str(exc))
+
+    ledgers: Any
+    try:
+        ledgers = load_ledgers(data_root, {})
+    except PublishLedgerError as exc:
+        if checking:
+            ledgers = exc
+        else:
+            _config_error(str(exc))
+
+    def opener() -> Any:
+        return open_resolver(data_root, _query_environment())
+
+    try:
+        if checking:
+            report = run_check(
+                data_root, template, selected, ledgers=ledgers, open_resolver=opener
+            )
+        else:
+            report = run_refill(
+                data_root,
+                template,
+                selected,
+                writing=yes,
+                ledgers=ledgers,
+                open_resolver=opener,
+            )
+        rendered = (
+            render_json(report)
+            if output_format is _PublishFormat.JSON
+            else render_text(report)
+        )
+        typer.echo(rendered)
+        if not checking and report.template_problems:  # refused SQL (10.15)
+            raise typer.Exit(code=_EXIT_CONFIG_ERROR)
+        if report.wrote:
+            # Standard output holds the report; the refresh speaks on standard
+            # error when that report is JSON.
+            if output_format is _PublishFormat.JSON:
+                with contextlib.redirect_stdout(sys.stderr):
+                    _run_index_pass(data_root, handoff=None)
+            else:
+                _run_index_pass(data_root, handoff=None)
+    except KeyboardInterrupt:
+        Console(stderr=True, markup=False, highlight=False, soft_wrap=True).print(
+            "Post template run interrupted; every page already written is kept."
+        )
+        raise typer.Exit(code=_EXIT_INTERRUPTED) from None
     _finish(failed=report.failed)
 
 

@@ -104,6 +104,8 @@ def page_text(page: FixturePage, *, post: str = contract.POST_PLACEHOLDER) -> st
         + region_block("load", contract.LOAD_NOT_COMPUTED)
         + "\n"
         + region_block("post", post)
+        + "\n"
+        + region_block("published", "")
     )
 
 
