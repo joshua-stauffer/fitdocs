@@ -54,6 +54,14 @@ _ALLOWED_IMPORT_TARGETS: Final[dict[str, frozenset[str]]] = {
     "fitdocs.post_template.region": frozenset(
         {"fitdocs.contract", "fitdocs.post_template.model", "fitdocs.publish.request"}
     ),
+    "fitdocs.post_template.resolve": frozenset(
+        {
+            "fitdocs.post_template.model",
+            "fitdocs.post_template.template",
+            "fitdocs.query.command",
+            "fitdocs.query.statement",
+        }
+    ),
     "fitdocs.post_template.template": frozenset(
         {
             "fitdocs.layout",
@@ -190,6 +198,36 @@ def _clock_problems(root: Path) -> list[str]:
     ]
 
 
+#: The one package module that may import `fitdocs.query` (design: "Allowed
+#: Dependencies"; the query guard lists it as a third importer).
+_QUERY_IMPORTER: Final = "fitdocs.post_template.resolve"
+
+
+def _is_query_target(target: str) -> bool:
+    return target == "fitdocs.query" or target.startswith("fitdocs.query.")
+
+
+def _query_targets(name: str, path: Path, is_package: bool) -> frozenset[str]:
+    """Every `fitdocs.query` target a module imports, by both repo resolvers."""
+    source = path.read_text(encoding="utf-8")
+    found = _query_import_targets(
+        source, name + ".__init__" if is_package else name
+    ) | _import_targets_of_tree(_tree(path, name), name, is_package=is_package)
+    return frozenset(t for t in found if _is_query_target(t))
+
+
+def _query_importer_problems(root: Path) -> list[str]:
+    """Package modules other than the resolver that import `fitdocs.query`."""
+    modules = _package_modules(root)
+    _seen(modules, "query importers")
+    return [
+        f"{name} imports {sorted(targets)}"
+        for name, (path, is_package) in modules.items()
+        if name != _QUERY_IMPORTER
+        and (targets := _query_targets(name, path, is_package))
+    ]
+
+
 def _reverse_scan(src_root: Path) -> tuple[list[str], frozenset[str]]:
     """(problems, modules seen): modules outside `<src_root>/post_template`
     that import the package and are not in `_ALLOWED_IMPORTERS`. `src_root`
@@ -253,6 +291,15 @@ class TestRealPackage:
     def test_the_package_walk_is_live(self) -> None:
         assert _package_dir().name == "post_template"
         assert set(_package_modules(_package_dir())) == set(_ALLOWED_IMPORT_TARGETS)
+
+    def test_only_the_resolver_imports_query_and_it_does(self) -> None:
+        assert _query_importer_problems(_package_dir()) == []
+        modules = _package_modules(_package_dir())
+        path, is_package = modules[_QUERY_IMPORTER]
+        # A positive control: the scan sees the resolver's own query imports.
+        targets = _query_targets(_QUERY_IMPORTER, path, is_package)
+        assert "fitdocs.query.command.open_session" in targets
+        assert "fitdocs.query.statement.StatementFailed" in targets
 
     def test_the_allowed_importer_set_is_exactly_the_cli(self) -> None:
         assert frozenset({"fitdocs.cli"}) == _ALLOWED_IMPORTERS
@@ -443,6 +490,48 @@ class TestImportTableGoesRed:
         table = {**_ALLOWED_IMPORT_TARGETS, "fitdocs.post_template.extra": frozenset()}
         problems = _import_table_problems(root, table)
         assert any("fitdocs.post_template.model" in p for p in problems)
+
+
+class TestQueryImporterScanGoesRed:
+    @pytest.mark.parametrize(
+        "statement",
+        [
+            "import fitdocs.query",
+            "import fitdocs.query.command",
+            "from fitdocs import query",
+            "from fitdocs.query import command",
+            "from fitdocs.query.statement import Restriction",
+            "from ..query import command",
+            "from .. import query",
+            'import importlib\nimportlib.import_module("fitdocs.query.command")',
+        ],
+    )
+    @pytest.mark.parametrize("victim", ["model.py", "region.py", "__init__.py"])
+    def test_another_module_importing_query_is_red(
+        self, statement: str, victim: str, per_test_directory: _Scratch
+    ) -> None:
+        root = _scratch_package(per_test_directory, {})
+        original = (root / victim).read_text(encoding="utf-8")
+        (root / victim).write_text(statement + "\n" + original, encoding="utf-8")
+        problems = _query_importer_problems(root)
+        assert len(problems) == 1, (statement, victim, problems)
+        assert problems[0].startswith(
+            "fitdocs.post_template"
+            + ("" if victim == "__init__.py" else f".{victim[:-3]}")
+        )
+
+    def test_the_resolver_itself_and_unrelated_imports_are_clean(
+        self, per_test_directory: _Scratch
+    ) -> None:
+        root = _scratch_package(
+            per_test_directory,
+            {"extra.py": "from fitdocs.queryish import x\nimport fitdocs.querying\n"},
+        )
+        assert _query_importer_problems(root) == []
+
+    def test_an_empty_directory_is_refused(self, per_test_directory: _Scratch) -> None:
+        with pytest.raises(AssertionError, match="saw no module"):
+            _query_importer_problems(per_test_directory("empty-package"))
 
 
 class TestClockScanGoesRed:

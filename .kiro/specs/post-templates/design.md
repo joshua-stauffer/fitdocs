@@ -487,11 +487,11 @@ class SessionResolver:
 1. `session.screen(sql)` must give kind `SELECT`. EXPLAIN is accepted by the sandbox and refused here.
 2. The parameters must include `as_of` and be a subset of `{as_of, page_key}`.
 3. The lint runs `SELECT json_serialize_sql($sql)` and walks the JSON. It refuses:
-   - a `function_name` in `VOLATILE_FUNCTIONS`, compared lowercased: `now`, `today`, `current_timestamp`, `get_current_time`, `get_current_timestamp`, `transaction_timestamp`, `current_localtime`, `current_localtimestamp`, `random`, `setseed`, `uuid`, `uuidv4`, `uuidv7`, `gen_random_uuid`, `nextval`, `currval`, `query` and `query_table`;
+   - a `function_name` in `VOLATILE_FUNCTIONS`, compared lowercased: `now`, `today`, `current_timestamp`, `get_current_time`, `get_current_timestamp`, `transaction_timestamp`, `current_localtime`, `current_localtimestamp`, `random`, `setseed`, `uuid`, `uuidv4`, `uuidv7`, `gen_random_uuid`, `nextval`, `currval`, `query` and `query_table`. Added at implementation (2.3): the call forms `current_date`, `current_time`, `localtime` and `localtimestamp`, which DuckDB serializes as FUNCTION nodes when written with parentheses; the clock macros `ago`, `pg_conf_load_time` and `pg_postmaster_start_time`; and the per-run values `current_transaction_id`, `txid_current`, `current_query_id` and `current_connection_id`;
    - a single-part `COLUMN_REF` in `VOLATILE_KEYWORDS`: `current_date`, `current_time`, `current_timestamp`, `localtime` and `localtimestamp`;
    - any non-null `sample`.
 
-   An `error` node is a refusal with its message. The parameters each statement uses are kept for binding.
+   An `error` node is a refusal with its message. `check` only parses: it neither prepares nor binds, so an unknown column passes `check` and fails per page as `STATEMENT_FAILED`. `check` does not keep each statement's parameters, so `resolve` re-screens to learn which names to bind (2.3 ruling).
 
 **`resolve` (3.1, 3.2, 3.4 to 3.9).**
 1. Bind exactly the screened parameter names from the `Binding`. DuckDB errors on an extra or a missing parameter.
