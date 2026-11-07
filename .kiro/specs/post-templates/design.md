@@ -190,11 +190,15 @@ sequenceDiagram
     Index-->>Cli: IndexReport
     Cli->>Cli: load template, absent means stop here
     Cli->>Engine: template, IndexGate, open_resolver, monotonic
-    Engine->>Pages: read each page once, keep Eligible
-    alt no Eligible page
+    Engine->>Pages: read each page once, keep Waiting pages in the window
+    alt no candidate
         Engine-->>Cli: empty report, prints nothing
-    else gate closed or ledgers unreadable
-        Engine-->>Cli: report with reason, writes nothing
+    else ledgers unreadable
+        Engine-->>Cli: report with reason and candidate count, writes nothing
+    else no candidate left once landed pages are dropped
+        Engine-->>Cli: empty report, prints nothing
+    else gate closed
+        Engine-->>Cli: report with reason and Eligible count, writes nothing
     else gate open
         Engine->>Resolver: open, check template SQL
         loop each Eligible page within budget
@@ -344,7 +348,7 @@ class FillReport:
     writing: bool
     template: TemplateSummary | None     # None when the file was refused
     template_problems: tuple[str, ...]   # 1.x and 2.x, located
-    waiting: int                         # pass: Eligible pages left unfilled, on every path (7.5, 6.4); check and refill: 0
+    waiting: int                         # pass: Eligible pages left unfilled, or candidates when ledgers are unreadable (7.5, 6.4, 6.8); check and refill: 0
     unavailable: Unavailable | None      # gate closed, index unavailable, ledgers unreadable
     rows: tuple[PageResult, ...]
     athletes_left_out: int               # 10.6
@@ -569,16 +573,17 @@ def run_refill(data_root: Path, template: PostTemplate, pages: tuple[SelectedPag
 | `run_refill` with pages | each named Waiting or Filled page; Athlete's reported (10.3, 10.5) | with `writing` |
 
 **Run order (`run_pass`)**
-1. Collect the Eligible pages. If there are none, return an empty report (7.6).
-2. Load the ledgers with `load_ledgers(data_root, {})`. If that raises `PublishLedgerError`, report `unavailable` (6.8).
-3. If the gate is closed, report it with the count waiting (6.4).
-4. Open the resolver. An `Unavailable` result is reported.
-5. Run `check`. Any problems are reported once and nothing is written (2.5).
-6. For each page, in file-name order:
+1. Collect the candidates: Waiting pages in the window. If there are none, return an empty report (7.6).
+2. Load the ledgers with `load_ledgers(data_root, {})`. If that raises `PublishLedgerError`, report `unavailable` with `waiting` set to the number of candidates, because no landed post can be ruled out (6.8).
+3. Drop the candidates with a landed post. What remains is the Eligible pages. If none remain, return an empty report (6.3, 7.6).
+4. If the gate is closed, report it with the count waiting (6.4).
+5. Open the resolver. An `Unavailable` result is reported.
+6. Run `check`. Any problems are reported once and nothing is written (2.5).
+7. For each Eligible page, in file-name order:
    - stop if `monotonic() - started >= PASS_BUDGET_S` (7.2);
    - otherwise call `_fill_page`;
    - after a `TIMED_OUT`, mark the rest `NOT_ATTEMPTED` and stop (7.3).
-7. Close the resolver in a `finally` block before returning.
+8. Close the resolver in a `finally` block before returning.
 
 `run_refill` follows the same order without the budget, using `COMMAND_STATEMENT_TIMEOUT_S`. It also stops at the first timeout (10.12). It takes the ledgers already loaded rather than loading them, because `cli` loads them first so that an unreadable ledger exits 2 before any write. The pass loads its own, because there an unreadable ledger is one line of output.
 

@@ -213,7 +213,7 @@ With this feature the athlete writes one file, once. Every new page then arrives
 12. `refill` shall allow each statement 30 seconds, stop at the first timeout and keep the pages it already wrote.
 13. When `refill --yes` has written at least one page, the fitdocs CLI shall refresh the index once before exiting, so that a later `fitdocs query` reports no drift for those pages.
 14. When `refill` is interrupted, every page shall hold either its complete previous bytes or its complete new bytes, and the command shall exit 130.
-15. `refill` shall exit 0 when no page failed, 1 when any page failed or the index is unavailable, and 2 before any write when the post template is absent or refused, a named page cannot be selected, or the publish records cannot be read.
+15. `refill` shall exit 0 when no page failed, 1 when any page failed or the index is unavailable, and 2 before any write when the post template is absent or refused (including a variable's SQL refused under Requirement 2), a named page cannot be selected, or the publish records cannot be read.
 
 ### Requirement 11: Shared behavior of the command
 

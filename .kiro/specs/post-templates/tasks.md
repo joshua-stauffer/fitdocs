@@ -128,6 +128,7 @@
     A `bool` is never rendered as an integer and a `datetime` never as a date.
   - _Requirements: 3.1, 3.2, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9_
   - _Boundary: VariableResolver_
+  - _Depends: 2.3_
 
 - [ ] 3. The fill engine and its reports
 
@@ -145,18 +146,23 @@
     - an edit between read and write giving page changed with the edit kept;
     - an older page never written;
     - an identical recomposition reported unchanged with no write;
-    - every byte outside the region unchanged after a fill.
-  - _Requirements: 3.3, 3.10, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 5.6, 5.7, 5.8, 5.9, 10.4, 10.9, 10.11_
+    - every byte outside the region unchanged after a fill;
+    - a page the index does not hold as it is now giving `index_behind`, with no variable resolved and no write.
+  - _Requirements: 3.3, 3.10, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 5.6, 5.7, 5.8, 5.9, 6.5, 10.4, 10.9, 10.11_
   - _Depends: 1.2, 1.4, 2.1, 2.2_
 
 - [ ] 3.2 Run the automatic pass
-  - Select every Eligible page in file-name order. Return an empty report when there is none.
-  - Load every ledger on disk; an unreadable one is reported as unavailable and nothing is written. A closed index gate is reported with the count waiting. An unavailable resolver is reported.
+  - Collect the candidates, the waiting pages in the window, in file-name order. Return an empty report when there are none.
+  - Load every ledger on disk. An unreadable ledger is reported as unavailable, counting the candidates as waiting, and nothing is written.
+  - Drop the candidates with a landed post. What remains is the Eligible pages; return an empty report when none remain.
+  - A closed index gate is reported with the count waiting. An unavailable resolver is reported.
   - A refused template SQL is reported once and nothing is written.
   - Fill each page with a 5-second statement limit. Stop starting new pages after 30 seconds by the injected monotonic clock, and stop at the first timeout, marking the rest not attempted with the variable named.
   - Close the resolver before returning, whatever happened. Filled pages are never queried.
   - Done when engine tests with a fake resolver and a fake clock show:
-    - the empty report with no resolver opened when nothing is Eligible;
+    - the empty report with no ledger read and no resolver opened when there is no candidate;
+    - the empty report when every candidate has a landed post;
+    - unreadable ledgers reported with the candidate count;
     - each unavailable path writing nothing;
     - the budget stop after the right page;
     - the timeout stop;
@@ -180,8 +186,9 @@
     - a failed refill keeping the page's text;
     - refill stopping at the first timeout with earlier pages kept;
     - check with an unavailable index reporting the file's problems and the unchecked SQL;
-    - check given unreadable ledgers reporting that as a problem, still checking the template and SQL, and showing pages without a landed flag.
-  - _Requirements: 9.2, 9.3, 9.4, 9.5, 9.6, 10.2, 10.3, 10.5, 10.6, 10.7, 10.8, 10.12_
+    - check given unreadable ledgers reporting that as a problem, still checking the template and SQL, and showing pages without a landed flag;
+    - a refill row for a page the index does not hold as it is now, giving `index_behind` with `fitdocs index` as the next step, and the page unchanged.
+  - _Requirements: 9.2, 9.3, 9.4, 9.5, 9.6, 10.2, 10.3, 10.5, 10.6, 10.7, 10.8, 10.10, 10.12_
 
 - [ ] 3.4 (P) Render the pass, check and refill reports
   - Render the pass as text:
@@ -222,7 +229,7 @@
     Publish reads no index and imports nothing from the new package.
   - Build the filled region in these tests with the region module's own renderer, not by hand, so that the round trip is the real one.
   - _Requirements: 12.1, 12.4, 12.5, 12.6, 12.7, 12.9, 12.10_
-  - _Depends: 1.1, 1.4, 2.2_
+  - _Depends: 1.1, 1.4, 2.2, 4.1_
 
 - [ ] 5. Integration in the CLI
 
@@ -242,8 +249,8 @@
     - `fitdocs regen` with the index directory deleted keeping a filled region byte for byte;
     - a later workout and a load recompute leaving it unchanged;
     - output and bytes identical to today with no template file.
-  - _Requirements: 1.3, 6.1, 6.4, 6.7, 6.9, 6.10, 6.11, 6.12, 6.13, 7.6, 8.1, 8.2, 8.3, 8.6_
-  - _Depends: 3.2, 3.4_
+  - _Requirements: 1.3, 6.1, 6.4, 6.7, 6.9, 6.10, 6.11, 6.12, 6.13, 7.6, 8.1, 8.2, 8.3_
+  - _Depends: 2.4, 3.2, 3.4_
 
 - [ ] 5.2 Add the `fitdocs post-template` command
   - Add `fitdocs post-template check|refill [PAGES...] [--yes] [--format text|json] [--out PATH]`.
@@ -260,7 +267,7 @@
     - `check` with pages showing values and the composed post;
     - JSON and text carrying the same results.
   - _Requirements: 9.1, 9.5, 9.7, 9.8, 10.1, 10.13, 10.14, 10.15, 11.1, 11.2, 11.3_
-  - _Depends: 3.3, 3.4_
+  - _Depends: 2.4, 3.3, 3.4_
 
 - [ ] 5.3 Read the template's `since` before publishing
   - In `fitdocs publish`'s settings preflight, load the template. A refused one gives a configuration error naming the file, exit 2, before any request or write, `--targets` included. Pass its `since`, or nothing, into the plan.
@@ -268,8 +275,9 @@
     - `fitdocs sync` with the index not built, then `fitdocs publish` refusing the new page with `post_waiting` and exit 1;
     - after `fitdocs index` and `fitdocs sync`, `would_post` with the filled text;
     - a broken template stopping publish with exit 2;
-    - publish unchanged with no template file.
-  - _Requirements: 1.3, 12.1, 12.2, 12.8, 12.10_
+    - publish unchanged with no template file;
+    - a filled page whose template file is then deleted keeping its text, with publish deciding `would_post` with that text and giving no `post_waiting`.
+  - _Requirements: 1.3, 8.6, 12.1, 12.2, 12.8, 12.10_
   - _Depends: 4.2, 5.1_
 
 - [ ] 5.4 Hold the new writers to the confinement and network guards
@@ -281,6 +289,7 @@
     - it goes red when the non-vacuous check is removed or a fixture leaves the region waiting;
     - a `check` run leaves every data-root byte unchanged.
   - _Requirements: 11.3, 13.1, 13.2_
+  - _Depends: 5.1, 5.2_
 
 - [ ] 6. Contract, documentation and records
 
