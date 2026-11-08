@@ -9,6 +9,8 @@ order: 2
 
 Fitdocs reads three things: where your data root is, `fitdocs.toml` (your settings), and `athlete.toml` (your thresholds). Every setting has a default, apart from the keys a connector instance requires, so you write only what you want to change. If you use a connector, its key or token is kept separately, outside the data root (see [Connector credentials](#connector-credentials)).
 
+If you write a `post-template.toml` beside `fitdocs.toml`, fitdocs reads that too. It's described in [Publishing posts](../guides/publishing.md#fill-posts-from-a-post-template).
+
 ## The data root
 
 Resolved in this order, and no other way:

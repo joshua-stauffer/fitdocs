@@ -17,7 +17,7 @@ Every command that reads or writes your data takes `--out PATH` to name the data
 
 ### `fitdocs sync [SOURCE]`
 
-Reads new files, archives them, and writes workout pages. Then it runs the passes that follow, in order: the Morning Of blocks, training load, training blocks, the analytics index refresh (once you've built the index), and dashboards.
+Reads new files, archives them, and writes workout pages. Then it runs the passes that follow, in order: the Morning Of blocks, training load, training blocks, the analytics index refresh (once you've built the index), filling new pages' posts from your [post template](../guides/publishing.md#fill-posts-from-a-post-template) if you have one, and dashboards.
 
 - **With `SOURCE`:** processes every `.fit` file under that folder, including subfolders. The source is only read. Wellness files aren't read this way.
 - **Without `SOURCE`:** drains the configured [inbox](../guides/inbox.md), wellness exports first, then `.fit` files.
@@ -167,6 +167,22 @@ Composes each workout page's post and, with `--yes`, sends it to the publish tar
 | `--targets` | List the configured targets and whether each is ready, instead of publishing. It sends no request and writes nothing, and can't be combined with `PAGES`, `--to`, or `--yes`. |
 | `--format FORMAT` | Report format: `text` (the default) or `json` |
 
+A page that opts in to a target and is still waiting for its post from your post template is refused with `post_waiting`, which counts as a failure.
+
+### `fitdocs post-template FORM [PAGES...]`
+
+Works with your [post template](../guides/publishing.md#fill-posts-from-a-post-template), `post-template.toml`. `PAGES` are taken as `fitdocs publish` takes them.
+
+| Form | What it does |
+|---|---|
+| `check` | Report problems in the file and its SQL, how many pages the next sync would fill, and how many filled pages came from an earlier template, without writing anything. With pages named, show each one's state, its variables' values, and the post it would get. Exits `1` when it finds a problem. |
+| `refill` | Recompute posts. Without `--yes` it writes nothing and shows what would change. With no pages named it leaves published pages alone; a named page is refilled even if it's been posted. A page whose post you've edited is never written. |
+
+| Option | Meaning |
+|---|---|
+| `--yes` | (`refill`) Write the posts, then refresh the index once |
+| `--format FORMAT` | Report format: `text` (the default) or `json` |
+
 ## Inspecting
 
 ### `fitdocs check`
@@ -192,6 +208,6 @@ Prints the installed version.
 | `0` | Success. A declined benchmark or an unsupported sport isn't a failure. |
 | `1` | Something failed: a file or page, a connector (a refused key, an unreachable service), a published post, a query, or a dashboard chart. The report says which and why. |
 | `2` | Configuration error: no data root found, a malformed `fitdocs.toml` or `athlete.toml`, an unknown connector name, or an invalid option combination. The message names what's wrong and how to fix it. |
-| `130` | You stopped `fitdocs query`, `fitdocs dashboard`, `fitdocs publish`, or `fitdocs connect` for a relay or Strava instance with Ctrl-C. |
+| `130` | You stopped `fitdocs query`, `fitdocs dashboard`, `fitdocs publish`, `fitdocs post-template refill`, or `fitdocs connect` for a relay or Strava instance with Ctrl-C. |
 
-A plugin that fails to load prints a warning. It never fails a run or changes the exit code. Neither does an index or dashboard refresh that runs after `sync`, `pull --sync`, `regen`, or `load`.
+A plugin that fails to load prints a warning. It never fails a run or changes the exit code. Neither does an index or dashboard refresh that runs after `sync`, `pull --sync`, `regen`, or `load`, or a post-template fill after `sync` or `pull --sync`.

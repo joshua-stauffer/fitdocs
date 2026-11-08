@@ -94,7 +94,7 @@ The relay holds your connection to Strava, so read its privacy policy, which the
 
 ### What a post carries
 
-A post says what you, or your template, wrote. The built-in template includes distance, time, pace or speed, average heart rate, average power, and elevation gain when the page records them, so read the preview from `fitdocs publish` before you add `--yes`. Your notes and the rest of the page’s text aren’t sent.
+A post says what you, or your template, wrote. A post template can put any number from your analytics index in a post, such as your weekly load. Filling it sends nothing, but publishing sends what it wrote. The built-in template includes distance, time, pace or speed, average heart rate, average power, and elevation gain when the page records them, so read the preview from `fitdocs publish` before you add `--yes`. Your notes and the rest of the page’s text aren’t sent.
 
 An upload sends the file as it is, and a `.fit` file can hold your GPS track, your heart rate, and details of your device. Uploads are off unless you turn them on.
 

@@ -77,7 +77,7 @@ Your device laps (manual button presses or workout steps) and automatic per-kilo
 
 ## Your post
 
-A `post` region that’s yours, with no heading of its own and a hidden comment that renders as nothing. Write a page’s own post here, and `fitdocs publish` sends those words instead of a template. See [Publishing posts](publishing.md#write-your-own-post).
+A `post` region that’s yours, with no heading of its own and a hidden comment that renders as nothing. Write a page’s own post here, and `fitdocs publish` sends those words instead of a template. If you keep a post template, `fitdocs sync` fills this region on each new page, and stops touching it once you edit it. See [Publishing posts](publishing.md#write-your-own-post).
 
 ## Morning Of
 

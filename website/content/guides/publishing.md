@@ -1,6 +1,6 @@
 ---
 title: Publishing posts
-description: Turn a workout page into a post with `fitdocs publish`. Opt the page in, write the post or use a template, preview it, and send it to the targets you configured.
+description: Turn a workout page into a post with `fitdocs publish`. Opt the page in, write the post, use a template, or have a post template fill it, preview it, and send it to the targets you configured.
 section: Guides
 order: 13
 ---
@@ -70,7 +70,7 @@ Felt strong from the first kilometre.
 <!-- fitdocs:end:post -->
 ```
 
-A region with only a title line posts an empty description. A second line that isn’t blank reports `post_invalid`. Hidden comments are removed and never posted. The same words go to every target the page opts in to, and fitdocs never changes this region.
+A region with only a title line posts an empty description. A second line that isn’t blank reports `post_invalid`. Hidden comments are removed and never posted. The same words go to every target the page opts in to. Fitdocs never changes words you wrote here. The only text it writes in this region comes from a [post template](#fill-posts-from-a-post-template), if you have one.
 
 ## Or use a template
 
@@ -112,6 +112,56 @@ A placeholder outside a clause with no value on the page reports `value_missing`
 The placeholders are `title`, `sport`, `date`, `start_time`, `distance_km`, `distance_mi`, `moving_time`, `elapsed_time`, `pace_per_km`, `pace_per_mi`, `speed_kmh`, `avg_hr_bpm`, `avg_power_w`, `elevation_gain_m`, `calories_kcal`, `load_value`, and `load_methodology`. The [publishing reference](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/publishing.md#placeholders) gives each one’s format and when it has no value.
 
 A mistake in `[publish]` stops every `fitdocs publish` run with exit code 2, before any request and before any write. The message names the table and the key.
+
+## Fill posts from a post template
+
+A post template writes each new page's post for you. It can include numbers the page doesn't hold, like this workout's load in the week so far, because its variables are SQL over the [analytics index](analytics.md). Without a template file, none of this applies and no command behaves differently.
+
+Build the index once with `fitdocs index`, then write `post-template.toml` at the top of your data root:
+
+```toml
+since = 2026-11-08
+
+title = "{title}"
+description = '''
+{?{week_load} load so far this week.}
+'''
+
+[vars.week_load]
+sql = '''
+SELECT round(sum(load_value))::INT
+FROM pages
+WHERE load_methodology = 'threshold'
+  AND date >= date_trunc('week', $as_of)
+  AND start_time_local <= $as_of
+'''
+```
+
+- **Set `since` to the day you create the file.** Only pages dated on or after it are filled. With a date in the past, the next sync fills every page since then that hasn't been posted.
+- `title` and `description` use the same placeholders and clauses as the templates above, plus the variables you declare under `vars`.
+- Each variable is one `SELECT` that `fitdocs query` would accept, and it must use `$as_of`, the workout's recorded start. Use it to look only at what existed when the workout began. `$page_key` names the page in the index.
+- A query with no rows, or a NULL, has no value. It's never written as `0`: an optional clause that needs it is dropped, and a variable outside a clause with no value leaves the page unfilled. Cast decimals, as the example does with `::INT`.
+
+The file is yours. Fitdocs only reads it.
+
+From then on, `fitdocs sync` and `fitdocs pull --sync` fill the `post` region of each page they create, and `fitdocs publish` sends that text as it would send words you wrote. A filled post is finished text: a later workout, a rebuilt index, `fitdocs regen`, or a change to the template leaves it as it is.
+
+Fitdocs writes only a region that's waiting (empty, or holding just its own hidden comments) or one it filled that you haven't touched. Once you change a single character, the region is yours and fitdocs never writes it again. To hand a page back to the template, empty its `post` region.
+
+Two commands check and redo the work:
+
+```sh
+fitdocs post-template check            # problems in the file or its SQL, and how many pages the next sync would fill
+fitdocs post-template check PAGE       # one page: its state, each variable's value, and the post it would get
+fitdocs post-template refill           # dry run: what a refill would change
+fitdocs post-template refill --yes     # recompute the posts
+```
+
+A bare `refill` takes every unposted page in the window that is waiting or filled, and leaves published pages alone. Naming a page refills it even if it's been posted, and the report tells you when publishing it again would update the target.
+
+With a template in place, `fitdocs publish` refuses an opted-in page that is still waiting for its post with `post_waiting`, and sends nothing from it, rather than send the default template. Run `fitdocs sync` to fill it, `fitdocs post-template check PAGE` to see why it wasn't filled, or write the post yourself.
+
+The [post templates reference](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/publishing.md#post-templates) has the full rules for values, the checks on each query, and every exit code.
 
 ## Send it
 

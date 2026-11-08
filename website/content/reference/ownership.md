@@ -35,6 +35,7 @@ Two things live outside the data root: connector credentials, in your user's con
 ## What you own
 
 - **`fitdocs.toml`**: fitdocs only reads it.
+- **`post-template.toml`**, your post template: fitdocs only reads it.
 - **Your plan folder** (`plans/` by default): fitdocs only reads it.
 - **Your dashboard pages**: their prose, headings, frontmatter, and chart directives. fitdocs only reads them, apart from the chart regions.
 - **`athlete.toml`**: shared. fitdocs adds values you confirm or that it derives, but never overwrites one you entered, and keeps every key it doesn't manage exactly as it was.
@@ -46,7 +47,7 @@ Two things live outside the data root: connector credentials, in your user's con
 |---|---|---|
 | `notes` | you | kept word for word |
 | `workout` (strength pages) | you | kept word for word |
-| `post` | you | kept word for word |
+| `post` | you | kept word for word. With a [post template](../guides/publishing.md#fill-posts-from-a-post-template), fitdocs may fill the region while it's empty and rewrite text it filled while you haven't edited it, never once it's yours. |
 | `load` | fitdocs | kept; only replaced when you run `fitdocs load --recompute` |
 | `morning` (the Morning Of block) | fitdocs | refreshed from your wellness series; hand edits are replaced |
 | `published` | fitdocs | carried over; `fitdocs publish --yes` refills it and replaces hand edits |
