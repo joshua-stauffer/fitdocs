@@ -1,7 +1,7 @@
 ---
 id: 2026-11-07-site-copy-post-templates
 title: Update the website copy for post templates and the new post-template command
-status: open
+status: done
 importance: medium
 importance_why: The site's publishing and CLI pages become stale the day the next release ships post templates; push to main deploys fitdocs.ai.
 effort: S
@@ -48,3 +48,6 @@ back" rule, it will disagree with the release that ships this feature.
 
 ## Open questions
 Whether a worked template example belongs on the site or only in `docs/publishing.md`.
+
+## Resolution
+2026-11-08. Folded into draft PR #5 (`chore/site-copy-connectors`) at 92c081c0, after merging `main` into that branch (44e4ab24) so the site's link check sees the post-templates section of `docs/publishing.md`. The publishing guide gains "Fill posts from a post template" with the worked example (answering the open question: a short example belongs on the site, the full rules stay in `docs/publishing.md`); `reference/cli.md` gains `fitdocs post-template` and the exit-code rows; `reference/ownership.md`, `guides/workout-pages.md`, `guides/privacy-and-network.md`, `reference/configuration.md` and `changelog.md` name the template file and the fill. The site's pages say nothing of the "never read back" rule or a command count, so neither needed a change. The site build is green. The pages ship when PR #5 merges after the release.
