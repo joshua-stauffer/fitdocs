@@ -243,7 +243,7 @@ Fitdocs asks for the token without echoing it and makes one request to check it.
 fitdocs connect relay --register --email you@example.com
 ```
 
-Without `--email`, fitdocs asks for the address. It prints a code. Confirm the registration at the relay’s confirmation page only if it shows the same code, because that match is what stops someone else’s registration from being confirmed as yours. Fitdocs waits until the registration is confirmed, refused, or expired, then stores the token the relay issues. Press Ctrl-C to stop waiting, and nothing is stored.
+Without `--email`, fitdocs asks for the address. It prints a code, and the relay emails you a confirmation link. Open it, and confirm the registration only if the page it opens shows the same code, because that match is what stops someone else’s registration from being confirmed as yours. Fitdocs waits until the registration is confirmed, refused, or expired, then stores the token the relay issues. Press Ctrl-C to stop waiting, and nothing is stored.
 
 `fitdocs disconnect relay` asks the relay to revoke the stored token, then removes the instance’s credentials file. If the relay can’t confirm, the file stays and the command exits `1`. `--local-only` removes the file without contacting the relay, and the token stays valid until the relay’s operator revokes it.
 
