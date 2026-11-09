@@ -435,8 +435,8 @@ def test_register_with_email_option_prints_started_lines_and_stores_the_token(
     assert lines == [
         f"Registering {_EMAIL}.",
         f"Your code: {_USER_CODE}",
-        "Confirm the registration only if the relay's confirmation page "
-        "shows the same code.",
+        "Check your email for a confirmation link, and open it to continue. "
+        "Confirm only if the page shows this same code.",
         "This registration expires in 10 minutes.",
         f"{_NAME}: connected.",
         f"Credentials: {_stored_path()}",
@@ -567,8 +567,8 @@ def test_interrupt_while_polling_exits_130_and_stores_nothing(
     assert lines[:4] == [
         f"Registering {_EMAIL}.",
         f"Your code: {_USER_CODE}",
-        "Confirm the registration only if the relay's confirmation page "
-        "shows the same code.",
+        "Check your email for a confirmation link, and open it to continue. "
+        "Confirm only if the page shows this same code.",
         "This registration expires in 10 minutes.",
     ]
     assert lines[4:] == [f"{_NAME}: interrupted; nothing was stored."]

@@ -760,11 +760,13 @@ code:
 ```
 Registering ADDRESS.
 Your code: CODE
+Check your email for a confirmation link, and open it to continue. Confirm only if the page shows this same code.
 ```
 
-Confirm the registration at the relay's confirmation page **only if it shows
-the same code**; that match is what stops someone else's registration from
-being confirmed as yours. fitdocs polls the relay until the registration is
+The relay emails a confirmation link to the address. Open it, and confirm
+the registration on the page it shows **only if that page shows the same
+code**; that match is what stops someone else's registration from being
+confirmed as yours. fitdocs polls the relay until the registration is
 confirmed, refused, or expired (it prints how long that takes, and `fitdocs
 connect relay --register` starts a new one), then stores the issued token.
 Press Ctrl-C to stop waiting; nothing is stored.
@@ -871,17 +873,18 @@ relay instance to start the connection, then prints an address on the relay,
 a code, and how long the attempt lasts:
 
 ```
-strava: open this address in a browser to connect this instance:
+strava: if your browser does not open automatically, open this link to connect your account:
   ADDRESS
 Code: CODE. Continue only if the page shows this same code.
 This attempt expires in N minutes.
 ```
 
-Open the address in a browser and give consent on the page it shows **only if
-the page shows the same code**; that match is what stops someone else's
-connection from being completed as yours. fitdocs opens the address in your
-browser for you, and prints `Could not open a browser; open the address above
-yourself.` when it cannot. `--no-browser` stops it from trying. While you
+fitdocs opens the address in your browser for you, and prints `Could not open
+a browser; open the link above yourself.` when it cannot. Give consent on the
+page it shows **only if the page shows the same code**; that match is what
+stops someone else's connection from being completed as yours. `--no-browser`
+stops fitdocs from trying to open a browser, and the first line becomes
+`strava: open this link in a browser to connect your account:`. While you
 consent, fitdocs asks the relay once per interval the relay states whether the
 connection is complete, until it is complete, refused or expired.
 

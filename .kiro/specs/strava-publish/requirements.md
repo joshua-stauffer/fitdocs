@@ -376,3 +376,11 @@ fitdocs always writes the Strava address the relay returns, so nothing needs a l
   - Criterion 3: where a terms address is configured, every page's footer also links it, after the privacy policy. Where none is configured, footers are unchanged.
 
 Testing follows the maintainer's code-only rule: no new test reads documentation, and served text is tested for structure only. A documentation-binding test that this change turns red is deleted, not updated.
+
+## Amendment 2 (2026-11-09): the connect line says the browser opens itself (maintainer)
+
+fitdocs opens the connect page in a browser itself, but its first line still told the user to open the address in a browser "to connect this instance". The maintainer asked for wording that treats the printed link as the fallback. No version moves; the Strava connector is in no released fitdocs.
+
+- Requirement 2 criterion 3: without `--no-browser`, the first line is `NAME: if your browser does not open automatically, open this link to connect your account:`; with `--no-browser` it is `NAME: open this link in a browser to connect your account:`. The opener's failure line says "link" for "address". The address, code and expiry lines are unchanged. Design ruling R13.5 still holds: the line names no service, so it says "your account" and leaves "Connect with Strava" to the relay's page.
+
+Testing follows the code-only rule: `tests/connectors/test_strava_docs.py::test_the_connect_output_quotes_the_cli`, which bound the documentation's quoted output to the CLI source, is deleted rather than updated.

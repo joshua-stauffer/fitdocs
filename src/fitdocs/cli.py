@@ -1587,14 +1587,20 @@ def _connect_browser(
     redactor = Redactor()
 
     def on_started(shown: ConsentShown) -> None:
-        _say(f"{name}: open this address in a browser to connect this instance:")
+        if no_browser:
+            _say(f"{name}: open this link in a browser to connect your account:")
+        else:
+            _say(
+                f"{name}: if your browser does not open automatically, "
+                "open this link to connect your account:"
+            )
         _say(f"  {shown.page_url}")
         _say(
             f"Code: {shown.user_code}. Continue only if the page shows this same code."
         )
         _say(f"This attempt expires in {_remaining_text(shown.expires_in_s)}.")
         if not no_browser and not _open_browser(shown.page_url):
-            _say("Could not open a browser; open the address above yourself.")
+            _say("Could not open a browser; open the link above yourself.")
 
     try:
         outcome = run_browser_connect(
@@ -1676,8 +1682,8 @@ def _connect_relay(
         _say(f"Registering {shown.email}.")
         _say(f"Your code: {shown.user_code}")
         _say(
-            "Confirm the registration only if the relay's confirmation page "
-            "shows the same code."
+            "Check your email for a confirmation link, and open it to continue. "
+            "Confirm only if the page shows this same code."
         )
         _say(f"This registration expires in {remaining}.")
 

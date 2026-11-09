@@ -59,10 +59,14 @@ _SETTINGS = (
     f'[connectors.{_NAME}]\nconnector = "strava"\nrelay = "home"\n'
     f'\n[connectors.home]\nconnector = "relay"\nurl = "{_URL}"\n'
 )
-_HEADER = f"{_NAME}: open this address in a browser to connect this instance:"
+_HEADER = (
+    f"{_NAME}: if your browser does not open automatically, "
+    "open this link to connect your account:"
+)
+_NO_BROWSER_HEADER = f"{_NAME}: open this link in a browser to connect your account:"
 _ADDRESS = f"  {_PAGE}"
 _CODE_LINE = f"Code: {_USER_CODE}. Continue only if the page shows this same code."
-_NO_BROWSER_LINE = "Could not open a browser; open the address above yourself."
+_NO_BROWSER_LINE = "Could not open a browser; open the link above yourself."
 
 
 @dataclass
@@ -177,14 +181,14 @@ def test_a_grant_prints_the_started_lines_opens_the_page_once_and_connects(
         assert hidden not in printed
 
 
-def test_no_browser_prints_the_same_lines_and_makes_no_browser_call(
+def test_no_browser_prints_its_own_header_and_makes_no_browser_call(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     session = _setup(tmp_path, monkeypatch, [_started(), _granted()])
     code, lines = _run(tmp_path, "--no-browser")
     assert code == 0
     assert lines[:4] == [
-        _HEADER,
+        _NO_BROWSER_HEADER,
         _ADDRESS,
         _CODE_LINE,
         "This attempt expires in 10 minutes.",

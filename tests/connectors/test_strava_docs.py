@@ -4,14 +4,13 @@
 
 The two mapping tables are parsed from the page and compared with
 ``PUBLISH_MAPPING`` and ``UPLOAD_MAPPING`` in both directions; the settings
-table with the connector's own parsing; the quoted command output and notes
-with the code that prints them; the limits with the codec's constants. The
+table with the connector's own parsing; the disconnect notes with the code
+that prints them; the limits with the codec's constants. The
 neutral-scan entry lives in ``test_neutral_scan.py``.
 """
 
 from __future__ import annotations
 
-import inspect
 import re
 from collections.abc import Mapping
 from pathlib import Path
@@ -19,7 +18,6 @@ from urllib.parse import urlparse
 
 import pytest
 
-from fitdocs import cli
 from fitdocs.connectors import disconnect
 from fitdocs.connectors.credentials import env_var_name
 from fitdocs.connectors.errors import ConnectorSettingsError
@@ -144,26 +142,7 @@ def test_the_settings_table_agrees_with_parse_settings() -> None:
     assert "`false` by default" in _flat(body)
 
 
-# --- the quoted output and notes -------------------------------------------
-
-
-_CONNECT_LINES = (
-    "open this address in a browser to connect this instance:",
-    "Continue only if the page shows this same code.",
-    "This attempt expires in",
-    "Could not open a browser; open the address above yourself.",
-)
-
-
-def test_the_connect_output_quotes_the_cli() -> None:
-    page = _flat(_subsection("Connecting a Strava instance"))
-    source = inspect.getsource(cli)
-    for line in _CONNECT_LINES:
-        assert line in page, line
-        assert line in source, line
-    # The success line is the browser branch's own, not any "connected." in cli.
-    assert "`strava: connected.`" in page
-    assert 'f"{name}: connected."' in inspect.getsource(cli._connect_browser)
+# --- the disconnect notes ---------------------------------------------------
 
 
 def test_the_disconnect_notes_are_the_codes_notes() -> None:

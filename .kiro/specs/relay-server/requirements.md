@@ -403,3 +403,9 @@ ownership-contract statement covers.
 - Shared surface: the pinned-copy table `SHARED_MODULES` has five pairs
   (`relay_codes`, `relay_envelope`, `publish/outcomes`, `relay_targets`,
   `identity/strict`), checked by `tests/test_relay_shared_copies.py`.
+
+## Amendment 2 (2026-11-09): the registration instruction names the email (maintainer)
+
+The maintainer found "Confirm the registration only if the relay's confirmation page shows the same code" unclear after a real registration: nothing said that an email had been sent or that the next step was in it. No version moves; the registration client is in no released fitdocs.
+
+- Requirement 13 criterion 3: the instruction tells the user to check their email for the confirmation link and open it to continue, then to confirm only if the page shows the same code. The CLI prints `Check your email for a confirmation link, and open it to continue. Confirm only if the page shows this same code.` in place of the old line; the address, the code and the expiry lines are unchanged.
