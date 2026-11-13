@@ -13,6 +13,12 @@ This page mirrors [`CHANGELOG.md`](https://github.com/joshua-stauffer/fitdocs/bl
 
 ## Unreleased
 
+Nothing yet.
+
+## 0.3.0 — 2026-11-13
+
+[PyPI](https://pypi.org/project/fitdocs/0.3.0/) · [tag `v0.3.0`](https://github.com/joshua-stauffer/fitdocs/tree/v0.3.0)
+
 ### Upgrading
 
 This release changes the page format. After upgrading, run `fitdocs regen` once, then `fitdocs check`:
