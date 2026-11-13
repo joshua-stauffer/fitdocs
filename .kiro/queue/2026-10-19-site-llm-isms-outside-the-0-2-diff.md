@@ -91,3 +91,33 @@ of the 80 phrases. Not changed: `training-blocks.md`'s "The plan file
 becomes a history of how the plan changed" (a fact, not a trope) and the
 wiki guide's "no network access at all", which PR #1 already rewrote. Close
 this item when PR #2 merges.
+
+## Update (2026-11-13): PR #2 merged, but its changes never reached `main`
+
+Do not close this item yet. PR #2 merged into its base branch,
+`chore/site-copy-0-2`, at 22:37:32Z on 2026-10-19, 17 minutes after PR #1
+merged that branch into `main` (merge commit `56f38082`, 22:20:56Z). GitHub did
+not retarget PR #2, so its four commits never reached `main`:
+
+- `779a2560` rewrites stock phrasing on the reference, guide and getting-started pages.
+- `1dee9909` rewrites stock phrasing on the home page and the LLM fundamentals page.
+- `f950caeb` puts Working with LLMs above Guides in the navigation.
+- `25147428` addresses the plugin rules to the calculator's author.
+
+PR #2's merge commit is `4c1a717b`, and none of these commits is an ancestor of
+`origin/main` at `4189548e` (`git merge-base --is-ancestor`). The live home
+page still says "powerful", "lightning-fast" and "duckdb".
+
+Measured on 2026-11-13 by cherry-picking in a scratch worktree:
+
+- All four commits apply cleanly, in order, to `origin/main` at `4189548e`.
+- On PR #5's head (`dc70fab9`), `1dee9909`, `f950caeb` and `25147428` each
+  apply on their own. `779a2560` conflicts in
+  `website/content/guides/privacy-and-network.md` and
+  `website/content/reference/ownership.md`.
+
+Recovery: cherry-pick the four commits onto a `chore/` branch from `main`,
+before or after PR #5 lands, and resolve the two files by hand. The maintainer
+already approved this content when merging PR #2. f950caeb also changes
+`scripts/sitebuild/model.py`, `docs/website.md`, the docs-site spec and three
+tests, so run the full gates as well as the site build.
