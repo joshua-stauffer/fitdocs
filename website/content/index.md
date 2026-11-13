@@ -19,4 +19,4 @@ uv tool install fitdocs
 Large language models (LLMs) can help you analyze and plan your training. Fitdocs turns the workout files from your wearable into a format built for LLMs, and includes an analytics database for finding patterns across years of training. The knowledge store is a local directory of linked markdown files alongside a DuckDB analytics database. 
 
 ## Fitdocs runs the numbers, LLMs make the connections
-LLMs are good at reading, connecting, and explaining, but they aren't reliable at arithmetic. Fitdocs calculates load, zones, splits, benchmarks, and fitness curve without any AI. Your LLM put the stats from your latest workout into context, identifies fitness trends over time, and writes the training plan you describe into the wiki, where it’s matched with 
+LLMs are good at reading, connecting, and explaining, but they aren't reliable at arithmetic. Fitdocs calculates load, zones, splits, benchmarks, and fitness curve without any AI. Your LLM puts the stats from your latest workout into context, identifies fitness trends over time, and writes the training plan you describe into the wiki, where it’s matched with 

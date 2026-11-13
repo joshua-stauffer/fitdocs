@@ -51,3 +51,15 @@ At 90cd00b:
    `uv run --group docs python -m scripts.build_site build --build-dir <scratch>`.
 
 Remember that a push to `main` that touches `website/**` deploys the site.
+
+## Update (2026-11-13): typos fixed in PR #5
+
+These are fixed on `chore/site-copy-connectors` (PR #5), at the maintainer's request:
+- `index.md`: "Your LLM put" → "Your LLM puts".
+- `llm/index.md`: "outlyers" → "outliers", and "your most interested in" → "you’re most interested in".
+
+PR #2's rewrite, recovered into the same PR, had already fixed "duckdb" and line 28 ("you’re curious about", "didn’t know to ask about").
+
+Still open: the home page's last sentence ends at "where it’s matched with". Only the maintainer writes that. Two things are left for the maintainer to decide, since they're grammar rather than typos and weren't queued:
+- `index.md:22`: "benchmarks, and fitness curve" (probably "fitness curves").
+- `llm/index.md:33`: "every one won’t be the right fit for you" (probably "not every one will be").
