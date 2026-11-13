@@ -7,7 +7,7 @@ order: 2
 
 # Connectors
 
-Instead of dropping files into the [inbox](inbox.md) yourself, you can set up a **connector**. You configure it once, and `fitdocs pull` fetches whatever is new and delivers it into the inbox, where the next drain turns it into pages as if you’d dropped the files there yourself. Some connectors also take the posts you send with [`fitdocs publish`](publishing.md).
+Instead of dropping files into the [inbox](inbox.md) yourself, you can set up a **connector**. You configure it once, and `fitdocs pull` fetches whatever is new into the inbox, ready for your next sync. Some connectors can also receive posts from [`fitdocs publish`](publishing.md).
 
 Fitdocs ships five connectors:
 
@@ -15,9 +15,9 @@ Fitdocs ships five connectors:
 - **`garmin`** reads a Garmin Connect account with a personal API key you create. It never writes to the account.
 - **`folder`** reads a local directory, such as a folder another app exports to. It needs no account and makes no network request.
 - **`relay`** connects to a fitdocs relay, a small server between fitdocs and services such as Strava. It has nothing to pull.
-- **`strava`** publishes posts through a relay that offers the Strava target. It’s “Compatible with Strava”, and it has nothing to pull.
+- **`strava`** publishes your posts to Strava through a relay. It has nothing to pull.
 
-Fitdocs can’t pull activities from Strava. If your device doesn’t sync to Garmin Connect, connect it to intervals.icu and let fitdocs read the original files from there. intervals.icu is free, community-supported, and syncs with most fitness platforms.
+Fitdocs can’t pull activities from Strava. If your device doesn’t sync to Garmin Connect, sync it to intervals.icu, which works with most fitness platforms, and pull from there.
 
 ## Set up intervals.icu
 
@@ -36,9 +36,9 @@ Fitdocs can’t pull activities from Strava. If your device doesn’t sync to Ga
 fitdocs connect intervals
 ```
 
-Fitdocs asks for the key without echoing it, makes one read request to check it, and saves it in a credentials store outside your data root (see [Credentials](#credentials)). If intervals.icu refuses the key, nothing is saved. Create a new key and run `connect` again.
+Paste the key when asked; it isn’t shown as you type. Fitdocs checks it and saves it outside your data root (see [Credentials](#credentials)).
 
-**4. If you already have pages, run `fitdocs regen` first.** Pages written before fitdocs 0.2 don’t yet carry what fitdocs needs to recognize a pulled file as a workout you already have. Without the regen, a pulled copy of an old run may not be recognized as that run.
+**4. If you have pages from before fitdocs 0.2, run `fitdocs regen` first**, so fitdocs recognizes pulled copies of workouts you already have.
 
 **5. Pull:**
 
@@ -56,7 +56,7 @@ The first pull lists the last 30 days. To go further back, give it a start date:
 fitdocs pull intervals --since 2025-01-01
 ```
 
-A long backfill can run into intervals.icu’s rate limits, so step `--since` back one season at a time. Fitdocs remembers what each run delivered, so a later run fetches only what the earlier ones didn’t. After the first pull, each pull starts 30 days before the newest activity it has already recorded (`lookback_days` changes that).
+For a long history, step `--since` back a season at a time. Each later pull fetches only what’s new.
 
 By default a pull keeps only the activities that reached intervals.icu from Garmin Connect, so other copies of the same workouts, like uploads from a phone app, aren’t fetched a second time. To pull from other platforms, list them:
 
@@ -65,9 +65,9 @@ By default a pull keeps only the activities that reached intervals.icu from Garm
 sources = ["GARMIN_CONNECT", "COROS", "WAHOO"]
 ```
 
-The names are intervals.icu’s own, in upper case: `GARMIN_CONNECT`, `COROS`, `POLAR`, `SUUNTO`, `WAHOO`, `ZWIFT`, `UPLOAD`, `STRAVA`, and others listed in the [connectors reference](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/connectors.md#configuring).
+The names are intervals.icu’s own, in upper case, such as `GARMIN_CONNECT`, `COROS`, `POLAR`, `SUUNTO`, `WAHOO`, and `ZWIFT`. The [connectors reference](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/connectors.md#configuring) lists them all.
 
-Some activities can’t be fetched, and the pull says so and moves on. intervals.icu shares only a stub, with no file, for an activity that came from Strava. An activity whose original isn’t a FIT file (GPX or TCX), or that has no file at all, is skipped too. Each one is recorded, so it isn’t asked about again.
+Activities that reached intervals.icu from Strava, or that have no `.fit` original, can’t be fetched and are skipped.
 
 Use `--dry-run` to see what a pull would fetch without downloading or delivering anything.
 
@@ -80,46 +80,32 @@ intervals.icu also keeps your daily wellness: resting heart rate, HRV, sleep, we
 wellness = true
 ```
 
-The first wellness pull reads back to 2010, or to `--since` if you give one. Each later pull re-checks the 30 days before the newest day it has already delivered. [Wellness and recovery](wellness.md) covers what fitdocs does with it.
-
-If intervals.icu refuses a wellness request, the pull says so. Set `wellness = false` to stop asking. For Garmin wellness, use Garmin’s own data export or the [`garmin` connector](#wellness-from-garmin).
+intervals.icu may refuse to share wellness that came from Garmin. For that, use the [`garmin` connector](#wellness-from-garmin) or Garmin’s own data export. [Wellness and recovery](wellness.md) covers what fitdocs does with your wellness.
 
 ## Publishing to intervals.icu
 
-The `intervals` connector is also a [publish target](publishing.md). A page opts in with the instance’s name in its `publish` key, and `fitdocs publish --yes` makes the matching activity on intervals.icu carry the page’s post: its name becomes the post’s title, and its description the post’s description.
+The `intervals` connector is also a [publish target](publishing.md). A page opts in with the instance’s name in its `publish` key, and `fitdocs publish --yes` sets the matching activity’s name and description to the page’s post.
 
 ```yaml
 publish: intervals
 ```
 
-Fitdocs looks for the matching activity in this order: the one it published this page to before, the one this instance pulled the page’s file from, then one that starts within a second of the page with the same distance or elapsed time.
-
-If several activities match, the answer is `ambiguous` and nothing changes.
-
-An activity that intervals.icu imported from Strava is never chosen. When nothing else matches and a Strava import starts within a second of the page, the answer is `not_updatable`.
-
-When nothing matches, the answer is `not_found` and nothing is created, unless you turn uploads on:
+When no activity matches, nothing is created, unless you turn uploads on:
 
 ```toml
 [connectors.intervals]
 publish_upload = true
 ```
 
-With `publish_upload` on, fitdocs uploads the page’s main `.fit` file, unmodified, once, and then sets the name and description of the activity that results. The file must be in the archive, or the answer is `activity_file_missing` and nothing is uploaded. With uploads on, a publish can occasionally create a second copy of an activity intervals.icu imported from Strava.
-
-If the instance’s pull record can’t be read, fitdocs still updates an activity it finds. If it finds none, it uploads nothing and the answer is `local_record_unreadable`.
-
-A post that lands records a direct link to the activity, labelled `intervals.icu`, in the page’s `published` region. The [connectors reference](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/connectors.md#publishing) has what each request sends and every answer.
+Fitdocs then uploads the page’s main `.fit` file and sets the new activity’s name and description. With uploads on, a publish can occasionally duplicate an activity that intervals.icu imported from Strava.
 
 ## Garmin
 
-The `garmin` connector lists the activities of the Garmin Connect account a personal API key belongs to and fetches each one’s original `.fit` file, byte for byte as Garmin stored it. With `wellness = true` it adds daily wellness. It never uploads to Garmin or changes anything there.
-
-Fitdocs isn’t affiliated with or endorsed by Garmin. The name Garmin is used only descriptively, to say which service the connector reads, and fitdocs claims no permission from Garmin.
+The `garmin` connector fetches the original `.fit` file of each activity in your Garmin Connect account, and with `wellness = true`, your daily wellness.
 
 ### Set up Garmin
 
-**1. Create a key.** Sign in to Garmin Connect on the web and open the [Personal API Key page](https://connect.garmin.com/app/settings/personalApiToken). Select **Create Key**, read and accept Garmin’s terms, choose when the key expires (30 days, 90 days, 180 days, or one year), and select **Create**. Garmin shows the key only once, so copy it now and keep it like a password, then select **Done**. If you lose it, delete it there and create a new one. These steps come from Garmin’s [Personal API FAQ](https://developer.garmin.com/gc-developer-program/personal/personal-faq/), which says more about the key.
+**1. Create a key.** Sign in to Garmin Connect on the web and open the [Personal API Key page](https://connect.garmin.com/app/settings/personalApiToken). Select **Create Key**, accept Garmin’s terms, choose when the key expires, and select **Create**. Garmin shows the key only once, so copy it now. Garmin’s [Personal API FAQ](https://developer.garmin.com/gc-developer-program/personal/personal-faq/) has more about the key.
 
 **2. Add the connector** to `fitdocs.toml`. An empty table is enough:
 
@@ -134,7 +120,7 @@ wellness = true   # optional; false by default
 fitdocs connect garmin
 ```
 
-Fitdocs asks for the key without echoing it, checks it with Garmin, and saves it in the credentials store. If Garmin refuses the key, nothing is saved.
+Paste the key when asked. Fitdocs checks it with Garmin and saves it in the [credentials store](#credentials).
 
 **4. Decide when your pages change**, if you already have some. Read [What the first sync does to an existing wiki](#what-the-first-sync-does-to-an-existing-wiki) first.
 
@@ -144,54 +130,43 @@ Fitdocs asks for the key without echoing it, checks it with Garmin, and saves it
 fitdocs pull garmin
 ```
 
-The key is sent only to Garmin, and nothing but the key is stored.
-
-A key expires after the period you chose. Garmin sends a reminder before then. To renew, create a new key on Garmin Connect and run `fitdocs connect garmin` again, which replaces the stored key. A key Garmin refuses, because it’s wrong, expired, or deleted, ends the pull with a message that says so.
-
-### Garmin’s terms
-
-You accept Garmin’s own terms when you create a key, and fitdocs isn’t a party to them. Garmin’s terms say a key is “personal to you”, and that it’s for “applications, services, or tools that you develop or operate for your own use”. Fitdocs runs on your machine, with your key, to read your own account. Fitdocs doesn’t claim that Garmin has approved this use and can’t tell you how Garmin reads those words, so read the terms you’re shown before you accept them.
-
-The same terms say Garmin may throttle or restrict access and may revoke a key. If Garmin refuses a listing or a download, the pull stops, says that Garmin refused the request, and doesn’t repeat it. Check the key’s status on Garmin Connect.
+When the key expires, create a new one and run `fitdocs connect garmin` again.
 
 ### What a first pull does
 
-A pull with no earlier record and no `--since` takes your whole activity history, oldest first. Fitdocs waits one second between requests. When Garmin limits requests, fitdocs waits up to five minutes before trying again. If that doesn’t clear it, the pull stops and says so, and the next pull resumes where this one stopped. A pull prints no progress while it runs, so a long wait looks like a pause.
+A first pull fetches your whole activity history, oldest first. It can take a while, and it prints no progress as it runs.
 
-A pull fetches at most 200 activities. When more remain, the report has one deferred entry that says how many, and the next plain `fitdocs pull` continues from there and fetches nothing already recorded. An account of 1,000 activities takes five pulls.
+A pull fetches at most 200 activities, so for a long history, run `fitdocs pull` again, or have your agent run it, until everything is in.
 
-`fitdocs pull garmin --since YYYY-MM-DD` lists only the activities from the start of that local day, with the same pacing and limit. On an instance that has pulled before, a `--since` backfill continues only when you run it again with the same `--since`. A plain pull won’t finish it.
+`fitdocs pull garmin --since YYYY-MM-DD` starts from that day instead. To continue a `--since` backfill, run the same command again; a plain `fitdocs pull` won’t continue it.
 
-Wellness has no such limit. With `wellness = true`, the first pull covers the whole range: from the start of your history, or from `--since`, to today. Twelve years of wellness takes about 6 to 8 minutes. If a wellness request fails, the next pull starts that range again.
+Wellness isn’t limited per pull. The first pull with `wellness = true` fetches all of it, which can take several minutes for a long history.
 
 ### Wellness from Garmin
 
-`wellness = true` adds these daily metrics to your wellness series, under the source `garmin-personal`: resting, minimum, and maximum heart rate, steps, sleep and its stages, respiration, blood oxygen, stress, body battery, weight, and overnight heart rate variability. A metric Garmin has no value for is left empty, never recorded as zero. See [Wellness and recovery](wellness.md).
+`wellness = true` adds these daily metrics to your wellness series, under the source `garmin-personal`: resting, minimum, and maximum heart rate, steps, sleep and its stages, respiration, blood oxygen, stress, body battery, weight, and overnight heart rate variability. See [Wellness and recovery](wellness.md).
 
 ### What the first sync does to an existing wiki
 
-A Garmin original ranks first as a page’s main file under the default `[identity] precedence`. So the first `fitdocs sync` after a pull, on a wiki that already holds pages built from other copies of the same activities, like a phone app’s, makes the Garmin original the main file of each of those pages. Those pages re-render. Some may be [renamed](workout-pages.md#when-a-page-is-renamed), and some may change their time, when the other copy’s clock was shifted by hours. Regions you own are kept.
+If your wiki already has pages built from other copies of the same activities, like a phone app’s, the first `fitdocs sync` after a Garmin pull rebuilds those pages from the Garmin originals. Some may be [renamed](workout-pages.md#when-a-page-is-renamed) or change their start time. Regions you own are kept.
 
 A wiki whose pages predate fitdocs 0.2 needs `fitdocs regen` before the first pull, or the Garmin file starts a second page.
 
 You have two controls:
 
 - **Run `fitdocs pull garmin` without `--sync`.** The files wait in the inbox until you run `fitdocs sync`, so you choose when the pages change.
-- **Set `[identity] precedence` to keep the main files you have.** For a wiki built from phone copies, this ranks them first:
+- **Set `[identity] precedence` to keep the main files you have.** For a wiki built from phone copies, this keeps them as the main files:
 
     ```toml
     [identity]
     precedence = ["phone_copy", "original", "unknown"]
     ```
 
-    On a page whose main file is a phone copy, the Garmin file then joins as an extra. A page whose main file is another original, like a Stryd file, is still ranked against the Garmin file, and the Garmin file can win. To keep that main file, list its `original:<manufacturer>` entry first. See [`[identity]`](../reference/configuration.md#identity).
+    To keep another device’s originals, like a Stryd’s, list its `original:<manufacturer>` entry first. See [`[identity]`](../reference/configuration.md#identity).
 
 ### What the Garmin connector doesn’t do
 
-- Activities that came from another app as a GPX or TCX upload have no `.fit` original. They’re skipped, and the report says why.
-- An activity whose download holds several FIT files is skipped, and the report names how many it found.
-- Women’s health, courses, and training aren’t pulled, and VO2max isn’t read.
-- Accounts on Garmin’s China service aren’t supported.
+Women’s health, courses, training, and VO2max aren’t pulled, and accounts on Garmin’s China service aren’t supported.
 
 ### Moving from intervals.icu
 
@@ -202,7 +177,7 @@ If you pull Garmin activities through the `intervals` connector, stop it fetchin
 sources = ["WAHOO", "ZWIFT"]
 ```
 
-`sources` can’t be empty, so if you want nothing else from that instance, delete its table.
+If you want nothing else from that instance, delete its table instead.
 
 ## The folder connector
 
@@ -214,42 +189,42 @@ connector = "folder"
 path = "/Users/you/Documents/WatchExports"
 ```
 
-The name in brackets is yours to choose (lowercase letters, digits, and hyphens). The folder can’t be your inbox, sit inside it, or contain it.
+The name in brackets is yours to choose (lowercase letters, digits, and hyphens).
 
 ## Connecting to a relay
 
-A relay is a small server that connects fitdocs to services such as Strava. A `relay` instance holds the token fitdocs uses with it. You connect it once and can revoke it later. A relay has no activities or wellness, so `fitdocs pull` doesn’t contact it.
+A relay is a small server that connects fitdocs to services such as Strava. You connect a `relay` instance once, with a token.
 
 ```toml
 [connectors.relay]
 url = "https://relay.example.com"
 ```
 
-Leave `url` out and the instance uses `https://api.fitdocs.ai`, the maintainer’s relay. The address must be `https`. Plain `http` is accepted only for `localhost`, `127.0.0.1`, and `::1`, for testing a relay on your own machine. To use more than one relay, name each instance and set `connector = "relay"` in its table.
+Leave `url` out to use `https://api.fitdocs.ai`, the maintainer’s relay. To use more than one relay, name each instance and set `connector = "relay"` in its table.
 
-A relay token comes from the relay’s operator, or from registering with a relay that offers registration. With a token in hand:
+If the relay’s operator gave you a token, connect with it and paste the token when asked:
 
 ```sh
 fitdocs connect relay
 ```
 
-Fitdocs asks for the token without echoing it and makes one request to check it. It stores the token only if the relay accepts it. To register instead, for a relay that offers it:
+To register with a relay that offers registration instead:
 
 ```sh
 fitdocs connect relay --register --email you@example.com
 ```
 
-Without `--email`, fitdocs asks for the address. It prints a code, and the relay emails you a confirmation link. Open it, and confirm the registration only if the page it opens shows the same code, because that match is what stops someone else’s registration from being confirmed as yours. Fitdocs waits until the registration is confirmed, refused, or expired, then stores the token the relay issues. Press Ctrl-C to stop waiting, and nothing is stored.
+Fitdocs shows a code, and the relay emails you a confirmation link. Open it, check that the page shows the same code as your terminal, and confirm. Fitdocs then stores the relay’s token.
 
-`fitdocs disconnect relay` asks the relay to revoke the stored token, then removes the instance’s credentials file. If the relay can’t confirm, the file stays and the command exits `1`. `--local-only` removes the file without contacting the relay, and the token stays valid until the relay’s operator revokes it.
+`fitdocs disconnect relay` revokes the token and forgets it. `--local-only` forgets it without contacting the relay, and the token stays valid until the relay’s operator revokes it.
 
 To run a relay yourself, see the [relay guide](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/relay.md#self-hosting-guide) in the repository.
 
 ## Strava
 
-The `strava` connector is “Compatible with Strava”. It talks only to a fitdocs relay, which holds the connection to your account and does the work on Strava. It doesn’t pull. On `fitdocs publish --yes`, a page’s post is written onto the matching Strava activity, and the page links to it with a View on Strava link.
+The `strava` connector publishes your posts to Strava through a fitdocs relay, which holds the connection to your Strava account. It doesn’t pull. When you run `fitdocs publish --yes`, each post is written onto the matching Strava activity, and the page links to it.
 
-An instance needs a `relay` instance whose relay offers the Strava target. See [Connecting to a relay](#connecting-to-a-relay).
+You need a `relay` instance whose relay offers Strava. See [Connecting to a relay](#connecting-to-a-relay).
 
 ```toml
 [connectors.relay]
@@ -259,14 +234,14 @@ relay = "relay"
 upload = false   # optional; this is the default
 ```
 
-`relay` is the name of a configured `relay` instance, and that instance’s `url` must be the relay’s public address, because the connect page is served there. Connect the relay instance first, then this one:
+`relay` names your `relay` instance. Connect it first, then this one:
 
 ```sh
 fitdocs connect relay
 fitdocs connect strava
 ```
 
-`fitdocs connect strava` asks you for nothing. It prints an address on the relay, a code, and how long the attempt lasts, and opens the address in your browser, unless you pass `--no-browser`. Give consent on that page with its Connect with Strava button, but only if the page shows the same code, because that match is what stops someone else’s connection from being completed as yours. Fitdocs waits until the connection is complete, refused, or expired, then stores the connection token the relay issues. Press Ctrl-C to stop waiting, and nothing is stored.
+When you run `fitdocs connect strava`, you’ll see a code, and the relay’s connect page opens in your browser (pass `--no-browser` to open it yourself). Check that the code on the page matches the one in your terminal, then select **Connect with Strava**. Fitdocs stores the connection once you’ve finished.
 
 A page opts in with the instance’s name in its [`publish` key](publishing.md#opt-a-page-in):
 
@@ -274,29 +249,25 @@ A page opts in with the instance’s name in its [`publish` key](publishing.md#o
 publish: strava
 ```
 
-For each post, the relay finds the page’s activity on Strava, by the same rule fitdocs uses to recognize one activity recorded twice, and sets the activity’s name to the post’s title and its description to the post’s description. Nothing else on the activity changes, and nothing on Strava is deleted. If more than one activity matches, the answer is `ambiguous` and nothing changes.
+For each post, the relay finds the matching Strava activity and sets its name and description to the post’s title and description. If no activity matches, nothing is created, unless you set `upload = true`. Then fitdocs sends the page’s main `.fit` file, and the relay creates the activity.
 
-While `upload` is `false`, a publish that finds no matching activity answers `not_found`. While it’s `true`, fitdocs sends the page’s main `.fit` file, unmodified, and the relay creates the activity. A file over 16 MiB, a title over 255 characters, or a description over 8,000 is `rejected` before anything is sent.
+`fitdocs disconnect strava` ends the connection and forgets it. `--local-only` forgets it without contacting the relay, and the connection stays until you revoke access in Strava’s settings.
 
-A post that lands records a View on Strava link in the page’s `published` region, when the relay’s answer carries a usable one. Fitdocs doesn’t retry a request within a run.
-
-`fitdocs disconnect strava` asks the relay to end the connection, then removes the instance’s credentials file. If the relay can’t confirm, the file stays and the command exits `1`. `--local-only` removes the file without contacting the relay, and the connection stays at the relay until the instance is connected and disconnected again, or access is revoked in Strava’s settings. Neither touches the relay instance’s own token.
-
-[Privacy and the network](privacy-and-network.md#strava) says what each request sends, and the [connectors reference](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/connectors.md#strava) has every answer.
+[Privacy and the network](privacy-and-network.md#strava) says what each request sends.
 
 ## Credentials
 
-Keys and tokens are never stored in your data root. They live in your user’s config folder, `~/.config/fitdocs/credentials/` by default (or under `$XDG_CONFIG_HOME`, or wherever `FITDOCS_CREDENTIALS_DIR` points). Fitdocs refuses a credentials folder inside the data root, so a key can’t end up in your wiki’s git history or a shared folder. Each instance’s file is readable only by you.
+Keys and tokens are stored outside your data root, in `~/.config/fitdocs/credentials/` by default (or under `$XDG_CONFIG_HOME`, or wherever `FITDOCS_CREDENTIALS_DIR` points), so they don’t end up in your wiki’s git history. Each instance’s file is readable only by you.
 
-Don’t put a key in `fitdocs.toml`. Fitdocs refuses `api_key` in an `intervals` or `garmin` table and `token` in a `relay` or `strava` table. To use one without storing it, set an environment variable instead. For an instance named `intervals`, that’s `FITDOCS_CONNECTOR_INTERVALS_API_KEY`, and for one named `relay`, `FITDOCS_CONNECTOR_RELAY_TOKEN`. A variable that’s set wins over a stored value, except in `fitdocs disconnect`, which acts only on what’s stored.
+Don’t put a key in `fitdocs.toml`; fitdocs refuses it. To use a key without storing it, set an environment variable instead, such as `FITDOCS_CONNECTOR_INTERVALS_API_KEY` for an instance named `intervals`, or `FITDOCS_CONNECTOR_RELAY_TOKEN` for one named `relay`. A variable that’s set wins over a stored value, except in `fitdocs disconnect`.
 
-`fitdocs disconnect NAME` forgets one instance’s stored credentials. For an `intervals` or `garmin` instance it sends no request, so the key stays valid at the service until you delete it there or it expires.
+`fitdocs disconnect NAME` forgets an instance’s stored credentials. An intervals.icu or Garmin key stays valid until you delete it on that service.
 
 ## What lands in your inbox
 
-Each instance delivers into its own subfolder of the inbox, like `inbox/intervals/`. Those files are fitdocs’s own copies: once the archive holds identical bytes, the next pull removes them. A connector never touches anything you or your own tools put in the inbox.
+Each instance delivers into its own subfolder of the inbox, like `inbox/intervals/`, and a later pull clears out files that are already archived. A connector doesn’t touch anything else in the inbox.
 
-Each instance that pulls keeps a record of what it has delivered in `.fitdocs/connectors/<name>.toml`. That record, not the service’s listing, decides what’s new. Don’t edit it. Deleting it makes the next pull start over like a first pull, and fitdocs no longer cleans up the deliveries still waiting in the inbox.
+Each instance keeps a record of what it has delivered in `.fitdocs/connectors/<name>.toml`. Don’t edit it. Deleting it makes the next pull start over like a first pull.
 
 ## Running it on a schedule
 
@@ -308,8 +279,8 @@ fitdocs pull --sync --no-prompt
 
 ## Turning a connector off
 
-Delete its `[connectors.<name>]` table. There’s no other switch: an instance without a table is never contacted again. Your pages, archive, and stored key stay where they are.
+Delete its `[connectors.<name>]` table. Your pages, archive, and stored key stay where they are.
 
-Deleting the table doesn’t revoke a relay token or end a Strava connection. To do that, run `fitdocs disconnect NAME` first, because it works only on a configured instance. Delete a `strava` table before or along with the `relay` table it names, because fitdocs refuses a `strava` instance whose relay instance isn’t configured.
+Deleting the table doesn’t revoke a relay token or end a Strava connection, so run `fitdocs disconnect NAME` first. Delete a `strava` table along with the `relay` table it names.
 
-The full rules, including every report row and exit code, are in the [connectors reference](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/connectors.md).
+The [connectors reference](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/connectors.md) has the full rules.
