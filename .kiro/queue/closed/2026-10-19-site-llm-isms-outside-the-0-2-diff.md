@@ -1,7 +1,7 @@
 ---
 id: 2026-10-19-site-llm-isms-outside-the-0-2-diff
 title: fitdocs.ai pages carry stock phrasing ("LLM-isms") on lines the 0.2 site-copy PR does not touch
-status: open
+status: done
 importance: low
 importance_why: Distracting to an engaged reader, and the maintainer asked for it; nothing is wrong factually, so it waits for the full-site pass.
 effort: M
@@ -121,3 +121,7 @@ before or after PR #5 lands, and resolve the two files by hand. The maintainer
 already approved this content when merging PR #2. f950caeb also changes
 `scripts/sitebuild/model.py`, `docs/website.md`, the docs-site spec and three
 tests, so run the full gates as well as the site build.
+
+## Resolution
+
+2026-11-13. PR #2's four commits are cherry-picked onto `chore/site-copy-connectors` (PR #5) at the maintainer's request, and close this item when PR #5 merges. The conflicts in `privacy-and-network.md` and `ownership.md` were resolved by hand, as PR #5's description records. 78 of the 80 phrases are rewritten; the two left alone are the ones the 2026-10-20 update names.
