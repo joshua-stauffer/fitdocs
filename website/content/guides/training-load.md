@@ -32,7 +32,7 @@ Then it picks one using a per-sport priority order, and uses only that number fo
 | Walk | heart rate |
 | Hike | heart rate |
 
-If the first channel in line can't be computed (no power meter that day, or a threshold you haven't recorded), the reason is recorded and the next one is used.
+If the first channel in line can't be computed (no power meter that day, or a threshold you haven't recorded), the next one is used.
 
 Change the order in `fitdocs.toml`:
 
@@ -52,7 +52,7 @@ Load is measured against *your* thresholds, which fitdocs stores in `athlete.tom
 
 There are three ways to fill them in:
 
-1. **Answer the prompts.** When `fitdocs sync` or `fitdocs load` needs a value it doesn't have, it asks, checks your answer, and saves it. If the activity is older than your answer, it also asks whether that answer should apply to earlier activities too.
+1. **Answer the prompts.** When `fitdocs sync` or `fitdocs load` needs a value it doesn't have, it asks.
 2. **Let fitdocs work them out from your races and your own data.** Tag your races and hard efforts, and `fitdocs derive-benchmarks` turns them into dated thresholds. It also works out your resting heart rate from your [wellness](wellness.md) data and your max heart rate from your hardest runs and rides. See [Benchmarks and race tags](benchmarks.md).
 3. **Write them by hand:**
 
@@ -79,13 +79,13 @@ Every benchmark has a date, and each activity is scored with the value that appl
 
 ## Data Quality
 
-If you’ve worn a fitness wearable for any amount of time, you’ve likely encountered bad data. Planning future workouts from poor-quality data leads to wrong decisions.
+If you’ve worn a fitness wearable for any amount of time, you’ve likely encountered bad data.
 fitdocs evaluates the data quality of each channel, and adds a warning to the page of any flagged workout:
 
-- **Cadence lock.** Wrist heart-rate sensors sometimes pick up your running cadence and report it as your heart rate. fitdocs checks whether "heart rate" is following cadence suspiciously closely.
+- **Cadence lock.** Wrist heart-rate sensors sometimes pick up your running cadence and report it as your heart rate.
 - **Channels disagree.** If the picked channel and heart rate disagree sharply about how hard the session was, the page flags it.
 - **Aerobic drift.** Heart rate rising steadily against steady output is flagged when it passes a threshold.
-- **Stale threshold.** A benchmark older than 12 weeks (configurable) gets flagged. The load is still computed, but you'll know it rests on an old number.
+- **Stale threshold.** A benchmark older than 12 weeks (configurable) gets flagged.
 
 ## Running the load pass yourself
 
@@ -100,7 +100,7 @@ fitdocs load --calculator ID    # use one specific calculator
 
 Run `fitdocs load` after adding new benchmarks to fill in pages that were missing a number. A page that already has a load keeps it until you run `fitdocs load --recompute`.
 
-A page built from [several files](workout-pages.md#several-files-one-workout) is scored from all of them together, so power from a Stryd pod counts even when the watch’s file is the main one. If more files of a workout arrive after its load was computed, the old number is kept until you recompute it.
+A page built from [several files](workout-pages.md#several-files-one-workout) is scored from all of them together, so power from a Stryd pod counts even when the watch’s file is the main one.
 
 ## Tuning
 

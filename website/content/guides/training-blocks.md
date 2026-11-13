@@ -10,7 +10,7 @@ order: 8
 Your workout pages record what you *did*. A training block says what you *plan* to do: a goal, a start and end date, a repeating cycle of weeks (called mesocycles), and the sessions on each day. fitdocs renders the plan as pages and checks your logged workouts against it.
 
 ## Create your plan
-Think through why you’re training, and what you’d like to achieve, and decide how much time you can sustainably devote to training each week. Then, have your agent use the **`build-training-block`** skill to write a plan file. The agent asks you for the goal, dates, mesocycle length, key sessions, weekly shape, cross-training, and load targets, and writes down what you say. See [Wiki integration](wiki-integration.md) to install it, and prompts to use it.
+Think through why you’re training, and what you’d like to achieve, and decide how much time you can sustainably devote to training each week. Then, have your agent use the **`build-training-block`** skill to write a plan file. The agent asks you for the goal, dates, mesocycle length, key sessions, weekly shape, cross-training, and load targets. See [Wiki integration](wiki-integration.md) to install it, and [prompts](../llm/prompts.md#training-blocks) to use it.
 
 The block page has a **Notes** section that belongs to you, just like a workout page.
 
@@ -32,9 +32,7 @@ The full plan grammar (every key and rule) is in the skill itself: run `fitdocs 
 
 The block page also adds up your actual load for each mesocycle and compares it to your target.
 
-The matching is recalculated from your pages every time and never stored. If a better match is logged later, it takes over. Matching writes nothing to your workout pages or your plan file.
-
-The pass runs automatically at the end of `sync`, `pull --sync`, and `regen`, and whenever you run:
+This runs automatically at the end of `sync`, `pull --sync`, and `regen`, and whenever you run:
 
 ```sh
 fitdocs plan
@@ -86,7 +84,7 @@ id = "w1-sat"
 date = 2026-10-11
 ```
 
-Amendments can move, add, or remove sessions and change mesocycle targets. The block page shows the current plan next to the original, with each change. The plan file becomes a history of how the plan changed.
+Amendments can move, add, or remove sessions and change mesocycle targets. The block page shows the current plan next to the original, with each change.
 
 ## Match a workout to the plan yourself
 
@@ -100,7 +98,5 @@ stems = ["2026-10-06-run-0700"]    # the workout page(s) that count as this sess
 reason = "the morning run was the intervals"
 ```
 
-Overrides go in the plan file, not on the workout page, because they're a decision about the plan.
-
-An override names workout pages by filename. If fitdocs renames a page (see [When a page is renamed](workout-pages.md#when-a-page-is-renamed)), update the name in your override, or `fitdocs plan` reports it as not found.
+An override names workout pages by filename. If fitdocs renames a page (see [When a page is renamed](workout-pages.md#when-a-page-is-renamed)), update the name in your override.
 

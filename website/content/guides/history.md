@@ -21,7 +21,7 @@ This is the fitness–fatigue model from Banister and colleagues, the same idea 
 - **Fatigue** is a fast-moving average (15 days by default).
 - **Form** is fitness minus fatigue. When it's positive, you're fresh.
 
-The page lists the constants it used and says whether they're fitdocs' **defaults** (starting values from the original papers, not fitted to you) or **values you set**:
+The defaults are starting values from the original papers, not fitted to you. To set your own:
 
 ```toml
 # <data-root>/fitdocs.toml
@@ -36,6 +36,6 @@ If fewer than 80% of a period's workouts have a load (configurable with `coverag
 
 ## When to rebuild
 
-`history` is never run automatically. Rebuild it whenever you want a fresh picture, such as after a sync, after adding benchmarks, or once a week. It always rebuilds the whole page.
+`history` is never run automatically. Rebuild it whenever you want a fresh picture, such as after a sync, after adding benchmarks, or once a week.
 
 If you've installed more than one load calculator, pick which one's numbers to use with `--methodology <id>` or `[history].methodology`.

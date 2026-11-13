@@ -41,7 +41,7 @@ class MyCalculator:
         ...  # your method here
 ```
 
-`compute` returns exactly one of four outcomes:
+`compute` returns one of four outcomes:
 
 | Outcome | When |
 |---|---|
@@ -96,7 +96,7 @@ register(MyCalculator())
 path = "plugins"
 ```
 
-Local plugin files run as ordinary Python code with your permissions. There's no sandbox.
+Local plugin files run as ordinary Python code with your permissions.
 
 ## Check that it loaded
 
@@ -104,7 +104,7 @@ Local plugin files run as ordinary Python code with your permissions. There's no
 fitdocs plugins
 ```
 
-Your calculator should be listed with its id, version, where it came from, and its sports. If it failed to load, the error appears below the list. A broken plugin produces a warning; it doesn't fail the run. Then:
+Your calculator should be listed with its id, version, where it came from, and its sports. Then:
 
 ```sh
 fitdocs load --calculator mycalc --recompute

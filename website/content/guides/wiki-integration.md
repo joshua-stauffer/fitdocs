@@ -7,7 +7,7 @@ order: 11
 
 # Inside your wiki or vault
 
-fitdocs works well on its own, but it was designed to live inside a larger markdown knowledge base, so your training sits next to your journal, your projects, and the rest of your notes. Workout pages become ordinary pages in your wiki. You can link to, search, and query them like any other page.
+fitdocs was designed to live inside a larger markdown knowledge base, so your training sits next to your journal, your projects, and the rest of your notes. You can link to, search, and query workout pages like any other page.
 
 ## What fitdocs reads and writes
 
@@ -53,11 +53,11 @@ fitdocs check          # exits 0 when everything is in order
 
 ## Agent skills
 
-fitdocs includes agent skills: markdown instruction files in the open [SKILL.md](https://agentskills.io) format that tell an LLM agent how to operate fitdocs correctly. They ship inside the package, so they match the version you have installed.
+fitdocs includes agent skills: markdown instruction files in the open [SKILL.md](https://agentskills.io) format that tell an LLM agent how to operate fitdocs. They ship inside the package, so they match the version you have installed.
 
 | Skill | What it teaches your agent |
 |---|---|
-| **`fitdocs-workouts`** | Pull from your [connectors](connectors.md), drain the inbox, run `check`, read the reports, and know what to do about deferred, quarantined, or failed files. It also knows *not* to run `regen` unless asked, and to leave quarantined files to you. |
+| **`fitdocs-workouts`** | Pull from your [connectors](connectors.md), drain the inbox, run `check`, and read the reports. It also knows *not* to run `regen` unless asked, and to leave quarantined files to you. |
 | **`fitdocs-analytics`** | Answer counts, totals, and trends from the [analytics index](analytics.md) with read-only SQL, check that the index is current first, and show you the query behind each answer. |
 | **`fitdocs-dashboards`** | Put an answer on a [dashboard](dashboards.md) page as a chart, check the page until it's clean, and keep your prose apart from fitdocs's charts. |
 | **`build-training-block`** | Interview you about a training block, write the plan file, render it, add amendments, and settle ambiguous matches ([Training blocks](training-blocks.md)). |
@@ -126,8 +126,8 @@ dashboards/AGENTS.md linguist-generated
 dashboards/assets/*/*.svg linguist-generated -diff
 ```
 
-The heavy folders (`fit-archive/`, `wellness-archive/`, chart assets, `.cache/`) can also be left out of git entirely, since `fitdocs regen` can rebuild every workout page from the archives. Then `fitdocs index`, `fitdocs recovery`, and `fitdocs dashboard refresh` redraw the rest. Make sure both archives are backed up. Keep your dashboard pages and their snapshot files (`dashboards/assets/**/*.snapshot-*.json`) in git, though: a snapshot is the only copy of the rows a frozen chart was drawn from.
+The heavy folders (`fit-archive/`, `wellness-archive/`, chart assets, `.cache/`) can also be left out of git, since `fitdocs regen` can rebuild every workout page from the archives. Then `fitdocs index`, `fitdocs recovery`, and `fitdocs dashboard refresh` redraw the rest. Make sure both archives are backed up. Keep your dashboard pages and their snapshot files (`dashboards/assets/**/*.snapshot-*.json`) in git. A snapshot is the only copy of the rows a frozen chart was drawn from.
 
 ## Obsidian
 
-Open the vault, and workout pages show up with their charts, because they're standard image links. The frontmatter works with Dataview and Bases. Wikilinks in `effort_event` show up as normal links. On a dashboard page, Live Preview shows each chart directive as dimmed source text above its chart.
+Open the vault, and workout pages show up with their charts, because they're standard image links. The frontmatter works with Dataview and Bases.

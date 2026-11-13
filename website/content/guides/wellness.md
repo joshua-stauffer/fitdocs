@@ -7,7 +7,7 @@ order: 7
 
 # Wellness and recovery
 
-How you slept, your resting heart rate, and your HRV say a lot about how a session went and how you’re absorbing your training. Fitdocs keeps a local record of those daily signals, shows the morning’s numbers on each workout page, and builds a recovery page that puts them next to your training load.
+Fitdocs keeps a local record of daily signals like sleep, resting heart rate, and HRV, shows the morning’s numbers on each workout page, and builds a recovery page that puts them next to your training load.
 
 Fitdocs reports what was recorded and how it compares with your own recent normal. It never gives a readiness score, a verdict, or a training recommendation.
 
@@ -19,9 +19,9 @@ Wellness arrives the same way workouts do: put the file in your [inbox](inbox.md
 
 On your iPhone, open the Health app, tap your profile picture, choose **Export All Health Data**, then **Export**. Put the `export.zip` it gives you in the inbox (the `export.xml` inside it works too) and run `fitdocs sync`.
 
-- Fitdocs keeps a compact extract of the wellness types it reads, not your whole export. Your profile, workouts, routes, clinical records, and ECGs are never kept.
+- Fitdocs keeps a compact extract of the wellness types it reads. Your profile, workouts, routes, clinical records, and ECGs are never kept.
 - A newer export replaces the earlier one entirely, so export everything each time.
-- A large export takes a while: about 10 to 20 seconds for each GB of `export.xml`. On a terminal you see the progress.
+- A large export takes a while.
 - Fitdocs doesn’t delete the original. If your inbox is an iCloud folder, move the export out yourself once it’s been archived, so it isn’t read again on every sync.
 
 The Health export carries wellness only. Apple Watch workouts still come in as `.fit` files from an app like HealthFit.
@@ -35,7 +35,7 @@ Request your data export from Garmin, unzip it yourself, and drop these JSON fil
 - `MetricsMaxMetData_*.json`: running and cycling VO2max
 - `*_userBioMetrics.json`: weight
 
-Fitdocs doesn’t read the whole export ZIP, or Garmin’s monitoring and sleep `.fit` files. A `.fit` file that isn’t an activity is skipped with a warning and left in the inbox.
+Fitdocs doesn’t read Garmin’s monitoring and sleep `.fit` files.
 
 ### intervals.icu
 
@@ -43,7 +43,7 @@ If you use the intervals.icu connector, set `wellness = true` on it and run `fit
 
 ### Garmin Connect
 
-If you use the `garmin` connector, set `wellness = true` on it and run `fitdocs pull --sync`. It reads Garmin’s daily summaries, sleep, heart rate variability, and weight from your account, with no export step, under the source `garmin-personal`. See [Wellness from Garmin](connectors.md#wellness-from-garmin).
+If you use the `garmin` connector, set `wellness = true` on it and run `fitdocs pull --sync`. It reads Garmin’s daily summaries, sleep, heart rate variability, and weight from your account under the source `garmin-personal`. See [Wellness from Garmin](connectors.md#wellness-from-garmin).
 
 ## What fitdocs keeps
 
@@ -52,9 +52,9 @@ Two folders in your data root hold your wellness:
 - **`wellness-archive/`** keeps every source file as it arrived (for Apple Health, the extract) and never modifies it. It’s the record everything else is rebuilt from, so back it up along with `fit-archive/`.
 - **`wellness/`** holds the daily series: one CSV per year, like `wellness/2026.csv`, with every value from every source. Fitdocs rebuilds it from the archive whenever something changes, and overwrites any edits you make to it. Open it in a spreadsheet, or query it with SQL as `wellness_daily` in the [analytics index](analytics.md).
 
-The signals include resting, lowest, and highest heart rate; HRV, both SDNN and rMSSD; sleep, with deep, light, REM, and awake time and sleeping heart rate; respiration, SpO2, weight, VO2max, steps, stress, and Body Battery; and subjective ratings like fatigue, mood, and soreness, when a source records them. SDNN and rMSSD are kept apart and never converted into each other, because they measure different things.
+The signals include resting, lowest, and highest heart rate; HRV, both SDNN and rMSSD; sleep, with deep, light, REM, and awake time and sleeping heart rate; respiration, SpO2, weight, VO2max, steps, stress, and Body Battery; and subjective ratings like fatigue, mood, and soreness, when a source records them.
 
-Each value belongs to a day, and a night’s sleep belongs to the morning you woke up. A value a source didn’t record stays missing. Fitdocs never fills it with a zero or carries an old value forward.
+Each value belongs to a day, and a night’s sleep belongs to the morning you woke up. A value a source didn’t record stays missing.
 
 ## When sources disagree
 
@@ -69,13 +69,13 @@ precedence = ["apple-health", "garmin-export", "intervals-icu"]
 hrv_rmssd_ms = ["intervals-icu", "garmin-export"]
 ```
 
-Fitdocs never mixes or averages sources. A change takes effect on your next sync or `fitdocs regen`.
+A change takes effect on your next sync or `fitdocs regen`.
 
 ## The Morning Of block
 
-Every workout page gets a **Morning Of** block, just before Training Load. It shows resting heart rate, HRV, and sleep for the day of the workout, each next to its 7-day mean and the source it came from. Heart rate and HRV are also set against your normal range from the 60 days before, and sleep against its 60-day mean.
+Workout pages get a **Morning Of** block, just before Training Load. It shows resting heart rate, HRV, and sleep for the day of the workout, each next to its 7-day mean and the source it came from. Heart rate and HRV are also set against your normal range from the 60 days before, and sleep against its 60-day mean.
 
-The block is refreshed on every `sync`, `pull --sync`, and `regen`. When there’s none of those that day, in the week up to it, or in the 60 days before, the page has no block. Fitdocs owns it and replaces any edits, so write your own thoughts in Notes.
+The block is refreshed on every `sync`, `pull --sync`, and `regen`. Fitdocs owns it and replaces any edits, so write your own thoughts in Notes.
 
 ## The recovery page
 
@@ -90,8 +90,6 @@ This writes `recovery/recovery.md`, with its charts in `recovery/assets/`. The p
 - **Sleep**, with its 7-day mean and a table of the latest night’s stages
 - **Other signals**, as small charts with no baseline
 - **Coverage**, and the **method and references** behind every number
-
-Each mean and normal range comes from a single source.
 
 `fitdocs recovery` never runs automatically. Run it after a sync that brought in new wellness, or whenever you want a fresh page. It works offline, and it doesn’t change your workout pages or your wellness files. The whole page is generated, so there’s nothing on it for you to edit.
 

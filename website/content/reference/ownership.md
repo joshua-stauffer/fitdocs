@@ -20,11 +20,11 @@ Fitdocs may create, rewrite, or delete these:
 | `recovery/` and `recovery/assets/` | The recovery page and its charts |
 | `blocks/` | Block pages and planned-workout pages |
 | `dashboards/assets/` | Dashboard chart images and frozen-chart snapshots |
-| `fit-archive/` | Your source `.fit` files, named by content hash and never modified |
+| `fit-archive/` | Your source `.fit` files, never modified |
 | `wellness-archive/` | Your wellness source files, never modified |
 | `wellness/` | The daily wellness series, rebuilt from `wellness-archive/` |
 | `.cache/` | Map tiles |
-| `.fitdocs/` | fitdocs' own state: the quarantine record, files held because they matched more than one page, each connector's delivery record, and each publish target's record of what it posted, under `.fitdocs/publish/` |
+| `.fitdocs/` | fitdocs' own state |
 
 In `dashboards/`, the pages are yours. fitdocs writes only inside each chart's region, which it adds below the chart's directive if it's missing, plus `dashboards/AGENTS.md`. It never creates, renames, or deletes a dashboard page.
 
@@ -54,14 +54,14 @@ Two things live outside the data root: connector credentials, in your user's con
 | `effort`, `effort_distance_m`, `effort_time_s`, `effort_event`, `publish` frontmatter keys | you | kept word for word |
 | everything else | fitdocs | rebuilt |
 
-Regions are marked with `<!-- fitdocs:begin:NAME -->` / `<!-- fitdocs:end:NAME -->`. Don't add markers of your own. A page with a marker fitdocs doesn't recognize is refused regeneration until the marker is removed.
+Regions are marked with `<!-- fitdocs:begin:NAME -->` / `<!-- fitdocs:end:NAME -->`. Don't add markers of your own.
 
 Your region, race-tag, and `publish` content is yours to edit as you like. No operation discards it, including regenerating your wiki after a fitdocs upgrade.
 
 ## Several files, renames, and links
 
-- **Each workout has one page.** Files of the same workout from different sources share a page. fitdocs never merges two existing pages: a file that matches more than one is archived and held, and `fitdocs check` reports it.
-- **Pages can be renamed.** When a page's best file changes and gives a different name, fitdocs renames the page, even one you named yourself, and moves its charts, with a warning. A page whose name fitdocs chose is also renamed when its local start time changes.
+- **Each workout has one page.** Files of the same workout from different sources share a page. fitdocs never merges two existing pages.
+- **Pages can be renamed.** When a page's best file changes and gives a different name, fitdocs renames the page, even one you named yourself, and moves its charts. A page whose name fitdocs chose is also renamed when its local start time changes.
 - **Links are never rewritten.** fitdocs doesn't update links to a renamed page, in its own pages or in your notes.
 
 ## How the rules are shown
@@ -70,11 +70,9 @@ Your region, race-tag, and `publish` content is yours to edit as you like. No op
 - **A one-line notice** at the top of every generated page.
 - **`fitdocs check`**: confirms the whole tree still matches.
 
-All three are generated from the same source code, and a test keeps the published contract in sync with it.
-
 ## Versions
 
-- The **contract version** changes whenever a guarantee changes, such as a new owned path, a new page type, a new region, a new class of user-owned key, or a change to what a command may write. The changelog calls it out, along with what (if anything) you need to do.
-- Each page's **`doc_version`** tracks its file format. When it changes, `fitdocs check` tells you and `fitdocs regen` updates your pages. If a page was written by a *newer* fitdocs than the one you have installed, fitdocs leaves it alone rather than downgrading it.
+- The **contract version** changes whenever a guarantee changes. The changelog calls it out, along with what (if anything) you need to do.
+- Each page's **`doc_version`** tracks its file format. When it changes, `fitdocs check` tells you and `fitdocs regen` updates your pages. If a page was written by a *newer* fitdocs than the one you have installed, fitdocs leaves it alone.
 
 See the [compatibility policy](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/compatibility.md) for what each version number promises.

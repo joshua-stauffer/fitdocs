@@ -19,7 +19,7 @@ mkdir -p ~/fitdocs-data
 
 ## 2. Tell fitdocs where it is
 
-Fitdocs needs to know where the data folder lives in order to write the wiki. You can pass it directly to a fitdocs command, export it in your shell profile, or add a .fitdocs/data-root file in your wiki.
+You can pass it directly to a fitdocs command, export it in your shell profile, or add a .fitdocs/data-root file in your wiki.
 
 ```sh
 # A. Pass it on each command
@@ -34,8 +34,6 @@ mkdir -p ~/notes/.fitdocs
 echo ~/fitdocs-data > ~/notes/.fitdocs/data-root
 ```
 
-If you haven’t set a data root, fitdocs will raise an error and exit.
-
 ## 3. Run your first sync
 
 ```sh
@@ -47,9 +45,8 @@ This searches the folder (and its subfolders) for `.fit` files and then:
 1. **archives** each source file, untouched, under `fit-archive/`
 2. **writes** one markdown page per activity under `workouts/`, with its charts in `workouts/assets/`
 3. **computes training load**, asking for anything it's missing, like your max heart rate or threshold pace (see [Training load](../guides/training-load.md))
-4. ends with a summary of pages written, skipped, and failed
 
-The source folder is only read. Running the same sync again is safe: files that are already archived are skipped. If the folder holds two files of the same workout, say from your watch and from HealthFit, they share one page.
+The source folder is only read. Running the same sync again skips files that are already archived. If the folder holds two files of the same workout, say from your watch and from HealthFit, they share one page.
 
 Don't have your thresholds handy? Add `--no-prompt`. The pages still get written, just without a load number, and you can fill it in later with `fitdocs load`.
 

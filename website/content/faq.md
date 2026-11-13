@@ -8,13 +8,13 @@ order: 3
 # FAQ
 
 **Which devices does it work with?**
-Anything that records a `.fit` file, which covers most Garmin, Coros, Wahoo, Suunto, Hammerhead, and Stryd devices, plus Zwift and the Apple Watch (exported through an app like HealthFit). For sleep, HRV, and resting heart rate, it also reads an Apple Health export, Garmin's data export, and wellness pulled from Garmin Connect or intervals.icu. GPX and TCX aren't supported. When tested, they carried nothing a `.fit` file doesn't.
+Anything that records a `.fit` file, which covers most Garmin, Coros, Wahoo, Suunto, Hammerhead, and Stryd devices, plus Zwift and the Apple Watch (exported through an app like HealthFit). For sleep, HRV, and resting heart rate, it also reads an Apple Health export, Garmin's data export, and wellness pulled from Garmin Connect or intervals.icu. GPX and TCX aren't supported.
 
 **Do I need an LLM?**
 No. fitdocs is a normal command-line tool, and the pages are readable on their own. It's designed to work *well* with an LLM, with any provider or a local model. See [Working with an LLM](llm/index.md).
 
 **I record the same run on my watch and with HealthFit or Stryd. Will I get two pages?**
-Usually not. Files of the same workout share one page, built from the best file, with anything it lacks, like Stryd's running dynamics, filled in from the others. If you had pages before fitdocs 0.2, run `fitdocs regen` first so they're recognized. See [Several files, one workout](guides/workout-pages.md#several-files-one-workout).
+Usually not. Files of the same workout share one page. If you had pages before fitdocs 0.2, run `fitdocs regen` first so they're recognized. See [Several files, one workout](guides/workout-pages.md#several-files-one-workout).
 
 **Can I ask questions across all my workouts?**
 Yes. `fitdocs index` builds a local DuckDB database of your whole training log, and `fitdocs query` runs SQL against it. Your LLM can write the SQL for you, and [dashboards](guides/dashboards.md) turn a query into a chart that stays up to date. See [The analytics index](guides/analytics.md).
@@ -29,16 +29,16 @@ Yes. Point it at your vault (or a folder inside it). Pages use standard frontmat
 You can edit the parts that are yours: the **Notes** section, the **Workout** section on strength pages, the `post` region, and the race-tag and `publish` frontmatter keys. Those are kept through every rebuild. Everything else is rebuilt from the archived `.fit` files and your wellness data, so edits there won't last. Dashboard pages are yours too, apart from the charts fitdocs draws on them. See [Your workout pages](guides/workout-pages.md).
 
 **Why doesn't my swim, strength session, or yoga have a training load?**
-The built-in calculator scores running, cycling, walking, and hiking. For other sports it leaves the load blank and says so, rather than inventing a number. Other methods can be added as [plugins](extend/load-calculators.md).
+The built-in calculator scores running, cycling, walking, and hiking. For other sports it leaves the load blank. Other methods can be added as [plugins](extend/load-calculators.md).
 
 **Why does my run say "not computed"?**
 The calculator needs thresholds that applied on that date, such as threshold pace, FTP, or heart-rate values. Run `fitdocs load` and answer the prompts, or [tag your races](guides/benchmarks.md) and let fitdocs derive them.
 
 **Will my numbers match intervals.icu, TrainingPeaks, or Garmin?**
-They'll be close, and they're built to be comparable. fitdocs uses the same families of methods (TSS from power, TRIMP/HRSS from heart rate, grade-adjusted pace) on the same "one hour at threshold = 100" scale. Exact numbers depend on your thresholds and each platform's details.
+They'll be close. fitdocs uses the same families of methods (TSS from power, TRIMP/HRSS from heart rate, grade-adjusted pace) on the same "one hour at threshold = 100" scale. Exact numbers depend on your thresholds and each platform's details.
 
 **What happens to my data if I stop using fitdocs?**
-Nothing. It's a folder of markdown, SVG, CSV, and your original `.fit` and wellness files. Uninstalling removes the tool and leaves every file where it is. The analytics index is only a cache outside that folder, safe to delete. Anything you published stays where you posted it. Uninstalling doesn't revoke a relay token or end a connection, so run `fitdocs disconnect` first.
+Nothing. It's a folder of markdown, SVG, CSV, and your original `.fit` and wellness files. Uninstalling removes the tool and leaves every file where it is. The analytics index is only a cache outside that folder, safe to delete. Uninstalling doesn't revoke a relay token or end a connection, so run `fitdocs disconnect` first.
 
 **Can I run it on a schedule?**
 Yes. fitdocs doesn't schedule anything itself, but `fitdocs sync --no-prompt` (or `fitdocs pull --sync --no-prompt`, if you use a connector) is safe to run from cron, launchd, or your LLM agent's daily routine.

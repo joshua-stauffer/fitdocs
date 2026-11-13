@@ -19,22 +19,22 @@ Resolved in this order:
 2. the `FITDOCS_DATA` environment variable
 3. a `.fitdocs/data-root` pointer file, found by searching up from the current directory. Its first line is the path; a relative path is resolved from the pointer file's own folder.
 
-The first one that's set must point to an existing folder, or fitdocs stops with exit code 2 and says which source failed. fitdocs never creates the data root and never falls back to the current directory.
+The first one that's set must point to an existing folder.
 
-Only `fitdocs plugins`, `fitdocs skill`, and `fitdocs dashboard kinds` work without a data root, because they describe the tool rather than your data.
+Only `fitdocs plugins`, `fitdocs skill`, and `fitdocs dashboard kinds` work without a data root.
 
 ## `fitdocs.toml`
 
-Lives at `<data-root>/fitdocs.toml`. You own this file. Fitdocs reads it but never creates, rewrites, or asks about it. A missing file, table, or key means "use the default". A value that's present but invalid is an error (exit 2).
+Lives at `<data-root>/fitdocs.toml`. Fitdocs reads it but never creates or rewrites it. A missing file, table, or key means "use the default".
 
 ### `[inbox]`
 
 | Key | Default | |
 |---|---|---|
 | `path` | `"inbox"` | Inbox folder. Relative paths resolve from the data root. |
-| `settle_seconds` | `2` | Time between the two checks that a file has finished writing, as a finite number of seconds. `0` skips the wait. |
+| `settle_seconds` | `2` | Time between the two checks that a file has finished writing, in seconds. `0` skips the wait. |
 | `ignore` | `[]` | Extra glob patterns to skip, such as an unrelated `.json`, `.zip`, or `.xml` file. |
-| `disposition` | `"leave"` | `"leave"` or `"move"`. There's no delete option. |
+| `disposition` | `"leave"` | `"leave"` or `"move"` |
 | `processed_dir` | unset | Where moved files go. Required when `disposition = "move"`. |
 
 See [Getting your files in](../guides/inbox.md).
@@ -43,7 +43,7 @@ See [Getting your files in](../guides/inbox.md).
 
 | Key | Default | |
 |---|---|---|
-| `enabled` | `true` | `false` = never request a tile; only draw maps from cached tiles. Connectors aren't affected. |
+| `enabled` | `true` | `false` = never request a tile; only draw maps from cached tiles. |
 | `name` | `"osm"` | Cache folder name for this provider |
 | `url` | OSM standard layer | Tile URL template containing `{z}`, `{x}`, `{y}` |
 | `attribution` | `© OpenStreetMap contributors` | Printed on every map |
@@ -57,7 +57,7 @@ See [Privacy and the network](../guides/privacy-and-network.md).
 | `default_calculator` | unset | Calculator id to use when none is given |
 | `benchmark_staleness_days` | `84` | Age after which a benchmark is flagged as stale |
 
-**`[load.priority]`**: the order channels are tried in, per sport. Only `run`, `ride`, `walk`, and `hike` are allowed as keys. Any other key is an error.
+**`[load.priority]`**: the order channels are tried in, per sport. Only `run`, `ride`, `walk`, and `hike` are allowed as keys.
 
 ```toml
 [load.priority]
@@ -87,8 +87,6 @@ hike = ["heart_rate"]                    # default
 | `divergence_max_intensity_delta` | `0.20` |
 | `aerobic_drift_max_pct` | `5.0` |
 
-`cadence_lock_max_delta_bpm`, `divergence_max_intensity_delta`, and `aerobic_drift_max_pct` must be finite numbers above zero.
-
 ### `[history]`
 
 | Key | Default | |
@@ -104,7 +102,7 @@ hike = ["heart_rate"]                    # default
 
 | Key | Default | |
 |---|---|---|
-| `path` | `"plans"` | Folder for plan source files. fitdocs never creates it or writes to it. It must be outside the folders fitdocs owns, and can't be `dashboards/` or inside it. |
+| `path` | `"plans"` | Folder for plan source files. fitdocs never creates it or writes to it. |
 
 ### `[plugins]`
 
@@ -113,7 +111,7 @@ hike = ["heart_rate"]                    # default
 | `enabled` | `true` | `false` turns off all plugin discovery |
 | `path` | unset | A local calculator file or folder. Relative paths resolve from the data root. |
 
-**Local plugin files run as ordinary Python code with your user permissions. There's no sandbox.** Only point this at code you trust.
+**Local plugin files run as ordinary Python code with your user permissions.** Only point this at code you trust.
 
 ### `[identity]`
 
@@ -134,7 +132,7 @@ precedence = ["original", "phone_copy", "unknown"]
 
 ### `[wellness]`
 
-Which source's value to use when several record the same wellness signal on the same day. Every source's value is kept either way.
+Which source's value to use when several record the same wellness signal on the same day.
 
 | Key | Default | |
 |---|---|---|
@@ -162,9 +160,9 @@ One table per connector instance. `<name>` is yours to choose: lowercase letters
 | `wellness` | `false` | Also pull wellness. Only for a connector that has it (`intervals`, `garmin`). |
 | `sources` | `["GARMIN_CONNECT"]` | (`intervals`) Which of intervals.icu's upload sources to keep |
 | `publish_upload` | `false` | (`intervals`) When a publish finds no matching activity, upload the page's main `.fit` file |
-| `path` | required | (`folder`) The folder to read. Relative paths resolve from the data root. It can't be, contain, or sit inside the inbox. |
+| `path` | required | (`folder`) The folder to read. Relative paths resolve from the data root. |
 | `settle_seconds` | `2` (the inbox's default) | (`folder`) How long a file must sit unchanged before it's read |
-| `url` | `"https://api.fitdocs.ai"` | (`relay`) The relay's address: `https`, or `http` only for `localhost`, `127.0.0.1`, and `::1`. No query, fragment, or user information. |
+| `url` | `"https://api.fitdocs.ai"` | (`relay`) The relay's address |
 | `relay` | required | (`strava`) The name of a configured `relay` instance |
 | `upload` | `false` | (`strava`) When a publish finds no matching activity, send the page's main `.fit` file and have the relay create the activity |
 
@@ -185,7 +183,7 @@ path = "/Users/you/Documents/WatchExports"
 relay = "relay"
 ```
 
-A `garmin` instance takes no keys of its own, and its per-pull limit (200) is fixed. Fitdocs refuses `api_key` in an `intervals` or `garmin` table and `token` in a `relay` or `strava` table. See [Connectors](../guides/connectors.md).
+A `garmin` instance takes no keys of its own. See [Connectors](../guides/connectors.md).
 
 ### `[publish]`
 
@@ -193,7 +191,7 @@ The templates `fitdocs publish` composes a post from. For each field, a target's
 
 | Key | Default | |
 |---|---|---|
-| `title` | `"{title}"` | Title template. It must fit on one line. |
+| `title` | `"{title}"` | Title template |
 | `description` | one line each for distance, time, pace, speed, average heart rate, average power, and elevation gain, when the page records them | Description template |
 
 ```toml
@@ -204,11 +202,11 @@ title = "{title}{? - {distance_km} km}"
 description = "{?Load: {load_value} ({load_methodology})}"
 ```
 
-Each name under `[publish.targets]` must be a configured publish target. A mistake in this table stops every `fitdocs publish` run with exit code 2. See [Publishing posts](../guides/publishing.md#or-use-a-publish-template).
+Each name under `[publish.targets]` must be a configured publish target. See [Publishing posts](../guides/publishing.md#or-use-a-publish-template).
 
 ## `athlete.toml`
 
-Lives at `<data-root>/athlete.toml` and holds your thresholds. Unlike `fitdocs.toml`, fitdocs writes to this file, but only values you gave it at a prompt or that `derive-benchmarks` derived: thresholds from a tagged effort, resting heart rate from your wellness series, and max heart rate from your runs and rides. It saves changes safely, never changes or deletes a benchmark you entered, and keeps every key it doesn't manage. Comments and formatting aren't kept when it writes the file.
+Lives at `<data-root>/athlete.toml` and holds your thresholds. Unlike `fitdocs.toml`, fitdocs writes to this file, but only values you gave it at a prompt or that `derive-benchmarks` derived. It never changes or deletes a benchmark you entered, and keeps every key it doesn't manage. Comments and formatting aren't kept when it writes the file.
 
 ```toml
 [[benchmarks.athlete.max_hr_bpm]]
@@ -239,11 +237,11 @@ measured_on = 2026-08-15
 | `lthr_bpm` | per sport | bpm |
 | `ftp_watts` | per sport | watts |
 
-You can add several entries per benchmark. Each activity is scored with the one that applied on its date. A missing file means no thresholds yet. A malformed file is an error (exit 2) whose message tells you what to fix, and so is a value of `nan` or `inf`.
+You can add several entries per benchmark. Each activity is scored with the one that applied on its date. A missing file means no thresholds yet.
 
 ## Outside the data root
 
-Fitdocs keeps two things outside your data root, so they don't travel with your notes.
+Fitdocs keeps two things outside your data root.
 
 ### Connector credentials
 
@@ -253,10 +251,10 @@ Fitdocs keeps two things outside your data root, so they don't travel with your 
 2. `$XDG_CONFIG_HOME/fitdocs/credentials`
 3. `~/.config/fitdocs/credentials`
 
-A credentials folder inside the data root is refused. An environment variable named `FITDOCS_CONNECTOR_<INSTANCE>_<FIELD>` supplies a value without storing it and wins over a stored one, for example `FITDOCS_CONNECTOR_INTERVALS_API_KEY`. `fitdocs disconnect` ignores these variables and acts only on the stored file.
+An environment variable named `FITDOCS_CONNECTOR_<INSTANCE>_<FIELD>` supplies a value without storing it and wins over a stored one, for example `FITDOCS_CONNECTOR_INTERVALS_API_KEY`.
 
 ### The analytics index location
 
-The [analytics index](../guides/analytics.md) lives outside the data root too, under `FITDOCS_INDEX_DIR` if it's set, otherwise `$XDG_CACHE_HOME/fitdocs/index`, otherwise `~/.cache/fitdocs/index`. Each data root gets its own folder there. It's a cache: delete it any time, and `fitdocs index` builds it again.
+The [analytics index](../guides/analytics.md) lives outside the data root too, under `FITDOCS_INDEX_DIR` if it's set, otherwise `$XDG_CACHE_HOME/fitdocs/index`, otherwise `~/.cache/fitdocs/index`. You can delete it any time; `fitdocs index` builds it again.
 
 The full specification is [docs/configuration.md](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/configuration.md) in the repository.
