@@ -24,13 +24,13 @@ Fitdocs may create, rewrite, or delete these:
 | `wellness-archive/` | Your wellness source files, never modified |
 | `wellness/` | The daily wellness series, rebuilt from `wellness-archive/` |
 | `.cache/` | Map tiles |
-| `.fitdocs/` | fitdocs' own state: the quarantine record, files held because they matched more than one page, each connector's delivery record, and each publish target's ledger under `.fitdocs/publish/` |
+| `.fitdocs/` | fitdocs' own state: the quarantine record, files held because they matched more than one page, each connector's delivery record, and each publish target's record of what it posted, under `.fitdocs/publish/` |
 
 In `dashboards/`, the pages are yours. fitdocs writes only inside each chart's region, which it adds below the chart's directive if it's missing, plus `dashboards/AGENTS.md`. It never creates, renames, or deletes a dashboard page.
 
 It also writes to the locations your settings name: the inbox folder and, if you opt in, `processed_dir`. A connector delivers into its own subfolder of the inbox, and removes those deliveries once they're archived.
 
-Two things live outside the data root: connector credentials, in your user's config folder, and the analytics index, a disposable cache in your user's cache folder. `fitdocs disconnect` removes one instance's credentials file and nothing else. See [Configuration](configuration.md#outside-the-data-root).
+Two things live outside the data root: connector credentials, in your user's config folder, and the analytics index, a disposable cache in your user's cache folder. `fitdocs disconnect` deletes one instance's credentials file. See [Configuration](configuration.md#outside-the-data-root).
 
 ## What you own
 
@@ -47,7 +47,7 @@ Two things live outside the data root: connector credentials, in your user's con
 |---|---|---|
 | `notes` | you | kept word for word |
 | `workout` (strength pages) | you | kept word for word |
-| `post` | you | kept word for word. With a [post template](../guides/publishing.md#fill-posts-from-a-post-template), fitdocs may fill the region while it's empty and rewrite text it filled while you haven't edited it, never once it's yours. |
+| `post` | you | kept word for word, except that a [post template](../guides/publishing.md#fill-posts-from-a-post-template) fills it while it's empty and may refill text it wrote that you haven't edited |
 | `load` | fitdocs | kept; only replaced when you run `fitdocs load --recompute` |
 | `morning` (the Morning Of block) | fitdocs | refreshed from your wellness series; hand edits are replaced |
 | `published` | fitdocs | carried over; `fitdocs publish --yes` refills it and replaces hand edits |

@@ -161,12 +161,12 @@ One table per connector instance. `<name>` is yours to choose: lowercase letters
 | `lookback_days` | `30` | How many days before the newest activity already recorded each pull starts listing (0 to 3650). Also how far back wellness is re-checked. |
 | `wellness` | `false` | Also pull wellness. Only for a connector that has it (`intervals`, `garmin`). |
 | `sources` | `["GARMIN_CONNECT"]` | (`intervals`) Which of intervals.icu's upload sources to keep |
-| `publish_upload` | `false` | (`intervals`) When a publish finds no matching activity, upload the page's base `.fit` file |
+| `publish_upload` | `false` | (`intervals`) When a publish finds no matching activity, upload the page's main `.fit` file |
 | `path` | required | (`folder`) The folder to read. Relative paths resolve from the data root. It can't be, contain, or sit inside the inbox. |
 | `settle_seconds` | `2` (the inbox's default) | (`folder`) How long a file must sit unchanged before it's read |
 | `url` | `"https://api.fitdocs.ai"` | (`relay`) The relay's address: `https`, or `http` only for `localhost`, `127.0.0.1`, and `::1`. No query, fragment, or user information. |
 | `relay` | required | (`strava`) The name of a configured `relay` instance |
-| `upload` | `false` | (`strava`) When a publish finds no matching activity, send the page's base `.fit` file and have the relay create the activity |
+| `upload` | `false` | (`strava`) When a publish finds no matching activity, send the page's main `.fit` file and have the relay create the activity |
 
 ```toml
 [connectors.intervals]
@@ -185,7 +185,7 @@ path = "/Users/you/Documents/WatchExports"
 relay = "relay"
 ```
 
-A `garmin` instance takes no keys of its own, and its pacing and per-pull limit are fixed. Fitdocs refuses a setting here with the same name as that connector's own credential: `api_key` on `intervals` and `garmin`, `token` on `relay` and `strava`. See [Connectors](../guides/connectors.md).
+A `garmin` instance takes no keys of its own, and its per-pull limit (200) is fixed. Fitdocs refuses `api_key` in an `intervals` or `garmin` table and `token` in a `relay` or `strava` table. See [Connectors](../guides/connectors.md).
 
 ### `[publish]`
 
@@ -204,7 +204,7 @@ title = "{title}{? - {distance_km} km}"
 description = "{?Load: {load_value} ({load_methodology})}"
 ```
 
-Each name under `[publish.targets]` must be a configured publish target. A mistake in this table stops every `fitdocs publish` run with exit code 2. See [Publishing posts](../guides/publishing.md#or-use-a-template).
+Each name under `[publish.targets]` must be a configured publish target. A mistake in this table stops every `fitdocs publish` run with exit code 2. See [Publishing posts](../guides/publishing.md#or-use-a-publish-template).
 
 ## `athlete.toml`
 
@@ -253,7 +253,7 @@ Fitdocs keeps two things outside your data root, so they don't travel with your 
 2. `$XDG_CONFIG_HOME/fitdocs/credentials`
 3. `~/.config/fitdocs/credentials`
 
-A credentials folder inside the data root is refused. An environment variable named `FITDOCS_CONNECTOR_<INSTANCE>_<FIELD>` supplies a value without storing it and wins over a stored one, for example `FITDOCS_CONNECTOR_INTERVALS_API_KEY`. The exception is `fitdocs disconnect`, which acts only on what's stored, and removes one instance's file and nothing else.
+A credentials folder inside the data root is refused. An environment variable named `FITDOCS_CONNECTOR_<INSTANCE>_<FIELD>` supplies a value without storing it and wins over a stored one, for example `FITDOCS_CONNECTOR_INTERVALS_API_KEY`. `fitdocs disconnect` ignores these variables and acts only on the stored file.
 
 ### The analytics index location
 

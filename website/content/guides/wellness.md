@@ -71,8 +71,6 @@ hrv_rmssd_ms = ["intervals-icu", "garmin-export"]
 
 Fitdocs never mixes or averages sources. A change takes effect on your next sync or `fitdocs regen`.
 
-In a data root that already holds wellness, the first `fitdocs sync` or `fitdocs regen` after you upgrade to a version with the `garmin-personal` source rebuilds the series once. Until then, `fitdocs check` reports the series as stale.
-
 ## The Morning Of block
 
 Every workout page gets a **Morning Of** block, just before Training Load. It shows resting heart rate, HRV, and sleep for the day of the workout, each next to its 7-day mean and the source it came from. Heart rate and HRV are also set against your normal range from the 60 days before, and sleep against its 60-day mean.

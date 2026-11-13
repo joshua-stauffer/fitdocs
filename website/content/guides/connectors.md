@@ -14,8 +14,8 @@ Fitdocs ships five connectors:
 - **`intervals`** reads an [intervals.icu](https://intervals.icu) account with your own API key. When you publish, it writes a page’s post to that account.
 - **`garmin`** reads a Garmin Connect account with a personal API key you create. It never writes to the account.
 - **`folder`** reads a local directory, such as a folder another app exports to. It needs no account and makes no network request.
-- **`relay`** connects to a fitdocs relay, a small server that holds a platform application on your behalf. It has nothing to pull.
-- **`strava`** publishes posts through a relay that offers the Strava target. It’s Compatible with Strava, and it has nothing to pull.
+- **`relay`** connects to a fitdocs relay, a small server between fitdocs and services such as Strava. It has nothing to pull.
+- **`strava`** publishes posts through a relay that offers the Strava target. It’s “Compatible with Strava”, and it has nothing to pull.
 
 Fitdocs can’t pull activities from Strava. If your device doesn’t sync to Garmin Connect, connect it to intervals.icu and let fitdocs read the original files from there. intervals.icu is free, community-supported, and syncs with most fitness platforms.
 
@@ -92,15 +92,11 @@ The `intervals` connector is also a [publish target](publishing.md). A page opts
 publish: intervals
 ```
 
-Fitdocs looks for the activity in this order, and stops at the first step that finds one:
+Fitdocs looks for the matching activity in this order: the one it published this page to before, the one this instance pulled the page’s file from, then one that starts within a second of the page with the same distance or elapsed time.
 
-1. **The recorded link**, from an earlier publish of this page to this instance.
-2. **The pull record**, which names the activities this instance delivered, by the digests of what it delivered.
-3. **A listing around the page’s start.** An activity matches when it carries this page’s publication id, or when it starts within a second of the page and has a matching distance or, if either has no distance, a matching elapsed time. The sport isn’t compared.
+If several activities match, the answer is `ambiguous` and nothing changes.
 
-If several activities match in one step, the answer is `ambiguous` and nothing changes. Fitdocs never picks one.
-
-A listed activity that intervals.icu imported from Strava is never chosen. When nothing else matches and a Strava import starts within a second of the page, the answer is `not_updatable`.
+An activity that intervals.icu imported from Strava is never chosen. When nothing else matches and a Strava import starts within a second of the page, the answer is `not_updatable`.
 
 When nothing matches, the answer is `not_found` and nothing is created, unless you turn uploads on:
 
@@ -109,17 +105,17 @@ When nothing matches, the answer is `not_found` and nothing is created, unless y
 publish_upload = true
 ```
 
-With `publish_upload` on, fitdocs uploads the page’s base `.fit` file, unmodified, once, and then sets the name and description of the activity that results. The file must be in the archive and match the digest the page records, or the answer is `activity_file_missing` and nothing is uploaded. A Strava import that lists no start time is recognized only when it and the page were recorded in the same time zone, so with uploads on, a publish can create a second copy of it.
+With `publish_upload` on, fitdocs uploads the page’s main `.fit` file, unmodified, once, and then sets the name and description of the activity that results. The file must be in the archive, or the answer is `activity_file_missing` and nothing is uploaded. With uploads on, a publish can occasionally create a second copy of an activity intervals.icu imported from Strava.
 
-If the instance’s ledger can’t be read, fitdocs can’t rule out that the activity is already in its pull record. It still updates an activity it finds through the link or the listing. If it finds none, it uploads nothing and the answer is `local_record_unreadable`.
+If the instance’s pull record can’t be read, fitdocs still updates an activity it finds. If it finds none, it uploads nothing and the answer is `local_record_unreadable`.
 
-A post that lands records a direct link to the activity, labelled `intervals.icu`, in the page’s `published` region. The [connectors reference](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/connectors.md#publishing) has what each request sends and the answer to each reply.
+A post that lands records a direct link to the activity, labelled `intervals.icu`, in the page’s `published` region. The [connectors reference](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/connectors.md#publishing) has what each request sends and every answer.
 
 ## Garmin
 
-The `garmin` connector lists the activities of the Garmin Connect account a personal API key belongs to and fetches each one’s original `.fit` file, byte for byte as Garmin stored it. With `wellness = true` it adds daily wellness. It only reads. It never uploads to Garmin or changes anything there, and it has no publish side.
+The `garmin` connector lists the activities of the Garmin Connect account a personal API key belongs to and fetches each one’s original `.fit` file, byte for byte as Garmin stored it. With `wellness = true` it adds daily wellness. It never uploads to Garmin or changes anything there.
 
-Fitdocs isn’t affiliated with or endorsed by Garmin. The name Garmin is used only descriptively, to say which service the connector reads, and fitdocs claims no permission from Garmin of any kind. What you may do with a key is set by [Garmin’s own terms](#garmins-terms).
+Fitdocs isn’t affiliated with or endorsed by Garmin. The name Garmin is used only descriptively, to say which service the connector reads, and fitdocs claims no permission from Garmin.
 
 ### Set up Garmin
 
@@ -138,7 +134,7 @@ wellness = true   # optional; false by default
 fitdocs connect garmin
 ```
 
-Fitdocs asks for the key without echoing it, makes one request to exchange it for a token and check that Garmin accepts it, discards the token, and saves the key in the credentials store. If Garmin refuses the key, nothing is saved.
+Fitdocs asks for the key without echoing it, checks it with Garmin, and saves it in the credentials store. If Garmin refuses the key, nothing is saved.
 
 **4. Decide when your pages change**, if you already have some. Read [What the first sync does to an existing wiki](#what-the-first-sync-does-to-an-existing-wiki) first.
 
@@ -148,29 +144,29 @@ Fitdocs asks for the key without echoing it, makes one request to exchange it fo
 fitdocs pull garmin
 ```
 
-The key goes only to Garmin’s token call. Each pull exchanges it for a token that lasts about a day, holds that token in memory for the pull, and never stores it.
+The key is sent only to Garmin, and nothing but the key is stored.
 
-A key expires after the period you chose when you created it: 30, 90, 180, or 365 days. Garmin sends a reminder before then. To renew, create a new key on Garmin Connect and run `fitdocs connect garmin` again, which replaces the stored key. A key Garmin refuses, because it’s wrong, expired, or deleted, ends the pull with a message that says so.
+A key expires after the period you chose. Garmin sends a reminder before then. To renew, create a new key on Garmin Connect and run `fitdocs connect garmin` again, which replaces the stored key. A key Garmin refuses, because it’s wrong, expired, or deleted, ends the pull with a message that says so.
 
 ### Garmin’s terms
 
-You accept Garmin’s own terms when you create a key, and fitdocs isn’t a party to them. Garmin’s terms say a key is “personal to you”, and that it’s for “applications, services, or tools that you develop or operate for your own use”. Fitdocs runs on your machine, with your key, to read your own account, and the key goes only to Garmin. Fitdocs doesn’t claim that Garmin has approved this use and can’t tell you how Garmin reads those words, so read the terms you’re shown before you accept them.
+You accept Garmin’s own terms when you create a key, and fitdocs isn’t a party to them. Garmin’s terms say a key is “personal to you”, and that it’s for “applications, services, or tools that you develop or operate for your own use”. Fitdocs runs on your machine, with your key, to read your own account. Fitdocs doesn’t claim that Garmin has approved this use and can’t tell you how Garmin reads those words, so read the terms you’re shown before you accept them.
 
 The same terms say Garmin may throttle or restrict access and may revoke a key. If Garmin refuses a listing or a download, the pull stops, says that Garmin refused the request, and doesn’t repeat it. Check the key’s status on Garmin Connect.
 
 ### What a first pull does
 
-A pull with no earlier record and no `--since` takes your whole activity history, oldest first. Fitdocs waits one second between requests. When Garmin says it’s limiting a request after the token call, fitdocs waits for the time Garmin states, up to five minutes, or else 30 seconds to four minutes, before trying again. If that doesn’t clear it, the pull stops and says so, and the next pull resumes where this one stopped. A pull prints no progress while it runs, so a long wait looks like a pause.
+A pull with no earlier record and no `--since` takes your whole activity history, oldest first. Fitdocs waits one second between requests. When Garmin limits requests, fitdocs waits up to five minutes before trying again. If that doesn’t clear it, the pull stops and says so, and the next pull resumes where this one stopped. A pull prints no progress while it runs, so a long wait looks like a pause.
 
 A pull fetches at most 200 activities. When more remain, the report has one deferred entry that says how many, and the next plain `fitdocs pull` continues from there and fetches nothing already recorded. An account of 1,000 activities takes five pulls.
 
 `fitdocs pull garmin --since YYYY-MM-DD` lists only the activities from the start of that local day, with the same pacing and limit. On an instance that has pulled before, a `--since` backfill continues only when you run it again with the same `--since`. A plain pull won’t finish it.
 
-Wellness has no such limit. With `wellness = true`, the first pull covers the whole range: from the start of your history, or from `--since`, to today. A year of wellness takes about 27 requests, so twelve years is about 330 requests, or 6 to 8 minutes. If a wellness request fails, the next pull starts that range again.
+Wellness has no such limit. With `wellness = true`, the first pull covers the whole range: from the start of your history, or from `--since`, to today. Twelve years of wellness takes about 6 to 8 minutes. If a wellness request fails, the next pull starts that range again.
 
 ### Wellness from Garmin
 
-`wellness = true` adds Garmin’s daily summaries, sleep, heart rate variability, and weight to your wellness series under the source `garmin-personal`: resting, minimum, and maximum heart rate, steps, sleep and its stages, respiration, blood oxygen, stress, body battery, weight, and overnight heart rate variability. A metric Garmin has no value for stays absent. It’s never recorded as zero. See [Wellness and recovery](wellness.md).
+`wellness = true` adds these daily metrics to your wellness series, under the source `garmin-personal`: resting, minimum, and maximum heart rate, steps, sleep and its stages, respiration, blood oxygen, stress, body battery, weight, and overnight heart rate variability. A metric Garmin has no value for is left empty, never recorded as zero. See [Wellness and recovery](wellness.md).
 
 ### What the first sync does to an existing wiki
 
@@ -181,7 +177,7 @@ A wiki whose pages predate fitdocs 0.2 needs `fitdocs regen` before the first pu
 You have two controls:
 
 - **Run `fitdocs pull garmin` without `--sync`.** The files wait in the inbox until you run `fitdocs sync`, so you choose when the pages change.
-- **Set `[identity] precedence` to keep the base you have.** For a wiki built from phone copies, this ranks them first:
+- **Set `[identity] precedence` to keep the main files you have.** For a wiki built from phone copies, this ranks them first:
 
     ```toml
     [identity]
@@ -222,7 +218,7 @@ The name in brackets is yours to choose (lowercase letters, digits, and hyphens)
 
 ## Connecting to a relay
 
-A relay is a small server that holds a platform application on your behalf, so the `fitdocs` command doesn’t carry it. Fitdocs talks to a relay with a relay token. A `relay` instance holds that token: you connect it once, and you can revoke it later. A relay has no activities or wellness, so `fitdocs pull` doesn’t contact it.
+A relay is a small server that connects fitdocs to services such as Strava. A `relay` instance holds the token fitdocs uses with it. You connect it once and can revoke it later. A relay has no activities or wellness, so `fitdocs pull` doesn’t contact it.
 
 ```toml
 [connectors.relay]
@@ -251,9 +247,9 @@ To run a relay yourself, see the [relay guide](https://github.com/joshua-stauffe
 
 ## Strava
 
-The `strava` connector is Compatible with Strava. It never contacts Strava itself. A Strava instance talks to a fitdocs relay, and the relay holds the connection to your account and does the work on Strava. It pulls nothing. What it does is `fitdocs publish --yes`: the post on a workout page is written onto the matching activity on Strava, and the page links to that activity with a View on Strava link.
+The `strava` connector is “Compatible with Strava”. It talks only to a fitdocs relay, which holds the connection to your account and does the work on Strava. It doesn’t pull. On `fitdocs publish --yes`, a page’s post is written onto the matching Strava activity, and the page links to it with a View on Strava link.
 
-An instance needs a relay instance to talk to, and the relay behind it has to offer the Strava target, which depends on how its operator set it up. See [Connecting to a relay](#connecting-to-a-relay).
+An instance needs a `relay` instance whose relay offers the Strava target. See [Connecting to a relay](#connecting-to-a-relay).
 
 ```toml
 [connectors.relay]
@@ -270,7 +266,7 @@ fitdocs connect relay
 fitdocs connect strava
 ```
 
-`fitdocs connect strava` asks you for nothing. It prints an address on the relay, a code, and how long the attempt lasts, and opens the address in your browser, unless you pass `--no-browser`. Give consent on that page with its Connect with Strava control, but only if the page shows the same code, because that match is what stops someone else’s connection from being completed as yours. Fitdocs waits until the connection is complete, refused, or expired, then stores the connection token the relay issues. Press Ctrl-C to stop waiting, and nothing is stored.
+`fitdocs connect strava` asks you for nothing. It prints an address on the relay, a code, and how long the attempt lasts, and opens the address in your browser, unless you pass `--no-browser`. Give consent on that page with its Connect with Strava button, but only if the page shows the same code, because that match is what stops someone else’s connection from being completed as yours. Fitdocs waits until the connection is complete, refused, or expired, then stores the connection token the relay issues. Press Ctrl-C to stop waiting, and nothing is stored.
 
 A page opts in with the instance’s name in its [`publish` key](publishing.md#opt-a-page-in):
 
@@ -280,9 +276,9 @@ publish: strava
 
 For each post, the relay finds the page’s activity on Strava, by the same rule fitdocs uses to recognize one activity recorded twice, and sets the activity’s name to the post’s title and its description to the post’s description. Nothing else on the activity changes, and nothing on Strava is deleted. If more than one activity matches, the answer is `ambiguous` and nothing changes.
 
-While `upload` is `false`, a publish that finds no matching activity answers `not_found`. While it’s `true`, fitdocs sends the page’s base `.fit` file, unmodified, and the relay creates the activity. A file over 16 MiB is `rejected`, and a file that isn’t in the archive is `activity_file_missing`, with no upload request in either case. A page that records neither an elapsed time nor a distance is `activity_facts_missing`, and a title over 255 characters or a description over 8,000 is `rejected`, each with no request.
+While `upload` is `false`, a publish that finds no matching activity answers `not_found`. While it’s `true`, fitdocs sends the page’s main `.fit` file, unmodified, and the relay creates the activity. A file over 16 MiB, a title over 255 characters, or a description over 8,000 is `rejected` before anything is sent.
 
-A post that lands records a View on Strava link in the page’s `published` region, when the relay’s answer carries a usable one. Each publish and upload request is attempted once, whatever the answer.
+A post that lands records a View on Strava link in the page’s `published` region, when the relay’s answer carries a usable one. Fitdocs doesn’t retry a request within a run.
 
 `fitdocs disconnect strava` asks the relay to end the connection, then removes the instance’s credentials file. If the relay can’t confirm, the file stays and the command exits `1`. `--local-only` removes the file without contacting the relay, and the connection stays at the relay until the instance is connected and disconnected again, or access is revoked in Strava’s settings. Neither touches the relay instance’s own token.
 
@@ -292,9 +288,9 @@ A post that lands records a View on Strava link in the page’s `published` regi
 
 Keys and tokens are never stored in your data root. They live in your user’s config folder, `~/.config/fitdocs/credentials/` by default (or under `$XDG_CONFIG_HOME`, or wherever `FITDOCS_CREDENTIALS_DIR` points). Fitdocs refuses a credentials folder inside the data root, so a key can’t end up in your wiki’s git history or a shared folder. Each instance’s file is readable only by you.
 
-Don’t put a key in `fitdocs.toml`. Fitdocs refuses a setting in an instance’s table with the same name as that connector’s own credential: `api_key` on `intervals` and `garmin`, `token` on `relay` and `strava`. To use one without storing it, set an environment variable instead. For an instance named `intervals`, that’s `FITDOCS_CONNECTOR_INTERVALS_API_KEY`, and for one named `relay`, `FITDOCS_CONNECTOR_RELAY_TOKEN`. A variable that’s set wins over a stored value, except in `fitdocs disconnect`, which acts only on what’s stored.
+Don’t put a key in `fitdocs.toml`. Fitdocs refuses `api_key` in an `intervals` or `garmin` table and `token` in a `relay` or `strava` table. To use one without storing it, set an environment variable instead. For an instance named `intervals`, that’s `FITDOCS_CONNECTOR_INTERVALS_API_KEY`, and for one named `relay`, `FITDOCS_CONNECTOR_RELAY_TOKEN`. A variable that’s set wins over a stored value, except in `fitdocs disconnect`, which acts only on what’s stored.
 
-`fitdocs disconnect NAME` forgets one instance’s stored credentials and removes nothing else. For an `intervals` or `garmin` instance it sends no request, so the key stays valid at the service until you delete it there or it expires.
+`fitdocs disconnect NAME` forgets one instance’s stored credentials. For an `intervals` or `garmin` instance it sends no request, so the key stays valid at the service until you delete it there or it expires.
 
 ## What lands in your inbox
 
@@ -314,6 +310,6 @@ fitdocs pull --sync --no-prompt
 
 Delete its `[connectors.<name>]` table. There’s no other switch: an instance without a table is never contacted again. Your pages, archive, and stored key stay where they are.
 
-Deleting the table doesn’t revoke a key or end a connection. To do that, run `fitdocs disconnect NAME` first, because it works only on a configured instance. Delete a `strava` table before or along with the `relay` table it names, because fitdocs refuses a `strava` instance whose relay instance isn’t configured.
+Deleting the table doesn’t revoke a relay token or end a Strava connection. To do that, run `fitdocs disconnect NAME` first, because it works only on a configured instance. Delete a `strava` table before or along with the `relay` table it names, because fitdocs refuses a `strava` instance whose relay instance isn’t configured.
 
 The full rules, including every report row and exit code, are in the [connectors reference](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/connectors.md).

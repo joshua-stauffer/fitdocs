@@ -66,17 +66,17 @@ See [Connectors](../guides/connectors.md).
 
 ### `fitdocs disconnect NAME`
 
-Forgets one configured instance's stored credentials and removes nothing else. It never writes under your data root.
+Forgets one configured instance's stored credentials.
 
 For a `relay` or `strava` instance, it first makes one request asking the relay to revoke the token or end the connection. If the relay can't confirm, the credentials file is kept and the command exits `1`. For an `intervals` or `garmin` instance it makes no request, and the key stays valid at the service. With nothing stored, it says so and exits `0`.
 
 | Option | Meaning |
 |---|---|
-| `--local-only` | (`relay`, `strava`) Remove the file without contacting the relay, even if fitdocs can't read it. A relay token stays valid until its operator revokes it. A Strava connection stays at the relay until the instance is connected and disconnected again, or access is revoked in Strava's settings. |
+| `--local-only` | (`relay`, `strava`) Remove the file without contacting the relay. The relay token stays valid until its operator revokes it; a Strava connection stays until you connect and disconnect again, or revoke access in Strava's settings. |
 
 ### `fitdocs pull [NAMES...]`
 
-Fetches new activities, and wellness where it's turned on, from every configured connector instance that pulls, or just the ones you name, and delivers them into the inbox. Without names it skips `relay` and `strava` instances, which have nothing to pull. Naming one reports an error and exits `1`, with no request.
+Fetches new activities, and wellness where it's turned on, from every configured connector instance, or just the ones you name, and delivers them into the inbox. It skips `relay` and `strava` instances, which have nothing to pull; naming one is an error (exit `1`), with no request.
 
 | Option | Meaning |
 |---|---|

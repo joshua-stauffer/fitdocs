@@ -1,6 +1,6 @@
 ---
 title: Publishing posts
-description: Turn a workout page into a post with `fitdocs publish`. Opt the page in, write the post, use a template, or have a post template fill it, preview it, and send it to the targets you configured.
+description: Turn a workout page into a post with `fitdocs publish`. Opt the page in, write its post or let a template write it, preview it, and send it.
 section: Guides
 order: 13
 ---
@@ -9,7 +9,7 @@ order: 13
 
 Fitdocs can turn a workout page into a post, which is a title and a description, and send it to a publish target. A target is a [connector](connectors.md) instance that can publish. The connectors guide says which connectors can, and how each one finds the activity it updates.
 
-A target exists only if you configured it, a page is posted to a target only if the page’s `publish` key names it, and nothing is sent unless you run `fitdocs publish --yes`.
+A page is posted only to the targets its `publish` key names, and only when you run `fitdocs publish --yes`.
 
 ```sh
 fitdocs publish --targets   # which targets are configured, and whether each is ready
@@ -31,7 +31,7 @@ publish: club-feed
 publish: [club-feed, team-log]
 ```
 
-The key is yours. Fitdocs never writes it, and keeps its line through every rebuild. A page with no `publish` key, or an empty list, is posted nowhere.
+Fitdocs never writes the key, and keeps its line through every rebuild. An empty list opts the page in to nothing.
 
 If a page stops naming a target it was posted to, fitdocs sends nothing more for it, deletes nothing at the target, and keeps the link on the page.
 
@@ -70,11 +70,11 @@ Felt strong from the first kilometre.
 <!-- fitdocs:end:post -->
 ```
 
-A region with only a title line posts an empty description. A second line that isn’t blank reports `post_invalid`. Hidden comments are removed and never posted. The same words go to every target the page opts in to. Fitdocs never changes words you wrote here. The only text it writes in this region comes from a [post template](#fill-posts-from-a-post-template), if you have one.
+A region with only a title line posts an empty description. A second line that isn’t blank reports `post_invalid`. Hidden comments aren’t posted. The same words go to every target the page opts in to. Fitdocs writes in this region only when a [post template](#fill-posts-from-a-post-template) fills it.
 
-## Or use a template
+## Or use a publish template
 
-With nothing in the `post` region, the post comes from a template. The built-in one uses the page’s title, then writes one line for each of distance, time, pace, speed, average heart rate, average power, and elevation gain, leaving out any the page doesn’t record:
+With nothing in the `post` region, the post comes from a publish template. The built-in one uses the page’s title, then writes one line for each of distance, time, pace, speed, average heart rate, average power, and elevation gain, leaving out any the page doesn’t record:
 
 ```text
 Morning Run
@@ -87,7 +87,7 @@ Average power: 231 W
 Elevation gain: 88 m
 ```
 
-To change it, set `[publish]` in `fitdocs.toml`. For each field, a target’s own table comes first, then `[publish]`, then the built-in template.
+To change it, set `[publish]` in `fitdocs.toml`. For each field, `[publish.targets.<name>]` comes first, then `[publish]`, then the built-in template.
 
 ```toml
 [publish]
@@ -111,11 +111,11 @@ A placeholder outside a clause with no value on the page reports `value_missing`
 
 The placeholders are `title`, `sport`, `date`, `start_time`, `distance_km`, `distance_mi`, `moving_time`, `elapsed_time`, `pace_per_km`, `pace_per_mi`, `speed_kmh`, `avg_hr_bpm`, `avg_power_w`, `elevation_gain_m`, `calories_kcal`, `load_value`, and `load_methodology`. The [publishing reference](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/publishing.md#placeholders) gives each one’s format and when it has no value.
 
-A mistake in `[publish]` stops every `fitdocs publish` run with exit code 2, before any request and before any write. The message names the table and the key.
+A mistake in `[publish]` stops `fitdocs publish` with exit code 2 before anything is sent or written. The message names the table and the key.
 
 ## Fill posts from a post template
 
-A post template writes each new page's post for you. It can include numbers the page doesn't hold, like this workout's load in the week so far, because its variables are SQL over the [analytics index](analytics.md). Without a template file, none of this applies and no command behaves differently.
+A post template writes each new page’s post. It can include numbers the page doesn’t hold, like this workout’s load in the week so far, because its variables are SQL over the [analytics index](analytics.md). Without the file, nothing in this section applies.
 
 Build the index once with `fitdocs index`, then write `post-template.toml` at the top of your data root:
 
@@ -137,16 +137,16 @@ WHERE load_methodology = 'threshold'
 '''
 ```
 
-- **Set `since` to the day you create the file.** Only pages dated on or after it are filled. With a date in the past, the next sync fills every page since then that hasn't been posted.
+- **Set `since` to the day you create the file.** Only pages dated on or after it are filled. With a date in the past, the next sync fills every page since then that hasn’t been posted.
 - `title` and `description` use the same placeholders and clauses as the templates above, plus the variables you declare under `vars`.
-- Each variable is one `SELECT` that `fitdocs query` would accept, and it must use `$as_of`, the workout's recorded start. Use it to look only at what existed when the workout began. `$page_key` names the page in the index.
-- A query with no rows, or a NULL, has no value. It's never written as `0`: an optional clause that needs it is dropped, and a variable outside a clause with no value leaves the page unfilled. Cast decimals, as the example does with `::INT`.
+- Each variable is one `SELECT` that `fitdocs query` would accept, and it must use `$as_of`, the workout’s recorded start. Use it to look only at what existed when the workout began. `$page_key` names the page in the index.
+- A query with no rows, or a NULL, has no value. An optional clause that needs it is dropped, and a variable outside a clause with no value leaves the page unfilled. Cast decimals, as the example does with `::INT`.
 
-The file is yours. Fitdocs only reads it.
+Fitdocs doesn’t write to this file.
 
-From then on, `fitdocs sync` and `fitdocs pull --sync` fill the `post` region of each page they create, and `fitdocs publish` sends that text as it would send words you wrote. A filled post is finished text: a later workout, a rebuilt index, `fitdocs regen`, or a change to the template leaves it as it is.
+From then on, `fitdocs sync` and `fitdocs pull --sync` fill the `post` region of each page they create, and `fitdocs publish` sends that text as it would send words you wrote. A filled post stays as it is through later workouts, a rebuilt index, `fitdocs regen`, or a change to the template.
 
-Fitdocs writes only a region that's waiting (empty, or holding just its own hidden comments) or one it filled that you haven't touched. Once you change a single character, the region is yours and fitdocs never writes it again. To hand a page back to the template, empty its `post` region.
+Fitdocs writes only a region that’s waiting (empty, or holding just its own hidden comments) or one it filled that you haven’t touched. Once you edit it, fitdocs leaves it alone. To hand a page back to the template, empty its `post` region.
 
 Two commands check and redo the work:
 
@@ -157,17 +157,17 @@ fitdocs post-template refill           # dry run: what a refill would change
 fitdocs post-template refill --yes     # recompute the posts
 ```
 
-A bare `refill` takes every unposted page in the window that is waiting or filled, and leaves published pages alone. Naming a page refills it even if it's been posted, and the report tells you when publishing it again would update the target.
+A bare `refill` takes every unposted page dated on or after `since` that is waiting or filled, and leaves published pages alone. Naming a page refills it even if it’s been posted, and the report tells you when publishing it again would update the target.
 
-With a template in place, `fitdocs publish` refuses an opted-in page that is still waiting for its post with `post_waiting`, and sends nothing from it, rather than send the default template. Run `fitdocs sync` to fill it, `fitdocs post-template check PAGE` to see why it wasn't filled, or write the post yourself.
+With a template in place, `fitdocs publish` sends nothing for an opted-in page still waiting for its post, rather than the default template, and reports `post_waiting`. Run `fitdocs sync` to fill it, `fitdocs post-template check PAGE` to see why it wasn’t filled, or write the post yourself.
 
 The [post templates reference](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/publishing.md#post-templates) has the full rules for values, the checks on each query, and every exit code.
 
 ## Send it
 
-`fitdocs publish --yes` works through the pages in file-name order. For each page and target it posts for the first time, updates an earlier post whose title or description changed, or does nothing because the post is unchanged. So a second run with nothing changed sends nothing, and a post that didn’t land is tried again on the next run.
+`fitdocs publish --yes` works through the pages in file-name order. For each page and target it posts for the first time, updates an earlier post whose title or description changed, or does nothing if the post is unchanged. A post that didn’t land is tried again on the next run.
 
-Each result is one code, and the report explains each code it prints. `posted` and `uploaded` mean the post landed, and a link is shown with them when the target gave a usable one. When a result like `rate_limited` or `auth_rejected` stops a target, the rest of that target’s posts in the run are `not_attempted`, and other targets carry on. `unconfirmed` means a request was sent but its result isn’t known, so the next run checks the target before sending again.
+Each result is one code. `posted` and `uploaded` mean the post landed, and a link is shown with them when the target gave a usable one. When a result like `rate_limited` or `auth_rejected` stops a target, the rest of that target’s posts in the run are `not_attempted`, and other targets carry on. `unconfirmed` means a request was sent but its result isn’t known, so the next run checks the target before sending again.
 
 The command exits `0` when no result is a failure, `1` when one is, and `2` for a configuration error found before any request or write. If you interrupt it, it stops sending, keeps every outcome it already received, and exits `130`. Add `--format json` for one JSON document instead of text.
 
@@ -181,8 +181,8 @@ Published: [Club feed](https://example.invalid/a/1) · [Team log](https://exampl
 
 Fitdocs owns that region, so a hand edit is replaced the next time `fitdocs publish --yes` considers the page. A posting run writes nothing else on a page.
 
-Each target also has a ledger at `.fitdocs/publish/<target>.toml`, which records what landed and where, so a later run knows what changed. Don’t edit it. If you delete a ledger, the next `--yes` run treats every page that opts in to that target as never posted and sends the posts again. A target looks for an existing activity before it creates one, so it’s expected to find the earlier activity rather than make a second.
+Each target also keeps a record at `.fitdocs/publish/<target>.toml` of what landed and where, so a later run knows what changed. Don’t edit it. If you delete it, the next `--yes` run treats every page that opts in to that target as never posted and sends the posts again. A target looks for an existing activity before it creates one, so it’s expected to find the earlier activity rather than make a second.
 
-A target’s answer becomes one code and, for a post that landed, one link. Fitdocs doesn’t print or write anything else a target returns.
+Beyond the code and the link, fitdocs doesn’t print or write anything a target returns.
 
-The [publishing reference](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/publishing.md) has every code, the rules for links, and the ledger’s format.
+The [publishing reference](https://github.com/joshua-stauffer/fitdocs/blob/main/docs/publishing.md) has every code, the rules for links, and the record’s format.

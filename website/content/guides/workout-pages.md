@@ -49,7 +49,7 @@ publish: intervals
 
 ## Published links
 
-If you’ve [published](publishing.md) this workout, a line near the top of the page, above Notes, links to each post. A page that hasn’t been posted shows nothing here. Fitdocs fills this in when you run `fitdocs publish --yes`, so it’s not a place for your own writing.
+If you’ve [published](publishing.md) this workout, a line near the top of the page, above Notes, links to each post. `fitdocs publish --yes` rewrites it, so don’t write there.
 
 ## Notes 
 
@@ -77,7 +77,7 @@ Your device laps (manual button presses or workout steps) and automatic per-kilo
 
 ## Your post
 
-A `post` region that’s yours, with no heading of its own and a hidden comment that renders as nothing. Write a page’s own post here, and `fitdocs publish` sends those words instead of a template. If you keep a post template, `fitdocs sync` fills this region on each new page, and stops touching it once you edit it. See [Publishing posts](publishing.md#write-your-own-post).
+A region that’s yours, with no heading, where you can write the page’s own post. It shows nothing until you do, and `fitdocs publish` sends those words instead of a template. If you keep a post template, `fitdocs sync` fills this region on each new page, and stops touching it once you edit it. See [Publishing posts](publishing.md#write-your-own-post).
 
 ## Morning Of
 
