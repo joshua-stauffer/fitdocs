@@ -63,3 +63,7 @@ PR #2's rewrite, recovered into the same PR, had already fixed "duckdb" and line
 Still open: the home page's last sentence ends at "where it’s matched with". Only the maintainer writes that. Two things are left for the maintainer to decide, since they're grammar rather than typos and weren't queued:
 - `index.md:22`: "benchmarks, and fitness curve" (probably "fitness curves").
 - `llm/index.md:33`: "every one won’t be the right fit for you" (probably "not every one will be").
+
+## Update (2026-11-13): the home page's last sentence ends
+
+At the maintainer's request, the last sentence of `index.md` now ends at "…and writes the training plan you describe into the wiki." The unfinished "where it’s matched with" clause is gone. The two grammar points in the update above are still open, and the maintainer will follow up on the remaining prose.
