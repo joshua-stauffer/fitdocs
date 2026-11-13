@@ -15,6 +15,8 @@ recorded as one.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-13
+
 ### Added
 
 - Post templates. A `post-template.toml` at the top of the data root holds a
